@@ -1,0 +1,23 @@
+{
+  "compilerOptions": {
+    "jsx": "react-jsx",
+    "moduleResolution": "Bundler",
+    "module": "ESNext",
+    "target": "ES2022",
+    "skipLibCheck": true,
+    "strictNullChecks": true,
+    "useDefineForClassFields": true,
+    "allowImportingTsExtensions": true,
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "noEmit": true,
+    "rootDir": "./",
+    "paths": {
+      "@/*": ["./src/*"],
+      "~/*": ["./*"]
+    },
+    "types": ["node", "vite/client"]
+  },
+  "include": ["src", "types", "vite.config.ts", "playwright.config.ts", "drizzle.config.ts", "ignore/scripts"],
+  "exclude": ["node_modules", "dist", "build"]
+}

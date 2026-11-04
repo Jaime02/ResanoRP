@@ -1,0 +1,5 @@
+[project]
+name = "ResanoRP"
+
+[tool.black]
+line-length = 120

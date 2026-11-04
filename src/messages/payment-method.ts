@@ -1,0 +1,16 @@
+export const PAYMENT_METHOD_CREATE_TITLE = "Crear Forma de pago";
+export const PAYMENT_METHOD_EDIT_TITLE = "Editar Forma de pago";
+export const PAYMENT_METHOD_EDIT_ERROR_TITLE = "Error al editar la Forma de pago";
+export const PAYMENT_METHOD_FETCH_ERROR_MESSAGE = "Error al obtener los datos de la Forma de pago";
+export const PAYMENT_METHOD_DELETE_TITLE = "Eliminar Forma de pago";
+export const PAYMENT_METHOD_DELETE_MESSAGE = "¿Estás seguro que quieres eliminar la Forma de pago?";
+export const PAYMENT_METHOD_DELETED_MESSAGE = "Forma de pago eliminada";
+export const PAYMENT_METHOD_RESTORE_TITLE = "Restaurar Forma de pago";
+export const PAYMENT_METHOD_RESTORE_MESSAGE = "¿Estás seguro que quieres restaurar la Forma de pago?";
+export const PAYMENT_METHOD_RESTORED_MESSAGE = "Forma de pago restaurada";
+export const SHOW_DELETED_PAYMENT_METHODS_LABEL = "Ver Formas de pago eliminadas";
+export const PAYMENT_METHOD_DUE_DAYS_LABEL = "Días de vencimiento";
+export const PAYMENT_METHOD_DUE_DAYS_COLUMN_LABEL = "Vencimiento (días)";
+export const PAYMENT_METHOD_GENERATES_RECEIPT_LABEL = "Genera recibo";
+export const PAYMENT_METHOD_CREATED_MESSAGE = "Forma de pago creada";
+export const PAYMENT_METHOD_EDITED_MESSAGE = "Forma de pago editada";

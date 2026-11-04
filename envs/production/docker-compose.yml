@@ -1,0 +1,97 @@
+# Standalone version of docker-compose.base.yml + docker-compose.production.yml: this folder is copied
+# alone to the production machine, which has neither the repo nor the source to build the app image.
+name: resanorp-production
+
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: "20m"
+    max-file: "3"
+
+services:
+  db:
+    logging: *logging
+    image: postgres:16
+    restart: unless-stopped
+    environment:
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - POSTGRES_DB=${POSTGRES_DB}
+    volumes:
+      - db_data:/var/lib/postgresql/data
+    ports:
+      - "${POSTGRES_PORT}:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 2s
+      timeout: 3s
+      retries: 4
+    command: postgres -c wal_level=logical -c listen_addresses='*'
+  electric:
+    logging: *logging
+    image: electricsql/electric:1.6.0
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}?sslmode=disable
+      ELECTRIC_INSECURE: true
+      ELECTRIC_USAGE_REPORTING: false
+    ports:
+      - "${VITE_ELECTRIC_PORT}:3000"
+    depends_on:
+      db:
+        condition: service_healthy
+  caddy:
+    logging: *logging
+    image: caddy:2
+    restart: unless-stopped
+    environment:
+      - VITE_HOST=${VITE_HOST}
+      - VITE_CADDY_HTTP_PORT=${VITE_CADDY_HTTP_PORT}
+      - VITE_CADDY_HTTPS_PORT=${VITE_CADDY_HTTPS_PORT}
+    ports:
+      - ${VITE_CADDY_HTTP_PORT}:${VITE_CADDY_HTTP_PORT}
+      - ${VITE_CADDY_HTTPS_PORT}:${VITE_CADDY_HTTPS_PORT}
+      - ${VITE_CADDY_HTTPS_PORT}:${VITE_CADDY_HTTPS_PORT}/udp # HTTP/3
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile
+      - ./caddy:/data
+      - caddy_config:/config
+    depends_on:
+      app:
+        condition: service_healthy
+  app:
+    logging: *logging
+    image: resanorp-app:production
+    restart: unless-stopped
+    # See docker-compose.base.yml: tini reaps the zombies Vite leaves behind as PID 1.
+    init: true
+    env_file: .env
+    environment:
+      - DATABASE_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}?sslmode=disable
+      - ELECTRIC_URL=http://electric:3000
+      - PORT=5173
+    volumes:
+      - vite_cache:/app/node_modules/.vite
+      # The *_ROOT_PATH variables in .env are relative to /app (./envs/production/...).
+      - .:/app/envs/production
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      # See docker-compose.base.yml: the fetch needs its own deadline or every interval leaks a bun process.
+      test:
+        - CMD-SHELL
+        - bun -e "fetch('http://localhost:5173', {signal:AbortSignal.timeout(2500)}).then(() => process.exit(0)).catch(() => process.exit(1))"
+      interval: 10s
+      timeout: 5s
+      start_period: 30s
+      retries: 20
+    command: bun run .output/server/index.mjs
+
+volumes:
+  db_data:
+    name: db_data_${VITE_ENV_NAME}
+  caddy_config:
+    name: caddy_config_${VITE_ENV_NAME}
+  vite_cache:
+    name: vite_cache_${VITE_ENV_NAME}

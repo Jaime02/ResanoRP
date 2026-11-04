@@ -1,0 +1,17 @@
+export const MACHINE_FETCH_ERROR_TITLE = "Error al obtener la Máquina";
+export const MACHINE_FETCH_ERROR_MESSAGE = "Error al obtener los datos de la Máquina";
+export const MACHINE_CREATE_TITLE = "Crear Máquina";
+export const MACHINE_DELETE_TITLE = "Eliminar Máquina";
+export const MACHINE_DELETE_MESSAGE = "¿Estás seguro que quieres eliminar la Máquina?";
+export const MACHINE_DELETED_MESSAGE = "Máquina eliminada";
+export const MACHINE_RESTORE_TITLE = "Restaurar Máquina";
+export const MACHINE_RESTORE_MESSAGE = "¿Estás seguro que quieres restaurar la Máquina?";
+export const MACHINE_RESTORED_MESSAGE = "Máquina restaurada";
+export const SHOW_DELETED_MACHINES_LABEL = "Ver Máquinas eliminadas";
+export const MACHINE_MIN_DIAMETER_LABEL = "Diámetro mínimo";
+export const MACHINE_MAX_DIAMETER_LABEL = "Diámetro máximo";
+export const COMPATIBLE_MACHINES_LABEL = "Máquinas compatibles";
+export const VIEW_MACHINES_LABEL = "Ver Máquinas";
+export const MACHINE_EDIT_TITLE = "Editar Máquina";
+export const MACHINE_CREATED_MESSAGE = "Máquina creada";
+export const MACHINE_EDITED_MESSAGE = "Máquina editada";

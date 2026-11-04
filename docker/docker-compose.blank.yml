@@ -1,0 +1,20 @@
+services:
+  caddy:
+    profiles: ["blank"]
+    depends_on:
+      app-blank:
+        condition: service_healthy
+  app-blank:
+    extends:
+      service: app
+      file: docker/docker-compose.base.yml
+    container_name: app-blank
+    profiles: ["blank"]
+    env_file: "./envs/.env.blank"
+    networks:
+      frontend:
+        aliases:
+          - app
+    volumes:
+      - ./envs/blank:/env
+    command: bunx vite dev

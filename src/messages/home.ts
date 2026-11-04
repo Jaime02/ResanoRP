@@ -1,0 +1,12 @@
+export const SUBMIT_SELL_ORDER_LABEL = "Introducir Pedido";
+export const SELL_ORDER_LIST_LABEL = "Pedidos";
+export const SERVE_PARTS_LABEL = "Servir Artículos";
+export const ADMINISTRATION_LABEL = "Administración";
+export const PRICE_CALCULATOR_LABEL = "Calcular Precios";
+export const MAINTENANCE_LABEL = "Mantenimiento";
+export const SELECT_MACHINE_TITLE = "Selecciona una Máquina";
+export const ADMIN_ACCESS_TITLE = "Acceso de Administrador";
+export const SELECT_USER_TYPE_TITLE = "Selecciona un tipo de Usuario";
+export const WRONG_PASSWORD_MESSAGE = "Contraseña incorrecta";
+export const ENTER_PASSWORD_LABEL = "Introduce la contraseña";
+export const LOGIN_LABEL = "Iniciar sesión";

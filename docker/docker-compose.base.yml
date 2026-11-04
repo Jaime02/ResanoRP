@@ -1,0 +1,122 @@
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: "20m"
+    max-file: "3"
+
+services:
+  db:
+    logging: *logging
+    image: postgres:16
+    restart: unless-stopped
+    environment:
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - POSTGRES_DB=${POSTGRES_DB}
+    volumes:
+      - db_data:/var/lib/postgresql/data
+    networks:
+      - frontend
+    ports:
+      - "${POSTGRES_PORT}:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 2s
+      timeout: 3s
+      retries: 4
+    command: postgres -c wal_level=logical -c listen_addresses='*'
+  electric:
+    logging: *logging
+    image: electricsql/electric:1.6.0
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}?sslmode=disable
+      ELECTRIC_INSECURE: true
+      ELECTRIC_USAGE_REPORTING: false
+    networks:
+      - frontend
+    ports:
+      - "${VITE_ELECTRIC_PORT}:3000"
+    depends_on:
+      db:
+        condition: service_healthy
+  caddy:
+    logging: *logging
+    image: caddy:2
+    restart: unless-stopped
+    environment:
+      - VITE_HOST=${VITE_HOST}
+      - VITE_CADDY_HTTP_PORT=${VITE_CADDY_HTTP_PORT}
+      - VITE_CADDY_HTTPS_PORT=${VITE_CADDY_HTTPS_PORT}
+    ports:
+      - ${VITE_CADDY_HTTP_PORT}:${VITE_CADDY_HTTP_PORT}
+      - ${VITE_CADDY_HTTPS_PORT}:${VITE_CADDY_HTTPS_PORT}
+      - ${VITE_CADDY_HTTPS_PORT}:${VITE_CADDY_HTTPS_PORT}/udp # HTTP/3
+    volumes:
+      - ./docker/Caddyfile:/etc/caddy/Caddyfile
+      - ${ENV_PATH}/caddy:/data
+      - caddy_config:/config
+    networks:
+      - frontend
+  app:
+    logging: *logging
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+      target: prerelease
+    image: resanorp-app:local
+    pull_policy: build
+    profiles: ["default"]
+    restart: unless-stopped
+    # Vite is PID 1 in this container and never reaps orphans, so anything Docker
+    # leaves behind - healthcheck processes above all - piles up as zombies until
+    # the container can no longer fork. tini reaps them.
+    init: true
+    networks:
+      - frontend
+    environment:
+      - DATABASE_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}?sslmode=disable
+      - ELECTRIC_URL=http://electric:3000
+    working_dir: /app
+    volumes:
+      # No bind mount for /app on purpose: source and node_modules are baked into
+      # the image. A Windows bind mount makes every fs metadata op ~880x slower,
+      # which cost ~20s on the first SSR render.
+      # Only the dependency-optimizer cache is a volume, so it survives recreation.
+      - vite_cache:/app/node_modules/.vite
+      # envs/ is excluded from the image and stays bound to the host: Vite reads
+      # envDir from it, and generated BLUEPRINTS/SELL_ORDERS/LOGS must remain
+      # reachable from Windows.
+      # Relative to this file, not the project directory: every app service extends this one
+      - ../envs:/app/envs
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      # The fetch needs its own deadline: Docker's `timeout` only marks the check
+      # failed, it never stops the process, so an unbounded fetch against a busy
+      # dev server leaks one bun process per interval.
+      test:
+        - CMD-SHELL
+        - bun -e "fetch('http://localhost:5173', {signal:AbortSignal.timeout(2500)}).then(() => process.exit(0)).catch(() => process.exit(1))"
+      interval: 10s
+      timeout: 5s
+      start_period: 30s
+      start_interval: 2s
+      retries: 20
+    ports:
+      - "5173"
+    expose:
+      - "5173"
+
+volumes:
+  db_data:
+    name: db_data_${VITE_ENV_NAME}
+  caddy_config:
+    name: caddy_config_${VITE_ENV_NAME}
+  vite_cache:
+    name: vite_cache_${VITE_ENV_NAME}
+
+networks:
+  frontend:
+    name: resanorp_${VITE_ENV_NAME}

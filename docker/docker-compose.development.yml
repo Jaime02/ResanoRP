@@ -1,0 +1,11 @@
+services:
+  electric:
+    stop_grace_period: 5s
+  caddy:
+    profiles: ["development"]
+    stop_grace_period: 5s
+    # Vite runs on the host (`bun run dev:server`) so file changes are picked up natively.
+    environment:
+      - APP_UPSTREAM=host.docker.internal:5173
+    extra_hosts:
+      - "host.docker.internal:host-gateway"

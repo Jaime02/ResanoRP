@@ -1,0 +1,134 @@
+diff --git a/dist/chunk-DDZR55U4.mjs b/dist/chunk-DDZR55U4.mjs
+index 7a1d1ac231bdd836f3bb17887c5cf0464364d3f8..4e873f08e188e5a7773260c5065666d467cf496e 100644
+--- a/dist/chunk-DDZR55U4.mjs	
++++ b/dist/chunk-DDZR55U4.mjs
+@@ -2295,6 +2295,7 @@ var ShapeStream = class {
+     }
+     const snapshotReason = `snapshot-${++__privateWrapper(this, _snapshotCounter)._}`;
+     __privateGet(this, _pauseLock).acquire(snapshotReason);
++    const startedOnColdStart = __privateGet(this, _syncState).offset === `now`;
+     const snapshotWarnTimer = setTimeout(() => {
+       console.warn(
+         `[Electric] Snapshot "${snapshotReason}" has held the pause lock for 30s \u2014 possible hung request or leaked lock. Current holders: ${[.../* @__PURE__ */ new Set([snapshotReason])].join(`, `)}`,
+@@ -2314,7 +2315,15 @@ var ShapeStream = class {
+       await __privateMethod(this, _ShapeStream_instances, onMessages_fn).call(this, dataWithEndBoundary, false, {
+         allowReentrantPublishBypass: true
+       });
+-      if (responseOffset !== null || responseHandle !== null) {
++      // A subset snapshot says nothing about the rows outside it, so moving a running stream to its offset skips their
++      // changes. Only a cold start takes it, and the earliest one wins, as concurrent snapshots finish in any order.
++      const currentOffset = __privateGet(this, _syncState).offset;
++      // A new shape answers `0_inf`, the end of its initial snapshot, which comes before every logged offset
++      const offsetParts = (offset) => /^\d+_(\d+|inf)$/.test(offset ?? ``) ? offset.split(`_`).map((part) => part === `inf` ? Infinity : BigInt(part)) : null;
++      const [responseLsn, responseOp] = offsetParts(responseOffset) ?? [];
++      const [currentLsn, currentOp] = offsetParts(currentOffset) ?? [];
++      const isBeforeCurrentOffset = responseLsn !== void 0 && currentLsn !== void 0 && (responseLsn < currentLsn || responseLsn === currentLsn && responseOp < currentOp);
++      if (startedOnColdStart && (currentOffset === `now` ? responseOffset !== null || responseHandle !== null : isBeforeCurrentOffset && responseHandle === __privateGet(this, _syncState).handle)) {
+         const transition = __privateGet(this, _syncState).handleResponseMetadata({
+           status: 200,
+           responseHandle,
+@@ -2548,6 +2557,8 @@ requestShape_fn = async function(requestShapeCacheBuster) {
+     return;
+   }
+   __privateSet(this, _pendingRequestShapeCacheBuster, void 0);
++  const requestOffset = __privateGet(this, _syncState).offset;
++  const recordFastLoopResponse = () => __privateGet(this, _recentRequestEntries).push({ timestamp: Date.now(), offset: requestOffset });
+   try {
+     await __privateMethod(this, _ShapeStream_instances, fetchShape_fn).call(this, {
+       fetchUrl,
+@@ -2555,6 +2566,7 @@ requestShape_fn = async function(requestShapeCacheBuster) {
+       headers: requestHeaders,
+       resumingFromPause
+     });
++    recordFastLoopResponse();
+   } catch (e) {
+     const abortReason = requestAbortController.signal.reason;
+     const isMarkedRestartAbort = __privateGet(this, _restartAbortControllers).delete(
+@@ -2568,10 +2580,12 @@ requestShape_fn = async function(requestShapeCacheBuster) {
+       return;
+     }
+     if (e instanceof StaleCacheError) {
++      recordFastLoopResponse();
+       return __privateMethod(this, _ShapeStream_instances, requestShape_fn).call(this);
+     }
+     if (!(e instanceof FetchError)) throw e;
+     if (e.status == 409) {
++      recordFastLoopResponse();
+       if (__privateGet(this, _syncState).handle) {
+         const shapeKey = canonicalShapeKey(fetchUrl);
+         expiredShapesCache.markExpired(shapeKey, __privateGet(this, _syncState).handle);
+@@ -2604,7 +2618,6 @@ checkFastLoop_fn = async function() {
+   __privateSet(this, _recentRequestEntries, __privateGet(this, _recentRequestEntries).filter(
+     (e) => now - e.timestamp < __privateGet(this, _fastLoopWindowMs)
+   ));
+-  __privateGet(this, _recentRequestEntries).push({ timestamp: now, offset: currentOffset });
+   const sameOffsetCount = __privateGet(this, _recentRequestEntries).filter(
+     (e) => e.offset === currentOffset
+   ).length;
+diff --git a/dist/cjs/index.cjs b/dist/cjs/index.cjs
+index aedf6069aef71b3b0fd9f38e3a924a677a17ba77..c6320f624283c05be432cecbccd1d00bea1f137d 100644
+--- a/dist/cjs/index.cjs	
++++ b/dist/cjs/index.cjs
+@@ -2333,6 +2333,7 @@ var ShapeStream = class {
+     }
+     const snapshotReason = `snapshot-${++__privateWrapper(this, _snapshotCounter)._}`;
+     __privateGet(this, _pauseLock).acquire(snapshotReason);
++    const startedOnColdStart = __privateGet(this, _syncState).offset === `now`;
+     const snapshotWarnTimer = setTimeout(() => {
+       console.warn(
+         `[Electric] Snapshot "${snapshotReason}" has held the pause lock for 30s \u2014 possible hung request or leaked lock. Current holders: ${[.../* @__PURE__ */ new Set([snapshotReason])].join(`, `)}`,
+@@ -2352,7 +2353,15 @@ var ShapeStream = class {
+       await __privateMethod(this, _ShapeStream_instances, onMessages_fn).call(this, dataWithEndBoundary, false, {
+         allowReentrantPublishBypass: true
+       });
+-      if (responseOffset !== null || responseHandle !== null) {
++      // A subset snapshot says nothing about the rows outside it, so moving a running stream to its offset skips their
++      // changes. Only a cold start takes it, and the earliest one wins, as concurrent snapshots finish in any order.
++      const currentOffset = __privateGet(this, _syncState).offset;
++      // A new shape answers `0_inf`, the end of its initial snapshot, which comes before every logged offset
++      const offsetParts = (offset) => /^\d+_(\d+|inf)$/.test(offset ?? ``) ? offset.split(`_`).map((part) => part === `inf` ? Infinity : BigInt(part)) : null;
++      const [responseLsn, responseOp] = offsetParts(responseOffset) ?? [];
++      const [currentLsn, currentOp] = offsetParts(currentOffset) ?? [];
++      const isBeforeCurrentOffset = responseLsn !== void 0 && currentLsn !== void 0 && (responseLsn < currentLsn || responseLsn === currentLsn && responseOp < currentOp);
++      if (startedOnColdStart && (currentOffset === `now` ? responseOffset !== null || responseHandle !== null : isBeforeCurrentOffset && responseHandle === __privateGet(this, _syncState).handle)) {
+         const transition = __privateGet(this, _syncState).handleResponseMetadata({
+           status: 200,
+           responseHandle,
+@@ -2586,6 +2595,8 @@ requestShape_fn = async function(requestShapeCacheBuster) {
+     return;
+   }
+   __privateSet(this, _pendingRequestShapeCacheBuster, void 0);
++  const requestOffset = __privateGet(this, _syncState).offset;
++  const recordFastLoopResponse = () => __privateGet(this, _recentRequestEntries).push({ timestamp: Date.now(), offset: requestOffset });
+   try {
+     await __privateMethod(this, _ShapeStream_instances, fetchShape_fn).call(this, {
+       fetchUrl,
+@@ -2593,6 +2604,7 @@ requestShape_fn = async function(requestShapeCacheBuster) {
+       headers: requestHeaders,
+       resumingFromPause
+     });
++    recordFastLoopResponse();
+   } catch (e) {
+     const abortReason = requestAbortController.signal.reason;
+     const isMarkedRestartAbort = __privateGet(this, _restartAbortControllers).delete(
+@@ -2606,10 +2618,12 @@ requestShape_fn = async function(requestShapeCacheBuster) {
+       return;
+     }
+     if (e instanceof StaleCacheError) {
++      recordFastLoopResponse();
+       return __privateMethod(this, _ShapeStream_instances, requestShape_fn).call(this);
+     }
+     if (!(e instanceof FetchError)) throw e;
+     if (e.status == 409) {
++      recordFastLoopResponse();
+       if (__privateGet(this, _syncState).handle) {
+         const shapeKey = canonicalShapeKey(fetchUrl);
+         expiredShapesCache.markExpired(shapeKey, __privateGet(this, _syncState).handle);
+@@ -2642,7 +2656,6 @@ checkFastLoop_fn = async function() {
+   __privateSet(this, _recentRequestEntries, __privateGet(this, _recentRequestEntries).filter(
+     (e) => now - e.timestamp < __privateGet(this, _fastLoopWindowMs)
+   ));
+-  __privateGet(this, _recentRequestEntries).push({ timestamp: now, offset: currentOffset });
+   const sameOffsetCount = __privateGet(this, _recentRequestEntries).filter(
+     (e) => e.offset === currentOffset
+   ).length;

@@ -1,0 +1,13 @@
+export const COATING_EDIT_ERROR_TITLE = "Error al editar el Tratamiento";
+export const COATING_FETCH_ERROR_MESSAGE = "Error al obtener los datos del Tratamiento";
+export const COATING_CREATE_TITLE = "Crear Tratamiento";
+export const COATING_EDIT_TITLE = "Editar Tratamiento";
+export const COATING_DELETE_TITLE = "Eliminar Tratamiento";
+export const COATING_DELETE_MESSAGE = "¿Estás seguro que quieres eliminar el Tratamiento?";
+export const COATING_DELETED_MESSAGE = "Tratamiento eliminado";
+export const COATING_RESTORE_TITLE = "Restaurar Tratamiento";
+export const COATING_RESTORE_MESSAGE = "¿Estás seguro que quieres restaurar el Tratamiento?";
+export const COATING_RESTORED_MESSAGE = "Tratamiento restaurado";
+export const SHOW_DELETED_COATINGS_LABEL = "Ver Tratamientos eliminados";
+export const COATING_CREATED_MESSAGE = "Tratamiento creado";
+export const COATING_EDITED_MESSAGE = "Tratamiento editado";

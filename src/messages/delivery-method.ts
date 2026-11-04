@@ -1,0 +1,13 @@
+export const DELIVERY_METHOD_CREATE_TITLE = "Crear Transporte";
+export const DELIVERY_METHOD_EDIT_TITLE = "Editar Transporte";
+export const DELIVERY_METHOD_EDIT_ERROR_TITLE = "Error al editar el Transporte";
+export const DELIVERY_METHOD_FETCH_ERROR_MESSAGE = "Error al obtener los datos del Transporte";
+export const DELIVERY_METHOD_DELETE_TITLE = "Eliminar Transporte";
+export const DELIVERY_METHOD_DELETE_MESSAGE = "¿Estás seguro que quieres eliminar el Transporte?";
+export const DELIVERY_METHOD_DELETED_MESSAGE = "Transporte eliminado";
+export const DELIVERY_METHOD_RESTORE_TITLE = "Restaurar Transporte";
+export const DELIVERY_METHOD_RESTORE_MESSAGE = "¿Estás seguro que quieres restaurar el Transporte?";
+export const DELIVERY_METHOD_RESTORED_MESSAGE = "Transporte restaurado";
+export const SHOW_DELETED_DELIVERY_METHODS_LABEL = "Ver Transportes eliminados";
+export const DELIVERY_METHOD_CREATED_MESSAGE = "Transporte creado";
+export const DELIVERY_METHOD_EDITED_MESSAGE = "Transporte editado";

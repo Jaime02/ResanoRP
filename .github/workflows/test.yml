@@ -1,0 +1,48 @@
+name: E2E tests
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  e2e:
+    runs-on: ubuntu-26.04
+    timeout-minutes: 30
+    # Each shard runs on its own runner with its own stack, so the tests sharing one database is not a problem
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3]
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: oven-sh/setup-bun@v2
+
+      - run: bun install --frozen-lockfile
+
+      - run: bunx playwright install --with-deps chromium
+
+      # Created before Docker does, otherwise the bind mounts leave them owned by root
+      - run: mkdir -p envs/test/caddy
+
+      # The app container copies the mock data as root keeping its permissions, so the tests could not reset those copies
+      - run: chmod -R a+rwX src/tests/mock-data
+
+      - run: echo "127.0.0.1 test.resanorp" | sudo tee -a /etc/hosts
+
+      # Runs the production build instead of the dev server, which loads every module on each navigation.
+      # Playwright reuses this stack instead of starting its own webServer.
+      - run: docker compose -p resanorp-test --project-directory . -f docker/docker-compose.base.yml -f docker/docker-compose.test.yml -f docker/docker-compose.test-production.yml --env-file ./envs/.env.test --profile test up -d --wait
+
+      - run: bun --env-file=./envs/.env.test ./src/scripts/wait-for-url.ts
+
+      - run: node --env-file=./envs/.env.test ./node_modules/@playwright/test/cli.js test --shard=${{ matrix.shard }}/3
+
+      - if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results-${{ matrix.shard }}
+          path: test-results/
+
+      - if: failure()
+        run: docker compose -p resanorp-test --project-directory . -f docker/docker-compose.base.yml -f docker/docker-compose.test.yml -f docker/docker-compose.test-production.yml --env-file ./envs/.env.test --profile test logs app-test

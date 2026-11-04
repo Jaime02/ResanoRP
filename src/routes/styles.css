@@ -1,0 +1,88 @@
+@import "tailwindcss" source("..");
+
+@custom-variant dark (&:is(.dark *));
+
+@theme inline {
+  --size-icon-sm: calc(var(--spacing) * 6);
+  --size-icon: calc(var(--spacing) * 10);
+  --width-base-input: 280px;
+  --width-base-number-input: 140px;
+  --color-dark-green: oklch(57% 0.219 149.579);
+  --color-status-warning: var(--color-amber-600);
+  --color-status-error: var(--color-red-600);
+  --color-status-neutral: var(--color-gray-500);
+  --shadow-dialog: 0 0 20px rgba(0, 0, 0, 0.6);
+
+  --radius: 0.625rem;
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+
+  --text-lg: 17px;
+  --text-xl: 18px;
+  --text-2xl: 20px;
+  --text-3xl: 22px;
+
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: oklch(0.35 0.24 265);
+  --color-primary-foreground: white;
+  --color-secondary: oklch(0.24 0.16 265);
+  --color-secondary-foreground: white;
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-success: var(--success);
+  --color-border: var(--border);
+  --color-ring: var(--color-primary);
+  --color-tr-background: var(--tr-background);
+  --color-tr-subrow-background: var(--tr-subrow-background);
+}
+
+:root {
+  --background: white;
+  --foreground: black;
+  --card: white;
+  --card-foreground: black;
+  --popover: white;
+  --popover-foreground: black;
+  --muted: oklch(0.97 0 0);
+  --muted-foreground: oklch(0.65 0 0);
+  --accent: oklch(0.96 0.047 92.4);
+  --accent-foreground: black;
+  --destructive: oklch(0.5 0.25 27);
+  --success: oklch(68% 0.22 149);
+  --border: oklch(0.65 0 0);
+  --tr-background: oklch(0.985 0 0);
+  --tr-subrow-background: oklch(0.97 0 0);
+}
+
+.dark {
+  --background: black;
+  --foreground: white;
+  --card: oklch(0.205 0 0);
+  --card-foreground: white;
+  --popover: oklch(0.205 0 0);
+  --popover-foreground: white;
+  --muted: oklch(0.269 0 0);
+  --muted-foreground: oklch(0.708 0 0);
+  --accent: oklch(0.269 0 0);
+  --accent-foreground: white;
+  --destructive: oklch(0.704 0.191 22.216);
+  --success: var(--color-dark-green);
+  --border: oklch(1 0 0 / 10%);
+  --tr-background: oklch(0.25 0 0);
+  --tr-subrow-background: oklch(0.2 0 0);
+}
+
+body {
+  font-feature-settings: "zero";
+  font-variant-numeric: slashed-zero;
+}

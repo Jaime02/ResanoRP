@@ -1,0 +1,26 @@
+export const TREATMENT_LABEL = "Tratamiento";
+export const IN_TREATMENT_TITLE = "En tratamiento";
+export const TREATMENT_HISTORY_TITLE = "Historial";
+export const TREATMENT_HISTORY_EMPTY_MESSAGE = "Selecciona una fecha o un Artículo para ver el historial";
+export const PENDING_TO_SEND_TITLE = "Pendiente de enviar";
+export const NO_PARTS_IN_TREATMENT_MESSAGE = "No hay Artículos enviados al Tratamiento";
+export const NO_PARTS_PENDING_TO_BE_DELIVERED_TO_TREATMENT_MESSAGE =
+  "No hay Artículos pendientes de ser enviados al Tratamiento";
+export const SEND_PART_TO_TREATMENT_WITHOUT_ORDER_TITLE = "Enviar Artículo al tratamiento sin Orden de producción";
+export const PARTS_SENT_TO_TREATMENT_MESSAGE = "Piezas enviadas al tratamiento";
+export const PARTS_RECEIVED_FROM_TREATMENT_MESSAGE = "Piezas recibidas del tratamiento";
+export const PRODUCED_QUANTITY_LABEL = "Fabricadas";
+export const SENT_QUANTITY_LABEL = "Enviadas";
+export const RECEIVED_QUANTITY_LABEL = "Recibidas";
+export const WITHOUT_ORDER_LABEL = "Sin orden";
+export const RECEPTIONS_LABEL = "Recepciones";
+export const RECEIVE_LABEL = "Recibir";
+export const SEND_LABEL = "Enviar";
+export const SEND_WITHOUT_ORDER_LABEL = "Enviar sin orden";
+export const SEND_TO_TREATMENT_LABEL = "Enviar al tratamiento";
+export const DELETE_RECEPTION_TITLE = "Eliminar recepción";
+export const DELETE_RECEPTION_MESSAGE = "¿Estás seguro que quieres eliminar la recepción de estas piezas?";
+export const RECEPTION_DELETED_MESSAGE = "Recepción eliminada";
+export const DELETE_SHIPMENT_TITLE = "Eliminar envío";
+export const DELETE_SHIPMENT_MESSAGE = "¿Estás seguro que quieres eliminar el envío de estas piezas al tratamiento?";
+export const SHIPMENT_DELETED_MESSAGE = "Envío eliminado";

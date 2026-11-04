@@ -1,0 +1,13 @@
+{
+	http_port {$VITE_CADDY_HTTP_PORT}
+	https_port {$VITE_CADDY_HTTPS_PORT}
+}
+
+{$VITE_HOST} {
+	tls {
+		issuer internal {
+			lifetime 720h
+		}
+	}
+	reverse_proxy {$APP_UPSTREAM:app:5173}
+}

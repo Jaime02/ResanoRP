@@ -1,0 +1,43 @@
+{
+  "options": {
+    "typeAware": true,
+    "typeCheck": true
+  },
+  "categories": {
+    "correctness": "warn"
+  },
+  "plugins": ["typescript", "react", "node", "react-perf", "import"],
+  "ignorePatterns": [
+    "**/build/**",
+    "**/coverage/**",
+    "**/dist/**",
+    "**/vite.config.*.timestamp-*.*",
+    "dist/**",
+    "build/**",
+    "node_modules/**",
+    "coverage/**",
+    "pdf.worker.min.mjs"
+  ],
+  "rules": {
+    "import/no-relative-parent-imports": "warn",
+    "react/no-children-prop": "off",
+    "typescript/no-unnecessary-type-assertion": "error",
+    "typescript/no-unnecessary-condition": "warn",
+    "react/exhaustive-deps": "error",
+    "react/only-export-components": "warn",
+    "typescript/consistent-type-imports": "error",
+    "typescript/strict-boolean-expressions": "warn",
+    "typescript/return-await": "warn",
+    "typescript/promise-function-async": "warn",
+    "typescript/use-unknown-in-catch-callback-variable": "warn",
+    "typescript/array-type": ["error", { "default": "generic" }]
+  },
+  "overrides": [
+    {
+      "files": ["src/routes/**", "src/files/**"],
+      "rules": {
+        "react/only-export-components": "off"
+      }
+    }
+  ]
+}

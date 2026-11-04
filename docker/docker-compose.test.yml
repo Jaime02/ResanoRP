@@ -1,0 +1,20 @@
+services:
+  caddy:
+    profiles: ["test"]
+    depends_on:
+      app-test:
+        condition: service_healthy
+  app-test:
+    extends:
+      service: app
+      file: docker/docker-compose.base.yml
+    container_name: app-test
+    profiles: ["test"]
+    env_file: "./envs/.env.test"
+    networks:
+      frontend:
+        aliases:
+          - app
+    volumes:
+      - ./envs/test:/env
+    command: sh -c "umask 0000 && bun run ./src/scripts/run-reset-env.ts && bunx vite dev"

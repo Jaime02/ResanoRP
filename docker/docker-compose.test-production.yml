@@ -1,0 +1,12 @@
+services:
+  app-test:
+    build:
+      context: .
+      target: production
+      args:
+        VITE_ENV_NAME: test
+    # Its own tag, so this test build never replaces the production image
+    image: resanorp-app:test-production
+    environment:
+      - PORT=5173
+    command: sh -c "umask 0000 && bun run ./src/scripts/run-reset-env.ts && bun run .output/server/index.mjs"

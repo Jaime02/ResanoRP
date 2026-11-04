@@ -1,0 +1,35 @@
+services:
+  caddy:
+    profiles: ["prisma"]
+    depends_on:
+      app-prisma:
+        condition: service_healthy
+  app-prisma:
+    extends:
+      service: app
+      file: docker/docker-compose.base.yml
+    container_name: app-prisma
+    profiles: ["prisma"]
+    env_file: "./envs/.env.prisma"
+    networks:
+      frontend:
+        aliases:
+          - app
+    volumes:
+      - ./envs/prisma:/env
+    command: bunx vite dev
+    # Synced rather than bind-mounted so Vite keeps watching a native filesystem; see docker-compose.base.yml.
+    develop:
+      watch:
+        - action: sync
+          path: ./src
+          target: /app/src
+        - action: sync
+          path: ./public
+          target: /app/public
+          ignore:
+            - styles.css
+        # Not package.json: formatters and bun install rewrite it unchanged, and each write cost a multi-minute rebuild
+        # that held back source syncs. Real dependency changes always touch bun.lock.
+        - action: rebuild
+          path: ./bun.lock

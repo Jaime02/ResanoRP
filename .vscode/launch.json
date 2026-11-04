@@ -1,0 +1,13 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Profile main.py",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "cProfile",
+      "args": ["-o", "${workspaceFolder}/profile.prof", "src/db/main.py"],
+      "console": "integratedTerminal"
+    }
+  ]
+}
