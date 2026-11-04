@@ -71,6 +71,7 @@ public/pdfjs-wasm/
 public/styles.css
 
 !envs/.env.test
+!envs/.env.development
 !envs/production/
 envs/production/*
 !envs/production/start.cmd

@@ -17,9 +17,13 @@ Stack: Bun, TanStack Start / Router / DB, tRPC, Drizzle ORM, PostgreSQL + Electr
 bun install
 ```
 
-The environment files live in `envs/` (`.env.development`, `.env.test`, `.env.prisma`, `.env.production`, `.env.blank`). Only `.env.test` is committed.
+The environment files live in `envs/` (`.env.development`, `.env.test`, `.env.prisma`, `.env.production`, `.env.blank`). Only `.env.test` and `.env.development` are committed.
+
+Once per machine, map the dev host to localhost by adding `127.0.0.1 dev.resanorp` to `C:\Windows\System32\drivers\etc\hosts` (`/etc/hosts` on macOS and Linux). It needs administrator rights.
 
 ## Run the application
+
+The first time, run `bun run dev:fresh`: it creates the database schema and seeds it. A plain `bun run dev` against a new database has no tables.
 
 ```bash
 bun run dev
