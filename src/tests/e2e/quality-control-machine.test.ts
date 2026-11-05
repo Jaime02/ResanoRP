@@ -273,8 +273,8 @@ for (const { name, message, tableStaysMounted, setUp, change } of rejectedCheckC
       await expectSingleToast(page, message);
       expect(await getQualityChecksOfProductionOrder(productionOrderId)).toEqual(checksBefore);
       if (tableStaysMounted) {
-        await expect(inputQuantity).toHaveValue("8");
-        await expect(buttonConfirm).toBeEnabled();
+        await expect(inputQuantity).toHaveValue("");
+        await expect(buttonConfirm).toBeDisabled();
       }
     },
   );
