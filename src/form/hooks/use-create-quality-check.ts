@@ -43,7 +43,7 @@ export default function useCreateQualityCheckForm({
         onSubmit,
       }),
     validators: {
-      onChange: createQualityCheckSchema,
+      onSubmit: createQualityCheckSchema,
     },
   });
 

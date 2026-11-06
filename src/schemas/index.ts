@@ -36,10 +36,9 @@ export function stringSchema(
   params: SchemaFunctionProps & { nullable: true },
 ): z.ZodPipe<z.ZodNullable<z.ZodString>, z.ZodTransform<string | null, string | null>>;
 
-// TODO nullable default false
 export function stringSchema({
   errorMessage = "Campo obligatorio",
-  nullable = true,
+  nullable = false,
 }: SchemaFunctionProps | undefined = {}) {
   const schema = z.string({ error: errorMessage });
   if (nullable) {

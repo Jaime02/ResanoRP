@@ -11,7 +11,7 @@ import {
 } from "@/schemas";
 
 const baseProductionOrderSchema = z.object({
-  notes: stringSchema().nullable(),
+  notes: stringSchema({ nullable: true }),
   qualityControl: z.boolean(),
 });
 

@@ -7,19 +7,19 @@ import { emailSchema, requiredIdSchema, stringSchema, vatPercentageSchema } from
 export const configurationSchema = createSelectSchema(dbTableConfiguration);
 
 export const updateConfigurationSchema = z.object({
-  address: stringSchema().nullable(),
-  bankAccount: stringSchema().nullable(),
-  city: stringSchema().nullable(),
-  email: stringSchema().nullable(),
+  address: stringSchema({ nullable: true }),
+  bankAccount: stringSchema({ nullable: true }),
+  city: stringSchema({ nullable: true }),
+  email: stringSchema({ nullable: true }),
   id: requiredIdSchema,
-  invoiceFootnote: stringSchema().nullable(),
-  invoiceSenderEmail: stringSchema().nullable().pipe(emailSchema.nullable()),
+  invoiceFootnote: stringSchema({ nullable: true }),
+  invoiceSenderEmail: stringSchema({ nullable: true }).pipe(emailSchema.nullable()),
   legalName: stringSchema({ nullable: false }),
-  phone: stringSchema().nullable(),
-  postalCode: stringSchema().nullable(),
-  province: stringSchema().nullable(),
-  taxId: stringSchema().nullable(),
+  phone: stringSchema({ nullable: true }),
+  postalCode: stringSchema({ nullable: true }),
+  province: stringSchema({ nullable: true }),
+  taxId: stringSchema({ nullable: true }),
   vatPercentage: vatPercentageSchema,
-  website: stringSchema().nullable(),
+  website: stringSchema({ nullable: true }),
 });
 export type TUpdateConfiguration = z.infer<typeof updateConfigurationSchema>;

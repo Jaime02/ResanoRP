@@ -1,3 +1,6 @@
+import fs from "node:fs/promises";
+import path from "node:path";
+
 import { TRPCError } from "@trpc/server";
 import { and, eq, inArray, isNull } from "drizzle-orm";
 
@@ -16,7 +19,8 @@ import {
   hasAmountTooLarge,
   MAX_AMOUNT_IN_CENTS,
 } from "@/files/accounting-export";
-import { printInvoice } from "@/files/invoice";
+import { removeOnRollback } from "@/files/functions";
+import { getAccountingExportPath, printInvoice } from "@/files/invoice";
 import { getSalesDocumentLine } from "@/files/sales-document";
 import { addAppDays, endOfAppDay, startOfAppDay } from "@/lib/dates";
 import { formatDate } from "@/lib/formatters";
@@ -29,88 +33,90 @@ import { adminProcedure } from "@/trpc";
 
 export default router({
   account: adminProcedure.mutation(async ({ ctx }) =>
-    ctx.db.transaction(async (tx) => {
-      try {
-        const txid = await generateTxId(tx);
+    removeOnRollback(async (createdPaths) =>
+      ctx.db.transaction(async (tx) => {
+        try {
+          const txid = await generateTxId(tx);
 
-        // The Facturas are marked before being read, so an export running at the same time waits for this one
-        // and does not export them again
-        const accountedInvoiceIds = (
-          await tx
-            .update(dbTableInvoice)
-            .set({ accounted: true })
-            .where(eq(dbTableInvoice.accounted, false))
-            .returning({ id: dbTableInvoice.id })
-        ).map((invoice) => invoice.id);
-        if (accountedInvoiceIds.length === 0) {
-          throw new TRPCError({
-            code: "NOT_FOUND",
-            message: "No hay Facturas pendientes de contabilizar",
-          });
-        }
+          // The Facturas are marked before being read, so an export running at the same time waits for this one
+          // and does not export them again
+          const accountedInvoiceIds = (
+            await tx
+              .update(dbTableInvoice)
+              .set({ accounted: true })
+              .where(eq(dbTableInvoice.accounted, false))
+              .returning({ id: dbTableInvoice.id })
+          ).map((invoice) => invoice.id);
+          if (accountedInvoiceIds.length === 0) {
+            throw new TRPCError({
+              code: "NOT_FOUND",
+              message: "No hay Facturas pendientes de contabilizar",
+            });
+          }
 
-        const invoices = await getInvoicesForAccountingExport(accountedInvoiceIds, tx);
-        const clientNamesWithoutAccount = [
-          ...new Set(
-            invoices
-              .filter((invoice) => invoice.client.prismaAccountingAccountId === null)
-              .map((invoice) => invoice.client.name),
-          ),
-        ];
-        if (clientNamesWithoutAccount.length > 0) {
-          throw new TRPCError({
-            code: "BAD_REQUEST",
-            message: `No se han contabilizado las Facturas porque estos Clientes no tienen cuenta contable de Prisma: ${clientNamesWithoutAccount.join(", ")}`,
-          });
-        }
-
-        // A Línea can lose its price after its Factura was created, and it would be exported at 0 €
-        const unpricedDeliveryNoteIds = getUnpricedDeliveryNoteIds(
-          invoices.flatMap((invoice) => invoice.deliveryNotes),
-        );
-        if (unpricedDeliveryNoteIds.length > 0) {
-          throw new TRPCError({
-            code: "BAD_REQUEST",
-            message: `No se han contabilizado las Facturas porque estos Albaranes tienen Líneas sin precio: ${unpricedDeliveryNoteIds.join(", ")}`,
-          });
-        }
-
-        const exportInvoices = invoices.map((invoice) => ({
-          client: { ...invoice.client, accountingAccountId: invoice.client.prismaAccountingAccountId! },
-          createdAt: invoice.createdAt,
-          dueDate: invoice.dueDate,
-          generatesReceipt: invoice.paymentMethod?.generatesReceipt ?? false,
-          id: invoice.id,
-          vatBreakdown: getVatBreakdown(
-            invoice.deliveryNotes.flatMap((deliveryNote) =>
-              deliveryNote.deliveryNoteLines.map((deliveryNoteLine) => ({
-                quantity: deliveryNoteLine.quantity,
-                unitPrice: getDeliveryNoteLineUnitPrice(deliveryNoteLine),
-                vatPercentage: deliveryNoteLine.vatPercentage,
-              })),
+          const invoices = await getInvoicesForAccountingExport(accountedInvoiceIds, tx);
+          const clientNamesWithoutAccount = [
+            ...new Set(
+              invoices
+                .filter((invoice) => invoice.client.prismaAccountingAccountId === null)
+                .map((invoice) => invoice.client.name),
             ),
-          ),
-        }));
-        const invoiceIdsWithAmountTooLarge = exportInvoices.filter(hasAmountTooLarge).map((invoice) => invoice.id);
-        if (invoiceIdsWithAmountTooLarge.length > 0) {
-          throw new TRPCError({
-            code: "BAD_REQUEST",
-            message: `No se han contabilizado las Facturas porque estas tienen importes mayores de ${formatCents(MAX_AMOUNT_IN_CENTS)}, que no caben en el fichero de Prisma: ${invoiceIdsWithAmountTooLarge.join(", ")}`,
-          });
+          ];
+          if (clientNamesWithoutAccount.length > 0) {
+            throw new TRPCError({
+              code: "BAD_REQUEST",
+              message: `No se han contabilizado las Facturas porque estos Clientes no tienen cuenta contable de Prisma: ${clientNamesWithoutAccount.join(", ")}`,
+            });
+          }
+
+          // A Línea can lose its price after its Factura was created, and it would be exported at 0 €
+          const unpricedDeliveryNoteIds = getUnpricedDeliveryNoteIds(
+            invoices.flatMap((invoice) => invoice.deliveryNotes),
+          );
+          if (unpricedDeliveryNoteIds.length > 0) {
+            throw new TRPCError({
+              code: "BAD_REQUEST",
+              message: `No se han contabilizado las Facturas porque estos Albaranes tienen Líneas sin precio: ${unpricedDeliveryNoteIds.join(", ")}`,
+            });
+          }
+
+          const exportInvoices = invoices.map((invoice) => ({
+            client: { ...invoice.client, accountingAccountId: invoice.client.prismaAccountingAccountId! },
+            createdAt: invoice.createdAt,
+            dueDate: invoice.dueDate,
+            generatesReceipt: invoice.paymentMethod?.generatesReceipt ?? false,
+            id: invoice.id,
+            vatBreakdown: getVatBreakdown(
+              invoice.deliveryNotes.flatMap((deliveryNote) =>
+                deliveryNote.deliveryNoteLines.map((deliveryNoteLine) => ({
+                  quantity: deliveryNoteLine.quantity,
+                  unitPrice: getDeliveryNoteLineUnitPrice(deliveryNoteLine),
+                  vatPercentage: deliveryNoteLine.vatPercentage,
+                })),
+              ),
+            ),
+          }));
+          const invoiceIdsWithAmountTooLarge = exportInvoices.filter(hasAmountTooLarge).map((invoice) => invoice.id);
+          if (invoiceIdsWithAmountTooLarge.length > 0) {
+            throw new TRPCError({
+              code: "BAD_REQUEST",
+              message: `No se han contabilizado las Facturas porque estas tienen importes mayores de ${formatCents(MAX_AMOUNT_IN_CENTS)}, que no caben en el fichero de Prisma: ${invoiceIdsWithAmountTooLarge.join(", ")}`,
+            });
+          }
+
+          // Saved before the Facturas are committed as accounted, so the file is not lost when its download fails
+          const fileName = `facturas-${invoices[0].id}-${invoices.at(-1)!.id}.csv`;
+          const filePath = getAccountingExportPath(fileName);
+          await fs.mkdir(path.dirname(filePath), { recursive: true });
+          createdPaths.push(filePath);
+          await fs.writeFile(filePath, encodeAccountingExportCsv(getAccountingExportCsv(exportInvoices)));
+
+          return { fileName, invoiceIds: accountedInvoiceIds, txid };
+        } catch (error) {
+          handleMutationError({ error });
         }
-
-        const csv = getAccountingExportCsv(exportInvoices);
-
-        return {
-          content: encodeAccountingExportCsv(csv).toString("base64"),
-          fileName: `facturas-${invoices[0].id}-${invoices.at(-1)!.id}.csv`,
-          invoiceIds: accountedInvoiceIds,
-          txid,
-        };
-      } catch (error) {
-        handleMutationError({ error });
-      }
-    }),
+      }),
+    ),
   ),
   unaccount: adminProcedure.input(requiredIdObjectSchema).mutation(async ({ ctx, input }) =>
     ctx.db.transaction(async (tx) => {

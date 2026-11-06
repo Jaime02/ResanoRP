@@ -125,6 +125,10 @@ export function getInvoicePath(invoiceId: number) {
   return path.join(process.env.INVOICE_ROOT_PATH!, `${invoiceId}.pdf`);
 }
 
+export function getAccountingExportPath(fileName: string) {
+  return path.join(process.env.INVOICE_ROOT_PATH!, fileName);
+}
+
 interface GetInvoiceEmailProps {
   invoiceId: number;
   from: string | null;

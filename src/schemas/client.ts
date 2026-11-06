@@ -5,13 +5,13 @@ import { nullableIdSchema, requiredIdSchema, stringSchema, tableStateSchema } fr
 const baseClientSchema = z.object({
   address: stringSchema({ nullable: false }),
   city: stringSchema({ nullable: false }),
-  country: stringSchema().nullable(),
+  country: stringSchema({ nullable: true }),
   defaultDeliveryMethodId: nullableIdSchema,
   defaultPaymentMethodId: nullableIdSchema,
-  iban: stringSchema().nullable(),
+  iban: stringSchema({ nullable: true }),
   legalName: stringSchema({ nullable: false }),
   name: stringSchema({ nullable: false }),
-  phone: stringSchema().nullable(),
+  phone: stringSchema({ nullable: true }),
   postalCode: stringSchema({ nullable: false }).regex(/^[0-9]+$/, "El campo solo puede contener dígitos"),
   // The account of the Cliente in Prisma, the accounting program, which is not
   // derived from its ID. The exported invoices write it in a 9 characters field
@@ -20,7 +20,7 @@ const baseClientSchema = z.object({
     .regex(/^(430[0-9]{0,6})?$/, "Debe empezar por 430 y tener como máximo 9 dígitos")
     .nullable()
     .transform((value) => (value === "" ? null : value)),
-  province: stringSchema().nullable(),
+  province: stringSchema({ nullable: true }),
   taxId: stringSchema({ nullable: false }),
 });
 

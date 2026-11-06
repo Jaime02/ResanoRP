@@ -3,7 +3,7 @@ import z from "zod";
 import { nameFiltersSchema, nullableIdSchema, requiredIdSchema, stringSchema, tableStateSchema } from "@/schemas";
 
 const basePartReferenceSchema = z.object({
-  clientDescription: stringSchema(),
+  clientDescription: stringSchema({ nullable: true }),
   reference: stringSchema({ nullable: false }),
 });
 

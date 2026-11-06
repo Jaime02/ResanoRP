@@ -1,3 +1,5 @@
+import fs from "node:fs/promises";
+
 import { expect } from "@playwright/test";
 import type { Download, Locator, Page } from "@playwright/test";
 import { eq, ne } from "drizzle-orm";
@@ -18,6 +20,7 @@ import {
   hasAmountTooLarge,
   MAX_AMOUNT_IN_CENTS,
 } from "@/files/accounting-export";
+import { getAccountingExportPath } from "@/files/invoice";
 import { formatCents, getDeliveryNoteLineUnitPrice, getVatBreakdown } from "@/lib/prices";
 import {
   MOCK_INITIAL_DATE,
@@ -402,6 +405,9 @@ test(
       await clearToasts(page);
 
       expect(fileName).toBe(`facturas-${pendingInvoices.at(0)!.id}-${pendingInvoices.at(-1)!.id}.csv`);
+      expect(await fs.readFile(getAccountingExportPath(fileName)), "The server keeps the exported file").toEqual(
+        content,
+      );
       const csv = content.toString("latin1");
       expect(csv.endsWith("\r\n")).toBe(true);
       const records = parseRecords(csv);

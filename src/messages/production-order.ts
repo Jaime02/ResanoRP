@@ -21,7 +21,6 @@ export const ASSIGN_PRODUCTION_ORDER_NO_ACTIVE_MACHINE_MESSAGE =
   "No se puede asignar la Orden de producción: no hay Máquina activa en el modo usuario";
 export const NO_QUEUED_PRODUCTION_ORDERS_MESSAGE = "No hay órdenes de producción en la cola";
 export const NO_PRODUCTIONS_MESSAGE = "No hay producciones registradas";
-export const PRODUCED_TOTAL_LABEL = "Unidades fabricadas / total";
 export const UNITS_TO_PRODUCE_LABEL = "Unidades a fabricar";
 export const QUANTITY_TO_PRODUCE_LABEL = "Cantidad a fabricar";
 export const UNITS_PRODUCED_LABEL = "Unidades fabricadas";

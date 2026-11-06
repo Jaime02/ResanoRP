@@ -1,5 +1,5 @@
 #!/bin/sh
 files=$(git diff --cached --name-only --diff-filter=ACM | grep -E '\.(ts|tsx|js|mjs|json|css|md)$')
 [ -z "$files" ] && exit 0
-echo "$files" | xargs bunx oxfmt || exit 1
-echo "$files" | xargs git add
+# Only checked: formatting and adding the files back would also commit their unstaged changes
+echo "$files" | xargs bunx oxfmt --check || { echo "Run bun run format and stage the changes"; exit 1; }

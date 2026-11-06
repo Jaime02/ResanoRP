@@ -15,7 +15,7 @@ const basePartSchema = z.object({
   coatingId: nullableIdSchema,
   description: stringSchema({ nullable: false }),
   length: stringSchema({ nullable: true }),
-  notes: stringSchema().nullable(),
+  notes: stringSchema({ nullable: true }),
   shapeId: nullableIdSchema,
   width: stringSchema({ nullable: true }),
 });

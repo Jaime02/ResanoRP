@@ -21,25 +21,21 @@ import {
 } from "@/messages/invoice";
 import trpc from "@/trpc/trpc-client";
 
-function downloadBase64File(content: string, fileName: string, type: string) {
-  const bytes = Uint8Array.from(atob(content), (character) => character.charCodeAt(0));
-  const url = URL.createObjectURL(new Blob([bytes], { type }));
-  downloadUrl(url, fileName);
-  URL.revokeObjectURL(url);
-}
-
 export default function DialogAccountInvoices() {
   const { showToastOnTRPCMutation } = useAppContext();
   const [isOpen, setIsOpen] = useState(false);
 
   const accountInvoices = useCallback(async () => {
-    const result = await showToastOnTRPCMutation({
-      mutation: trpc.invoice.account.mutate(),
+    await showToastOnTRPCMutation({
+      // Downloaded as soon as the server answers: the Facturas are already accounted, so a sync that times out
+      // must not lose the file
+      mutation: trpc.invoice.account.mutate().then((result) => {
+        downloadUrl(`/api/files/accounting-export/${result.fileName}?generatedAt=${Date.now()}`, result.fileName);
+        return result;
+      }),
       collection: invoiceCollection,
       onSuccess: { title: INVOICES_ACCOUNTED_MESSAGE },
     });
-    if (!result) return;
-    downloadBase64File(result.content, result.fileName, "text/csv");
   }, [showToastOnTRPCMutation]);
 
   return (
