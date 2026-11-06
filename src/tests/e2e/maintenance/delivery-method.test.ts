@@ -2,6 +2,8 @@ import { expect } from "@playwright/test";
 import { eq } from "drizzle-orm";
 
 import { DELIVERY_METHOD_NAME_CONSTRAINT, dbTableDeliveryMethod } from "@/db/schema";
+import { DEFAULT_DELIVERY_METHOD_LABEL } from "@/messages/client";
+import { DELIVERY_METHOD_LABEL, NAME_LABEL } from "@/messages/common";
 import { mockClients, mockDeliveryMethods, mockDeliveryNotes } from "@/tests/mock-data";
 import { openAndConfirmAlertDialog } from "@/tests/utils/components/alert-dialog";
 import { assertComboboxValue, fillComboboxFilter, openCombobox } from "@/tests/utils/components/combobox";
@@ -29,7 +31,7 @@ test("manage the Transportes", { annotation: TestAnnotations.NonEmptyErrorsLogFi
 
   const submitDeliveryMethodName = async (name: string) => {
     await expect(dialogCreateEditDeliveryMethod).toBeVisible();
-    await getFormInputByLabel(dialogCreateEditDeliveryMethod, "Nombre").fill(name);
+    await getFormInputByLabel(dialogCreateEditDeliveryMethod, NAME_LABEL).fill(name);
     await dialogCreateEditDeliveryMethod.getByTestId("button-submit").click();
   };
 
@@ -136,7 +138,7 @@ test("manage the Transportes", { annotation: TestAnnotations.NonEmptyErrorsLogFi
         await page.goto(`/client/${client.id}`);
         await assertFormLoaded(formClient);
         await assertComboboxValue(
-          getFormInputByLabel(formClient, "Transporte predeterminado", InputElementType.Combobox),
+          getFormInputByLabel(formClient, DEFAULT_DELIVERY_METHOD_LABEL, InputElementType.Combobox),
           null,
         );
       }
@@ -149,7 +151,7 @@ test("manage the Transportes", { annotation: TestAnnotations.NonEmptyErrorsLogFi
         await workflowOpenEditDeliveryNote(page, deliveryNote.id);
         const comboboxDeliveryMethod = getFormInputByLabel(
           dialogCreateEditDeliveryNote,
-          "Transporte",
+          DELIVERY_METHOD_LABEL,
           InputElementType.Combobox,
         );
         await assertComboboxValue(comboboxDeliveryMethod, String(deliveryMethod.id));

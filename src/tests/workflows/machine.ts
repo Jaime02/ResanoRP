@@ -2,6 +2,7 @@ import { expect } from "@playwright/test";
 import type { Page } from "@playwright/test";
 
 import { getMachineById } from "@/db/functions/machine";
+import { NAME_LABEL } from "@/messages/common";
 import { openAndConfirmAlertDialog } from "@/tests/utils/components/alert-dialog";
 import { assertFormLoaded, getFormInputByLabel } from "@/tests/utils/components/form";
 import { findTableRowByText } from "@/tests/utils/components/table";
@@ -21,7 +22,7 @@ export async function workflowCreateMachine(page: Page, machineId: number, machi
   await expect(page).toHaveURL("/maintenance?tab=machine&createMachine=true");
   await expect(dialogCreateMachine).toBeVisible();
 
-  await getFormInputByLabel(dialogCreateMachine, "Nombre").fill(machineName);
+  await getFormInputByLabel(dialogCreateMachine, NAME_LABEL).fill(machineName);
   await dialogCreateMachine.getByTestId("button-submit").click();
 
   await expect(dialogCreateMachine).not.toBeVisible();

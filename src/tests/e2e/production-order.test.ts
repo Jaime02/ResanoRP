@@ -21,6 +21,8 @@ import {
 } from "@/db/schema";
 import { formatPartDimension } from "@/lib/formatters";
 import { translatedEnums } from "@/lib/translations";
+import { PART_LABEL } from "@/messages/common";
+import { QUANTITY_TO_PRODUCE_LABEL } from "@/messages/production-order";
 import { ProductionOrderStatus } from "@/schemas/production-order";
 import type { TProductionOrderFilters, TTableProductionOrderState } from "@/schemas/production-order";
 import {
@@ -943,7 +945,7 @@ test(
     const isActivePart = (partId: number) => mockParts.find((part) => part.id === partId)!.deletedAt === null;
     const getPartBlueprints = (partId: number) => mockBlueprints.filter((blueprint) => blueprint.partId === partId);
     const deletedPart = mockParts.find((part) => part.deletedAt !== null)!;
-    const inputQuantity = getFormInputByLabel(page, "Cantidad a fabricar", InputElementType.Number);
+    const inputQuantity = getFormInputByLabel(page, QUANTITY_TO_PRODUCE_LABEL, InputElementType.Number);
     const assertBlueprintsShown = async (partId: number) => {
       const blueprints = getPartBlueprints(partId);
       expect(blueprints.length, `Part ${partId} needs blueprints`).toBeGreaterThan(0);
@@ -963,7 +965,7 @@ test(
 
       const { dialogPickerPartContent, tablePickerPart } = await openPartPicker(
         page,
-        getFormInputByLabel(page, "Artículo", InputElementType.Picker),
+        getFormInputByLabel(page, PART_LABEL, InputElementType.Picker),
       );
       const inputFilterDescription = tablePickerPart.getByTestId("input-filter-description");
       // A deleted part cannot be picked

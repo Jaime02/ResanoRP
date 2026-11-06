@@ -3,6 +3,7 @@ import { expect } from "@playwright/test";
 import { getProductionOrderById } from "@/db/functions/production-order";
 import { getQualityChecksOfProductionOrder } from "@/db/functions/quality-check";
 import { DEFAULT_QUALITY_CONTROL_MIN_QUANTITY } from "@/lib/production-order";
+import { QUANTITY_TO_PRODUCE_LABEL } from "@/messages/production-order";
 import { mockProductionOrders, mockQualityChecks } from "@/tests/mock-data";
 import { InputElementType, assertFormLoaded, getFormInputByLabel } from "@/tests/utils/components/form";
 import { getTableRowByTestId } from "@/tests/utils/components/table";
@@ -82,7 +83,7 @@ test("the quality control of the production orders", async ({ page }) => {
   await test.step("a production order is created with quality control from the default quantity", async () => {
     await page.goto("/create-production-order");
     const checkbox = getQualityControlCheckbox(page);
-    const inputQuantity = getFormInputByLabel(page, "Cantidad a fabricar", InputElementType.Number);
+    const inputQuantity = getFormInputByLabel(page, QUANTITY_TO_PRODUCE_LABEL, InputElementType.Number);
     await assertFormLoaded(page);
     await expect(checkbox).not.toBeChecked();
     await inputQuantity.fill(String(DEFAULT_QUALITY_CONTROL_MIN_QUANTITY));

@@ -7,6 +7,7 @@ import { getDeliveryNote, getDeliveryNotes, getDeliveryNoteWithLinesForDocument 
 import { getInvoiceById, getInvoices } from "@/db/functions/invoice";
 import { startOfAppDay } from "@/lib/dates";
 import { formatCents, getDeliveryNoteLineUnitPrice, getLinesTotalInCents, getTotalWithVatInCents } from "@/lib/prices";
+import { CLIENT_LABEL, FROM_LABEL, TO_LABEL } from "@/messages/common";
 import { openAndConfirmAlertDialog } from "@/tests/utils/components/alert-dialog";
 import { selectComboboxOption } from "@/tests/utils/components/combobox";
 import { selectDateInputDate } from "@/tests/utils/components/date-input";
@@ -31,8 +32,8 @@ async function assertTableDeliveryNotes(table: Locator, deliveryNotes: Array<Bas
 
 // The range is filled in from the pending Albaranes displayed, so it is only settled once it spans all of them
 export async function assertDateRangeOfDeliveryNotes(dialog: Locator, deliveryNotes: Array<BaseDeliveryNote>) {
-  const inputStartDate = getFormInputByLabel(dialog, "Desde", InputElementType.Date);
-  const inputEndDate = getFormInputByLabel(dialog, "Hasta", InputElementType.Date);
+  const inputStartDate = getFormInputByLabel(dialog, FROM_LABEL, InputElementType.Date);
+  const inputEndDate = getFormInputByLabel(dialog, TO_LABEL, InputElementType.Date);
   if (deliveryNotes.length === 0) {
     await expect(inputStartDate).not.toHaveAttribute("data-value");
     await expect(inputEndDate).not.toHaveAttribute("data-value");
@@ -102,7 +103,7 @@ export async function assertTablePendingDeliveryNotes(dialog: Locator, deliveryN
 export async function selectInvoiceClient(page: Page, dialog: Locator, client: BaseClient) {
   await selectComboboxOption(
     page,
-    getFormInputByLabel(dialog, "Cliente", InputElementType.Combobox),
+    getFormInputByLabel(dialog, CLIENT_LABEL, InputElementType.Combobox),
     client.name,
     String(client.id),
   );
@@ -135,12 +136,12 @@ export async function workflowCreateInvoice(
   if (startDate !== undefined) {
     await selectDateInputDate(
       page,
-      getFormInputByLabel(dialogCreateInvoice, "Desde", InputElementType.Date),
+      getFormInputByLabel(dialogCreateInvoice, FROM_LABEL, InputElementType.Date),
       startDate,
     );
   }
   if (endDate !== undefined) {
-    await selectDateInputDate(page, getFormInputByLabel(dialogCreateInvoice, "Hasta", InputElementType.Date), endDate);
+    await selectDateInputDate(page, getFormInputByLabel(dialogCreateInvoice, TO_LABEL, InputElementType.Date), endDate);
   }
   await dialogCreateInvoice.getByTestId("button-submit").click();
 

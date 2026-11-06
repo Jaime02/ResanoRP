@@ -2,6 +2,9 @@ import { expect } from "@playwright/test";
 import { eq } from "drizzle-orm";
 
 import { PAYMENT_METHOD_NAME_CONSTRAINT, dbTablePaymentMethod } from "@/db/schema";
+import { DEFAULT_PAYMENT_METHOD_LABEL } from "@/messages/client";
+import { NAME_LABEL, PAYMENT_METHOD_LABEL } from "@/messages/common";
+import { PAYMENT_METHOD_DUE_DAYS_LABEL } from "@/messages/payment-method";
 import { mockClients, mockInvoices, mockPaymentMethods, mockSellOrders } from "@/tests/mock-data";
 import { openAndConfirmAlertDialog } from "@/tests/utils/components/alert-dialog";
 import { assertComboboxValue, fillComboboxFilter, openCombobox } from "@/tests/utils/components/combobox";
@@ -53,7 +56,7 @@ test(
       await page.getByRole("button", { name: "Crear Forma de pago" }).click();
       await expect(dialogCreateEditPaymentMethod).toBeVisible();
       await expect(checkboxGeneratesReceipt).not.toBeChecked();
-      await getFormInputByLabel(dialogCreateEditPaymentMethod, "Nombre").fill(newPaymentMethodName);
+      await getFormInputByLabel(dialogCreateEditPaymentMethod, NAME_LABEL).fill(newPaymentMethodName);
       await checkboxGeneratesReceipt.click();
       await expect(checkboxGeneratesReceipt).toBeChecked();
       await dialogCreateEditPaymentMethod.getByTestId("button-submit").click();
@@ -75,8 +78,11 @@ test(
         await (await findTableRowByText(tablePaymentMethod, paymentMethod.name)).getByTestId("button-edit").click();
         await expect(dialogCreateEditPaymentMethod).toBeVisible();
         await assertFormLoaded(dialogCreateEditPaymentMethod);
-        const inputPaymentDeadlineDays = getFormInputByLabel(dialogCreateEditPaymentMethod, "Días de vencimiento");
-        await expect(getFormInputByLabel(dialogCreateEditPaymentMethod, "Nombre")).toHaveValue(paymentMethod.name);
+        const inputPaymentDeadlineDays = getFormInputByLabel(
+          dialogCreateEditPaymentMethod,
+          PAYMENT_METHOD_DUE_DAYS_LABEL,
+        );
+        await expect(getFormInputByLabel(dialogCreateEditPaymentMethod, NAME_LABEL)).toHaveValue(paymentMethod.name);
         await expect(inputPaymentDeadlineDays).toHaveValue(
           paymentMethod.paymentDeadlineDays === null ? "" : `${paymentMethod.paymentDeadlineDays} días`,
         );
@@ -112,7 +118,7 @@ test(
       for (const paymentMethod of activePaymentMethods) {
         await page.getByRole("button", { name: "Crear Forma de pago" }).click();
         await expect(dialogCreateEditPaymentMethod).toBeVisible();
-        await getFormInputByLabel(dialogCreateEditPaymentMethod, "Nombre").fill(paymentMethod.name);
+        await getFormInputByLabel(dialogCreateEditPaymentMethod, NAME_LABEL).fill(paymentMethod.name);
         await dialogCreateEditPaymentMethod.getByTestId("button-submit").click();
 
         await expect(toasts).toHaveCount(1);
@@ -204,7 +210,7 @@ test(
           await page.goto(`/client/${client.id}`);
           await assertFormLoaded(formClient);
           await assertComboboxValue(
-            getFormInputByLabel(formClient, "Forma de pago predeterminada", InputElementType.Combobox),
+            getFormInputByLabel(formClient, DEFAULT_PAYMENT_METHOD_LABEL, InputElementType.Combobox),
             null,
           );
         }
@@ -215,7 +221,11 @@ test(
         )) {
           await page.goto(`/sell-order/${sellOrder.id}`);
           await assertFormLoaded(formSellOrder);
-          const comboboxPaymentMethod = getFormInputByLabel(formSellOrder, "Forma de pago", InputElementType.Combobox);
+          const comboboxPaymentMethod = getFormInputByLabel(
+            formSellOrder,
+            PAYMENT_METHOD_LABEL,
+            InputElementType.Combobox,
+          );
           await assertComboboxValue(comboboxPaymentMethod, String(paymentMethod.id));
           await expect(comboboxPaymentMethod.getByTestId("button-trigger")).toHaveText(paymentMethod.name);
 
@@ -228,7 +238,7 @@ test(
         await page.goto(MAINTENANCE_PAYMENT_METHOD_URL);
         await page.getByRole("button", { name: "Crear Forma de pago" }).click();
         await expect(dialogCreateEditPaymentMethod).toBeVisible();
-        await getFormInputByLabel(dialogCreateEditPaymentMethod, "Nombre").fill(paymentMethod.name);
+        await getFormInputByLabel(dialogCreateEditPaymentMethod, NAME_LABEL).fill(paymentMethod.name);
         await dialogCreateEditPaymentMethod.getByTestId("button-submit").click();
         await expect(dialogCreateEditPaymentMethod).not.toBeVisible();
         await expect(filterByExactText(getTableRows(tablePaymentMethod), paymentMethod.name)).toHaveCount(1);

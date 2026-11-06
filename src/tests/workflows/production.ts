@@ -14,6 +14,8 @@ import {
 import { getSellOrderById } from "@/db/functions/sell-order";
 import { getSellOrderLineById } from "@/db/functions/sell-order-line";
 import { isProductionFinished } from "@/lib/production-order";
+import { PART_LABEL } from "@/messages/common";
+import { QUANTITY_TO_PRODUCE_LABEL, UNITS_PRODUCED_LABEL } from "@/messages/production-order";
 import { ProductionOrderStatus } from "@/schemas/production-order";
 import type { TTableProductionOrderState } from "@/schemas/production-order";
 import { mockProductionOrders } from "@/tests/mock-data";
@@ -39,7 +41,7 @@ export function getProductionLocators(page: Page) {
     formMachineProductionOrder: page.getByTestId("form-machine-production-order"),
     inputProducedQuantity: getFormInputByLabel(
       dialogContentStopProductionOrder,
-      "Unidades fabricadas",
+      UNITS_PRODUCED_LABEL,
       InputElementType.Number,
     ),
     tableMachineProductionOrderQueue: dialogContentMachineProductionOrderQueue.getByTestId(
@@ -310,13 +312,13 @@ export async function workflowCreateProductionOrder(
   if (part !== undefined) {
     const { dialogPickerPartContent, tablePickerPart } = await openPartPicker(
       page,
-      getFormInputByLabel(page, "Artículo", InputElementType.Picker),
+      getFormInputByLabel(page, PART_LABEL, InputElementType.Picker),
     );
     await tablePickerPart.getByTestId("input-filter-description").fill(part.description);
     await getTableRowByTestId(tablePickerPart, part.id).getByTestId("button-success").click();
     await expect(dialogPickerPartContent).not.toBeVisible();
   }
-  await getFormInputByLabel(page, "Cantidad a fabricar", InputElementType.Number).fill("1");
+  await getFormInputByLabel(page, QUANTITY_TO_PRODUCE_LABEL, InputElementType.Number).fill("1");
   await page.getByTestId("button-submit").click();
   await expectSingleToast(page, expectedErrorMessage);
   if (expectedErrorMessage === undefined) {

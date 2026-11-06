@@ -16,20 +16,22 @@ export function getFormInputByLabel(
   labelText: string,
   inputElementType: InputElementType = InputElementType.Input,
 ): Locator {
+  // A backslash or quote in a label (e.g. "Característica \ Unidades") breaks an unescaped CSS string
+  const label = JSON.stringify(labelText);
   switch (inputElementType) {
     case InputElementType.Textarea:
-      return element.locator(`label:text-is("${labelText}") + textarea[data-input-type="textarea"]`);
+      return element.locator(`label:text-is(${label}) + textarea[data-input-type="textarea"]`);
     case InputElementType.Input:
     case InputElementType.Number:
-      return element.locator(`label:text-is("${labelText}") + input[data-input-type="input"]`);
+      return element.locator(`label:text-is(${label}) + input[data-input-type="input"]`);
     case InputElementType.Date:
-      return element.locator(`label:text-is("${labelText}") + div[data-input-type="date-input"]`);
+      return element.locator(`label:text-is(${label}) + div[data-input-type="date-input"]`);
     case InputElementType.Combobox:
-      return element.locator(`label:text-is("${labelText}") + div[data-input-type="combobox"]`);
+      return element.locator(`label:text-is(${label}) + div[data-input-type="combobox"]`);
     case InputElementType.File:
-      return element.locator(`label:text-is("${labelText}") + div[data-input-type="dropzone"]`);
+      return element.locator(`label:text-is(${label}) + div[data-input-type="dropzone"]`);
     case InputElementType.Picker:
-      return element.locator(`label:text-is("${labelText}") + div[data-input-type="picker"]`);
+      return element.locator(`label:text-is(${label}) + div[data-input-type="picker"]`);
     default:
       throw new Error(`Invalid argument, unknown type: "${inputElementType as string}"`);
   }

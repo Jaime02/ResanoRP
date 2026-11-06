@@ -6,6 +6,7 @@ import type { Locator } from "@playwright/test";
 import { getMachineById } from "@/db/functions/machine";
 import { getMachineProductionOrderQueue } from "@/db/functions/machine-production-order-queue";
 import { getProductionOrderById, getProductionOrderProducedQuantity } from "@/db/functions/production-order";
+import { CLIENT_LABEL, NOTES_LABEL } from "@/messages/common";
 import { ProductionOrderStatus } from "@/schemas/production-order";
 import { mockMachineProductionOrderQueues, mockMachines, mockProductionOrders } from "@/tests/mock-data";
 import { getTestId } from "@/tests/utils/components";
@@ -78,11 +79,11 @@ test(
 
         const dbProductionOrder = await getActiveProductionOrder(userMachine);
 
-        const inputClient = getFormInputByLabel(formMachineProductionOrder, "Cliente", InputElementType.Input);
+        const inputClient = getFormInputByLabel(formMachineProductionOrder, CLIENT_LABEL, InputElementType.Input);
         await expect(inputClient).toHaveValue(await getProductionOrderClientName(dbProductionOrder));
 
         const newNotes = `Updated production order notes of ${userMachine.name}`;
-        const inputNotes = getFormInputByLabel(formMachineProductionOrder, "Notas", InputElementType.Textarea);
+        const inputNotes = getFormInputByLabel(formMachineProductionOrder, NOTES_LABEL, InputElementType.Textarea);
         await expect(inputNotes).toBeVisible();
         expect(await inputNotes.inputValue()).toBe(dbProductionOrder.notes ?? "");
 

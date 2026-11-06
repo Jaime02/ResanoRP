@@ -4,6 +4,7 @@ import { UserMode } from "@/contexts/app-context";
 import { getMachineById } from "@/db/functions/machine";
 import { getMachineProductionOrderQueue } from "@/db/functions/machine-production-order-queue";
 import { getProductionOrderById } from "@/db/functions/production-order";
+import { NOTES_LABEL } from "@/messages/common";
 import { ProductionOrderStatus } from "@/schemas/production-order";
 import { InputElementType, getFormInputByLabel } from "@/tests/utils/components/form";
 import { getTableRowByTestId } from "@/tests/utils/components/table";
@@ -90,14 +91,14 @@ test("what a machine has filled in survives an administrator editing its active 
   await workflowFillQualityCheck(page, 7);
 
   await adminPage.goto(`/production-order/${productionOrderId}`);
-  const inputNotes = getFormInputByLabel(adminPage, "Notas", InputElementType.Textarea);
+  const inputNotes = getFormInputByLabel(adminPage, NOTES_LABEL, InputElementType.Textarea);
   await inputNotes.fill(newNotes);
   await adminPage.getByTestId("button-submit").click();
   await expectSingleToast(adminPage);
   expect((await getProductionOrderById(productionOrderId))?.notes).toBe(newNotes);
 
   await expect(
-    getFormInputByLabel(page.getByTestId("form-machine-production-order"), "Notas", InputElementType.Textarea),
+    getFormInputByLabel(page.getByTestId("form-machine-production-order"), NOTES_LABEL, InputElementType.Textarea),
   ).toHaveValue(newNotes);
   await expect(inputQuantity).toHaveValue("7");
 

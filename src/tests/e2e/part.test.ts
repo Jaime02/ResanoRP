@@ -29,7 +29,21 @@ import {
 import { getBlueprintPath } from "@/files/blueprint";
 import { formatPrice } from "@/lib/formatters";
 import { translatedEnums } from "@/lib/translations";
-import { PART_REFERENCE_DELETED_TOOLTIP_MESSAGE } from "@/messages/part";
+import { BLUEPRINT_LABEL } from "@/messages/blueprint";
+import {
+  DESCRIPTION_LABEL,
+  NAME_LABEL,
+  NOTES_LABEL,
+  PRICE_LABEL,
+  QUANTITY_LABEL,
+  REFERENCE_LABEL,
+} from "@/messages/common";
+import {
+  CLIENT_REFERENCE_DESCRIPTION_LABEL,
+  PART_FEATURE_LABEL,
+  PART_REFERENCE_DELETED_TOOLTIP_MESSAGE,
+  PART_STOCK_UPDATE_QUANTITY_LABEL,
+} from "@/messages/part";
 import type { TTablePartState } from "@/schemas/part";
 import { ProductionOrderStatus } from "@/schemas/production-order";
 import { sanitizePath } from "@/schemas/utils";
@@ -347,7 +361,7 @@ test("manage the parts", { annotation: TestAnnotations.ResetBlueprints }, async 
   });
 
   await test.step("keep the unsaved changes of every part while its related rows change", async () => {
-    const inputDescription = getFormInputByLabel(formPart, "Descripción");
+    const inputDescription = getFormInputByLabel(formPart, DESCRIPTION_LABEL);
 
     for (const part of activeParts) {
       const unsavedDescription = `Unsaved description of ${part.id}`;
@@ -359,7 +373,7 @@ test("manage the parts", { annotation: TestAnnotations.ResetBlueprints }, async 
       await page.getByRole("tab", { name: "Planos" }).click();
       await formPart.getByTestId("button-create-part-feature").click();
       const dialogCreatePartFeature = page.getByTestId("dialog-create-part-feature");
-      await getFormInputByLabel(dialogCreatePartFeature, "Característica").fill("Característica sin guardar");
+      await getFormInputByLabel(dialogCreatePartFeature, PART_FEATURE_LABEL).fill("Característica sin guardar");
       await dialogCreatePartFeature.getByTestId("button-submit").click();
       await expect(dialogCreatePartFeature).toBeHidden();
       await expect(toasts).toHaveCount(1);
@@ -372,7 +386,7 @@ test("manage the parts", { annotation: TestAnnotations.ResetBlueprints }, async 
       // ...but a change of the Artículo itself reloads the form
       const syncedNotes = `Synced notes of ${part.id}`;
       await db.update(dbTablePart).set({ notes: syncedNotes }).where(eq(dbTablePart.id, part.id));
-      await expect(getFormInputByLabel(formPart, "Notas", InputElementType.Textarea)).toHaveValue(syncedNotes);
+      await expect(getFormInputByLabel(formPart, NOTES_LABEL, InputElementType.Textarea)).toHaveValue(syncedNotes);
       await expect(inputDescription).toHaveValue(part.description);
     }
   });
@@ -387,7 +401,7 @@ test("manage the parts", { annotation: TestAnnotations.ResetBlueprints }, async 
       await page.goto(`/part/${part.id}`);
       await assertFormLoaded(formPart);
 
-      const inputDescription = getFormInputByLabel(formPart, "Descripción");
+      const inputDescription = getFormInputByLabel(formPart, DESCRIPTION_LABEL);
       await inputDescription.fill(updatedDescription);
       await expect(inputDescription).toHaveValue(updatedDescription);
 
@@ -427,22 +441,22 @@ test("manage the parts", { annotation: TestAnnotations.ResetBlueprints }, async 
       const newWidth = "75.5";
       const newLength = "150";
 
-      await getFormInputByLabel(formPart, "Referencia").fill(newReference);
-      await getFormInputByLabel(formPart, "Descripción del Cliente").fill(newClientDescription);
+      await getFormInputByLabel(formPart, REFERENCE_LABEL).fill(newReference);
+      await getFormInputByLabel(formPart, CLIENT_REFERENCE_DESCRIPTION_LABEL).fill(newClientDescription);
 
       const clientReferenceCombobox = formPart.getByTestId("combobox-client");
       await openCombobox(clientReferenceCombobox);
       await clickInComboboxOption(page, client.name);
 
-      await getFormInputByLabel(formPart, "Descripción").fill(newDescription);
-      await getFormInputByLabel(formPart, "Notas", InputElementType.Textarea).fill(newNotes);
+      await getFormInputByLabel(formPart, DESCRIPTION_LABEL).fill(newDescription);
+      await getFormInputByLabel(formPart, NOTES_LABEL, InputElementType.Textarea).fill(newNotes);
       await formPart.getByTestId("input-width").pressSequentially(newWidth);
       await formPart.getByTestId("input-length").pressSequentially(newLength);
 
       await formPart.getByTestId("button-submit").click();
 
       await expect(page).toHaveURL(`/part/${newPartId}`);
-      await expect(getFormInputByLabel(formPart, "Descripción")).toHaveValue(newDescription);
+      await expect(getFormInputByLabel(formPart, DESCRIPTION_LABEL)).toHaveValue(newDescription);
       expect(await countGetPartByIdQueryErrors()).toBe(0);
 
       expect(await getPartById(newPartId)).toMatchObject({
@@ -474,9 +488,11 @@ test("manage the parts", { annotation: TestAnnotations.ResetBlueprints }, async 
       const newDescription = "New Test Part Description";
       const newReference = `REF123-${index}`;
 
-      await getFormInputByLabel(formPart, "Referencia").fill(newReference);
-      await getFormInputByLabel(formPart, "Descripción").fill(newDescription);
-      await getFormInputByLabel(formPart, "Descripción del Cliente").fill(`${newReference} Client description`);
+      await getFormInputByLabel(formPart, REFERENCE_LABEL).fill(newReference);
+      await getFormInputByLabel(formPart, DESCRIPTION_LABEL).fill(newDescription);
+      await getFormInputByLabel(formPart, CLIENT_REFERENCE_DESCRIPTION_LABEL).fill(
+        `${newReference} Client description`,
+      );
 
       await openCombobox(formPart.getByTestId("combobox-client"));
       await clickInComboboxOption(page, client.name);
@@ -511,10 +527,10 @@ test("edit, delete and create the prices of every part", async ({ page, toasts }
       await expect(dialogEditPartPrice).toBeVisible();
       await assertFormLoaded(dialogEditPartPrice);
 
-      const inputPrice = getFormInputByLabel(dialogEditPartPrice, "Precio", InputElementType.Number);
+      const inputPrice = getFormInputByLabel(dialogEditPartPrice, PRICE_LABEL, InputElementType.Number);
       const comboboxClient = dialogEditPartPrice.getByTestId("combobox-client");
       await expect(inputPrice).toHaveValue(formatPrice(partPrice.price, { replaceNBSP: true }));
-      await expect(getFormInputByLabel(dialogEditPartPrice, "Cantidad", InputElementType.Number)).toHaveValue(
+      await expect(getFormInputByLabel(dialogEditPartPrice, QUANTITY_LABEL, InputElementType.Number)).toHaveValue(
         String(partPrice.quantity),
       );
       await assertComboboxValue(comboboxClient, partPrice.clientId === null ? null : String(partPrice.clientId));
@@ -558,10 +574,10 @@ test("edit, delete and create the prices of every part", async ({ page, toasts }
       const newQuantity = String(55 + index);
       const newPrice = "12.34";
 
-      const inputQuantity = getFormInputByLabel(cardCreatePartPrice, "Cantidad", InputElementType.Number);
+      const inputQuantity = getFormInputByLabel(cardCreatePartPrice, QUANTITY_LABEL, InputElementType.Number);
       await inputQuantity.clear();
       await inputQuantity.pressSequentially(newQuantity);
-      const inputPrice = getFormInputByLabel(cardCreatePartPrice, "Precio", InputElementType.Number);
+      const inputPrice = getFormInputByLabel(cardCreatePartPrice, PRICE_LABEL, InputElementType.Number);
       await inputPrice.clear();
       await inputPrice.pressSequentially(newPrice);
       await openCombobox(cardCreatePartPrice.getByTestId("combobox-client"));
@@ -605,8 +621,8 @@ test("keep the unsaved changes of a price while its client changes, but reload i
   await expect(dialogEditPartPrice).toBeVisible();
   await assertFormLoaded(dialogEditPartPrice);
 
-  const inputPrice = getFormInputByLabel(dialogEditPartPrice, "Precio", InputElementType.Number);
-  const inputQuantity = getFormInputByLabel(dialogEditPartPrice, "Cantidad", InputElementType.Number);
+  const inputPrice = getFormInputByLabel(dialogEditPartPrice, PRICE_LABEL, InputElementType.Number);
+  const inputQuantity = getFormInputByLabel(dialogEditPartPrice, QUANTITY_LABEL, InputElementType.Number);
   const comboboxClient = dialogEditPartPrice.getByTestId("combobox-client");
   await inputPrice.clear();
   await inputPrice.pressSequentially(unsavedPrice);
@@ -756,7 +772,11 @@ test("add stock to every part without an existing part stock", async ({ page, db
     await expect(dialogPartStock).toBeVisible();
     await assertFormLoaded(dialogPartStock);
 
-    const inputQuantity = getFormInputByLabel(dialogPartStock, "Actualizar cantidad", InputElementType.Number);
+    const inputQuantity = getFormInputByLabel(
+      dialogPartStock,
+      PART_STOCK_UPDATE_QUANTITY_LABEL,
+      InputElementType.Number,
+    );
     await expect(inputQuantity).toHaveValue("");
     await inputQuantity.pressSequentially(newQuantity);
     await expect(inputQuantity).toHaveValue(newQuantity);
@@ -797,7 +817,7 @@ test(
       const newFeature = `Característica nueva de ${part.id}`;
       await formPart.getByTestId("button-create-part-feature").click();
       await expect(dialogCreatePartFeature).toBeVisible();
-      await getFormInputByLabel(dialogCreatePartFeature, "Característica").fill(newFeature);
+      await getFormInputByLabel(dialogCreatePartFeature, PART_FEATURE_LABEL).fill(newFeature);
       await dialogCreatePartFeature.getByTestId("button-submit").click();
       await expect(dialogCreatePartFeature).toBeHidden();
       await expect(toasts).toHaveCount(1);
@@ -869,7 +889,7 @@ test(
     const [firstFeature, secondFeature] = getPartFeatures(part.id);
     const createPartFeature = async (feature: string) => {
       await formPart.getByTestId("button-create-part-feature").click();
-      await getFormInputByLabel(dialogCreatePartFeature, "Característica").fill(feature);
+      await getFormInputByLabel(dialogCreatePartFeature, PART_FEATURE_LABEL).fill(feature);
       await dialogCreatePartFeature.getByTestId("button-submit").click();
     };
 
@@ -919,7 +939,7 @@ test("a feature can have a range of up to 2 decimals whose minimum cannot exceed
   await page.goto(`/part/${part.id}?tab=blueprints`);
   await assertFormLoaded(formPart);
   await formPart.getByTestId("button-create-part-feature").click();
-  await getFormInputByLabel(dialogCreatePartFeature, "Característica").fill(feature);
+  await getFormInputByLabel(dialogCreatePartFeature, PART_FEATURE_LABEL).fill(feature);
   await inputMinValue.fill("5,5");
   await inputMaxValue.fill("5");
   await expect(buttonSubmit).toBeDisabled();
@@ -1023,11 +1043,11 @@ test(
       // Its folder is created if it has none yet
       await formPart.getByTestId("button-add-blueprint").click();
       await expect(dialogCreateBlueprint).toBeVisible();
-      const inputFilename = getFormInputByLabel(dialogCreateBlueprint, "Nombre");
+      const inputFilename = getFormInputByLabel(dialogCreateBlueprint, NAME_LABEL);
       await expect(inputFilename).toHaveValue("");
       await setInputFiles(
         page,
-        getFormInputByLabel(dialogCreateBlueprint, "Plano", InputElementType.File),
+        getFormInputByLabel(dialogCreateBlueprint, BLUEPRINT_LABEL, InputElementType.File),
         newBlueprintFilePath,
       );
       await expect(inputFilename).toHaveValue(path.parse(newBlueprintFilePath).name);
@@ -1054,7 +1074,7 @@ test(
         await cardBlueprint.getByTestId("button-edit").click();
         await expect(dialogEditBlueprint).toBeVisible();
 
-        const inputEditFilename = getFormInputByLabel(dialogEditBlueprint, "Nombre");
+        const inputEditFilename = getFormInputByLabel(dialogEditBlueprint, NAME_LABEL);
         await expect(inputEditFilename).toHaveValue(blueprint.fileName);
         await inputEditFilename.fill(`${renamedBlueprintName}.pdf`);
         await dialogEditBlueprint.getByTestId("button-submit").click();
@@ -1071,10 +1091,10 @@ test(
       await expect(dialogCreateBlueprint).toBeVisible();
       await setInputFiles(
         page,
-        getFormInputByLabel(dialogCreateBlueprint, "Plano", InputElementType.File),
+        getFormInputByLabel(dialogCreateBlueprint, BLUEPRINT_LABEL, InputElementType.File),
         newBlueprintFilePath,
       );
-      await getFormInputByLabel(dialogCreateBlueprint, "Nombre").fill(`Renamed-${dbBlueprints[0].id}`);
+      await getFormInputByLabel(dialogCreateBlueprint, NAME_LABEL).fill(`Renamed-${dbBlueprints[0].id}`);
       await dialogCreateBlueprint.getByTestId("button-submit").click();
       await expect(toasts).toHaveCount(1);
       expect(await getToastType(toasts.first())).toBe(ToastType.Error);
@@ -1388,8 +1408,8 @@ test("update every part reference", async ({ page, db }) => {
     await expect(dialogCreateEditPartReference).toBeVisible();
     await assertFormLoaded(dialogCreateEditPartReference);
 
-    await getFormInputByLabel(dialogCreateEditPartReference, "Referencia").fill(newReference);
-    await getFormInputByLabel(dialogCreateEditPartReference, "Descripción del Cliente").fill(newDescription);
+    await getFormInputByLabel(dialogCreateEditPartReference, REFERENCE_LABEL).fill(newReference);
+    await getFormInputByLabel(dialogCreateEditPartReference, CLIENT_REFERENCE_DESCRIPTION_LABEL).fill(newDescription);
     const clientCombobox = dialogCreateEditPartReference.getByTestId("combobox-client");
     await openCombobox(clientCombobox);
     await clickInComboboxOption(page, newClient.name);
@@ -1424,9 +1444,9 @@ test(
     const submitPartReference = async (reference: string, clientName: string, description?: string) => {
       await formPart.getByTestId("button-add-reference").click();
       await expect(dialogCreateEditPartReference).toBeVisible();
-      await getFormInputByLabel(dialogCreateEditPartReference, "Referencia").fill(reference);
+      await getFormInputByLabel(dialogCreateEditPartReference, REFERENCE_LABEL).fill(reference);
       if (description !== undefined) {
-        await getFormInputByLabel(dialogCreateEditPartReference, "Descripción del Cliente").fill(description);
+        await getFormInputByLabel(dialogCreateEditPartReference, CLIENT_REFERENCE_DESCRIPTION_LABEL).fill(description);
       }
       await openCombobox(clientCombobox);
       await clickInComboboxOption(page, clientName);
@@ -1933,8 +1953,8 @@ for (const userMode of [UserMode.Admin, UserMode.User]) {
       await assertTableRowCount(tablePartReferences, formPartReferences.length);
       await expect(tablePartReferences.getByTestId("tooltip-deleted")).toHaveCount(deletedPartReferencesCount);
       await (isAdmin
-        ? expect(getFormInputByLabel(formPart, "Descripción")).toBeEditable()
-        : expect(getFormInputByLabel(formPart, "Descripción")).not.toBeEditable());
+        ? expect(getFormInputByLabel(formPart, DESCRIPTION_LABEL)).toBeEditable()
+        : expect(getFormInputByLabel(formPart, DESCRIPTION_LABEL)).not.toBeEditable());
       await expectShown(page.getByTestId("button-create-part"), isAdmin);
       await expectShown(formPart.getByTestId("button-submit"), isAdmin);
       await expectShown(formPart.getByTestId("button-add-reference"), isAdmin);
@@ -1993,9 +2013,9 @@ test(
 
     await test.step("create the part with its blueprint folder", async () => {
       await page.goto("/part?createPart=true");
-      await getFormInputByLabel(formPart, "Referencia").fill("628000450");
-      await getFormInputByLabel(formPart, "Descripción").fill(description);
-      await getFormInputByLabel(formPart, "Descripción del Cliente").fill(description);
+      await getFormInputByLabel(formPart, REFERENCE_LABEL).fill("628000450");
+      await getFormInputByLabel(formPart, DESCRIPTION_LABEL).fill(description);
+      await getFormInputByLabel(formPart, CLIENT_REFERENCE_DESCRIPTION_LABEL).fill(description);
       await openCombobox(formPart.getByTestId("combobox-client"));
       await clickInComboboxOption(page, activeClients[0].name);
       await formPart.getByTestId("button-submit").click();
@@ -2013,10 +2033,10 @@ test(
       const dialogCreateBlueprint = page.getByTestId("dialog-create-blueprint");
       await setInputFiles(
         page,
-        getFormInputByLabel(dialogCreateBlueprint, "Plano", InputElementType.File),
+        getFormInputByLabel(dialogCreateBlueprint, BLUEPRINT_LABEL, InputElementType.File),
         path.join(MOCK_DATA_PATH, "sample.pdf"),
       );
-      await getFormInputByLabel(dialogCreateBlueprint, "Nombre").fill(blueprintFileName);
+      await getFormInputByLabel(dialogCreateBlueprint, NAME_LABEL).fill(blueprintFileName);
       await dialogCreateBlueprint.getByTestId("button-submit").click();
       await expect(dialogCreateBlueprint).not.toBeVisible();
 
@@ -2058,16 +2078,16 @@ test("create a part with its blueprint", { annotation: [TestAnnotations.ResetBlu
   const blueprintFileName = "NewPartBlueprint";
 
   await page.goto("/part?createPart=true");
-  await getFormInputByLabel(formPart, "Referencia").fill("REF-BLUEPRINT");
-  await getFormInputByLabel(formPart, "Descripción").fill("Part with blueprint");
-  await getFormInputByLabel(formPart, "Descripción del Cliente").fill("Part with blueprint");
+  await getFormInputByLabel(formPart, REFERENCE_LABEL).fill("REF-BLUEPRINT");
+  await getFormInputByLabel(formPart, DESCRIPTION_LABEL).fill("Part with blueprint");
+  await getFormInputByLabel(formPart, CLIENT_REFERENCE_DESCRIPTION_LABEL).fill("Part with blueprint");
   await openCombobox(formPart.getByTestId("combobox-client"));
   await clickInComboboxOption(page, activeClients[0].name);
 
-  const inputFileName = getFormInputByLabel(formPart, "Nombre");
+  const inputFileName = getFormInputByLabel(formPart, NAME_LABEL);
   await setInputFiles(
     page,
-    getFormInputByLabel(formPart, "Plano", InputElementType.File),
+    getFormInputByLabel(formPart, BLUEPRINT_LABEL, InputElementType.File),
     path.join(MOCK_DATA_PATH, "sample.pdf"),
   );
   await expect(inputFileName).toHaveValue("sample");

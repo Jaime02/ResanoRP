@@ -4,6 +4,8 @@ import { eq } from "drizzle-orm";
 
 import type { TDatabase } from "@/db";
 import { MATERIAL_COMBINATION_CONSTRAINT, SHAPE_NAME_CONSTRAINT, dbTableMaterial, dbTableShape } from "@/db/schema";
+import { SHAPE_LABEL } from "@/messages/common";
+import { RAW_MATERIAL_LABEL } from "@/messages/material";
 import { mockMaterials, mockRawMaterials, mockShapes } from "@/tests/mock-data";
 import { openAndConfirmAlertDialog } from "@/tests/utils/components/alert-dialog";
 import {
@@ -44,12 +46,12 @@ async function fillMaterialForm(page: Page, material: (typeof mockMaterials)[num
   expect(rawMaterial).toBeDefined();
   expect(shape).toBeDefined();
 
-  const comboboxRawMaterial = getFormInputByLabel(dialogCreateMaterial, "Materia prima", InputElementType.Combobox);
+  const comboboxRawMaterial = getFormInputByLabel(dialogCreateMaterial, RAW_MATERIAL_LABEL, InputElementType.Combobox);
   await openCombobox(comboboxRawMaterial);
   await fillComboboxFilter(page, rawMaterial!.name);
   await clickInComboboxOption(page, rawMaterial!.name);
 
-  const comboboxShape = getFormInputByLabel(dialogCreateMaterial, "Forma", InputElementType.Combobox);
+  const comboboxShape = getFormInputByLabel(dialogCreateMaterial, SHAPE_LABEL, InputElementType.Combobox);
   await openCombobox(comboboxShape);
   await fillComboboxFilter(page, shape!.name);
   await clickInComboboxOption(page, shape!.name);

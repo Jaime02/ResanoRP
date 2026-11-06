@@ -5,6 +5,8 @@ import { eq } from "drizzle-orm";
 import { AppContextStorage, UserMode } from "@/contexts/app-context";
 import { getMachineById } from "@/db/functions/machine";
 import { MACHINE_NAME_CONSTRAINT, dbTableMachine, dbTablePartProduction } from "@/db/schema";
+import { NAME_LABEL } from "@/messages/common";
+import { MACHINE_MAX_DIAMETER_LABEL, MACHINE_MIN_DIAMETER_LABEL } from "@/messages/machine";
 import { ProductionOrderStatus } from "@/schemas/production-order";
 import {
   MOCK_INITIAL_DATE,
@@ -78,7 +80,7 @@ test("manage the machines", { annotation: TestAnnotations.NonEmptyErrorsLogFile 
 
       await expect(formMachine).toBeVisible();
       await assertFormLoaded(formMachine);
-      await expect(getFormInputByLabel(formMachine, "Nombre")).toHaveValue(machine.name);
+      await expect(getFormInputByLabel(formMachine, NAME_LABEL)).toHaveValue(machine.name);
 
       await expect(tableMachineProductionHistory).toBeVisible();
       await assertTableRowCount(tableMachineProductionHistory, machineProductions.length);
@@ -155,7 +157,7 @@ test("manage the machines", { annotation: TestAnnotations.NonEmptyErrorsLogFile 
       await page.getByRole("button", { name: "Crear Máquina" }).click();
       await expect(dialogCreateMachine).toBeVisible();
 
-      await getFormInputByLabel(dialogCreateMachine, "Nombre").fill(machine.name);
+      await getFormInputByLabel(dialogCreateMachine, NAME_LABEL).fill(machine.name);
       await dialogCreateMachine.getByTestId("button-submit").click();
 
       await expect(toasts).toHaveCount(1);
@@ -176,7 +178,7 @@ test("manage the machines", { annotation: TestAnnotations.NonEmptyErrorsLogFile 
 
       await page.getByRole("button", { name: "Crear Máquina" }).click();
       await expect(dialogCreateMachine).toBeVisible();
-      await getFormInputByLabel(dialogCreateMachine, "Nombre").fill(machine.name);
+      await getFormInputByLabel(dialogCreateMachine, NAME_LABEL).fill(machine.name);
       await dialogCreateMachine.getByTestId("button-submit").click();
 
       await expect(dialogCreateMachine).not.toBeVisible();
@@ -349,8 +351,8 @@ test("set the diameter range of the machines", async ({ page, toasts }) => {
     await page.goto("/maintenance?tab=machine&createMachine=true");
     await expect(dialogCreateMachine).toBeVisible();
 
-    await getFormInputByLabel(dialogCreateMachine, "Nombre").fill(newMachineName);
-    await getFormInputByLabel(dialogCreateMachine, "Diámetro mínimo").fill("15");
+    await getFormInputByLabel(dialogCreateMachine, NAME_LABEL).fill(newMachineName);
+    await getFormInputByLabel(dialogCreateMachine, MACHINE_MIN_DIAMETER_LABEL).fill("15");
     await dialogCreateMachine.getByTestId("button-submit").click();
 
     await expect(dialogCreateMachine).not.toBeVisible();
@@ -373,8 +375,8 @@ test("set the diameter range of the machines", async ({ page, toasts }) => {
       await page.goto(`/machine/${machine.id}`);
       await assertFormLoaded(formMachine);
 
-      await getFormInputByLabel(formMachine, "Diámetro mínimo").fill("50");
-      await getFormInputByLabel(formMachine, "Diámetro máximo").fill("20");
+      await getFormInputByLabel(formMachine, MACHINE_MIN_DIAMETER_LABEL).fill("50");
+      await getFormInputByLabel(formMachine, MACHINE_MAX_DIAMETER_LABEL).fill("20");
       await formMachine.getByTestId("button-submit").click();
 
       await expect(formMachine.getByText("El diámetro máximo no puede ser menor que el mínimo")).toBeVisible();
@@ -385,7 +387,7 @@ test("set the diameter range of the machines", async ({ page, toasts }) => {
     });
 
     await test.step(`update the diameter range of ${machine.name}`, async () => {
-      await getFormInputByLabel(formMachine, "Diámetro máximo").fill("80");
+      await getFormInputByLabel(formMachine, MACHINE_MAX_DIAMETER_LABEL).fill("80");
       await formMachine.getByTestId("button-submit").click();
 
       await expect(toasts).toHaveCount(1);
@@ -396,14 +398,14 @@ test("set the diameter range of the machines", async ({ page, toasts }) => {
 
       await page.reload();
       await assertFormLoaded(formMachine);
-      await expect(getFormInputByLabel(formMachine, "Diámetro mínimo")).toHaveValue("50 mm");
-      await expect(getFormInputByLabel(formMachine, "Diámetro máximo")).toHaveValue("80 mm");
+      await expect(getFormInputByLabel(formMachine, MACHINE_MIN_DIAMETER_LABEL)).toHaveValue("50 mm");
+      await expect(getFormInputByLabel(formMachine, MACHINE_MAX_DIAMETER_LABEL)).toHaveValue("80 mm");
     });
 
     await test.step(`both diameters of ${machine.name} are optional`, async () => {
       await clearToasts(page);
-      await getFormInputByLabel(formMachine, "Diámetro mínimo").clear();
-      await getFormInputByLabel(formMachine, "Diámetro máximo").clear();
+      await getFormInputByLabel(formMachine, MACHINE_MIN_DIAMETER_LABEL).clear();
+      await getFormInputByLabel(formMachine, MACHINE_MAX_DIAMETER_LABEL).clear();
       await formMachine.getByTestId("button-submit").click();
 
       await expect(toasts).toHaveCount(1);
@@ -435,7 +437,7 @@ test("show the machine as it is in the database when its page is opened again", 
 
     await page.goto(`/machine/${machine.id}`);
     await assertFormLoaded(formMachine);
-    await expect(getFormInputByLabel(formMachine, "Nombre")).toHaveValue(machine.name);
+    await expect(getFormInputByLabel(formMachine, NAME_LABEL)).toHaveValue(machine.name);
 
     // Leaving the page cancels its pending live request, so the change cannot arrive in a response the browser kept
     await page.evaluate(() => {

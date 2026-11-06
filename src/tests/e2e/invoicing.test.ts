@@ -12,6 +12,7 @@ import { dbTableClient, dbTableDeliveryNote, dbTableDeliveryNoteLine, dbTableInv
 import { endOfAppDay, isSameAppDay, startOfAppDay } from "@/lib/dates";
 import { formatDate, formatPrice } from "@/lib/formatters";
 import { formatCents, getLineTotalInCents } from "@/lib/prices";
+import { CLIENT_LABEL, DATE_LABEL, FROM_LABEL, TO_LABEL } from "@/messages/common";
 import {
   MOCK_INITIAL_DATE,
   mockClientInvoiceEmails,
@@ -326,7 +327,7 @@ test("create, change and delete invoices", async ({ page, db, toasts }) => {
     // Narrowing the range takes out of the table the Albaranes that would not be invoiced
     await selectDateInputDate(
       page,
-      getFormInputByLabel(dialogCreateInvoice, "Hasta", InputElementType.Date),
+      getFormInputByLabel(dialogCreateInvoice, TO_LABEL, InputElementType.Date),
       firstDeliveryNote.deliveryDate!,
     );
     await assertTablePendingDeliveryNotes(dialogCreateInvoice, [firstDeliveryNote]);
@@ -334,7 +335,7 @@ test("create, change and delete invoices", async ({ page, db, toasts }) => {
     // Clearing the Cliente displays the pending Albaranes of every Cliente again. The date picked by hand is kept,
     // while the other one is filled in from all of them.
     await getClearComboboxButton(
-      getFormInputByLabel(dialogCreateInvoice, "Cliente", InputElementType.Combobox),
+      getFormInputByLabel(dialogCreateInvoice, CLIENT_LABEL, InputElementType.Combobox),
     ).click();
     await assertTablePendingDeliveryNotes(
       dialogCreateInvoice,
@@ -342,11 +343,11 @@ test("create, change and delete invoices", async ({ page, db, toasts }) => {
         (deliveryNote) => deliveryNote.deliveryDate! <= endOfAppDay(firstDeliveryNote.deliveryDate!),
       ),
     );
-    await expect(getFormInputByLabel(dialogCreateInvoice, "Desde", InputElementType.Date)).toHaveAttribute(
+    await expect(getFormInputByLabel(dialogCreateInvoice, FROM_LABEL, InputElementType.Date)).toHaveAttribute(
       "data-value",
       startOfAppDay(getDeliveryDatesRange(mockPendingDeliveryNotes).startDate).toISOString(),
     );
-    await expect(getFormInputByLabel(dialogCreateInvoice, "Hasta", InputElementType.Date)).toHaveAttribute(
+    await expect(getFormInputByLabel(dialogCreateInvoice, TO_LABEL, InputElementType.Date)).toHaveAttribute(
       "data-value",
       startOfAppDay(firstDeliveryNote.deliveryDate!).toISOString(),
     );
@@ -365,8 +366,8 @@ test("create, change and delete invoices", async ({ page, db, toasts }) => {
     await page.getByRole("button", { name: "Crear Factura" }).click();
     await expect(dialogCreateInvoice).toBeVisible();
     const buttonSubmit = dialogCreateInvoice.getByTestId("button-submit");
-    const inputStartDate = getFormInputByLabel(dialogCreateInvoice, "Desde", InputElementType.Date);
-    const inputEndDate = getFormInputByLabel(dialogCreateInvoice, "Hasta", InputElementType.Date);
+    const inputStartDate = getFormInputByLabel(dialogCreateInvoice, FROM_LABEL, InputElementType.Date);
+    const inputEndDate = getFormInputByLabel(dialogCreateInvoice, TO_LABEL, InputElementType.Date);
 
     await workflowPickInvoiceClient(page, dialogCreateInvoice, client);
     await expect(buttonSubmit).toBeEnabled();
@@ -452,7 +453,7 @@ test("create, change and delete invoices", async ({ page, db, toasts }) => {
 
       await selectDateInputDate(
         page,
-        getFormInputByLabel(dialogCreateInvoice, "Hasta", InputElementType.Date),
+        getFormInputByLabel(dialogCreateInvoice, TO_LABEL, InputElementType.Date),
         endDate,
       );
       await assertTablePendingDeliveryNotes(
@@ -463,11 +464,11 @@ test("create, change and delete invoices", async ({ page, db, toasts }) => {
       // Picking the Cliente fills in the start of the range from its Albaranes, but keeps the picked end
       await selectInvoiceClient(page, dialogCreateInvoice, client);
       await assertTablePendingDeliveryNotes(dialogCreateInvoice, invoicedDeliveryNotes);
-      await expect(getFormInputByLabel(dialogCreateInvoice, "Desde", InputElementType.Date)).toHaveAttribute(
+      await expect(getFormInputByLabel(dialogCreateInvoice, FROM_LABEL, InputElementType.Date)).toHaveAttribute(
         "data-value",
         startOfAppDay(getDeliveryDatesRange(clientDeliveryNotes).startDate).toISOString(),
       );
-      await expect(getFormInputByLabel(dialogCreateInvoice, "Hasta", InputElementType.Date)).toHaveAttribute(
+      await expect(getFormInputByLabel(dialogCreateInvoice, TO_LABEL, InputElementType.Date)).toHaveAttribute(
         "data-value",
         startOfAppDay(endDate).toISOString(),
       );
@@ -524,7 +525,7 @@ test("create, change and delete invoices", async ({ page, db, toasts }) => {
 
     await selectDateInputDate(
       page,
-      getFormInputByLabel(dialogCreateEditDeliveryNote, "Fecha", InputElementType.Date),
+      getFormInputByLabel(dialogCreateEditDeliveryNote, DATE_LABEL, InputElementType.Date),
       newDeliveryDate,
     );
     await dialogCreateEditDeliveryNote.getByTestId("button-submit").click();

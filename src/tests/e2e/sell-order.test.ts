@@ -1,4 +1,3 @@
-// TODO sell order file tests
 import path from "node:path";
 
 import { expect } from "@playwright/test";
@@ -22,6 +21,18 @@ import { findFolderById } from "@/files/functions";
 import { getSellOrderPath, getSellOrderRootPath } from "@/files/sell-order";
 import { isSameAppDay } from "@/lib/dates";
 import { formatPrice } from "@/lib/formatters";
+// TODO sell order file tests
+import {
+  CLIENT_LABEL,
+  DESCRIPTION_LABEL,
+  FILE_LABEL,
+  NOTES_LABEL,
+  PART_LABEL,
+  PAYMENT_METHOD_LABEL,
+  PRICE_LABEL,
+  QUANTITY_LABEL,
+} from "@/messages/common";
+import { CLIENT_REFERENCE_LABEL, RECEPTION_DATE_LABEL } from "@/messages/sell-order";
 import { ProductionOrderStatus } from "@/schemas/production-order";
 import type { TTableSellOrderState } from "@/schemas/sell-order";
 import { createSellOrderLineSchema, updateSellOrderLineSchema } from "@/schemas/sell-order-line";
@@ -112,7 +123,7 @@ test(
       const existingDbSellOrder = await getSellOrderById(newSellOrder.id);
       expect(existingDbSellOrder).toBeUndefined();
 
-      const comboboxClient = getFormInputByLabel(page, "Cliente", InputElementType.Combobox);
+      const comboboxClient = getFormInputByLabel(page, CLIENT_LABEL, InputElementType.Combobox);
       await expect(comboboxClient).toBeVisible();
       await assertComboboxValue(comboboxClient, null);
       await openCombobox(comboboxClient);
@@ -120,24 +131,24 @@ test(
       await clickInComboboxOption(page, newSellOrderClient.name);
       await assertComboboxValue(comboboxClient, String(newSellOrderClient.id));
 
-      const comboboxPaymentMethod = getFormInputByLabel(page, "Forma de pago", InputElementType.Combobox);
+      const comboboxPaymentMethod = getFormInputByLabel(page, PAYMENT_METHOD_LABEL, InputElementType.Combobox);
       await expect(comboboxPaymentMethod).toBeVisible();
       await assertComboboxValue(
         comboboxPaymentMethod,
         newSellOrderClient.defaultPaymentMethodId !== null ? String(newSellOrderClient.defaultPaymentMethodId) : null,
       );
 
-      const inputSellOrderFile = getFormInputByLabel(page, "Archivo", InputElementType.File);
+      const inputSellOrderFile = getFormInputByLabel(page, FILE_LABEL, InputElementType.File);
       await expect(inputSellOrderFile).toBeVisible();
       await setInputFiles(page, inputSellOrderFile, newSellOrderFilePath);
 
       if (newSellOrder.clientReference !== null) {
-        const inputClientReference = getFormInputByLabel(page, "Referencia del Cliente");
+        const inputClientReference = getFormInputByLabel(page, CLIENT_REFERENCE_LABEL);
         await expect(inputClientReference).toBeVisible();
         await inputClientReference.fill(newSellOrder.clientReference);
       }
 
-      const inputNotes = getFormInputByLabel(page, "Notas", InputElementType.Textarea);
+      const inputNotes = getFormInputByLabel(page, NOTES_LABEL, InputElementType.Textarea);
       await expect(inputNotes).toBeVisible();
       await inputNotes.fill(newSellOrder.notes!);
 
@@ -194,10 +205,10 @@ test(
       const formSellOrder = page.getByTestId("form-sell-order");
       await assertFormLoaded(formSellOrder);
       const buttonSubmit = formSellOrder.getByTestId("button-submit-form-sell-order");
-      const comboboxPaymentMethod = getFormInputByLabel(formSellOrder, "Forma de pago", InputElementType.Combobox);
+      const comboboxPaymentMethod = getFormInputByLabel(formSellOrder, PAYMENT_METHOD_LABEL, InputElementType.Combobox);
 
-      await getFormInputByLabel(formSellOrder, "Referencia del Cliente").clear();
-      await getFormInputByLabel(formSellOrder, "Notas", InputElementType.Textarea).clear();
+      await getFormInputByLabel(formSellOrder, CLIENT_REFERENCE_LABEL).clear();
+      await getFormInputByLabel(formSellOrder, NOTES_LABEL, InputElementType.Textarea).clear();
       await selectComboboxOption(page, comboboxPaymentMethod, paymentMethod.name, String(paymentMethod.id));
       await buttonSubmit.click();
       await expect(toasts).toHaveCount(1);
@@ -297,18 +308,18 @@ test(
       expect(await getPickerValue(pickerPart)).toBe(String(partToBeAdded.id));
       expect(await getPickerText(pickerPart)).toEqual(pickedPartReference.reference);
 
-      const inputQuantity = getFormInputByLabel(dialogCreateSellOrderLine, "Cantidad", InputElementType.Number);
+      const inputQuantity = getFormInputByLabel(dialogCreateSellOrderLine, QUANTITY_LABEL, InputElementType.Number);
       await expect(inputQuantity).toBeVisible();
 
       await inputQuantity.pressSequentially(String(newSellOrderLine.quantity));
       await inputQuantity.press("Enter");
 
-      const inputPartPrice = getFormInputByLabel(dialogCreateSellOrderLine, "Precio", InputElementType.Number);
+      const inputPartPrice = getFormInputByLabel(dialogCreateSellOrderLine, PRICE_LABEL, InputElementType.Number);
       await expect(inputPartPrice).toBeVisible();
 
       await inputPartPrice.pressSequentially(newSellOrderLine.partPrice!);
 
-      await getFormInputByLabel(dialogCreateSellOrderLine, "Notas", InputElementType.Textarea).fill(
+      await getFormInputByLabel(dialogCreateSellOrderLine, NOTES_LABEL, InputElementType.Textarea).fill(
         newSellOrderLine.notes!,
       );
 
@@ -379,10 +390,10 @@ test(
       expect(await getPickerText(pickerPart)).toEqual(nullClientPartReference.reference);
       await expect(getDivDisabledMessage(tablePartPrices)).not.toBeVisible();
 
-      const inputQuantity = getFormInputByLabel(dialogCreateSellOrderLine, "Cantidad", InputElementType.Number);
+      const inputQuantity = getFormInputByLabel(dialogCreateSellOrderLine, QUANTITY_LABEL, InputElementType.Number);
       await inputQuantity.pressSequentially(String(quantity));
       await inputQuantity.press("Enter");
-      await getFormInputByLabel(dialogCreateSellOrderLine, "Precio", InputElementType.Number).pressSequentially(
+      await getFormInputByLabel(dialogCreateSellOrderLine, PRICE_LABEL, InputElementType.Number).pressSequentially(
         partPrice,
       );
       await dialogCreateSellOrderLine.getByTestId("button-submit").click();
@@ -441,19 +452,19 @@ test(
       await expect(formSellOrder).toBeVisible();
       await assertFormLoaded(formSellOrder);
 
-      const inputReceptionDate = getFormInputByLabel(formSellOrder, "Fecha de recepción", InputElementType.Date);
+      const inputReceptionDate = getFormInputByLabel(formSellOrder, RECEPTION_DATE_LABEL, InputElementType.Date);
       await expect(inputReceptionDate.getByTestId("popover-trigger")).toBeDisabled();
 
-      const comboboxClient = getFormInputByLabel(formSellOrder, "Cliente", InputElementType.Combobox);
+      const comboboxClient = getFormInputByLabel(formSellOrder, CLIENT_LABEL, InputElementType.Combobox);
       await expect(comboboxClient.getByTestId("button-trigger")).toBeDisabled();
 
-      const inputClientReference = getFormInputByLabel(formSellOrder, "Referencia del Cliente", InputElementType.Input);
+      const inputClientReference = getFormInputByLabel(formSellOrder, CLIENT_REFERENCE_LABEL, InputElementType.Input);
       await expect(inputClientReference).toHaveAttribute("readonly");
 
-      const comboboxPaymentMethod = getFormInputByLabel(formSellOrder, "Forma de pago", InputElementType.Combobox);
+      const comboboxPaymentMethod = getFormInputByLabel(formSellOrder, PAYMENT_METHOD_LABEL, InputElementType.Combobox);
       await expect(comboboxPaymentMethod.getByTestId("button-trigger")).toBeDisabled();
 
-      const inputNotes = getFormInputByLabel(formSellOrder, "Notas", InputElementType.Textarea);
+      const inputNotes = getFormInputByLabel(formSellOrder, NOTES_LABEL, InputElementType.Textarea);
       await expect(inputNotes).toHaveAttribute("readonly");
 
       const tableSellOrderLine = formSellOrder.getByTestId("table-sell-order-line");
@@ -856,7 +867,7 @@ test(
 
       await page.goto("/create-sell-order");
 
-      const comboboxClient = getFormInputByLabel(page, "Cliente", InputElementType.Combobox);
+      const comboboxClient = getFormInputByLabel(page, CLIENT_LABEL, InputElementType.Combobox);
       const buttonClearComboboxClient = getClearComboboxButton(comboboxClient);
       await expect(comboboxClient).toBeVisible();
       await expect(buttonClearComboboxClient).not.toBeVisible();
@@ -867,7 +878,7 @@ test(
       await assertComboboxValue(comboboxClient, String(existingSellOrderClient!.id));
       await expect(buttonClearComboboxClient).toBeVisible();
 
-      const inputClientReference = getFormInputByLabel(page, "Referencia del Cliente");
+      const inputClientReference = getFormInputByLabel(page, CLIENT_REFERENCE_LABEL);
 
       await expect(inputClientReference).toBeVisible();
       await inputClientReference.fill(existingSellOrder.clientReference);
@@ -894,7 +905,7 @@ test(
       await inputClientReference.fill(existingSellOrder.clientReference);
       await setInputFiles(
         page,
-        getFormInputByLabel(page, "Archivo", InputElementType.File),
+        getFormInputByLabel(page, FILE_LABEL, InputElementType.File),
         path.join(MOCK_DATA_PATH, "sample.pdf"),
       );
 
@@ -958,7 +969,7 @@ test(
     expect(await findFolderById(getSellOrderRootPath(), client.id)).toBeNull();
 
     await page.goto("/create-sell-order");
-    const comboboxClient = getFormInputByLabel(page, "Cliente", InputElementType.Combobox);
+    const comboboxClient = getFormInputByLabel(page, CLIENT_LABEL, InputElementType.Combobox);
     await openCombobox(comboboxClient);
     await fillComboboxFilter(page, client.name);
     await clickInComboboxOption(page, client.name);
@@ -966,7 +977,7 @@ test(
 
     await setInputFiles(
       page,
-      getFormInputByLabel(page, "Archivo", InputElementType.File),
+      getFormInputByLabel(page, FILE_LABEL, InputElementType.File),
       path.join(MOCK_DATA_PATH, "sample.pdf"),
     );
     await page.getByTestId("button-submit-form-sell-order").click();
@@ -989,9 +1000,9 @@ test("manage the sell order lines without part", async ({ page, db, toasts }) =>
   const dialogCreateSellOrderLine = page.getByTestId("dialog-create-sell-order-line");
   const checkboxCustomLine = dialogCreateSellOrderLine.getByTestId("checkbox-custom-line");
   const pickerPart = dialogCreateSellOrderLine.getByTestId("picker-part");
-  const inputDescription = getFormInputByLabel(dialogCreateSellOrderLine, "Descripción");
-  const inputQuantity = getFormInputByLabel(dialogCreateSellOrderLine, "Cantidad", InputElementType.Number);
-  const inputPartPrice = getFormInputByLabel(dialogCreateSellOrderLine, "Precio", InputElementType.Number);
+  const inputDescription = getFormInputByLabel(dialogCreateSellOrderLine, DESCRIPTION_LABEL);
+  const inputQuantity = getFormInputByLabel(dialogCreateSellOrderLine, QUANTITY_LABEL, InputElementType.Number);
+  const inputPartPrice = getFormInputByLabel(dialogCreateSellOrderLine, PRICE_LABEL, InputElementType.Number);
   const buttonSubmit = dialogCreateSellOrderLine.getByTestId("button-submit");
   const requiredFieldErrors = dialogCreateSellOrderLine.getByText("Campo obligatorio");
   const customLine = { description: "Portes", quantity: 3 };
@@ -1146,8 +1157,8 @@ test(
     const formSellOrder = page.getByTestId("form-sell-order");
     const tableSellOrderLine = formSellOrder.getByTestId("table-sell-order-line");
     const dialogCreateSellOrderLine = page.getByTestId("dialog-create-sell-order-line");
-    const inputQuantity = getFormInputByLabel(dialogCreateSellOrderLine, "Cantidad", InputElementType.Number);
-    const inputPartPrice = getFormInputByLabel(dialogCreateSellOrderLine, "Precio", InputElementType.Number);
+    const inputQuantity = getFormInputByLabel(dialogCreateSellOrderLine, QUANTITY_LABEL, InputElementType.Number);
+    const inputPartPrice = getFormInputByLabel(dialogCreateSellOrderLine, PRICE_LABEL, InputElementType.Number);
     const inputTotal = dialogCreateSellOrderLine.locator("#dialog-create-sell-order-line-total");
     const buttonSubmit = dialogCreateSellOrderLine.getByTestId("button-submit");
     const returnLine = { description: "Devolución pieza", quantity: -170 };
@@ -1162,7 +1173,7 @@ test(
     await test.step("a line can not have a quantity of 0", async () => {
       await workflowOpenCreateSellOrderLine(page, sellOrder.id);
       await dialogCreateSellOrderLine.getByTestId("checkbox-custom-line").click();
-      await getFormInputByLabel(dialogCreateSellOrderLine, "Descripción").fill(returnLine.description);
+      await getFormInputByLabel(dialogCreateSellOrderLine, DESCRIPTION_LABEL).fill(returnLine.description);
       await inputQuantity.pressSequentially("0");
       await inputQuantity.blur();
       await buttonSubmit.click();
@@ -1268,7 +1279,7 @@ test("create the part prices of a sell order for its client", async ({ page, toa
   const tablePartPrices = dialogCreateSellOrderLine.getByTestId("radio-table-part-prices");
   const cardCreatePartPrice = dialogCreateSellOrderLine.getByTestId("card-create-part-price");
   const buttonToggleCreatePartPrice = cardCreatePartPrice.getByTestId("button-toggle-create-part-price");
-  const inputCreatePartPrice = getFormInputByLabel(cardCreatePartPrice, "Precio", InputElementType.Number);
+  const inputCreatePartPrice = getFormInputByLabel(cardCreatePartPrice, PRICE_LABEL, InputElementType.Number);
 
   const pickPart = async () => {
     const { dialogPickerPartContent, tablePickerPart } = await openPartPicker(page, pickerPart);
@@ -1286,8 +1297,8 @@ test("create the part prices of a sell order for its client", async ({ page, toa
 
     // The price is for the client of the sell order, so it is not asked
     await expect(card.getByTestId("combobox-client")).toHaveCount(0);
-    await getFormInputByLabel(card, "Cantidad", InputElementType.Number).pressSequentially(String(quantity));
-    await getFormInputByLabel(card, "Precio", InputElementType.Number).pressSequentially(price);
+    await getFormInputByLabel(card, QUANTITY_LABEL, InputElementType.Number).pressSequentially(String(quantity));
+    await getFormInputByLabel(card, PRICE_LABEL, InputElementType.Number).pressSequentially(price);
     await card.getByTestId("button-submit").click();
     await expect(toasts).toHaveCount(1);
     expect(await getToastType(toasts.first())).toBe(ToastType.Success);
@@ -1365,7 +1376,7 @@ test("filter the sell orders by part", async ({ page }) => {
   const tableSellOrder = page.getByTestId("table-sell-order");
   const popoverFilters = tableSellOrder.getByTestId("popover-sell-order-filters");
   const buttonClearFilters = popoverFilters.getByTestId("button-clear-filters");
-  const pickerPart = getFormInputByLabel(getPopoverContent(page), "Artículo", InputElementType.Picker);
+  const pickerPart = getFormInputByLabel(getPopoverContent(page), PART_LABEL, InputElementType.Picker);
   const getTableState = () => {
     const tableState = new URL(page.url()).searchParams.get("table-sell-order");
     return tableState !== null ? (JSON.parse(tableState) as TTableSellOrderState) : undefined;
@@ -1464,7 +1475,7 @@ test(
     // Uploading a file is the only change of the form
     await setInputFiles(
       page,
-      getFormInputByLabel(page, "Archivo", InputElementType.File),
+      getFormInputByLabel(page, FILE_LABEL, InputElementType.File),
       path.join(MOCK_DATA_PATH, "sample.pdf"),
     );
     await page.getByTestId("button-submit-form-sell-order").click();

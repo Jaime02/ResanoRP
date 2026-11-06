@@ -13,6 +13,17 @@ import { dbTableDeliveryNote, dbTableDeliveryNoteLine, dbTableInvoice, dbTableSe
 import { isSameAppDay } from "@/lib/dates";
 import { formatDate, formatPrice } from "@/lib/formatters";
 import { formatCents, getLineTotalInCents, getLinesTotalInCents } from "@/lib/prices";
+import {
+  CLIENT_LABEL,
+  DATE_LABEL,
+  DELIVERY_METHOD_LABEL,
+  DESCRIPTION_LABEL,
+  PART_LABEL,
+  PRICE_LABEL,
+  QUANTITY_LABEL,
+} from "@/messages/common";
+import { DELIVERY_NOTE_NUMBER_LABEL } from "@/messages/delivery-note";
+import { CLIENT_REFERENCE_DESCRIPTION_LABEL } from "@/messages/part";
 import type { TTableDeliveryNoteState } from "@/schemas/delivery-note";
 import {
   MOCK_INITIAL_DATE,
@@ -134,16 +145,16 @@ test(
         const subrow = getTableSubrowById(tableDeliveryNotes, deliveryNote.id);
         await expect(subrow).toBeVisible();
         await assertFormLoaded(subrow);
-        await expect(getFormInputByLabel(subrow, "Albarán Nº", InputElementType.Number)).toHaveValue(
+        await expect(getFormInputByLabel(subrow, DELIVERY_NOTE_NUMBER_LABEL, InputElementType.Number)).toHaveValue(
           String(deliveryNote.id),
         );
-        await expect(getFormInputByLabel(subrow, "Fecha", InputElementType.Date)).toHaveText(
+        await expect(getFormInputByLabel(subrow, DATE_LABEL, InputElementType.Date)).toHaveText(
           formatDate(deliveryNote.deliveryDate)!,
         );
-        await expect(getFormInputByLabel(subrow, "Cliente", InputElementType.Combobox)).toHaveText(
+        await expect(getFormInputByLabel(subrow, CLIENT_LABEL, InputElementType.Combobox)).toHaveText(
           deliveryNoteClient!.name,
         );
-        const comboboxDeliveryMethod = getFormInputByLabel(subrow, "Transporte", InputElementType.Combobox);
+        const comboboxDeliveryMethod = getFormInputByLabel(subrow, DELIVERY_METHOD_LABEL, InputElementType.Combobox);
         await assertComboboxValue(
           comboboxDeliveryMethod,
           deliveryNote.deliveryMethodId === null ? null : String(deliveryNote.deliveryMethodId),
@@ -206,7 +217,7 @@ test(
 
         const pickerPart = getFormInputByLabel(
           popoverContentTableDeliveryNotesFilters,
-          "Artículo",
+          PART_LABEL,
           InputElementType.Picker,
         );
         await expect(pickerPart).toBeVisible();
@@ -284,7 +295,7 @@ test(
       };
       const popoverFilters = tableDeliveryNotes.getByTestId("popover-delivery-note-filters");
       const buttonClearFilters = popoverFilters.getByTestId("button-clear-filters");
-      const pickerPart = getFormInputByLabel(getPopoverContent(page), "Artículo", InputElementType.Picker);
+      const pickerPart = getFormInputByLabel(getPopoverContent(page), PART_LABEL, InputElementType.Picker);
       const pickPartFilter = async (partId: number) => {
         if (!(await pickerPart.isVisible())) {
           await popoverFilters.getByTestId("popover-trigger").click();
@@ -364,7 +375,7 @@ test(
       await expect(tableDeliveryNotes).toBeVisible();
 
       await tableDeliveryNotes.getByTestId("popover-delivery-note-filters").getByTestId("popover-trigger").click();
-      const pickerPart = getFormInputByLabel(getPopoverContent(page), "Artículo", InputElementType.Picker);
+      const pickerPart = getFormInputByLabel(getPopoverContent(page), PART_LABEL, InputElementType.Picker);
       const { dialogPickerPartContent, tablePickerPart } = await openPartPicker(page, pickerPart);
 
       const activeParts = mockParts.filter((part) => part.deletedAt === null);
@@ -471,9 +482,11 @@ test(
           .click();
         // The closing picker gives the focus back to its trigger, which would swallow the typed quantity
         await expect(dialogPickerPartContent).not.toBeVisible();
-        await getFormInputByLabel(dialogCreateDeliveryNoteLine, "Cantidad", InputElementType.Number).pressSequentially(
-          "3",
-        );
+        await getFormInputByLabel(
+          dialogCreateDeliveryNoteLine,
+          QUANTITY_LABEL,
+          InputElementType.Number,
+        ).pressSequentially("3");
         await dialogCreateDeliveryNoteLine.getByTestId("button-submit").click();
         await expect(dialogCreateDeliveryNoteLine).not.toBeVisible();
         await expect(toasts).toHaveCount(1);
@@ -670,22 +683,24 @@ test(
         await expect(dialogCreateEditDeliveryNote.getByTestId("button-submit")).toBeDisabled();
 
         await expect(
-          getFormInputByLabel(dialogCreateEditDeliveryNote, "Albarán Nº", InputElementType.Number),
+          getFormInputByLabel(dialogCreateEditDeliveryNote, DELIVERY_NOTE_NUMBER_LABEL, InputElementType.Number),
         ).toHaveValue(String(deliveryNote.id));
-        await expect(getFormInputByLabel(dialogCreateEditDeliveryNote, "Fecha", InputElementType.Date)).toBeVisible();
+        await expect(
+          getFormInputByLabel(dialogCreateEditDeliveryNote, DATE_LABEL, InputElementType.Date),
+        ).toBeVisible();
         const actualDate = await getDateInputValue(
-          getFormInputByLabel(dialogCreateEditDeliveryNote, "Fecha", InputElementType.Date),
+          getFormInputByLabel(dialogCreateEditDeliveryNote, DATE_LABEL, InputElementType.Date),
         );
         expect(actualDate).toBeDefined();
         expect(isSameAppDay(actualDate!, deliveryNote.deliveryDate!)).toBeTruthy();
 
         await assertComboboxValue(
-          getFormInputByLabel(dialogCreateEditDeliveryNote, "Cliente", InputElementType.Combobox),
+          getFormInputByLabel(dialogCreateEditDeliveryNote, CLIENT_LABEL, InputElementType.Combobox),
           String(deliveryNoteClient!.id),
         );
         const comboboxDeliveryMethod = getFormInputByLabel(
           dialogCreateEditDeliveryNote,
-          "Transporte",
+          DELIVERY_METHOD_LABEL,
           InputElementType.Combobox,
         );
         await assertComboboxValue(
@@ -819,20 +834,24 @@ test(
           // Expect that the client description input has been autofilled after picking the part
           const inputDescription = getFormInputByLabel(
             dialogCreateDeliveryNoteLine,
-            "Descripción del Cliente",
+            CLIENT_REFERENCE_DESCRIPTION_LABEL,
             InputElementType.Input,
           );
           expect(await inputDescription.inputValue()).toBe(
             pickedPartReference.clientDescription ?? partToBeAdded.description,
           );
 
-          const inputQuantity = getFormInputByLabel(dialogCreateDeliveryNoteLine, "Cantidad", InputElementType.Number);
+          const inputQuantity = getFormInputByLabel(
+            dialogCreateDeliveryNoteLine,
+            QUANTITY_LABEL,
+            InputElementType.Number,
+          );
           await inputQuantity.clear();
           await inputQuantity.pressSequentially(String(newQuantity));
           await inputQuantity.blur();
 
           await expect(
-            getFormInputByLabel(dialogCreateDeliveryNoteLine, "Precio", InputElementType.Number),
+            getFormInputByLabel(dialogCreateDeliveryNoteLine, PRICE_LABEL, InputElementType.Number),
           ).toHaveValue(formatPrice(clientPartPrice.price, { replaceNBSP: true }));
           await expect(
             getTableRowByTestId(
@@ -920,12 +939,16 @@ test(
         // Without a client description, the description of the Artículo is used
         const inputDescription = getFormInputByLabel(
           dialogCreateDeliveryNoteLine,
-          "Descripción del Cliente",
+          CLIENT_REFERENCE_DESCRIPTION_LABEL,
           InputElementType.Input,
         );
         await expect(inputDescription).toHaveValue(nullClientPartReference.clientDescription ?? part.description);
 
-        const inputQuantity = getFormInputByLabel(dialogCreateDeliveryNoteLine, "Cantidad", InputElementType.Number);
+        const inputQuantity = getFormInputByLabel(
+          dialogCreateDeliveryNoteLine,
+          QUANTITY_LABEL,
+          InputElementType.Number,
+        );
         await inputQuantity.clear();
         await inputQuantity.pressSequentially(String(quantity));
         await dialogCreateDeliveryNoteLine.getByTestId("button-submit").click();
@@ -963,7 +986,7 @@ test(
         await workflowOpenCreateDeliveryNoteLine(page);
         const checkboxCustomLine = dialogCreateDeliveryNoteLine.getByTestId("checkbox-custom-line");
         const pickerPart = dialogCreateDeliveryNoteLine.getByTestId("picker-part");
-        const inputDescription = getFormInputByLabel(dialogCreateDeliveryNoteLine, "Descripción");
+        const inputDescription = getFormInputByLabel(dialogCreateDeliveryNoteLine, DESCRIPTION_LABEL);
         const buttonSubmit = dialogCreateDeliveryNoteLine.getByTestId("button-submit");
         const requiredFieldErrors = dialogCreateDeliveryNoteLine.getByText("Campo obligatorio");
 
@@ -974,7 +997,7 @@ test(
         await expect(getDivDisabledMessage(dialogCreateDeliveryNoteLine.getByTestId("card-part-prices"))).toBeVisible();
 
         // The description and the price are typed by hand, and they are dropped when switching to a line with Artículo
-        const inputUnitPrice = getFormInputByLabel(dialogCreateDeliveryNoteLine, "Precio", InputElementType.Number);
+        const inputUnitPrice = getFormInputByLabel(dialogCreateDeliveryNoteLine, PRICE_LABEL, InputElementType.Number);
         await inputDescription.fill(customLine.description);
         await inputUnitPrice.pressSequentially(customLine.unitPrice);
         await checkboxCustomLine.click();
@@ -983,9 +1006,11 @@ test(
         await checkboxCustomLine.click();
         await expect(inputDescription).toHaveValue("");
 
-        await getFormInputByLabel(dialogCreateDeliveryNoteLine, "Cantidad", InputElementType.Number).pressSequentially(
-          String(customLine.quantity),
-        );
+        await getFormInputByLabel(
+          dialogCreateDeliveryNoteLine,
+          QUANTITY_LABEL,
+          InputElementType.Number,
+        ).pressSequentially(String(customLine.quantity));
         await buttonSubmit.click();
         await expect(requiredFieldErrors).toHaveCount(1);
 
@@ -1067,7 +1092,7 @@ test(
 
         const inputDeliveryNoteId = getFormInputByLabel(
           dialogCreateEditDeliveryNote,
-          "Albarán Nº",
+          DELIVERY_NOTE_NUMBER_LABEL,
           InputElementType.Number,
         );
         await expect(inputDeliveryNoteId).toHaveValue(String(deletedDeliveryNote.id + 1));
@@ -1082,21 +1107,27 @@ test(
         const newDeliveryNoteId = otherUserDeliveryNote.id + 1;
         await expect(inputDeliveryNoteId).toHaveValue(String(newDeliveryNoteId));
         await db.delete(dbTableDeliveryNote).where(eq(dbTableDeliveryNote.id, otherUserDeliveryNote.id));
-        await expect(getFormInputByLabel(dialogCreateEditDeliveryNote, "Fecha", InputElementType.Date)).toBeVisible();
+        await expect(
+          getFormInputByLabel(dialogCreateEditDeliveryNote, DATE_LABEL, InputElementType.Date),
+        ).toBeVisible();
         const actualDate = await getDateInputValue(
-          getFormInputByLabel(dialogCreateEditDeliveryNote, "Fecha", InputElementType.Date),
+          getFormInputByLabel(dialogCreateEditDeliveryNote, DATE_LABEL, InputElementType.Date),
         );
         expect(actualDate).toBeTruthy();
         expect(isSameAppDay(actualDate!, MOCK_INITIAL_DATE)).toBeTruthy();
 
-        const clientCombobox = getFormInputByLabel(dialogCreateEditDeliveryNote, "Cliente", InputElementType.Combobox);
+        const clientCombobox = getFormInputByLabel(
+          dialogCreateEditDeliveryNote,
+          CLIENT_LABEL,
+          InputElementType.Combobox,
+        );
         await assertComboboxValue(clientCombobox, null);
 
         await selectComboboxOption(page, clientCombobox, deliveryNoteClient.name, String(deliveryNoteClient.id));
 
         const deliveryMethodCombobox = getFormInputByLabel(
           dialogCreateEditDeliveryNote,
-          "Transporte",
+          DELIVERY_METHOD_LABEL,
           InputElementType.Combobox,
         );
 

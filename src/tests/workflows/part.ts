@@ -2,6 +2,7 @@ import { expect } from "@playwright/test";
 import type { Page } from "@playwright/test";
 
 import { getPartById, getPartFeaturesOfPart } from "@/db/functions/part";
+import { PART_FEATURE_LABEL } from "@/messages/part";
 import { openAndConfirmAlertDialog } from "@/tests/utils/components/alert-dialog";
 import { assertFormLoaded, getFormInputByLabel } from "@/tests/utils/components/form";
 import { getTableRowByTestId } from "@/tests/utils/components/table";
@@ -31,7 +32,7 @@ export async function workflowCreatePartFeature(page: Page, partId: number, feat
   await page.getByTestId("form-part").getByTestId("button-create-part-feature").click();
   const dialogCreatePartFeature = page.getByTestId("dialog-create-part-feature");
   await expect(dialogCreatePartFeature).toBeVisible();
-  await getFormInputByLabel(dialogCreatePartFeature, "Característica").fill(feature);
+  await getFormInputByLabel(dialogCreatePartFeature, PART_FEATURE_LABEL).fill(feature);
   await dialogCreatePartFeature.getByTestId("button-submit").click();
   await expect(dialogCreatePartFeature).toBeHidden();
   await expectSingleToast(page);

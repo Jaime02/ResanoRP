@@ -6,6 +6,8 @@ import { AppContextStorage, UserMode } from "@/contexts/app-context";
 import { getInvoiceById } from "@/db/functions/invoice";
 import { dbTableClient, dbTableInvoice } from "@/db/schema";
 import { ADMIN_SESSION_COOKIE_NAME } from "@/lib/admin-session";
+import { ENTER_PASSWORD_LABEL } from "@/messages/home";
+import { CLIENT_REFERENCE_LABEL } from "@/messages/sell-order";
 import {
   MOCK_INITIAL_DATE,
   mockDeliveryNoteLines,
@@ -60,7 +62,7 @@ test("login with every user mode", { annotation: TestAnnotations.UserModeNull },
     await expect(dialogLogin).not.toBeVisible();
     await expect(dialogInputAdminPassword).toBeVisible();
 
-    const inputAdminPassword = getFormInputByLabel(dialogInputAdminPassword, "Introduce la contraseña");
+    const inputAdminPassword = getFormInputByLabel(dialogInputAdminPassword, ENTER_PASSWORD_LABEL);
     await expect(inputAdminPassword).toBeVisible();
 
     expect(process.env.ADMIN_PASSWORD).toBeDefined();
@@ -177,7 +179,7 @@ async function assertSellOrderPage(page: Page, sellOrderId: number, userMode: Us
   await expect(formSellOrder.getByTestId("span-sell-order-lines-total")).toBeVisible({ visible: isAdmin });
   if (isAdmin) return;
 
-  await expect(getFormInputByLabel(formSellOrder, "Referencia del Cliente")).not.toBeEditable();
+  await expect(getFormInputByLabel(formSellOrder, CLIENT_REFERENCE_LABEL)).not.toBeEditable();
   await expect(formSellOrder.getByTestId("button-submit-form-sell-order")).toHaveCount(0);
   await expect(formSellOrder.getByTestId("button-add-sell-order-line")).toHaveCount(0);
   await expect(tableSellOrderLine.getByTestId("editable-cell-input")).toHaveCount(0);
@@ -323,7 +325,7 @@ test(
     const accountedInvoice = mockInvoices.find((invoice) => invoice.accounted)!;
     const dialogLogin = page.getByTestId("form-login");
     const dialogInputAdminPassword = page.getByTestId("form-admin-password");
-    const inputAdminPassword = getFormInputByLabel(dialogInputAdminPassword, "Introduce la contraseña");
+    const inputAdminPassword = getFormInputByLabel(dialogInputAdminPassword, ENTER_PASSWORD_LABEL);
 
     const getAdminSessionCookie = async () =>
       (await page.context().cookies()).find((cookie) => cookie.name === ADMIN_SESSION_COOKIE_NAME);

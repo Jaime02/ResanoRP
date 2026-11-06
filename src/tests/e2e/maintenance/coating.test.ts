@@ -3,6 +3,7 @@ import { eq } from "drizzle-orm";
 
 import { getCoatingById } from "@/db/functions/coating";
 import { COATING_NAME_CONSTRAINT, dbTableCoating } from "@/db/schema";
+import { COATING_LABEL, NAME_LABEL } from "@/messages/common";
 import { mockCoatings, mockParts } from "@/tests/mock-data";
 import { openAndConfirmAlertDialog } from "@/tests/utils/components/alert-dialog";
 import { assertComboboxValue } from "@/tests/utils/components/combobox";
@@ -34,7 +35,7 @@ test("manage the Tratamientos", { annotation: TestAnnotations.NonEmptyErrorsLogF
   const createCoating = async (name: string) => {
     await page.getByRole("button", { name: "Crear Tratamiento" }).click();
     await expect(dialogCreateEditCoating).toBeVisible();
-    await getFormInputByLabel(dialogCreateEditCoating, "Nombre").fill(name);
+    await getFormInputByLabel(dialogCreateEditCoating, NAME_LABEL).fill(name);
     await dialogCreateEditCoating.getByTestId("button-submit").click();
   };
 
@@ -58,7 +59,7 @@ test("manage the Tratamientos", { annotation: TestAnnotations.NonEmptyErrorsLogF
 
     // A cancelled draft is kept
     await page.getByRole("button", { name: "Crear Tratamiento" }).click();
-    await expect(getFormInputByLabel(dialogCreateEditCoating, "Nombre")).toHaveValue(activeCoatings.at(-1)!.name);
+    await expect(getFormInputByLabel(dialogCreateEditCoating, NAME_LABEL)).toHaveValue(activeCoatings.at(-1)!.name);
     await dialogCreateEditCoating.getByTestId("button-close").click();
     await expect(dialogCreateEditCoating).not.toBeVisible();
   });
@@ -103,7 +104,7 @@ test("manage the Tratamientos", { annotation: TestAnnotations.NonEmptyErrorsLogF
 
       // ...the create dialog starts empty after a Tratamiento is created...
       await page.getByRole("button", { name: "Crear Tratamiento" }).click();
-      await expect(getFormInputByLabel(dialogCreateEditCoating, "Nombre")).toHaveValue("");
+      await expect(getFormInputByLabel(dialogCreateEditCoating, NAME_LABEL)).toHaveValue("");
       await dialogCreateEditCoating.getByTestId("button-close").click();
       await expect(dialogCreateEditCoating).not.toBeVisible();
 
@@ -129,7 +130,7 @@ test("manage the Tratamientos", { annotation: TestAnnotations.NonEmptyErrorsLogF
       )) {
         await page.goto(`/part/${part.id}`);
         await assertFormLoaded(formPart);
-        await assertComboboxValue(getFormInputByLabel(formPart, "Tratamiento", InputElementType.Combobox), null);
+        await assertComboboxValue(getFormInputByLabel(formPart, COATING_LABEL, InputElementType.Combobox), null);
       }
     }
   });

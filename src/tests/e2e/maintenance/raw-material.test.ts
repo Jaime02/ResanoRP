@@ -3,6 +3,8 @@ import { eq } from "drizzle-orm";
 
 import { RAW_MATERIAL_NAME_CONSTRAINT, dbTableRawMaterial } from "@/db/schema";
 import { formatPrice } from "@/lib/formatters";
+import { NAME_LABEL } from "@/messages/common";
+import { RAW_MATERIAL_DENSITY_LABEL, RAW_MATERIAL_PRICE_LABEL } from "@/messages/material";
 import { mockMaterials, mockRawMaterials } from "@/tests/mock-data";
 import { openAndConfirmAlertDialog } from "@/tests/utils/components/alert-dialog";
 import { InputElementType, assertFormLoaded, getFormInputByLabel } from "@/tests/utils/components/form";
@@ -61,8 +63,12 @@ test(
     const createRawMaterial = async (rawMaterial: BaseRawMaterial) => {
       await page.getByRole("button", { name: "Crear Materia prima" }).click();
       await expect(dialogCreateEditRawMaterial).toBeVisible();
-      await getFormInputByLabel(dialogCreateEditRawMaterial, "Nombre").fill(rawMaterial.name);
-      const inputPrice = getFormInputByLabel(dialogCreateEditRawMaterial, "Precio (€ / kg)", InputElementType.Number);
+      await getFormInputByLabel(dialogCreateEditRawMaterial, NAME_LABEL).fill(rawMaterial.name);
+      const inputPrice = getFormInputByLabel(
+        dialogCreateEditRawMaterial,
+        RAW_MATERIAL_PRICE_LABEL,
+        InputElementType.Number,
+      );
       await inputPrice.clear();
       await inputPrice.pressSequentially(rawMaterial.price ?? "1");
       await dialogCreateEditRawMaterial.getByTestId("button-submit").click();
@@ -103,9 +109,17 @@ test(
         await expect(dialogCreateEditRawMaterial).toBeVisible();
         await assertFormLoaded(dialogCreateEditRawMaterial);
 
-        const inputName = getFormInputByLabel(dialogCreateEditRawMaterial, "Nombre");
-        const inputPrice = getFormInputByLabel(dialogCreateEditRawMaterial, "Precio (€ / kg)", InputElementType.Number);
-        const inputDensity = getFormInputByLabel(dialogCreateEditRawMaterial, "Densidad", InputElementType.Number);
+        const inputName = getFormInputByLabel(dialogCreateEditRawMaterial, NAME_LABEL);
+        const inputPrice = getFormInputByLabel(
+          dialogCreateEditRawMaterial,
+          RAW_MATERIAL_PRICE_LABEL,
+          InputElementType.Number,
+        );
+        const inputDensity = getFormInputByLabel(
+          dialogCreateEditRawMaterial,
+          RAW_MATERIAL_DENSITY_LABEL,
+          InputElementType.Number,
+        );
         await expect(inputName).toHaveValue(rawMaterial.name);
         await expect(inputPrice).toHaveValue(formatPrice(rawMaterial.price, { replaceNBSP: true }));
         await expect(inputDensity).toHaveValue(formatDensity(rawMaterial.density));

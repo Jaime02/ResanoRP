@@ -5,6 +5,7 @@ import { getDeliveryNote, getSellOrderLinesByDeliveryNoteId } from "@/db/functio
 import { getDeliveryNoteLinesByDeliveryNoteId } from "@/db/functions/delivery-note-line";
 import { getSellOrderLineById } from "@/db/functions/sell-order-line";
 import { clampPendingQuantity } from "@/lib/sell-order-line";
+import { CLIENT_LABEL, DESCRIPTION_LABEL, PRICE_LABEL, QUANTITY_LABEL } from "@/messages/common";
 import { getTestId } from "@/tests/utils/components";
 import { openAndConfirmAlertDialog } from "@/tests/utils/components/alert-dialog";
 import {
@@ -85,7 +86,7 @@ export async function workflowOpenCreateDeliveryNoteForClient(page: Page, client
   await page.goto("/create-delivery-note");
   await selectComboboxOption(
     page,
-    getFormInputByLabel(page, "Cliente", InputElementType.Combobox),
+    getFormInputByLabel(page, CLIENT_LABEL, InputElementType.Combobox),
     client.name,
     String(client.id),
   );
@@ -116,12 +117,12 @@ export async function workflowFillCustomDeliveryNoteLine(
   const checkboxCustomLine = dialogCreateDeliveryNoteLine.getByTestId("checkbox-custom-line");
   await checkboxCustomLine.click();
   await expect(checkboxCustomLine).toBeChecked();
-  await getFormInputByLabel(dialogCreateDeliveryNoteLine, "Descripción").fill(line.description);
-  await getFormInputByLabel(dialogCreateDeliveryNoteLine, "Cantidad", InputElementType.Number).pressSequentially(
+  await getFormInputByLabel(dialogCreateDeliveryNoteLine, DESCRIPTION_LABEL).fill(line.description);
+  await getFormInputByLabel(dialogCreateDeliveryNoteLine, QUANTITY_LABEL, InputElementType.Number).pressSequentially(
     String(line.quantity),
   );
   if (line.unitPrice !== undefined) {
-    await getFormInputByLabel(dialogCreateDeliveryNoteLine, "Precio", InputElementType.Number).pressSequentially(
+    await getFormInputByLabel(dialogCreateDeliveryNoteLine, PRICE_LABEL, InputElementType.Number).pressSequentially(
       line.unitPrice,
     );
   }

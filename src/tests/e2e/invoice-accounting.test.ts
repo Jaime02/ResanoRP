@@ -22,6 +22,7 @@ import {
 } from "@/files/accounting-export";
 import { getAccountingExportPath } from "@/files/invoice";
 import { formatCents, getDeliveryNoteLineUnitPrice, getVatBreakdown } from "@/lib/prices";
+import { PRISMA_ACCOUNTING_ACCOUNT_LABEL } from "@/messages/client";
 import {
   MOCK_INITIAL_DATE,
   mockClients,
@@ -308,7 +309,7 @@ test(
       await page.goto(`/client/${clientWithoutAccount.id}`);
       const formClient = page.getByTestId("form-client");
       await assertFormLoaded(formClient);
-      await getFormInputByLabel(formClient, "Cuenta contable Prisma").fill(
+      await getFormInputByLabel(formClient, PRISMA_ACCOUNTING_ACCOUNT_LABEL).fill(
         clientWithoutAccount.prismaAccountingAccountId!,
       );
       await formClient.getByTestId("button-submit").click();

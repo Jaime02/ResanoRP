@@ -36,7 +36,7 @@ export default function FieldLayout({
       {labelPosition === "start" && labelElement}
       {children}
       {labelPosition === "end" && labelElement}
-      {typeof field.state.meta.errors.at(0)?.message === "string" && (
+      {field.state.meta.isTouched && typeof field.state.meta.errors.at(0)?.message === "string" && (
         <span className="mt-1 flex flex-row gap-1 font-bold text-red-500">
           <TriangleAlertIcon />
           {field.state.meta.errors.at(0).message}

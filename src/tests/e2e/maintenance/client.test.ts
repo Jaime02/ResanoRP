@@ -9,6 +9,21 @@ import {
   dbTableClient,
   dbTableClientInvoiceEmail,
 } from "@/db/schema";
+import {
+  DEFAULT_DELIVERY_METHOD_LABEL,
+  DEFAULT_PAYMENT_METHOD_LABEL,
+  PHONE_LABEL,
+  PRISMA_ACCOUNTING_ACCOUNT_LABEL,
+} from "@/messages/client";
+import {
+  ADDRESS_LABEL,
+  CITY_LABEL,
+  CLIENT_LABEL,
+  LEGAL_NAME_LABEL,
+  NAME_LABEL,
+  POSTAL_CODE_LABEL,
+  TAX_ID_LABEL,
+} from "@/messages/common";
 import { SellOrderStatus } from "@/schemas/sell-order";
 import {
   mockClientInvoiceEmails,
@@ -74,12 +89,12 @@ async function fillRequiredClientFields(
   form: Locator,
   client: Pick<BaseClient, "name" | "legalName" | "address" | "city" | "postalCode" | "taxId">,
 ) {
-  await getFormInputByLabel(form, "Nombre").fill(client.name);
-  await getFormInputByLabel(form, "Nombre legal").fill(client.legalName);
-  await getFormInputByLabel(form, "Dirección").fill(client.address);
-  await getFormInputByLabel(form, "Ciudad").fill(client.city);
-  await getFormInputByLabel(form, "Código postal").fill(client.postalCode);
-  await getFormInputByLabel(form, "CIF").fill(client.taxId);
+  await getFormInputByLabel(form, NAME_LABEL).fill(client.name);
+  await getFormInputByLabel(form, LEGAL_NAME_LABEL).fill(client.legalName);
+  await getFormInputByLabel(form, ADDRESS_LABEL).fill(client.address);
+  await getFormInputByLabel(form, CITY_LABEL).fill(client.city);
+  await getFormInputByLabel(form, POSTAL_CODE_LABEL).fill(client.postalCode);
+  await getFormInputByLabel(form, TAX_ID_LABEL).fill(client.taxId);
 }
 
 function getClientRows(name: string): Locator {
@@ -105,7 +120,7 @@ test("set and remove the default delivery method of every client", async ({ page
     await workflowAssertClientFormData(formClient, client);
     const comboboxDeliveryMethod = getFormInputByLabel(
       formClient,
-      "Transporte predeterminado",
+      DEFAULT_DELIVERY_METHOD_LABEL,
       InputElementType.Combobox,
     );
 
@@ -204,7 +219,7 @@ test(
     await test.step("change and remove the default payment method of every client", async () => {
       const comboboxPaymentMethod = getFormInputByLabel(
         formClient,
-        "Forma de pago predeterminada",
+        DEFAULT_PAYMENT_METHOD_LABEL,
         InputElementType.Combobox,
       );
 
@@ -306,7 +321,7 @@ test(
       const unsavedPhone = "600000000";
       const unsavedEmail = "unsavedemail@test.com";
       const syncedCity = "Synced City";
-      const inputPhone = getFormInputByLabel(formClient, "Teléfono");
+      const inputPhone = getFormInputByLabel(formClient, PHONE_LABEL);
       const inputAddEmail = formClient.getByTestId("input-add-invoice-email");
 
       for (const client of activeClients) {
@@ -324,7 +339,7 @@ test(
 
         // ...but a change of the Cliente itself reloads the form
         await db.update(dbTableClient).set({ city: syncedCity }).where(eq(dbTableClient.id, client.id));
-        await expect(getFormInputByLabel(formClient, "Ciudad")).toHaveValue(syncedCity);
+        await expect(getFormInputByLabel(formClient, CITY_LABEL)).toHaveValue(syncedCity);
         await expect(inputPhone).toHaveValue(client.phone ?? "");
         await expect(inputAddEmail).toHaveValue(unsavedEmail);
       }
@@ -343,11 +358,11 @@ test(
         await expect(page).toHaveURL(`/client/${client.id}`);
         await assertFormLoaded(formClient);
 
-        await getFormInputByLabel(formClient, "Nombre").fill(updatedName);
-        await getFormInputByLabel(formClient, "Ciudad").fill(updatedCity);
+        await getFormInputByLabel(formClient, NAME_LABEL).fill(updatedName);
+        await getFormInputByLabel(formClient, CITY_LABEL).fill(updatedCity);
 
         // The account goes into the 430 group and the exported invoices only have room for 9 digits
-        const inputAccountingAccountId = getFormInputByLabel(formClient, "Cuenta contable Prisma");
+        const inputAccountingAccountId = getFormInputByLabel(formClient, PRISMA_ACCOUNTING_ACCOUNT_LABEL);
         for (const invalidAccountingAccountId of ["7050001", "4300000001"]) {
           await inputAccountingAccountId.fill(invalidAccountingAccountId);
           await formClient.getByTestId("button-submit").click();
@@ -389,12 +404,12 @@ test(
       await expect(page).toHaveURL("/maintenance?createClient=true");
 
       // The accounting account is only filled in from the route of the Cliente
-      await expect(getFormInputByLabel(dialogCreateClient, "Cuenta contable Prisma")).toHaveCount(0);
+      await expect(getFormInputByLabel(dialogCreateClient, PRISMA_ACCOUNTING_ACCOUNT_LABEL)).toHaveCount(0);
 
-      await getFormInputByLabel(dialogCreateClient, "Nombre").fill(newClient.name);
-      await getFormInputByLabel(dialogCreateClient, "Nombre legal").fill(newClient.legalName);
-      await getFormInputByLabel(dialogCreateClient, "Ciudad").fill(newClient.city);
-      await getFormInputByLabel(dialogCreateClient, "Teléfono").fill(newClient.phone);
+      await getFormInputByLabel(dialogCreateClient, NAME_LABEL).fill(newClient.name);
+      await getFormInputByLabel(dialogCreateClient, LEGAL_NAME_LABEL).fill(newClient.legalName);
+      await getFormInputByLabel(dialogCreateClient, CITY_LABEL).fill(newClient.city);
+      await getFormInputByLabel(dialogCreateClient, PHONE_LABEL).fill(newClient.phone);
 
       // The address, postal code and CIF are required to account the invoices of the Cliente
       await dialogCreateClient.getByTestId("button-submit").click();
@@ -402,19 +417,19 @@ test(
       await expect(dialogCreateClient).toBeVisible();
       expect(await getClientById(NEW_CLIENT_ID)).toBeUndefined();
 
-      await getFormInputByLabel(dialogCreateClient, "Dirección").fill(newClient.address);
-      await getFormInputByLabel(dialogCreateClient, "Código postal").fill(newClient.postalCode);
-      await getFormInputByLabel(dialogCreateClient, "CIF").fill(newClient.taxId);
+      await getFormInputByLabel(dialogCreateClient, ADDRESS_LABEL).fill(newClient.address);
+      await getFormInputByLabel(dialogCreateClient, POSTAL_CODE_LABEL).fill(newClient.postalCode);
+      await getFormInputByLabel(dialogCreateClient, TAX_ID_LABEL).fill(newClient.taxId);
 
       await dialogCreateClient.getByTestId("button-submit").click();
 
       await expect(page).toHaveURL(`/client/${NEW_CLIENT_ID}`);
       await assertFormLoaded(formClient);
-      await expect(getFormInputByLabel(formClient, "Nombre")).toHaveValue(newClient.name);
+      await expect(getFormInputByLabel(formClient, NAME_LABEL)).toHaveValue(newClient.name);
       await expect(formClient.getByTestId("card-table-client-invoice-email")).not.toHaveAttribute("inert");
 
       expect(await getClientById(NEW_CLIENT_ID)).toMatchObject({ ...newClient, prismaAccountingAccountId: null });
-      await expect(getFormInputByLabel(formClient, "Cuenta contable Prisma")).toHaveValue("");
+      await expect(getFormInputByLabel(formClient, PRISMA_ACCOUNTING_ACCOUNT_LABEL)).toHaveValue("");
 
       await formClient.getByRole("button", { name: "Ver Clientes" }).click();
 
@@ -643,7 +658,7 @@ test("a deleted client keeps its history, but its references and prices are hidd
       await assertFormLoaded(formSellOrder);
       await expect(formSellOrder.getByTestId("badge-sell-order-status")).toContainText("Cliente eliminado");
       await expect(formSellOrder.getByTestId("button-submit-form-sell-order")).toHaveCount(0);
-      const comboboxClient = getFormInputByLabel(formSellOrder, "Cliente", InputElementType.Combobox);
+      const comboboxClient = getFormInputByLabel(formSellOrder, CLIENT_LABEL, InputElementType.Combobox);
       await assertComboboxValue(comboboxClient, String(client.id));
       await expect(comboboxClient.getByTestId("button-trigger")).toHaveText(client.name);
 
@@ -760,7 +775,7 @@ test(
 
       await expect(dialogCreateClient).not.toBeVisible();
       await assertFormLoaded(formClient);
-      await expect(getFormInputByLabel(formClient, "Nombre")).toHaveValue(client.name);
+      await expect(getFormInputByLabel(formClient, NAME_LABEL)).toHaveValue(client.name);
 
       // ...so the deleted Cliente can no longer be restored
       await page.goto(`/client/${client.id}`);
