@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { zfd } from "zod-form-data";
 
-import { fileNameSchema, requiredFileSchema, requiredIdSchema, stringSchema } from "@/schemas";
+import { nullableDateSchema, fileNameSchema, requiredFileSchema, requiredIdSchema, stringSchema } from "@/schemas";
 
 const baseBlueprintSchema = z.object({
   fileName: fileNameSchema,
@@ -10,7 +10,7 @@ const baseBlueprintSchema = z.object({
 export const collectionBlueprintSchema = baseBlueprintSchema.extend({
   id: requiredIdSchema,
   fileUrl: stringSchema(),
-  createdAt: z.coerce.date().nullable(),
+  createdAt: nullableDateSchema,
   blueprint: z.instanceof(File),
   partId: requiredIdSchema,
 });

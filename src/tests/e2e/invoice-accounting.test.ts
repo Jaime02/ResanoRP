@@ -23,6 +23,7 @@ import {
 import { getAccountingExportPath } from "@/files/invoice";
 import { formatCents, getDeliveryNoteLineUnitPrice, getVatBreakdown } from "@/lib/prices";
 import { PRISMA_ACCOUNTING_ACCOUNT_LABEL } from "@/messages/client";
+import { CLOSE_LABEL } from "@/messages/common";
 import {
   MOCK_INITIAL_DATE,
   mockClients,
@@ -536,7 +537,7 @@ test(
       const dialog = page.getByTestId("dialog-unaccount-invoice-content");
       await expect(dialog).toBeVisible();
       await expect(dialog).toContainText(`Factura ${invoiceToUnaccount.id}`);
-      await dialog.getByRole("button", { name: "Cerrar" }).click();
+      await dialog.getByRole("button", { name: CLOSE_LABEL }).click();
       await expect(dialog).not.toBeVisible();
       expect((await getInvoiceById(invoiceToUnaccount.id))?.accounted).toBe(true);
 

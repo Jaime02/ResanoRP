@@ -10,7 +10,6 @@ import {
   deleteDeliveryNoteLine,
 } from "@/db/functions/delivery-note-line";
 import { resetChangedDeliveryNoteInvoice, resetInvoiceStatus } from "@/db/functions/invoice";
-import { getPartById } from "@/db/functions/part";
 import { dbTableDeliveryNote, dbTableDeliveryNoteLine, dbTableInvoice } from "@/db/schema";
 import { printDeliveryNote } from "@/files/delivery-note";
 import { getSalesDocumentLine } from "@/files/sales-document";
@@ -67,15 +66,7 @@ async function insertStagedSellOrderLines(
           message: `Referencia de pieza ${sellOrderLine.partReferenceId} no encontrada`,
         });
       }
-
-      const part = await getPartById(partReference.partId, tx);
-      if (!part) {
-        throw new TRPCError({
-          code: "NOT_FOUND",
-          message: `Pieza ${partReference.partId} no encontrada`,
-        });
-      }
-      description = partReference.clientDescription ?? part.description;
+      description = partReference.clientDescription;
     }
 
     await tx.insert(dbTableDeliveryNoteLine).values({

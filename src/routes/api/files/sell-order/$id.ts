@@ -1,9 +1,11 @@
 import fs from "node:fs/promises";
 
 import { createFileRoute } from "@tanstack/react-router";
+import { getCookie } from "@tanstack/react-start/server";
 
 import { getSellOrderById } from "@/db/functions/sell-order";
 import { getSellOrderPath } from "@/files/sell-order";
+import { ADMIN_SESSION_COOKIE_NAME, isAdminSession } from "@/lib/admin-session";
 import logger from "@/logging/logger";
 import { coercedIdObjectSchema } from "@/schemas";
 
@@ -11,6 +13,10 @@ export const Route = createFileRoute("/api/files/sell-order/$id")({
   server: {
     handlers: {
       GET: async ({ params }: { params: { id: string } }) => {
+        if (!isAdminSession(getCookie(ADMIN_SESSION_COOKIE_NAME))) {
+          return new Response("Esta acción solo la puede hacer el Administrador", { status: 403 });
+        }
+
         let id: number;
         try {
           ({ id } = coercedIdObjectSchema.parse(params));

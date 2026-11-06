@@ -10,6 +10,12 @@ Use Bash always, even on Windows. Use PowerShell only when necessary. Use `bunx`
 
 Do not run the tests unless explicitly required.
 
+When writing tests:
+
+- Drive them through the user UI. Do not send custom HTTP or tRPC requests (`page.request`), force clicks or use similar hacks to reach states the UI cannot reach.
+- Put repeated UI actions in reusable workflows in `src/tests/workflows/`, and reuse the existing ones before writing new ones.
+- Keep tests as compact as possible without reducing coverage: merge related scenarios into `test.step`s of one test and share setup instead of repeating it.
+
 Do not add comments to describe your changes. The code should be self-explanatory.
 Comments are only allowed when they are necessary to explain why a change was made, not what the change does.
 

@@ -9,7 +9,7 @@ interface TooltipPartReferencesProps {
   references: Array<{
     id: number;
     reference: string;
-    clientDescription: string | null;
+    clientDescription: string;
     client?: { name: string } | null;
   }>;
 }

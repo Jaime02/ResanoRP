@@ -8,13 +8,14 @@ import {
   requiredIdSchema,
   stringSchema,
   tableStateSchema,
+  nullableDateSchema,
 } from "@/schemas";
 
 const baseSellOrderLineSchema = z.object({
   notes: stringSchema({ nullable: true }),
   partPrice: priceSchema.nullable().transform((partPrice) => (partPrice === "" ? null : partPrice)),
   quantity: nonZeroQuantitySchema,
-  requestedDeliveryDate: z.coerce.date().nullable(),
+  requestedDeliveryDate: nullableDateSchema,
 });
 
 // The form validates each kind of Línea with its own schema, because an error on a field it hides would block it
@@ -49,7 +50,7 @@ export const sellOrderLineSchema = sellOrderLineFieldsSchema.extend({
   description: z.string().nullable(),
   partReferenceId: nullableIdSchema,
   sellOrderId: requiredIdSchema,
-  deletedAt: z.coerce.date().nullable(),
+  deletedAt: nullableDateSchema,
 });
 export type TSellOrderLine = z.infer<typeof sellOrderLineSchema>;
 

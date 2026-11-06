@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-import { nullableIdSchema, requiredIdSchema, stringSchema, tableStateSchema } from "@/schemas";
+import { nullableDateSchema, nullableIdSchema, requiredIdSchema, stringSchema, tableStateSchema } from "@/schemas";
 
 const baseClientSchema = z.object({
   address: stringSchema({ nullable: false }),
@@ -26,7 +26,7 @@ const baseClientSchema = z.object({
 
 export const clientSchema = baseClientSchema.extend({
   id: requiredIdSchema,
-  deletedAt: z.coerce.date().nullable(),
+  deletedAt: nullableDateSchema,
 });
 
 export const createClientSchema = baseClientSchema;

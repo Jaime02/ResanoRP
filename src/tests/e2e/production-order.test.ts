@@ -21,8 +21,8 @@ import {
 } from "@/db/schema";
 import { formatPartDimension } from "@/lib/formatters";
 import { translatedEnums } from "@/lib/translations";
-import { PART_LABEL } from "@/messages/common";
-import { QUANTITY_TO_PRODUCE_LABEL } from "@/messages/production-order";
+import { STATUS_PENDING_LABEL, PART_LABEL } from "@/messages/common";
+import { PRODUCTION_ORDERS_LABEL, QUANTITY_TO_PRODUCE_LABEL } from "@/messages/production-order";
 import { ProductionOrderStatus } from "@/schemas/production-order";
 import type { TProductionOrderFilters, TTableProductionOrderState } from "@/schemas/production-order";
 import {
@@ -439,7 +439,7 @@ test("deleting a production order takes it off the machines", async ({ page, bro
   );
   expect(await getMachineProductionOrderQueue(machine.id)).toHaveLength(0);
   await expect(getTableRowByTestId(tableProductionOrders, activeProductionOrderId).getByTestId("status")).toHaveText(
-    "Pendiente",
+    STATUS_PENDING_LABEL,
   );
 });
 
@@ -477,15 +477,15 @@ test(
 
 test("the heading only counts the production orders once they are loaded", async ({ page }) => {
   // The count of a loading table is only shown for a moment, so every heading is recorded as the page renders it
-  await page.addInitScript(() => {
+  await page.addInitScript((productionOrdersLabel) => {
     const headings = new Set<string>();
     (window as Window & { productionOrderHeadings?: Set<string> }).productionOrderHeadings = headings;
     new MutationObserver(() => {
       for (const heading of document.querySelectorAll("h2")) {
-        if (heading.textContent.endsWith("Órdenes de producción")) headings.add(heading.textContent);
+        if (heading.textContent.endsWith(productionOrdersLabel)) headings.add(heading.textContent);
       }
     }).observe(document, { characterData: true, childList: true, subtree: true });
-  });
+  }, PRODUCTION_ORDERS_LABEL);
   await gotoProductionOrdersWithStatuses(page, Object.values(ProductionOrderStatus));
 
   await expect(page.getByRole("heading", { level: 2, name: /Órdenes de producción$/ })).toHaveText(

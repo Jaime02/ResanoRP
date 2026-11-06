@@ -2,6 +2,7 @@ import { expect } from "@playwright/test";
 import type { Locator, Page } from "@playwright/test";
 
 import { getClientById } from "@/db/functions/client";
+import { CLIENT_DELETE_TITLE } from "@/messages/client";
 import type { TBaseModel } from "@/schemas";
 import { mockDeliveryMethods, mockPaymentMethods } from "@/tests/mock-data";
 import { openAndConfirmAlertDialog } from "@/tests/utils/components/alert-dialog";
@@ -46,7 +47,7 @@ export async function workflowAssertClientFormData(formClient: Locator, client: 
   await assertModelComboboxValue(formClient, paymentMethodLabel, client.defaultPaymentMethodId, mockPaymentMethods);
   await assertModelComboboxValue(formClient, deliveryMethodLabel, client.defaultDeliveryMethodId, mockDeliveryMethods);
 
-  const buttonDeleteClient = formClient.getByRole("button", { name: "Eliminar Cliente" });
+  const buttonDeleteClient = formClient.getByRole("button", { name: CLIENT_DELETE_TITLE });
   const buttonRestoreClient = formClient.getByTestId("button-restore");
   if (client.deletedAt === null) {
     await expect(buttonDeleteClient).toBeEnabled();

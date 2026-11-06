@@ -5,8 +5,17 @@ import { eq } from "drizzle-orm";
 import { AppContextStorage, UserMode } from "@/contexts/app-context";
 import { getMachineById } from "@/db/functions/machine";
 import { MACHINE_NAME_CONSTRAINT, dbTableMachine, dbTablePartProduction } from "@/db/schema";
-import { NAME_LABEL } from "@/messages/common";
-import { MACHINE_MAX_DIAMETER_LABEL, MACHINE_MIN_DIAMETER_LABEL } from "@/messages/machine";
+import { NO_MACHINES_MESSAGE } from "@/messages/combobox";
+import { CLOSE_LABEL, STATUS_PENDING_LABEL, NAME_LABEL } from "@/messages/common";
+import {
+  MACHINE_CREATE_TITLE,
+  MACHINE_DELETED_MESSAGE,
+  MACHINE_RESTORED_MESSAGE,
+  SHOW_DELETED_MACHINES_LABEL,
+  VIEW_MACHINES_LABEL,
+  MACHINE_MAX_DIAMETER_LABEL,
+  MACHINE_MIN_DIAMETER_LABEL,
+} from "@/messages/machine";
 import { ProductionOrderStatus } from "@/schemas/production-order";
 import {
   MOCK_INITIAL_DATE,
@@ -85,7 +94,7 @@ test("manage the machines", { annotation: TestAnnotations.NonEmptyErrorsLogFile 
       await expect(tableMachineProductionHistory).toBeVisible();
       await assertTableRowCount(tableMachineProductionHistory, machineProductions.length);
 
-      await formMachine.getByRole("button", { name: "Ver Máquinas" }).click();
+      await formMachine.getByRole("button", { name: VIEW_MACHINES_LABEL }).click();
 
       await expect(page).toHaveURL(MAINTENANCE_MACHINE_URL);
       await expect(tableMaintenanceMachine.getByText(machine.name, { exact: true })).toBeVisible();
@@ -128,7 +137,7 @@ test("manage the machines", { annotation: TestAnnotations.NonEmptyErrorsLogFile 
 
       await workflowEditMachine(page, machine.id, machine.name, updatedName);
 
-      await formMachine.getByRole("button", { name: "Ver Máquinas" }).click();
+      await formMachine.getByRole("button", { name: VIEW_MACHINES_LABEL }).click();
 
       await expect(tableMaintenanceMachine.getByText(updatedName, { exact: true })).toBeVisible();
       await expect(tableMaintenanceMachine.getByText(machine.name, { exact: true })).not.toBeVisible();
@@ -154,7 +163,7 @@ test("manage the machines", { annotation: TestAnnotations.NonEmptyErrorsLogFile 
 
     await page.goto(MAINTENANCE_MACHINE_URL);
     for (const machine of machines) {
-      await page.getByRole("button", { name: "Crear Máquina" }).click();
+      await page.getByRole("button", { name: MACHINE_CREATE_TITLE }).click();
       await expect(dialogCreateMachine).toBeVisible();
 
       await getFormInputByLabel(dialogCreateMachine, NAME_LABEL).fill(machine.name);
@@ -176,7 +185,7 @@ test("manage the machines", { annotation: TestAnnotations.NonEmptyErrorsLogFile 
       // Deleting a Máquina frees its name
       await workflowDeleteMachine(page, machine.id, machine.name);
 
-      await page.getByRole("button", { name: "Crear Máquina" }).click();
+      await page.getByRole("button", { name: MACHINE_CREATE_TITLE }).click();
       await expect(dialogCreateMachine).toBeVisible();
       await getFormInputByLabel(dialogCreateMachine, NAME_LABEL).fill(machine.name);
       await dialogCreateMachine.getByTestId("button-submit").click();
@@ -264,7 +273,7 @@ test("delete every machine, emptying its queue but keeping what it produced, and
     if (machine.activeProductionOrderId !== null) {
       await expect(
         getTableRowByTestId(tableProductionOrder, machine.activeProductionOrderId).getByTestId("status"),
-      ).toHaveText("Pendiente");
+      ).toHaveText(STATUS_PENDING_LABEL);
     }
 
     // Only the Órdenes de producción of the remaining Máquinas are still in production
@@ -280,7 +289,7 @@ test("delete every machine, emptying its queue but keeping what it produced, and
     await assertFormLoaded(formMachine);
 
     // A deleted machine is read only until it is restored
-    await expect(formMachine.getByText("Máquina eliminada", { exact: true })).toBeVisible();
+    await expect(formMachine.getByText(MACHINE_DELETED_MESSAGE, { exact: true })).toBeVisible();
     await expect(formMachine.getByTestId("button-submit")).toHaveCount(0);
 
     // The restore dialog lists the machine, and cancelling it keeps the machine deleted
@@ -289,12 +298,12 @@ test("delete every machine, emptying its queue but keeping what it produced, and
     await expect(dialogRestoreMachine).toContainText(machine.name);
     await dialogRestoreMachine.getByTestId("button-close").click();
     await expect(dialogRestoreMachine).not.toBeVisible();
-    await expect(formMachine.getByText("Máquina eliminada", { exact: true })).toBeVisible();
+    await expect(formMachine.getByText(MACHINE_DELETED_MESSAGE, { exact: true })).toBeVisible();
     expect((await getMachineById(machine.id))?.deletedAt).not.toBeNull();
 
     await openAndConfirmAlertDialog(page, formMachine.getByTestId("button-restore"), "dialog-restore-model-content");
 
-    await expect(formMachine.getByText("Máquina eliminada", { exact: true })).not.toBeVisible();
+    await expect(formMachine.getByText(MACHINE_DELETED_MESSAGE, { exact: true })).not.toBeVisible();
     await expect(formMachine.getByTestId("button-submit")).toBeVisible();
 
     // Restoring it does not bring its queue nor its Orden de producción back
@@ -339,7 +348,7 @@ test("close the session of every Machine that is deleted while in use", async ({
     }
     await expect(filterByExactText(machineButtons, machine.name)).toHaveCount(0);
     if (remainingMachines.length === 0) {
-      await expect(dialogMachineSelection.getByText("No hay Máquinas disponibles")).toBeVisible();
+      await expect(dialogMachineSelection.getByText(NO_MACHINES_MESSAGE)).toBeVisible();
     }
   }
 });
@@ -366,7 +375,7 @@ test("set the diameter range of the machines", async ({ page, toasts }) => {
     const dialogDeleteMachine = page.getByTestId("dialog-delete-model-content");
     await expect(dialogDeleteMachine).toContainText(/Diámetro mínimo:\s*15/);
     await expect(dialogDeleteMachine).toContainText(/Diámetro máximo:\s*No disponible/);
-    await dialogDeleteMachine.getByRole("button", { name: "Cerrar" }).click();
+    await dialogDeleteMachine.getByRole("button", { name: CLOSE_LABEL }).click();
     await expect(dialogDeleteMachine).not.toBeVisible();
   });
 
@@ -457,7 +466,7 @@ test("show the machine as it is in the database when its page is opened again", 
 const DELETED_MACHINE_FILTER_PARAMS = {
   url: MAINTENANCE_MACHINE_URL,
   tableTestId: "table-machine",
-  filterLabel: "Ver Máquinas eliminadas",
+  filterLabel: SHOW_DELETED_MACHINES_LABEL,
   getDeletedAt: async (id: number) => (await getMachineById(id))?.deletedAt,
 };
 
@@ -468,7 +477,7 @@ test("list the deleted machines only when asked for and restore them from the ta
     ids: activeMachines.map(({ id }) => id),
     // The page of a deleted Máquina shows it read only, with its own restore button
     editButton: EditButtonVisibility.Always,
-    restoredToastTitle: "Máquina restaurada",
+    restoredToastTitle: MACHINE_RESTORED_MESSAGE,
   });
 });
 

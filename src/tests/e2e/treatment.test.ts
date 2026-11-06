@@ -22,7 +22,12 @@ import {
 import { isSameAppDay } from "@/lib/dates";
 import { getSellOrderLineStatusDisplay } from "@/lib/sell-order-line";
 import { translatedEnums } from "@/lib/translations";
-import { NO_PARTS_IN_TREATMENT_MESSAGE } from "@/messages/treatment";
+import {
+  TREATMENT_HISTORY_EMPTY_MESSAGE,
+  TREATMENT_LABEL,
+  WITHOUT_ORDER_LABEL,
+  NO_PARTS_IN_TREATMENT_MESSAGE,
+} from "@/messages/treatment";
 import { ProductionOrderStatus } from "@/schemas/production-order";
 import { SellOrderLineStatus } from "@/schemas/sell-order-line";
 import {
@@ -156,7 +161,7 @@ test("open the treatment page from the home page in every user mode", async ({ p
   ] as const) {
     await setUserMode(page, userMode, machineId);
     await page.goto("/");
-    await page.getByRole("link", { name: "Tratamiento", exact: true }).click();
+    await page.getByRole("link", { name: TREATMENT_LABEL, exact: true }).click();
     await expect(page).toHaveURL((url) => url.pathname === "/treatment");
     await expect(getTreatmentLocators(page).tablePending).toBeVisible();
   }
@@ -245,7 +250,7 @@ test("the history defaults to today and needs a day or a part to be listed", asy
 
   await test.step("without filters nothing is listed", async () => {
     await sectionHistory.getByTestId("input-treatment-history-date").getByTestId("button-clear").click();
-    await expect(sectionHistory).toContainText("Selecciona una fecha o un Artículo para ver el historial");
+    await expect(sectionHistory).toContainText(TREATMENT_HISTORY_EMPTY_MESSAGE);
     await expect(tableBatchReceived).toHaveCount(0);
   });
 
@@ -947,7 +952,7 @@ test("parts without a production order can be sent to the treatment", async ({ p
     getTreatmentLocators(page).sectionOut.getByTestId(`table-treatment-batch-${shipment.sentAt.getTime()}`),
     shipment.id,
   );
-  await expect(row.getByTestId("productionOrderId")).toHaveText("Sin orden");
+  await expect(row.getByTestId("productionOrderId")).toHaveText(WITHOUT_ORDER_LABEL);
   await expect(row.getByTestId("description")).toHaveText(coatedPart.description);
   await expect(row.getByTestId("pendingQuantity")).toHaveText(String(quantity));
 

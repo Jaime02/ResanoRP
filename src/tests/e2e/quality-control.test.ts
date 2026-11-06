@@ -3,11 +3,13 @@ import { expect } from "@playwright/test";
 import { getProductionOrderById } from "@/db/functions/production-order";
 import { getQualityChecksOfProductionOrder } from "@/db/functions/quality-check";
 import { DEFAULT_QUALITY_CONTROL_MIN_QUANTITY } from "@/lib/production-order";
+import { OPEN_PART_LABEL } from "@/messages/part";
 import { QUANTITY_TO_PRODUCE_LABEL } from "@/messages/production-order";
 import { mockProductionOrders, mockQualityChecks } from "@/tests/mock-data";
 import { InputElementType, assertFormLoaded, getFormInputByLabel } from "@/tests/utils/components/form";
 import { getTableRowByTestId } from "@/tests/utils/components/table";
 import { TestAnnotations, test } from "@/tests/utils/fixtures";
+import { assertPartLink } from "@/tests/workflows/production";
 import {
   assertQualityControlTable,
   findOrderWithFeatures,
@@ -59,7 +61,7 @@ test("the quality control of the production orders", async ({ page }) => {
     const table = await gotoQualityControl(page, productionOrder.id);
     await expect(table.getByTestId("tr-no-data")).toBeVisible();
     await expect(table.getByTestId("button-quality-check-create")).toHaveCount(0);
-    await expect(table.getByRole("link", { name: "Abrir Artículo" })).toHaveAttribute(
+    await expect(table.getByRole("link", { name: OPEN_PART_LABEL })).toHaveAttribute(
       "href",
       `/part/${productionOrder.partId}?tab=blueprints`,
     );
@@ -70,6 +72,7 @@ test("the quality control of the production orders", async ({ page }) => {
     await page.goto(`/production-order/${productionOrder.id}`);
     await expect(page.getByText(`Orden de producción ${productionOrder.id}`).first()).toBeVisible();
     await expect(getQualityControlLocators(page).table).toHaveCount(0);
+    await assertPartLink(page, productionOrder.partId);
   });
 
   await test.step("a deleted production order does not allow changing its quality control", async () => {

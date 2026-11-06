@@ -1,7 +1,14 @@
 import { expect } from "@playwright/test";
 import type { Locator } from "@playwright/test";
 
-type TTablePagerButtonName = "Primera página" | "Página anterior" | "Página siguiente" | "Última página";
+import type { FIRST_PAGE_LABEL, LAST_PAGE_LABEL, PREVIOUS_PAGE_LABEL } from "@/messages/common";
+import { NEXT_PAGE_LABEL } from "@/messages/common";
+
+type TTablePagerButtonName =
+  | typeof FIRST_PAGE_LABEL
+  | typeof PREVIOUS_PAGE_LABEL
+  | typeof NEXT_PAGE_LABEL
+  | typeof LAST_PAGE_LABEL;
 
 export function getTablePagerButton(table: Locator, name: TTablePagerButtonName): Locator {
   return table.locator("xpath=preceding-sibling::div[1]").getByRole("button", { exact: true, name });
@@ -14,7 +21,7 @@ export function filterByExactText(elements: Locator, text: string): Locator {
 
 // Real data spreads the rows over pages of 10, so the row is looked for from the current page onwards
 export async function findTableRow(table: Locator, row: Locator): Promise<Locator> {
-  const buttonNextPage = getTablePagerButton(table, "Página siguiente");
+  const buttonNextPage = getTablePagerButton(table, NEXT_PAGE_LABEL);
   const pageLabel = table.locator("xpath=preceding-sibling::div[1]").getByText(/^Página \d+ de \d+$/);
   await expect(getTableRows(table).or(getTableNoDataRow(table)).first()).toBeVisible();
   while (!(await row.isVisible()) && (await buttonNextPage.isVisible()) && (await buttonNextPage.isEnabled())) {

@@ -59,6 +59,8 @@ export const STATUS_DELETED_LABEL = "Eliminado";
 export const PENDING_LABEL = "Pendientes";
 export const REFERENCE_LABEL = "Referencia";
 export const FILE_LABEL = "Archivo";
+export const DROP_FILE_PLACEHOLDER = "Arrastra un archivo";
+export const getDropFilesPlaceholder = (maxFiles: number) => `Arrastra hasta ${maxFiles} archivos`;
 export const MATERIAL_LABEL = "Material";
 export const SHAPE_LABEL = "Forma";
 export const SIZE_LABEL = "Medida";

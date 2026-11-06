@@ -110,12 +110,8 @@ export default function useSellOrderForm({
   const form = useAppForm({
     formId: "sellOrder",
     defaultValues,
-    onSubmit: async ({ value: sellOrderFormData, formApi }) => {
+    onSubmit: async ({ value: sellOrderFormData }) => {
       if (formMode !== FormMode.Create && formMode !== FormMode.Update) return;
-      // Electric emits no change for a row whose values did not change, so a new file alone never syncs back
-      const isOnlyFileChanged = Object.entries(formApi.state.fieldMeta).every(
-        ([name, meta]) => name === "sellOrderFile" || meta?.isDefaultValue !== false,
-      );
 
       const mutation =
         formMode === FormMode.Create
@@ -124,7 +120,7 @@ export default function useSellOrderForm({
       await showToastOnTRPCMutation({
         mutation,
         onSuccess: { title: formMode === FormMode.Create ? SELL_ORDER_CREATED_MESSAGE : SELL_ORDER_EDITED_MESSAGE },
-        collection: isOnlyFileChanged ? undefined : sellOrderCollection,
+        collection: sellOrderCollection,
         onSubmit,
       });
     },

@@ -4,7 +4,12 @@ import { eq } from "drizzle-orm";
 import { PAYMENT_METHOD_NAME_CONSTRAINT, dbTablePaymentMethod } from "@/db/schema";
 import { DEFAULT_PAYMENT_METHOD_LABEL } from "@/messages/client";
 import { NAME_LABEL, PAYMENT_METHOD_LABEL } from "@/messages/common";
-import { PAYMENT_METHOD_DUE_DAYS_LABEL } from "@/messages/payment-method";
+import {
+  PAYMENT_METHOD_CREATE_TITLE,
+  PAYMENT_METHOD_RESTORED_MESSAGE,
+  SHOW_DELETED_PAYMENT_METHODS_LABEL,
+  PAYMENT_METHOD_DUE_DAYS_LABEL,
+} from "@/messages/payment-method";
 import { mockClients, mockInvoices, mockPaymentMethods, mockSellOrders } from "@/tests/mock-data";
 import { openAndConfirmAlertDialog } from "@/tests/utils/components/alert-dialog";
 import { assertComboboxValue, fillComboboxFilter, openCombobox } from "@/tests/utils/components/combobox";
@@ -53,7 +58,7 @@ test(
 
       // A new Forma de pago does not generate receipts unless it is checked
       const newPaymentMethodName = "Giro a 60 días";
-      await page.getByRole("button", { name: "Crear Forma de pago" }).click();
+      await page.getByRole("button", { name: PAYMENT_METHOD_CREATE_TITLE }).click();
       await expect(dialogCreateEditPaymentMethod).toBeVisible();
       await expect(checkboxGeneratesReceipt).not.toBeChecked();
       await getFormInputByLabel(dialogCreateEditPaymentMethod, NAME_LABEL).fill(newPaymentMethodName);
@@ -116,7 +121,7 @@ test(
       await page.goto(MAINTENANCE_PAYMENT_METHOD_URL);
 
       for (const paymentMethod of activePaymentMethods) {
-        await page.getByRole("button", { name: "Crear Forma de pago" }).click();
+        await page.getByRole("button", { name: PAYMENT_METHOD_CREATE_TITLE }).click();
         await expect(dialogCreateEditPaymentMethod).toBeVisible();
         await getFormInputByLabel(dialogCreateEditPaymentMethod, NAME_LABEL).fill(paymentMethod.name);
         await dialogCreateEditPaymentMethod.getByTestId("button-submit").click();
@@ -236,7 +241,7 @@ test(
 
         // Its name can be used again...
         await page.goto(MAINTENANCE_PAYMENT_METHOD_URL);
-        await page.getByRole("button", { name: "Crear Forma de pago" }).click();
+        await page.getByRole("button", { name: PAYMENT_METHOD_CREATE_TITLE }).click();
         await expect(dialogCreateEditPaymentMethod).toBeVisible();
         await getFormInputByLabel(dialogCreateEditPaymentMethod, NAME_LABEL).fill(paymentMethod.name);
         await dialogCreateEditPaymentMethod.getByTestId("button-submit").click();
@@ -256,7 +261,7 @@ test(
 const DELETED_PAYMENT_METHOD_FILTER_PARAMS = {
   url: MAINTENANCE_PAYMENT_METHOD_URL,
   tableTestId: "table-payment-method",
-  filterLabel: "Ver Formas de pago eliminadas",
+  filterLabel: SHOW_DELETED_PAYMENT_METHODS_LABEL,
 };
 
 test("list the deleted Formas de pago only when asked for and restore them from the table", async ({ page, db }) => {
@@ -266,7 +271,7 @@ test("list the deleted Formas de pago only when asked for and restore them from 
     getDeletedAt: async (id) => (await db.query.dbTablePaymentMethod.findFirst({ where: { id } }))?.deletedAt,
     ids: mockPaymentMethods.filter((paymentMethod) => paymentMethod.deletedAt === null).map(({ id }) => id),
     editButton: EditButtonVisibility.OnlyActive,
-    restoredToastTitle: "Forma de pago restaurada",
+    restoredToastTitle: PAYMENT_METHOD_RESTORED_MESSAGE,
   });
 });
 

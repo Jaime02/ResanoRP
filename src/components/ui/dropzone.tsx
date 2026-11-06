@@ -1,12 +1,11 @@
-import { UploadIcon } from "lucide-react";
+import { UploadIcon, XIcon } from "lucide-react";
 import { useRef } from "react";
 import { useDropzone } from "react-dropzone";
 import type { DropEvent, DropzoneOptions, FileRejection } from "react-dropzone";
 
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-
-const maxLabelItems = 3;
+import { CLEAR_SELECTION_LABEL, DROP_FILE_PLACEHOLDER, getDropFilesPlaceholder } from "@/messages/common";
 
 export type DropzoneProps = Omit<DropzoneOptions, "onDrop"> & {
   id?: string;
@@ -14,8 +13,9 @@ export type DropzoneProps = Omit<DropzoneOptions, "onDrop"> & {
   filterFieldName: string;
   required?: boolean;
   allowMultipleFiles?: boolean;
-  src?: Array<File> | File;
+  src?: Array<File> | File | null;
   onDrop?: (acceptedFiles: Array<File>, fileRejections: Array<FileRejection>, event: DropEvent) => void;
+  onClear?: () => void;
 };
 
 export function Dropzone({
@@ -32,6 +32,7 @@ export function Dropzone({
   src,
   disabled = false,
   onDrop,
+  onClear,
   ...props
 }: DropzoneProps) {
   const hiddenInputRef = useRef<HTMLInputElement | null>(null);
@@ -63,69 +64,60 @@ export function Dropzone({
     onError,
     ...props,
   });
-  let caption = "";
-  /*if (accept) {
-    caption += "Formatos aceptados: ";
-    caption += new Intl.ListFormat("es").format(Object.keys(accept).map((type) => type.split("/").at(1) ?? type));
-  }*/
-
-  if (minSize !== undefined && maxSize !== undefined) {
-    caption += ` de entre ${renderBytes(minSize)} y ${renderBytes(maxSize)}`;
-  } else if (minSize !== undefined) {
-    caption += ` de al menos ${renderBytes(minSize)}`;
-  } else if (maxSize !== undefined) {
-    caption += ` de menos de ${renderBytes(maxSize)}`;
-  }
+  const files = src == null ? [] : Array.isArray(src) ? src : [src];
 
   return (
-    <div id={id} data-testid={testId} data-input-type="dropzone" className="flex w-base-input min-w-fit flex-col gap-2">
+    <div
+      id={id}
+      data-testid={testId}
+      data-input-type="dropzone"
+      className="flex w-base-input flex-row items-center gap-1"
+    >
       {!disabled && (
-        <Button
-          className={cn("flex-col gap-0 px-2", isDragActive && "ring-1 ring-ring outline-none")}
-          size="unstyled"
-          {...getRootProps()}
-        >
-          <div className="flex flex-col items-center justify-center gap-1 p-2">
-            <div className="flex items-center justify-center">
-              <UploadIcon className="size-icon-sm" />
-            </div>
-            <p className="w-full">
-              {src
-                ? Array.isArray(src)
-                  ? src.length > maxLabelItems
-                    ? `${new Intl.ListFormat("es").format(
-                        src.slice(0, maxLabelItems).map((file) => file.name),
-                      )} y ${src.length - maxLabelItems} más`
-                    : new Intl.ListFormat("es").format(src.map((file) => file.name))
-                  : src.name
-                : `Arrastra o selecciona ${maxFiles === 1 ? "un archivo" : `hasta ${maxFiles} archivos`}`}
-            </p>
-            {caption && <p className="text-sm text-wrap">{caption}</p>}
-          </div>
-          <input
-            data-testid="input-hidden"
-            type="file"
-            name={filterFieldName}
-            required={required}
-            className="hidden"
-            ref={hiddenInputRef}
-          />
-          <input data-testid="input-visible" {...getInputProps()} />
-        </Button>
+        <>
+          <Button
+            className={cn(
+              "min-w-0 grow justify-start text-left whitespace-normal",
+              isDragActive && "ring-1 ring-ring outline-none",
+            )}
+            {...getRootProps()}
+          >
+            <UploadIcon />
+            <span className="min-w-0 wrap-anywhere">
+              {files.length > 0
+                ? new Intl.ListFormat("es").format(files.map((file) => file.name))
+                : maxFiles === 1
+                  ? DROP_FILE_PLACEHOLDER
+                  : getDropFilesPlaceholder(maxFiles)}
+            </span>
+            <input
+              data-testid="input-hidden"
+              type="file"
+              name={filterFieldName}
+              required={required}
+              className="hidden"
+              ref={hiddenInputRef}
+            />
+            <input data-testid="input-visible" {...getInputProps()} />
+          </Button>
+          {onClear && files.length > 0 && (
+            <Button
+              testId="button-clear"
+              aria-label={CLEAR_SELECTION_LABEL}
+              size="icon"
+              variant="destructive"
+              onClick={() => {
+                if (hiddenInputRef.current) {
+                  hiddenInputRef.current.value = "";
+                }
+                onClear();
+              }}
+            >
+              <XIcon />
+            </Button>
+          )}
+        </>
       )}
     </div>
   );
-}
-
-function renderBytes(bytes: number) {
-  const units = ["B", "KB", "MB", "GB", "TB", "PB"];
-  let size = bytes;
-  let unitIndex = 0;
-
-  while (size >= 1024 && unitIndex < units.length - 1) {
-    size /= 1024;
-    unitIndex++;
-  }
-
-  return `${size.toFixed(2)}${units[unitIndex]}`;
 }

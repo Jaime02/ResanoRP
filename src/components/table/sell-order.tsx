@@ -108,7 +108,7 @@ export default function TableSellOrder({ testId = "table-sell-order", state, ...
             columnHelper.display({
               cell: ({ row }) => (
                 <ModelActions
-                  extraComponentsStart={<DialogSellOrderFile sellOrderId={row.original.id} iconOnly />}
+                  extraComponentsStart={<DialogSellOrderFile sellOrder={row.original} iconOnly />}
                   onEdit={async () => onEdit(row.original.id)}
                   deleteButton={
                     row.original.deletedAt === null
@@ -144,7 +144,7 @@ export default function TableSellOrder({ testId = "table-sell-order", state, ...
                   }
                 />
               ),
-              size: 100,
+              size: 150,
               header: ACTIONS_LABEL,
               id: "actions",
             }),

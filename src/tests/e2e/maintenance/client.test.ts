@@ -10,12 +10,17 @@ import {
   dbTableClientInvoiceEmail,
 } from "@/db/schema";
 import {
+  CLIENT_CREATE_TITLE,
+  CLIENT_RESTORED_MESSAGE,
+  SHOW_DELETED_CLIENTS_LABEL,
+  VIEW_CLIENTS_LABEL,
   DEFAULT_DELIVERY_METHOD_LABEL,
   DEFAULT_PAYMENT_METHOD_LABEL,
   PHONE_LABEL,
   PRISMA_ACCOUNTING_ACCOUNT_LABEL,
 } from "@/messages/client";
 import {
+  STATUS_DELETED_LABEL,
   ADDRESS_LABEL,
   CITY_LABEL,
   CLIENT_LABEL,
@@ -24,6 +29,7 @@ import {
   POSTAL_CODE_LABEL,
   TAX_ID_LABEL,
 } from "@/messages/common";
+import { SELL_ORDER_STATUS_CLIENT_DELETED_LABEL } from "@/messages/sell-order";
 import { SellOrderStatus } from "@/schemas/sell-order";
 import {
   mockClientInvoiceEmails,
@@ -209,7 +215,7 @@ test(
         await page.goto(`/client/${client.id}`);
 
         await assertFormLoaded(formClient);
-        await formClient.getByRole("button", { name: "Ver Clientes" }).click();
+        await formClient.getByRole("button", { name: VIEW_CLIENTS_LABEL }).click();
 
         await expect(page).toHaveURL("/maintenance?tab=client");
         await expect(getClientRows(client.name)).toHaveCount(1);
@@ -385,7 +391,7 @@ test(
           prismaAccountingAccountId: updatedAccountingAccountId,
         });
 
-        await formClient.getByRole("button", { name: "Ver Clientes" }).click();
+        await formClient.getByRole("button", { name: VIEW_CLIENTS_LABEL }).click();
 
         const updatedClientRow = await findTableRowByText(tableMaintenanceClient, updatedName);
         await expect(updatedClientRow.getByText(updatedCity, { exact: true })).toBeVisible();
@@ -398,7 +404,7 @@ test(
       await page.goto("/maintenance");
       await assertTableRowCount(tableMaintenanceClient, activeClients.length);
 
-      await page.getByRole("button", { name: "Crear Cliente" }).click();
+      await page.getByRole("button", { name: CLIENT_CREATE_TITLE }).click();
 
       await expect(dialogCreateClient).toBeVisible();
       await expect(page).toHaveURL("/maintenance?createClient=true");
@@ -431,7 +437,7 @@ test(
       expect(await getClientById(NEW_CLIENT_ID)).toMatchObject({ ...newClient, prismaAccountingAccountId: null });
       await expect(getFormInputByLabel(formClient, PRISMA_ACCOUNTING_ACCOUNT_LABEL)).toHaveValue("");
 
-      await formClient.getByRole("button", { name: "Ver Clientes" }).click();
+      await formClient.getByRole("button", { name: VIEW_CLIENTS_LABEL }).click();
 
       const newClientRow = await findTableRowByText(tableMaintenanceClient, newClient.name);
       await expect(newClientRow.getByText(newClient.city, { exact: true })).toBeVisible();
@@ -565,7 +571,7 @@ test(
 const DELETED_CLIENT_FILTER_PARAMS = {
   url: "/maintenance",
   tableTestId: "table-client",
-  filterLabel: "Ver Clientes eliminados",
+  filterLabel: SHOW_DELETED_CLIENTS_LABEL,
   getDeletedAt: async (id: number) => (await getClientById(id))?.deletedAt,
 };
 
@@ -576,7 +582,7 @@ test("list the deleted clients only when asked for and restore them from the tab
     ids: activeClients.map(({ id }) => id),
     // The page of a deleted Cliente shows it read only, with its own restore button
     editButton: EditButtonVisibility.Always,
-    restoredToastTitle: "Cliente restaurado",
+    restoredToastTitle: CLIENT_RESTORED_MESSAGE,
   });
 });
 
@@ -637,11 +643,11 @@ test("a deleted client keeps its history, but its references and prices are hidd
     for (const sellOrder of mockSellOrders) {
       const cellStatus = getTableRowByTestId(tableSellOrder, sellOrder.id).getByTestId("status");
       if (sellOrder.deletedAt !== null) {
-        await expect(cellStatus).toHaveText("Eliminado");
+        await expect(cellStatus).toHaveText(STATUS_DELETED_LABEL);
       } else if (isOfDeletedClient(sellOrder)) {
-        await expect(cellStatus).toHaveText("Cliente eliminado");
+        await expect(cellStatus).toHaveText(SELL_ORDER_STATUS_CLIENT_DELETED_LABEL);
       } else {
-        await expect(cellStatus).not.toHaveText("Cliente eliminado");
+        await expect(cellStatus).not.toHaveText(SELL_ORDER_STATUS_CLIENT_DELETED_LABEL);
       }
     }
 
@@ -656,7 +662,9 @@ test("a deleted client keeps its history, but its references and prices are hidd
     )) {
       await page.goto(`/sell-order/${sellOrder.id}`);
       await assertFormLoaded(formSellOrder);
-      await expect(formSellOrder.getByTestId("badge-sell-order-status")).toContainText("Cliente eliminado");
+      await expect(formSellOrder.getByTestId("badge-sell-order-status")).toContainText(
+        SELL_ORDER_STATUS_CLIENT_DELETED_LABEL,
+      );
       await expect(formSellOrder.getByTestId("button-submit-form-sell-order")).toHaveCount(0);
       const comboboxClient = getFormInputByLabel(formSellOrder, CLIENT_LABEL, InputElementType.Combobox);
       await assertComboboxValue(comboboxClient, String(client.id));
@@ -735,7 +743,7 @@ test(
   async ({ page, db, toasts }) => {
     await page.goto("/maintenance");
     for (const client of activeClients) {
-      await page.getByRole("button", { name: "Crear Cliente" }).click();
+      await page.getByRole("button", { name: CLIENT_CREATE_TITLE }).click();
       await expect(dialogCreateClient).toBeVisible();
 
       await fillRequiredClientFields(dialogCreateClient, client);
@@ -768,7 +776,7 @@ test(
       await workflowDeleteClient(page, client);
       await expect(getClientRows(client.name)).toHaveCount(0);
 
-      await page.getByRole("button", { name: "Crear Cliente" }).click();
+      await page.getByRole("button", { name: CLIENT_CREATE_TITLE }).click();
       await expect(dialogCreateClient).toBeVisible();
       await fillRequiredClientFields(dialogCreateClient, client);
       await dialogCreateClient.getByTestId("button-submit").click();

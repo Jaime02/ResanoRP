@@ -5,7 +5,7 @@ import { getDeliveryNote, getSellOrderLinesByDeliveryNoteId } from "@/db/functio
 import { getDeliveryNoteLinesByDeliveryNoteId } from "@/db/functions/delivery-note-line";
 import { getSellOrderLineById } from "@/db/functions/sell-order-line";
 import { clampPendingQuantity } from "@/lib/sell-order-line";
-import { CLIENT_LABEL, DESCRIPTION_LABEL, PRICE_LABEL, QUANTITY_LABEL } from "@/messages/common";
+import { ADD_PART_LABEL, CLIENT_LABEL, DESCRIPTION_LABEL, PRICE_LABEL, QUANTITY_LABEL } from "@/messages/common";
 import { getTestId } from "@/tests/utils/components";
 import { openAndConfirmAlertDialog } from "@/tests/utils/components/alert-dialog";
 import {
@@ -76,7 +76,7 @@ export async function workflowEditDeliveryNoteLineQuantity(page: Page, deliveryN
 
 export async function workflowOpenCreateDeliveryNoteLine(page: Page) {
   const dialogCreateDeliveryNoteLine = page.getByTestId("dialog-create-delivery-note-line");
-  await page.getByTestId("dialog-create-edit-delivery-note").getByRole("button", { name: "Añadir Artículo" }).click();
+  await page.getByTestId("dialog-create-edit-delivery-note").getByRole("button", { name: ADD_PART_LABEL }).click();
   await expect(dialogCreateDeliveryNoteLine).toBeVisible();
   await assertFormLoaded(dialogCreateDeliveryNoteLine);
   return dialogCreateDeliveryNoteLine;

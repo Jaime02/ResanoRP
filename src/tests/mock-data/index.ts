@@ -496,7 +496,7 @@ export const mockPartReferences: Array<BasePartReference> = [
     reference: "ID-6-P5-C1",
   },
   {
-    clientDescription: null,
+    clientDescription: "Id 7, part 1, client 2",
     clientId: 2,
     deletedAt: null,
     id: 7,
@@ -504,7 +504,7 @@ export const mockPartReferences: Array<BasePartReference> = [
     reference: "ID-7-P1-C2",
   },
   {
-    clientDescription: null,
+    clientDescription: "Id 8, part 6, client 1",
     clientId: 1,
     deletedAt: null,
     id: 8,
@@ -512,7 +512,7 @@ export const mockPartReferences: Array<BasePartReference> = [
     reference: "ID-8-P6-C1",
   },
   {
-    clientDescription: null,
+    clientDescription: "Id 9, part 6, no client",
     clientId: null,
     deletedAt: null,
     id: 9,
@@ -521,7 +521,7 @@ export const mockPartReferences: Array<BasePartReference> = [
   },
   {
     // Only reachable by Client 1 through includePartReferenceNullClientId
-    clientDescription: null,
+    clientDescription: "Id 10, part 3, no client",
     clientId: null,
     deletedAt: null,
     id: 10,
@@ -530,7 +530,7 @@ export const mockPartReferences: Array<BasePartReference> = [
   },
   {
     // Deleted, so it must not make part 2 reachable by Client 1
-    clientDescription: null,
+    clientDescription: "DELETED-P2-CNULL",
     clientId: null,
     deletedAt: new Date(MOCK_INITIAL_DATE.getTime() - DAY_IN_MS * 10),
     id: 11,
@@ -545,6 +545,7 @@ export const mockSellOrders: Array<BaseSellOrder> = [
     clientId: 1,
     clientReference: "ID-1-C1-PM1",
     deletedAt: null,
+    fileUploadedAt: new Date(MOCK_INITIAL_DATE),
     id: 1,
     notes: "Pedido urgente",
     paymentMethodId: 1,
@@ -555,6 +556,7 @@ export const mockSellOrders: Array<BaseSellOrder> = [
     clientId: 2,
     clientReference: "ID-2-C2-PM2",
     deletedAt: null,
+    fileUploadedAt: new Date(MOCK_INITIAL_DATE.getTime() - DAY_IN_MS * 3),
     id: 2,
     notes: null,
     paymentMethodId: 2,
@@ -565,6 +567,7 @@ export const mockSellOrders: Array<BaseSellOrder> = [
     clientId: 1,
     clientReference: "ID-3-C1-PM3",
     deletedAt: null,
+    fileUploadedAt: new Date(MOCK_INITIAL_DATE.getTime() - DAY_IN_MS * 7),
     id: 3,
     notes: "Pedido regular",
     paymentMethodId: null,
@@ -575,6 +578,7 @@ export const mockSellOrders: Array<BaseSellOrder> = [
     clientId: 1,
     clientReference: "ID-4-C1-PM4",
     deletedAt: null,
+    fileUploadedAt: null,
     id: 4,
     notes: null,
     paymentMethodId: 1,
@@ -585,6 +589,7 @@ export const mockSellOrders: Array<BaseSellOrder> = [
     clientId: 1,
     clientReference: "ID-5-C1-PM5",
     deletedAt: null,
+    fileUploadedAt: null,
     id: 5,
     notes: "Pedido con dos líneas de la misma pieza con distintas fechas de entrega",
     paymentMethodId: 1,
@@ -595,6 +600,7 @@ export const mockSellOrders: Array<BaseSellOrder> = [
     clientId: 1,
     clientReference: "DELETED-ID-6-C1-PM6",
     deletedAt: new Date(MOCK_INITIAL_DATE.getTime() - DAY_IN_MS),
+    fileUploadedAt: null,
     id: 6,
     notes: "DELETED SELL ORDER",
     paymentMethodId: 1,
@@ -873,7 +879,7 @@ export const mockDeliveryNoteLines: Array<BaseDeliveryNoteLine> = [
   },
   {
     deliveryNoteId: 2,
-    description: mockPartReferences[2].clientDescription!,
+    description: mockPartReferences[2].clientDescription,
     id: 2,
     partReferenceId: 3,
     quantity: 5,
@@ -913,7 +919,7 @@ export const mockDeliveryNoteLines: Array<BaseDeliveryNoteLine> = [
   },
   {
     deliveryNoteId: 4,
-    description: mockPartReferences[1].clientDescription!,
+    description: mockPartReferences[1].clientDescription,
     id: 6,
     partReferenceId: 2,
     quantity: 7,
@@ -943,7 +949,7 @@ export const mockDeliveryNoteLines: Array<BaseDeliveryNoteLine> = [
   },
   {
     deliveryNoteId: 7,
-    description: mockPartReferences[2].clientDescription!,
+    description: mockPartReferences[2].clientDescription,
     id: 9,
     partReferenceId: 3,
     quantity: 4,
@@ -953,7 +959,7 @@ export const mockDeliveryNoteLines: Array<BaseDeliveryNoteLine> = [
   },
   {
     deliveryNoteId: 7,
-    description: mockPartReferences[2].clientDescription!,
+    description: mockPartReferences[2].clientDescription,
     id: 10,
     partReferenceId: 3,
     quantity: 1,
@@ -963,7 +969,7 @@ export const mockDeliveryNoteLines: Array<BaseDeliveryNoteLine> = [
   },
   {
     deliveryNoteId: 8,
-    description: mockPartReferences[3].clientDescription!,
+    description: mockPartReferences[3].clientDescription,
     id: 11,
     partReferenceId: 4,
     quantity: 12,

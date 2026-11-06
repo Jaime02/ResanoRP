@@ -6,6 +6,7 @@ import {
   requiredDateSchema,
   requiredIdSchema,
   tableStateSchema,
+  nullableDateSchema,
 } from "@/schemas";
 
 const baseDeliveryNoteSchema = z.object({
@@ -23,7 +24,7 @@ export const deliveryNoteSchema = baseDeliveryNoteSchema
   .extend(deliveryNoteUpdateFieldsSchema.shape)
   .extend(deliveryNoteCreateFieldsSchema.shape)
   .extend({
-    deliveryDate: z.coerce.date().nullable(),
+    deliveryDate: nullableDateSchema,
     invoiceId: nullableIdSchema,
     createdAt: z.coerce.date(),
   });

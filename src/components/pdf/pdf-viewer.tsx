@@ -19,7 +19,7 @@ if (import.meta.env?.VITE_ENV_NAME !== "test") {
 }
 
 interface PDFViewerProps {
-  url: string;
+  url?: string;
   initialScale?: number;
   landscape?: boolean;
   fullScreen?: boolean;

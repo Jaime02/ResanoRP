@@ -144,7 +144,7 @@ export default function TablePart({
                       }
                     />
                   )}
-                {partReference.clientDescription && partReference.clientDescription !== row.original.description ? (
+                {partReference.clientDescription !== row.original.description ? (
                   <Popover>
                     <InfoPopoverTrigger>
                       {partReference.reference} {partReference.client && ` | ${partReference.client.name}`}

@@ -15,6 +15,9 @@ import { getSellOrderLineById } from "@/db/functions/sell-order-line";
 import { dbTableDeliveryNote, dbTableDeliveryNoteLine, dbTableInvoice, dbTableSellOrderLine } from "@/db/schema";
 import { formatDate, formatPrice } from "@/lib/formatters";
 import { formatCents, getLineTotalInCents } from "@/lib/prices";
+import { CLOSE_LABEL, STATUS_PENDING_LABEL } from "@/messages/common";
+import { INVOICE_CREATE_TITLE } from "@/messages/invoice";
+import { SHOW_PREPARED_LINES_LABEL } from "@/messages/sell-order";
 import { SellOrderStatus } from "@/schemas/sell-order";
 import { assertPartStockConsumption } from "@/tests/assertions/part-stock";
 import { MOCK_INITIAL_DATE, mockClients, mockDeliveryNotes, mockInvoices, mockSellOrderLines } from "@/tests/mock-data";
@@ -354,7 +357,7 @@ for (const client of clientsWithPendingLines) {
         await workflowOpenCreateDeliveryNoteForClient(page, client);
         await expect(pendingSellOrderLineRow.getByTestId("reference")).toHaveText("");
         await expect(pendingSellOrderLineRow.getByTestId("description")).toHaveText(customSellOrderLine.description!);
-        await expect(pendingSellOrderLineRow.getByTestId("status")).toHaveText("Pendiente");
+        await expect(pendingSellOrderLineRow.getByTestId("status")).toHaveText(STATUS_PENDING_LABEL);
       });
 
       await test.step("print the tags of the staged line, which are named after its description", async () => {
@@ -439,7 +442,7 @@ for (const client of clientsWithPendingLines) {
         expect(Number(pricedSellOrderDeliveryNoteLine.unitPrice)).not.toBe(Number(customSellOrderLine.partPrice));
 
         await page.goto("/invoicing");
-        await page.getByRole("button", { name: "Crear Factura" }).click();
+        await page.getByRole("button", { name: INVOICE_CREATE_TITLE }).click();
         const dialogCreateInvoice = page.getByTestId("dialog-create-invoice");
         await workflowPickInvoiceClient(page, dialogCreateInvoice, client);
 
@@ -716,7 +719,7 @@ for (const client of clientsWithPendingLines) {
     await expect(stagedLineRow).toHaveCount(0);
     await expect(otherLineRow).toBeVisible();
 
-    await page.getByText("Mostrar líneas preparadas").click();
+    await page.getByText(SHOW_PREPARED_LINES_LABEL).click();
     await expect(checkboxShowStagedLines).toBeChecked();
     await expect(stagedLineRow).toBeVisible();
 
@@ -766,7 +769,7 @@ for (const client of clientsWithPendingLines) {
 
       await expect(dialogPrint).toBeVisible();
       await expect(dialogCheckboxes).not.toBeVisible();
-      await dialogPrint.getByRole("button", { name: "Cerrar" }).click();
+      await dialogPrint.getByRole("button", { name: CLOSE_LABEL }).click();
       await expect(dialogPrint).not.toBeVisible();
     });
 
@@ -781,7 +784,7 @@ for (const client of clientsWithPendingLines) {
 
       await expect(dialogCheckboxes).not.toBeVisible();
       await expect(dialogPrint).toBeVisible();
-      await dialogPrint.getByRole("button", { name: "Cerrar" }).click();
+      await dialogPrint.getByRole("button", { name: CLOSE_LABEL }).click();
       await expect(dialogPrint).not.toBeVisible();
     });
 
@@ -911,10 +914,7 @@ for (const client of clientsWithPendingLines) {
           const partReference = getMockPartReferenceById(sellOrderLine.partReferenceId);
           expect(deliveryNoteLines).toContainEqual(
             expect.objectContaining({
-              description:
-                partReference === undefined
-                  ? sellOrderLine.description
-                  : (partReference.clientDescription ?? getMockPartByPartReferenceId(partReference.id)!.description),
+              description: partReference === undefined ? sellOrderLine.description : partReference.clientDescription,
               partReferenceId: sellOrderLine.partReferenceId,
               quantity: sellOrderLine.pendingQuantity,
               sellOrderLineId: sellOrderLine.id,

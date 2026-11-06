@@ -98,7 +98,7 @@ export default function FormSellOrder({
                 <TooltipSellOrderStatus status={status} />
               </Badge>
             )}
-            {sellOrder && <DialogSellOrderFile sellOrderId={sellOrder.id} />}
+            {sellOrder && <DialogSellOrderFile sellOrder={sellOrder} />}
           </div>
         )}
         <div className="flex w-full flex-col gap-2 md:grid md:grid-cols-[repeat(3,auto)] md:justify-center">

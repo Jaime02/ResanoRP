@@ -5,7 +5,13 @@ import { eq } from "drizzle-orm";
 import type { TDatabase } from "@/db";
 import { MATERIAL_COMBINATION_CONSTRAINT, SHAPE_NAME_CONSTRAINT, dbTableMaterial, dbTableShape } from "@/db/schema";
 import { SHAPE_LABEL } from "@/messages/common";
-import { RAW_MATERIAL_LABEL } from "@/messages/material";
+import {
+  INACTIVE_MATERIAL_DELETED_MESSAGE,
+  MATERIAL_CREATE_TITLE,
+  MATERIAL_RESTORED_MESSAGE,
+  SHOW_DELETED_MATERIALS_LABEL,
+  RAW_MATERIAL_LABEL,
+} from "@/messages/material";
 import { mockMaterials, mockRawMaterials, mockShapes } from "@/tests/mock-data";
 import { openAndConfirmAlertDialog } from "@/tests/utils/components/alert-dialog";
 import {
@@ -25,7 +31,6 @@ import {
   workflowRestoreTaken,
 } from "@/tests/workflows/deleted-filter";
 import {
-  MATERIAL_DELETED_MESSAGE,
   assertInactiveMaterialWarning,
   assertPartsMaterialsState,
   getMockPartsShowingMaterials,
@@ -151,7 +156,7 @@ test("manage the Materiales", { annotation: TestAnnotations.NonEmptyErrorsLogFil
     await page.goto(MAINTENANCE_MATERIAL_URL);
 
     for (const material of activeMaterials) {
-      await page.getByRole("button", { name: "Crear Material" }).click();
+      await page.getByRole("button", { name: MATERIAL_CREATE_TITLE }).click();
       await expect(dialogCreateMaterial).toBeVisible();
       await fillMaterialForm(page, material);
       await dialogCreateMaterial.getByTestId("button-submit").click();
@@ -218,7 +223,7 @@ test("manage the Materiales", { annotation: TestAnnotations.NonEmptyErrorsLogFil
 
     for (const material of activeMaterials) {
       await page.goto(MAINTENANCE_MATERIAL_URL);
-      await page.getByRole("button", { name: "Crear Material" }).click();
+      await page.getByRole("button", { name: MATERIAL_CREATE_TITLE }).click();
       await expect(dialogCreateMaterial).toBeVisible();
       await fillMaterialForm(page, material);
       await dialogCreateMaterial.getByTestId("button-submit").click();
@@ -239,7 +244,7 @@ test("manage the Materiales", { annotation: TestAnnotations.NonEmptyErrorsLogFil
 const DELETED_MATERIAL_FILTER_PARAMS = {
   url: MAINTENANCE_MATERIAL_URL,
   tableTestId: "table-material",
-  filterLabel: "Ver Materiales eliminados",
+  filterLabel: SHOW_DELETED_MATERIALS_LABEL,
 };
 
 test("list the deleted Materiales only when asked for and restore them from the table", async ({ page, db }) => {
@@ -249,11 +254,11 @@ test("list the deleted Materiales only when asked for and restore them from the 
     getDeletedAt: async (id) => (await getMaterial(db, id))?.deletedAt,
     ids: mockMaterials.filter((material) => material.deletedAt === null).map(({ id }) => id),
     editButton: EditButtonVisibility.Never,
-    restoredToastTitle: "Material restaurado",
+    restoredToastTitle: MATERIAL_RESTORED_MESSAGE,
     // None of the mock Materias primas is deleted, so only the deleted Materiales are flagged
     assertRow: async (row, isDeleted) =>
       isDeleted
-        ? assertInactiveMaterialWarning(page, row, MATERIAL_DELETED_MESSAGE)
+        ? assertInactiveMaterialWarning(page, row, INACTIVE_MATERIAL_DELETED_MESSAGE)
         : expect(row.getByTestId("tooltip-inactive-material")).toHaveCount(0),
   });
 });

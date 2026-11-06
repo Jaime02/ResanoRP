@@ -21,7 +21,7 @@ export const requiredDateSchema = z.preprocess(
   (value) => value ?? undefined,
   z.coerce.date({ error: "Campo obligatorio" }),
 );
-const nullableDateSchema = z.coerce.date().nullable();
+export const nullableDateSchema = z.coerce.date().nullable();
 export type TBaseModel = {
   id: z.infer<typeof requiredIdSchema>;
   deletedAt?: z.infer<typeof nullableDateSchema>;

@@ -2,6 +2,7 @@ import { z } from "zod";
 import { zfd } from "zod-form-data";
 
 import {
+  nullableDateSchema,
   nullableIdSchema,
   requiredIdSchema,
   stringSchema,
@@ -51,7 +52,8 @@ export type TUpdateSellOrder = z.infer<typeof updateSellOrderFormDataSchema>;
 
 export const sellOrderSchema = baseSellOrderSchema.extend({
   id: requiredIdSchema,
-  deletedAt: z.coerce.date().nullable(),
+  deletedAt: nullableDateSchema,
+  fileUploadedAt: nullableDateSchema,
   clientId: requiredIdSchema,
 });
 export type TSellOrder = z.infer<typeof sellOrderSchema>;

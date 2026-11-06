@@ -140,7 +140,7 @@ export function serializePart(part: { description: string }): TSerializeOutput {
 
 export function serializePartReference(partReference: {
   reference: string;
-  clientDescription: string | null;
+  clientDescription: string;
   client?: { name: string } | null;
 }): TSerializeOutput {
   return serialize({

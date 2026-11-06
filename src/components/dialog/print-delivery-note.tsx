@@ -124,7 +124,7 @@ export default function DialogPrintDeliveryNote({ deliveryNoteId, iconOnly = fal
           <DialogHeader>
             <DialogTitle>Albarán {deliveryNoteId}</DialogTitle>
           </DialogHeader>
-          {previewUrl !== undefined && <PDFViewer url={previewUrl} />}
+          <PDFViewer url={previewUrl} />
           <DialogFooter>
             <Button
               testId="button-download-delivery-note"

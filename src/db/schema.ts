@@ -226,6 +226,7 @@ export const dbTableSellOrder = pgTable(
       .references(() => dbTableClient.id),
     clientReference: text("clientReference"),
     deletedAt: deletedAtType,
+    fileUploadedAt: datetimeType("fileUploadedAt"),
     id: idType,
     notes: text("notes"),
     paymentMethodId: integer("paymentMethodId").references(() => dbTablePaymentMethod.id),
@@ -379,7 +380,7 @@ export const PART_REFERENCE_CONSTRAINT = "unique_part_reference_active";
 export const dbTablePartReference = pgTable(
   "part_reference",
   {
-    clientDescription: text("clientDescription"),
+    clientDescription: text("clientDescription").notNull(),
     clientId: integer("clientId").references(() => dbTableClient.id),
     deletedAt: deletedAtType,
     id: idType,

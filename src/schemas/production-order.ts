@@ -8,6 +8,7 @@ import {
   requiredIdSchema,
   stringSchema,
   tableStateSchema,
+  nullableDateSchema,
 } from "@/schemas";
 
 const baseProductionOrderSchema = z.object({
@@ -33,7 +34,7 @@ export const productionOrderSchema = baseProductionOrderSchema.extend({
   sellOrderLineId: nullableIdSchema,
   quantity: positiveQuantitySchema.nullable(),
   createdAt: z.coerce.date(),
-  deletedAt: z.coerce.date().nullable(),
+  deletedAt: nullableDateSchema,
 });
 export type TProductionOrder = z.infer<typeof productionOrderSchema>;
 

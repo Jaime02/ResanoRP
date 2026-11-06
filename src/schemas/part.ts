@@ -9,6 +9,7 @@ import {
   requiredIdSchema,
   stringSchema,
   tableStateSchema,
+  nullableDateSchema,
 } from "@/schemas";
 
 const basePartSchema = z.object({
@@ -22,7 +23,7 @@ const basePartSchema = z.object({
 
 export const partSchema = basePartSchema.extend({
   id: requiredIdSchema,
-  deletedAt: z.coerce.date().nullable(),
+  deletedAt: nullableDateSchema,
 });
 
 const blueprintFileNameRequiredError = {

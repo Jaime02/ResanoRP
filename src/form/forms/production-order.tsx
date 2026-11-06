@@ -92,7 +92,17 @@ export default function FormProductionOrder({
               <div className="flex flex-row flex-wrap items-start justify-center gap-2">
                 <Card>
                   <CardHeader>
-                    <CardTitle>{PART_LABEL}</CardTitle>
+                    <CardTitle>
+                      <ButtonLink
+                        testId="button-link-part"
+                        to="/part/$id"
+                        params={{ id: productionOrderDetail?.part?.id }}
+                        target="_blank"
+                        disabled={productionOrderDetail?.part === undefined}
+                      >
+                        {PART_LABEL}
+                      </ButtonLink>
+                    </CardTitle>
                   </CardHeader>
                   <PartFields part={productionOrderDetail?.part} />
                 </Card>

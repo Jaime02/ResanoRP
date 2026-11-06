@@ -8,6 +8,7 @@ import {
   requiredDateSchema,
   requiredIdSchema,
   tableStateSchema,
+  nullableDateSchema,
 } from "@/schemas";
 
 const basePartPriceSchema = z.object({
@@ -18,7 +19,7 @@ const basePartPriceSchema = z.object({
 });
 
 export const partPriceSchema = basePartPriceSchema.extend({
-  createdAt: z.coerce.date().nullable(),
+  createdAt: nullableDateSchema,
   id: requiredIdSchema,
   partId: requiredIdSchema,
 });

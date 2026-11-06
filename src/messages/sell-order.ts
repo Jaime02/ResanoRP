@@ -17,7 +17,6 @@ export const CLIENT_REFERENCE_LABEL = "Referencia del Cliente";
 export const CLIENT_REFERENCE_COLUMN_LABEL = "Referencia del cliente";
 export const ADD_LINES_REQUIRES_SELL_ORDER_MESSAGE =
   "Para añadir líneas al Pedido de venta, primero debes crear el Pedido de venta";
-export const SELL_ORDER_NO_FILE_MESSAGE = "El Pedido de venta no tiene archivo";
 export const VIEW_FILE_LABEL = "Ver Archivo";
 export const DELETE_SELL_ORDER_FILE_TITLE = "Eliminar archivo";
 export const DELETE_SELL_ORDER_FILE_MESSAGE = "¿Estás seguro de que deseas eliminar el archivo del Pedido de venta?";

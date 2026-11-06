@@ -8,6 +8,7 @@ import { getInvoiceById, getInvoices } from "@/db/functions/invoice";
 import { startOfAppDay } from "@/lib/dates";
 import { formatCents, getDeliveryNoteLineUnitPrice, getLinesTotalInCents, getTotalWithVatInCents } from "@/lib/prices";
 import { CLIENT_LABEL, FROM_LABEL, TO_LABEL } from "@/messages/common";
+import { INVOICE_CREATE_TITLE } from "@/messages/invoice";
 import { openAndConfirmAlertDialog } from "@/tests/utils/components/alert-dialog";
 import { selectComboboxOption } from "@/tests/utils/components/combobox";
 import { selectDateInputDate } from "@/tests/utils/components/date-input";
@@ -128,7 +129,7 @@ export async function workflowCreateInvoice(
   const tableInvoices = page.getByTestId("table-invoice");
   await expect(tableInvoices).toBeVisible();
 
-  await page.getByRole("button", { name: "Crear Factura" }).click();
+  await page.getByRole("button", { name: INVOICE_CREATE_TITLE }).click();
   const dialogCreateInvoice = page.getByTestId("dialog-create-invoice");
   await expect(dialogCreateInvoice).toBeVisible();
 

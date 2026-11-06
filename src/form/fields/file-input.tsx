@@ -24,7 +24,7 @@ export default function FieldFilesInput({
   onValueChange,
   ...props
 }: FieldFileInputProps) {
-  const field = useFieldContext<File | Array<File> | undefined>();
+  const field = useFieldContext<File | Array<File> | null>();
   const { formMode, isLoading, validationSchema } = useFormContext();
   const isRequired = isFieldRequired(field.name, validationSchema);
   const readOnly = formMode === FormMode.ReadOnly || props.disabled === true || isLoading;
@@ -38,6 +38,7 @@ export default function FieldFilesInput({
           onValueChange?.(acceptedFiles);
           field.handleChange(props.allowMultipleFiles === true ? acceptedFiles : acceptedFiles[0]);
         }}
+        onClear={() => field.handleChange(props.allowMultipleFiles === true ? [] : null)}
         onError={(error) => void clientLog(LoggerLevels.debug, "Dropzone error", { error })}
         src={field.state.value}
         disabled={readOnly}

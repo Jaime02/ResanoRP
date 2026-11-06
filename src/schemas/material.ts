@@ -7,6 +7,7 @@ import {
   requiredIdSchema,
   stringSchema,
   tableStateSchema,
+  nullableDateSchema,
 } from "@/schemas";
 
 const baseMaterialSchema = z.object({
@@ -17,7 +18,7 @@ const baseMaterialSchema = z.object({
 
 export const materialSchema = baseMaterialSchema.extend({
   id: requiredIdSchema,
-  deletedAt: z.coerce.date().nullable(),
+  deletedAt: nullableDateSchema,
 });
 
 export const createMaterialSchema = baseMaterialSchema;

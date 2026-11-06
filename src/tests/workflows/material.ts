@@ -1,6 +1,8 @@
 import { expect } from "@playwright/test";
 import type { Locator, Page } from "@playwright/test";
 
+import { INACTIVE_MATERIAL_DELETED_MESSAGE, INACTIVE_RAW_MATERIAL_DELETED_MESSAGE } from "@/messages/material";
+import { NO_ACTIVE_MATERIALS_MESSAGE } from "@/messages/part-price";
 import { mockMaterials, mockPartMaterials, mockPartPriceEstimators, mockParts } from "@/tests/mock-data";
 import { openCombobox } from "@/tests/utils/components/combobox";
 import { assertFormLoaded } from "@/tests/utils/components/form";
@@ -8,9 +10,6 @@ import { getPopoverContent } from "@/tests/utils/components/popover";
 import { assertTableRowCount, getTableRowByTestId } from "@/tests/utils/components/table";
 import type { BaseMaterial } from "@/types/material";
 import type { BasePart } from "@/types/part";
-
-export const MATERIAL_DELETED_MESSAGE = "El Material ha sido eliminado";
-const RAW_MATERIAL_DELETED_MESSAGE = "La Materia prima del Material ha sido eliminada";
 
 export interface TDeletedMaterials {
   materialIds: Set<number>;
@@ -36,10 +35,10 @@ async function assertMaterialWarning(page: Page, container: Locator, message: st
 
 export function getExpectedInactiveMaterialMessage(material: BaseMaterial, deleted: TDeletedMaterials): string | null {
   if (deleted.materialIds.has(material.id)) {
-    return MATERIAL_DELETED_MESSAGE;
+    return INACTIVE_MATERIAL_DELETED_MESSAGE;
   }
   if (deleted.rawMaterialIds.has(material.rawMaterialId)) {
-    return RAW_MATERIAL_DELETED_MESSAGE;
+    return INACTIVE_RAW_MATERIAL_DELETED_MESSAGE;
   }
   return null;
 }
@@ -131,7 +130,7 @@ export async function assertPartsMaterialsState(page: Page, parts: Array<BasePar
     await openCombobox(formEstimator.getByTestId("combobox-estimator-material"));
     await expect(page.getByTestId("combobox-list").locator("[role='option']")).toHaveCount(activePartMaterials.length);
     if (activePartMaterials.length === 0) {
-      await expect(page.getByText("El Artículo no tiene Materiales activos asignados")).toBeVisible();
+      await expect(page.getByText(NO_ACTIVE_MATERIALS_MESSAGE)).toBeVisible();
     }
     await page.keyboard.press("Escape");
   }

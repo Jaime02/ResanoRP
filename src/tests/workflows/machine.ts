@@ -3,6 +3,7 @@ import type { Page } from "@playwright/test";
 
 import { getMachineById } from "@/db/functions/machine";
 import { NAME_LABEL } from "@/messages/common";
+import { MACHINE_CREATE_TITLE } from "@/messages/machine";
 import { openAndConfirmAlertDialog } from "@/tests/utils/components/alert-dialog";
 import { assertFormLoaded, getFormInputByLabel } from "@/tests/utils/components/form";
 import { findTableRowByText } from "@/tests/utils/components/table";
@@ -17,7 +18,7 @@ export async function workflowCreateMachine(page: Page, machineId: number, machi
 
   expect(await getMachineById(machineId)).toBeUndefined();
 
-  await page.getByRole("button", { name: "Crear Máquina" }).click();
+  await page.getByRole("button", { name: MACHINE_CREATE_TITLE }).click();
 
   await expect(page).toHaveURL("/maintenance?tab=machine&createMachine=true");
   await expect(dialogCreateMachine).toBeVisible();

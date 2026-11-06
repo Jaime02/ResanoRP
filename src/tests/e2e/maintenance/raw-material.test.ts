@@ -4,7 +4,13 @@ import { eq } from "drizzle-orm";
 import { RAW_MATERIAL_NAME_CONSTRAINT, dbTableRawMaterial } from "@/db/schema";
 import { formatPrice } from "@/lib/formatters";
 import { NAME_LABEL } from "@/messages/common";
-import { RAW_MATERIAL_DENSITY_LABEL, RAW_MATERIAL_PRICE_LABEL } from "@/messages/material";
+import {
+  RAW_MATERIAL_CREATE_TITLE,
+  RAW_MATERIAL_RESTORED_MESSAGE,
+  SHOW_DELETED_RAW_MATERIALS_LABEL,
+  RAW_MATERIAL_DENSITY_LABEL,
+  RAW_MATERIAL_PRICE_LABEL,
+} from "@/messages/material";
 import { mockMaterials, mockRawMaterials } from "@/tests/mock-data";
 import { openAndConfirmAlertDialog } from "@/tests/utils/components/alert-dialog";
 import { InputElementType, assertFormLoaded, getFormInputByLabel } from "@/tests/utils/components/form";
@@ -61,7 +67,7 @@ test(
     const dialogCreateEditRawMaterial = page.getByTestId("dialog-create-edit-raw-material");
 
     const createRawMaterial = async (rawMaterial: BaseRawMaterial) => {
-      await page.getByRole("button", { name: "Crear Materia prima" }).click();
+      await page.getByRole("button", { name: RAW_MATERIAL_CREATE_TITLE }).click();
       await expect(dialogCreateEditRawMaterial).toBeVisible();
       await getFormInputByLabel(dialogCreateEditRawMaterial, NAME_LABEL).fill(rawMaterial.name);
       const inputPrice = getFormInputByLabel(
@@ -224,7 +230,7 @@ test(
 const DELETED_RAW_MATERIAL_FILTER_PARAMS = {
   url: MAINTENANCE_RAW_MATERIAL_URL,
   tableTestId: "table-raw-material",
-  filterLabel: "Ver Materias primas eliminadas",
+  filterLabel: SHOW_DELETED_RAW_MATERIALS_LABEL,
 };
 
 test("list the deleted Materias primas only when asked for and restore them from the table", async ({ page, db }) => {
@@ -234,7 +240,7 @@ test("list the deleted Materias primas only when asked for and restore them from
     getDeletedAt: async (id) => (await db.query.dbTableRawMaterial.findFirst({ where: { id } }))?.deletedAt,
     ids: mockRawMaterials.filter((rawMaterial) => rawMaterial.deletedAt === null).map(({ id }) => id),
     editButton: EditButtonVisibility.OnlyActive,
-    restoredToastTitle: "Materia prima restaurada",
+    restoredToastTitle: RAW_MATERIAL_RESTORED_MESSAGE,
   });
 });
 

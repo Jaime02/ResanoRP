@@ -13,13 +13,14 @@ import { dbTableDeliveryNote, dbTableDeliveryNoteLine, dbTableInvoice, dbTableSe
 import { isSameAppDay } from "@/lib/dates";
 import { formatDate, formatPrice } from "@/lib/formatters";
 import { formatCents, getLineTotalInCents, getLinesTotalInCents } from "@/lib/prices";
+import { SELECT_PART_PLACEHOLDER } from "@/messages/combobox";
 import {
+  PRICE_LABEL,
   CLIENT_LABEL,
   DATE_LABEL,
   DELIVERY_METHOD_LABEL,
   DESCRIPTION_LABEL,
   PART_LABEL,
-  PRICE_LABEL,
   QUANTITY_LABEL,
 } from "@/messages/common";
 import { DELIVERY_NOTE_NUMBER_LABEL } from "@/messages/delivery-note";
@@ -463,12 +464,12 @@ test(
 
         const tableDeliveryNoteLines = dialogCreateEditDeliveryNote.getByTestId("table-delivery-note-line");
         await expect(tableDeliveryNoteLines).toBeVisible();
-        await expect(tableDeliveryNoteLines.getByRole("cell", { name: "Precio" })).not.toBeVisible();
+        await expect(tableDeliveryNoteLines.getByRole("cell", { name: PRICE_LABEL })).not.toBeVisible();
         await expect(dialogCreateEditDeliveryNote.getByTestId("span-delivery-note-lines-total")).toHaveCount(0);
 
         await workflowOpenCreateDeliveryNoteLine(page);
 
-        await expect(dialogCreateDeliveryNoteLine.getByLabel("Precio")).not.toBeVisible();
+        await expect(dialogCreateDeliveryNoteLine.getByLabel(PRICE_LABEL)).not.toBeVisible();
         await expect(dialogCreateDeliveryNoteLine.getByTestId("radio-table-part-prices")).toHaveCount(0);
 
         // A user can still add a Línea, which is left without price for the Administrador to set before invoicing it
@@ -822,7 +823,7 @@ test(
           // The picked part can be cleared and picked again
           await clearPicker(pickerPart);
           expect(await getPickerValue(pickerPart)).toBeNull();
-          expect(await getPickerText(pickerPart)).toBe("Selecciona un Artículo");
+          expect(await getPickerText(pickerPart)).toBe(SELECT_PART_PLACEHOLDER);
 
           await openPicker(pickerPart);
           await expect(dialogPickerPartContent).toBeVisible();
@@ -837,9 +838,7 @@ test(
             CLIENT_REFERENCE_DESCRIPTION_LABEL,
             InputElementType.Input,
           );
-          expect(await inputDescription.inputValue()).toBe(
-            pickedPartReference.clientDescription ?? partToBeAdded.description,
-          );
+          expect(await inputDescription.inputValue()).toBe(pickedPartReference.clientDescription);
 
           const inputQuantity = getFormInputByLabel(
             dialogCreateDeliveryNoteLine,
@@ -942,7 +941,7 @@ test(
           CLIENT_REFERENCE_DESCRIPTION_LABEL,
           InputElementType.Input,
         );
-        await expect(inputDescription).toHaveValue(nullClientPartReference.clientDescription ?? part.description);
+        await expect(inputDescription).toHaveValue(nullClientPartReference.clientDescription);
 
         const inputQuantity = getFormInputByLabel(
           dialogCreateDeliveryNoteLine,
@@ -960,7 +959,7 @@ test(
         expect(newDbLines).toHaveLength(1);
         // No price of the Artículo matches the quantity, so the Administrador leaves the price for later
         expect(newDbLines[0]).toMatchObject({
-          description: nullClientPartReference.clientDescription ?? part.description,
+          description: nullClientPartReference.clientDescription,
           partReferenceId: nullClientPartReference.id,
           quantity,
           sellOrderLineId: null,
@@ -970,7 +969,7 @@ test(
         const rowDeliveryNoteLine = getTableRowByTestId(tableDeliveryNoteLines, newDbLines[0].id);
         await expect(rowDeliveryNoteLine.getByTestId("partReference")).toHaveText(nullClientPartReference.reference);
         await expect(rowDeliveryNoteLine.getByTestId("description")).toContainText(
-          nullClientPartReference.clientDescription ?? part.description,
+          nullClientPartReference.clientDescription,
         );
       });
     }

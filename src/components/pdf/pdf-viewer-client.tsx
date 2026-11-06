@@ -15,7 +15,7 @@ pdfjs.GlobalWorkerOptions.workerSrc = "/pdf.worker.min.mjs";
 const documentOptions = { wasmUrl: "/pdfjs-wasm/" };
 
 export interface PDFViewerClientProps {
-  url: string;
+  url?: string;
   scale: number;
   rotation: number;
   landscape: boolean;
@@ -25,6 +25,11 @@ export interface PDFViewerClientProps {
 
 export function PDFViewerClient({ url, scale, rotation, landscape, setLoading, setError }: PDFViewerClientProps) {
   const [pagesCount, setPagesCount] = useState(0);
+  // Dialogs clear the url when closing, keeping the last one avoids collapsing the viewer during the exit animation
+  const [file, setFile] = useState(url);
+  if (url !== undefined && url !== file) {
+    setFile(url);
+  }
 
   function onDocumentLoadSuccess({ numPages }: { numPages: number }) {
     setPagesCount(numPages);
@@ -41,7 +46,7 @@ export function PDFViewerClient({ url, scale, rotation, landscape, setLoading, s
   return (
     <div className="flex flex-col items-center gap-4">
       <Document
-        file={url}
+        file={file}
         options={documentOptions}
         suspense={false}
         onLoadSuccess={onDocumentLoadSuccess}

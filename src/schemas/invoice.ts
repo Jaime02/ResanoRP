@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-import { nullableIdSchema, requiredIdSchema, tableStateSchema } from "@/schemas";
+import { nullableDateSchema, nullableIdSchema, requiredIdSchema, tableStateSchema } from "@/schemas";
 
 export const invoiceSchema = z.object({
   accounted: z.boolean(),
@@ -32,8 +32,8 @@ export type TFormCreateInvoice = z.infer<typeof formCreateInvoiceSchema>;
 export const createInvoiceSchema = z
   .object({
     clientId: requiredIdSchema,
-    endDate: z.coerce.date().nullable(),
-    startDate: z.coerce.date().nullable(),
+    endDate: nullableDateSchema,
+    startDate: nullableDateSchema,
   })
   .refine(isValidDateRange, invalidDateRangeError);
 

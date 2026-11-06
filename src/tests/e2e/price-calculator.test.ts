@@ -6,6 +6,7 @@ import { getPartPriceEstimatorByPartId } from "@/db/functions/part-price-estimat
 import { formatPrice, formatPricePerKilo } from "@/lib/formatters";
 import type { EstimatorMaterial, EstimatorValues } from "@/lib/part-price-estimator";
 import { DEFAULT_ESTIMATION_QUANTITIES, getEstimation, roundPrice } from "@/lib/part-price-estimator";
+import { SAVE_NEW_PRICE_LABEL, SAVE_PENDING_PRICE_LABEL, SELECT_MATERIAL_MESSAGE } from "@/messages/part-price";
 import {
   mockClients,
   mockCoatings,
@@ -166,7 +167,7 @@ for (const part of activeParts.filter((activePart) =>
     await test.step("the material details are shown in a table", async () => {
       const tableMaterial = formEstimator.getByTestId("table-estimator-material");
       if (material === undefined) {
-        await expect(getTableNoDataRow(tableMaterial)).toHaveText("Selecciona un material");
+        await expect(getTableNoDataRow(tableMaterial)).toHaveText(SELECT_MATERIAL_MESSAGE);
         return;
       }
       const cells = getTableRows(tableMaterial).first().getByRole("cell");
@@ -206,7 +207,7 @@ for (const part of activeParts.filter((activePart) =>
           getTableRowByTestId(tableEstimatorPendingPartPrices, expectedPartPrice.id).getByRole("radio"),
         ).toBeChecked();
         await expect(tableEstimatorPendingPartPrices.getByRole("radio", { checked: true })).toHaveCount(1);
-        await expect(formEstimator.getByTestId("button-submit")).toHaveText("Guardar precio pendiente");
+        await expect(formEstimator.getByTestId("button-submit")).toHaveText(SAVE_PENDING_PRICE_LABEL);
       }
     });
 
@@ -282,7 +283,7 @@ for (const part of activeParts.filter((activePart) =>
         await inputQuantity.pressSequentially(String(newQuantity));
         const basePrice = await expectSalePriceRow("custom", newQuantity, values, estimatorMaterial);
         await expect(tableEstimatorPendingPartPrices.getByRole("radio", { checked: true })).toHaveCount(0);
-        await expect(formEstimator.getByTestId("button-submit")).toHaveText("Guardar precio nuevo");
+        await expect(formEstimator.getByTestId("button-submit")).toHaveText(SAVE_NEW_PRICE_LABEL);
 
         const comboboxClient = formEstimator.getByTestId("combobox-client");
         await openCombobox(comboboxClient);

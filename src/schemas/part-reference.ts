@@ -1,9 +1,16 @@
 import z from "zod";
 
-import { nameFiltersSchema, nullableIdSchema, requiredIdSchema, stringSchema, tableStateSchema } from "@/schemas";
+import {
+  nullableDateSchema,
+  nameFiltersSchema,
+  nullableIdSchema,
+  requiredIdSchema,
+  stringSchema,
+  tableStateSchema,
+} from "@/schemas";
 
 const basePartReferenceSchema = z.object({
-  clientDescription: stringSchema({ nullable: true }),
+  clientDescription: stringSchema({ nullable: false }),
   reference: stringSchema({ nullable: false }),
 });
 
@@ -11,7 +18,7 @@ export const partReferenceSchema = basePartReferenceSchema.extend({
   id: requiredIdSchema,
   partId: requiredIdSchema,
   clientId: nullableIdSchema,
-  deletedAt: z.coerce.date().nullable(),
+  deletedAt: nullableDateSchema,
 });
 
 export const createPartReferenceSchema = basePartReferenceSchema.extend({

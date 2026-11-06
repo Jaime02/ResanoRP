@@ -1,9 +1,11 @@
+import fs from "node:fs";
 import path from "node:path";
 
 import { expect } from "@playwright/test";
 import type { Locator } from "@playwright/test";
 import { eq } from "drizzle-orm";
 
+import { UserMode } from "@/contexts/app-context";
 import { getMachineById } from "@/db/functions/machine";
 import { getMachineProductionOrderQueue } from "@/db/functions/machine-production-order-queue";
 import { getPartPricesByPartId } from "@/db/functions/part-price";
@@ -21,10 +23,13 @@ import { findFolderById } from "@/files/functions";
 import { getSellOrderPath, getSellOrderRootPath } from "@/files/sell-order";
 import { isSameAppDay } from "@/lib/dates";
 import { formatPrice } from "@/lib/formatters";
-// TODO sell order file tests
 import {
+  STATUS_COMPLETED_LABEL,
+  STATUS_DELETED_LABEL,
+  STATUS_PENDING_LABEL,
   CLIENT_LABEL,
   DESCRIPTION_LABEL,
+  DROP_FILE_PLACEHOLDER,
   FILE_LABEL,
   NOTES_LABEL,
   PART_LABEL,
@@ -32,7 +37,12 @@ import {
   PRICE_LABEL,
   QUANTITY_LABEL,
 } from "@/messages/common";
-import { CLIENT_REFERENCE_LABEL, RECEPTION_DATE_LABEL } from "@/messages/sell-order";
+import {
+  SELL_ORDER_LINE_DELETED_MESSAGE,
+  SELL_ORDER_LINE_ORDER_DELETED_LABEL,
+  CLIENT_REFERENCE_LABEL,
+  RECEPTION_DATE_LABEL,
+} from "@/messages/sell-order";
 import { ProductionOrderStatus } from "@/schemas/production-order";
 import type { TTableSellOrderState } from "@/schemas/sell-order";
 import { createSellOrderLineSchema, updateSellOrderLineSchema } from "@/schemas/sell-order-line";
@@ -95,9 +105,16 @@ import {
   getMockSellOrdersOfPart,
 } from "@/tests/utils/mock-data-utils";
 import {
+  getSellOrderFilePath,
   workflowDeleteSellOrder,
+  workflowDeleteSellOrderFile,
   workflowDeleteSellOrderLine,
+  workflowDownloadSellOrderFile,
   workflowOpenCreateSellOrderLine,
+  workflowOpenSellOrder,
+  workflowOpenSellOrderFile,
+  workflowSubmitSellOrder,
+  workflowUploadSellOrderFile,
 } from "@/tests/workflows/sell-order";
 import { ToastType } from "@/types";
 import type { BaseSellOrder } from "@/types/sell-order";
@@ -108,7 +125,7 @@ test(
   async ({ page, db, toasts }) => {
     await test.step("create a new sell order", async () => {
       const newSellOrderClient = mockClients[0];
-      const newSellOrder: BaseSellOrder = {
+      const newSellOrder: Omit<BaseSellOrder, "fileUploadedAt"> = {
         clientId: newSellOrderClient.id,
         clientReference: "TestSellOrderClientReference/25",
         deletedAt: null,
@@ -184,6 +201,7 @@ test(
       const { receptionDate: newSellOrderReceptionDate, ...newSellOrderWithoutReceptionDate } = newSellOrder;
       expect(isSameAppDay(dbReceptionDate, newSellOrderReceptionDate)).toBeTruthy();
       expect(dbSellOrderWithoutReceptionDate).toMatchObject(newSellOrderWithoutReceptionDate);
+      expect(dbSellOrder!.fileUploadedAt).not.toBeNull();
 
       expect(
         await getSellOrderPath({
@@ -475,7 +493,7 @@ test(
       expect(dbSellOrderLines.length).toBeGreaterThan(getMockSellOrderLines(sellOrder.id).length);
       for (const sellOrderLine of dbSellOrderLines) {
         await expect(getTableRowByTestId(tableSellOrderLine, sellOrderLine.id).getByTestId("status")).toHaveText(
-          "Pedido eliminado",
+          SELL_ORDER_LINE_ORDER_DELETED_LABEL,
         );
       }
 
@@ -494,7 +512,7 @@ test(
         queuedProductionOrder.productionOrderId,
       );
       const actionsProductionOrder = rowProductionOrder.getByTestId("actions");
-      await expect(rowProductionOrder.getByTestId("status")).toHaveText("Pedido eliminado");
+      await expect(rowProductionOrder.getByTestId("status")).toHaveText(SELL_ORDER_LINE_ORDER_DELETED_LABEL);
       await expect(actionsProductionOrder.getByTestId("button-edit")).toBeVisible();
       await expect(actionsProductionOrder.getByTestId("button-restore")).not.toBeAttached();
 
@@ -506,7 +524,7 @@ test(
       await expect(toasts).toHaveCount(1);
       expect(await getToastType(toasts.first())).toBe(ToastType.Success);
       await clearToasts(page);
-      await expect(rowProductionOrder.getByTestId("status")).toHaveText("Eliminado");
+      await expect(rowProductionOrder.getByTestId("status")).toHaveText(STATUS_DELETED_LABEL);
       await expect(actionsProductionOrder.getByTestId("button-delete")).not.toBeAttached();
       expect(
         await dbGetProductionOrderStatus((await getProductionOrderById(queuedProductionOrder.productionOrderId))!),
@@ -521,7 +539,7 @@ test(
       await expect(toasts).toHaveCount(1);
       expect(await getToastType(toasts.first())).toBe(ToastType.Success);
       await clearToasts(page);
-      await expect(rowProductionOrder.getByTestId("status")).toHaveText("Pedido eliminado");
+      await expect(rowProductionOrder.getByTestId("status")).toHaveText(SELL_ORDER_LINE_ORDER_DELETED_LABEL);
       await expect(actionsProductionOrder.getByTestId("button-restore")).not.toBeAttached();
       expect(
         await dbGetProductionOrderStatus((await getProductionOrderById(queuedProductionOrder.productionOrderId))!),
@@ -790,12 +808,12 @@ test(
       const formSellOrder = page.getByTestId("form-sell-order");
       await assertFormLoaded(formSellOrder);
       const badgeSellOrderStatus = formSellOrder.getByTestId("badge-sell-order-status");
-      await expect(badgeSellOrderStatus).toContainText("Pendiente");
+      await expect(badgeSellOrderStatus).toContainText(STATUS_PENDING_LABEL);
 
       const rowSellOrderLine = await workflowDeleteSellOrderLine(page, sellOrderLine.id);
 
-      await expect(rowSellOrderLine.getByTestId("status")).toHaveText("Eliminado");
-      await expect(badgeSellOrderStatus).toContainText("Completado");
+      await expect(rowSellOrderLine.getByTestId("status")).toHaveText(STATUS_DELETED_LABEL);
+      await expect(badgeSellOrderStatus).toContainText(STATUS_COMPLETED_LABEL);
 
       // Its Orden de producción is deleted along with it, so it is taken off the Máquinas
       expect(await dbGetProductionOrderStatus((await getProductionOrderById(productionOrder.id))!)).toBe(
@@ -826,7 +844,7 @@ test(
         );
       await gotoProductionOrdersOfSellOrderWithStatus(ProductionOrderStatus.SellOrderLineDeleted);
       await expect(getTableRowByTestId(tableProductionOrder, productionOrder.id).getByTestId("status")).toHaveText(
-        "Línea eliminada",
+        SELL_ORDER_LINE_DELETED_MESSAGE,
       );
       await gotoProductionOrdersOfSellOrderWithStatus(ProductionOrderStatus.SellOrderDeleted);
       await expect(getTableNoDataRow(tableProductionOrder)).toBeVisible();
@@ -846,8 +864,8 @@ test(
       );
       await expect(toasts).toHaveCount(1);
       expect(await getToastType(toasts.first())).toBe(ToastType.Success);
-      await expect(badgeSellOrderStatus).toContainText("Pendiente");
-      await expect(rowSellOrderLine.getByTestId("status")).not.toHaveText("Eliminado");
+      await expect(badgeSellOrderStatus).toContainText(STATUS_PENDING_LABEL);
+      await expect(rowSellOrderLine.getByTestId("status")).not.toHaveText(STATUS_DELETED_LABEL);
       expect((await getSellOrderLineById(sellOrderLine.id))?.deletedAt).toBeNull();
       expect(await dbGetProductionOrderStatus((await getProductionOrderById(productionOrder.id))!)).toBe(
         ProductionOrderStatus.Pending,
@@ -1095,7 +1113,7 @@ test("manage the sell order lines without part", async ({ page, db, toasts }) =>
     const rowSellOrderLine = getTableRowByTestId(tableSellOrderLine, customSellOrderLineId);
     await expect(rowSellOrderLine.getByTestId("part")).toHaveText("");
     await expect(rowSellOrderLine.getByTestId("description")).toHaveText(customLine.description);
-    await expect(rowSellOrderLine.getByTestId("status")).toHaveText("Pendiente");
+    await expect(rowSellOrderLine.getByTestId("status")).toHaveText(STATUS_PENDING_LABEL);
   });
 
   await test.step("switching back to a line with part drops the description", async () => {
@@ -1145,7 +1163,7 @@ test("manage the sell order lines without part", async ({ page, db, toasts }) =>
     await expect(toasts).toHaveCount(1);
     expect(await getToastType(toasts.first())).toBe(ToastType.Success);
     expect((await getSellOrderLineById(customSellOrderLineId))?.pendingQuantity).toBe(0);
-    await expect(rowSellOrderLine.getByTestId("status")).toHaveText("Completado");
+    await expect(rowSellOrderLine.getByTestId("status")).toHaveText(STATUS_COMPLETED_LABEL);
   });
 });
 
@@ -1205,7 +1223,7 @@ test(
       returnSellOrderLineId = newDbSellOrderLine!.id;
 
       const rowSellOrderLine = getTableRowByTestId(tableSellOrderLine, returnSellOrderLineId);
-      await expect(rowSellOrderLine.getByTestId("status")).toHaveText("Pendiente");
+      await expect(rowSellOrderLine.getByTestId("status")).toHaveText(STATUS_PENDING_LABEL);
       // A return is delivered back without being produced
       await expect(rowSellOrderLine.getByTestId("button-create-production-order")).toHaveCount(0);
     });
@@ -1242,11 +1260,11 @@ test(
       // A return turned into an ordered line has nothing pending until it is set again
       await editCell(inputRowQuantity, 100);
       expect(await getSellOrderLineById(returnSellOrderLineId)).toMatchObject({ pendingQuantity: 0, quantity: 100 });
-      await expect(rowSellOrderLine.getByTestId("status")).toHaveText("Completado");
+      await expect(rowSellOrderLine.getByTestId("status")).toHaveText(STATUS_COMPLETED_LABEL);
 
       await editCell(inputPendingQuantity, 40);
       expect(await getSellOrderLineById(returnSellOrderLineId)).toMatchObject({ pendingQuantity: 40, quantity: 100 });
-      await expect(rowSellOrderLine.getByTestId("status")).toHaveText("Pendiente");
+      await expect(rowSellOrderLine.getByTestId("status")).toHaveText(STATUS_PENDING_LABEL);
 
       await editCell(inputRowQuantity, 30);
       expect(await getSellOrderLineById(returnSellOrderLineId)).toMatchObject({ pendingQuantity: 30, quantity: 30 });
@@ -1437,54 +1455,234 @@ test("filter the sell orders by part", async ({ page }) => {
   });
 });
 
+const SAMPLE_PDF_PATH = path.join(MOCK_DATA_PATH, "sample.pdf");
+const sellOrderWithFile = mockSellOrders.find(
+  (sellOrder) => sellOrder.fileUploadedAt !== null && sellOrder.deletedAt === null,
+)!;
+// Shares the client folder with sellOrderWithFile, so a change to one file must not touch the other
+const sameClientSellOrderWithFile = mockSellOrders.find(
+  (sellOrder) =>
+    sellOrder.id !== sellOrderWithFile.id &&
+    sellOrder.clientId === sellOrderWithFile.clientId &&
+    sellOrder.fileUploadedAt !== null,
+)!;
+// Also of the same client, so editing it checks that folder is left alone
+const sellOrderWithoutFile = mockSellOrders.find(
+  (sellOrder) =>
+    sellOrder.clientId === sellOrderWithFile.clientId &&
+    sellOrder.fileUploadedAt === null &&
+    sellOrder.deletedAt === null,
+)!;
+const deletedSellOrder = mockSellOrders.find((sellOrder) => sellOrder.deletedAt !== null)!;
+
+async function getDeletedSellOrderFilePaths(sellOrderId: number) {
+  const clientFolder = (await findFolderById(getSellOrderRootPath(), sellOrderWithFile.clientId))!;
+  return fs
+    .readdirSync(clientFolder)
+    .filter((fileName) => fileName.startsWith("DELETED_") && fileName.endsWith(`.${sellOrderId}.pdf`))
+    .map((fileName) => path.join(clientFolder, fileName));
+}
+
+const getButtonFile = (container: Locator) => container.getByTestId("button-sell-order-file");
+
+test("view the files of the sell orders", async ({ page }) => {
+  // The UI only reads fileUploadedAt, so the mock data has to match the mock SELL_ORDERS folder
+  for (const sellOrder of mockSellOrders) {
+    expect((await getSellOrderFilePath(sellOrder.id)) !== null, `Wrong test set up: sell order ${sellOrder.id}`).toBe(
+      sellOrder.fileUploadedAt !== null,
+    );
+  }
+
+  await test.step("in the table", async () => {
+    await page.goto("/sell-order");
+    const tableSellOrder = page.getByTestId("table-sell-order");
+    for (const sellOrder of mockSellOrders.filter((mockSellOrder) => mockSellOrder.deletedAt === null)) {
+      await expect(
+        getButtonFile(getTableRowByTestId(tableSellOrder, sellOrder.id)),
+        `Sell order ${sellOrder.id}`,
+      ).toBeEnabled({ enabled: sellOrder.fileUploadedAt !== null });
+    }
+    const dialogFile = await workflowOpenSellOrderFile(
+      page,
+      getButtonFile(getTableRowByTestId(tableSellOrder, sellOrderWithFile.id)),
+    );
+    await expect(dialogFile).toContainText(`Pedido de venta ${sellOrderWithFile.id}`);
+    await workflowDownloadSellOrderFile(page, dialogFile, sellOrderWithFile.id);
+  });
+
+  await test.step("in the form, where the same file keeps its URL so the browser can cache it", async () => {
+    const buttonFile = getButtonFile(await workflowOpenSellOrder(page, sellOrderWithFile.id));
+    const dialogFile = await workflowOpenSellOrderFile(page, buttonFile);
+    await expect(dialogFile.getByTestId("button-delete-sell-order-file")).toBeVisible();
+    const url = await workflowDownloadSellOrderFile(page, dialogFile, sellOrderWithFile.id);
+    await page.keyboard.press("Escape");
+    await expect(dialogFile).not.toBeVisible();
+    expect(
+      await workflowDownloadSellOrderFile(
+        page,
+        await workflowOpenSellOrderFile(page, buttonFile),
+        sellOrderWithFile.id,
+      ),
+    ).toBe(url);
+
+    for (const sellOrder of [sellOrderWithoutFile, deletedSellOrder]) {
+      await expect(getButtonFile(await workflowOpenSellOrder(page, sellOrder.id))).toBeDisabled();
+    }
+  });
+});
+
 test(
-  "view, delete and upload again the file of a sell order",
+  "delete, upload and replace the files of the sell orders",
   { annotation: TestAnnotations.ResetSellOrders },
-  async ({ page, toasts }) => {
-    // Its file is in the mock SELL_ORDERS folder
-    const sellOrder = mockSellOrders[0];
-    const getFilePath = async () =>
-      getSellOrderPath({ checkIfFileExists: true, logErrors: false, sellOrderId: sellOrder.id });
-    const buttonFile = page.getByTestId("form-sell-order").getByTestId("button-sell-order-file");
-    const dialogFile = page.getByTestId("dialog-sell-order-file-content");
-
-    await page.goto(`/sell-order/${sellOrder.id}`);
-    await assertFormLoaded(page.getByTestId("form-sell-order"));
-    expect(await getFilePath()).not.toBeNull();
-
-    await buttonFile.click();
-    await expect(dialogFile).toBeVisible();
-    await openAndConfirmAlertDialog(
-      page,
-      dialogFile.getByTestId("button-delete-sell-order-file"),
-      "dialog-delete-model-content",
+  async ({ page, toasts, openPage }) => {
+    const fileContent = fs.readFileSync((await getSellOrderFilePath(sellOrderWithFile.id))!);
+    expect(fileContent.equals(fs.readFileSync(SAMPLE_PDF_PATH)), "Wrong test set up: the files should differ").toBe(
+      false,
     );
-    await expect(toasts).toHaveCount(1);
-    expect(await getToastType(toasts.first())).toBe(ToastType.Success);
-    await clearToasts(page);
-    await expect(dialogFile).not.toBeVisible();
-    expect(await getFilePath()).toBeNull();
 
-    // Without a file the dialog is not opened
-    await buttonFile.click();
-    await expect(toasts).toHaveCount(1);
-    expect(await getToastType(toasts.first())).toBe(ToastType.Info);
-    await clearToasts(page);
-    await expect(dialogFile).not.toBeVisible();
+    // Another tab with the table sees every change without reloading
+    const tablePage = await openPage(UserMode.Admin);
+    await tablePage.goto("/sell-order");
+    const getTableButtonFile = (sellOrderId: number) =>
+      getButtonFile(getTableRowByTestId(tablePage.getByTestId("table-sell-order"), sellOrderId));
 
-    // Uploading a file is the only change of the form
-    await setInputFiles(
-      page,
-      getFormInputByLabel(page, FILE_LABEL, InputElementType.File),
-      path.join(MOCK_DATA_PATH, "sample.pdf"),
-    );
-    await page.getByTestId("button-submit-form-sell-order").click();
-    await expect(toasts).toHaveCount(1);
-    expect(await getToastType(toasts.first())).toBe(ToastType.Success);
-    await clearToasts(page);
-    expect(await getFilePath()).not.toBeNull();
+    const buttonFile = getButtonFile(await workflowOpenSellOrder(page, sellOrderWithFile.id));
+    const dialogFile = await workflowOpenSellOrderFile(page, buttonFile);
 
-    await buttonFile.click();
-    await expect(dialogFile).toBeVisible();
+    await test.step("cancelling the deletion keeps the file", async () => {
+      const dialogDelete = page.getByTestId("dialog-delete-model-content");
+      await dialogFile.getByTestId("button-delete-sell-order-file").click();
+      await expect(dialogDelete).toBeVisible();
+      await page.keyboard.press("Escape");
+      await expect(dialogDelete).not.toBeVisible();
+      await expect(dialogFile).toBeVisible();
+      await expect(toasts).toHaveCount(0);
+      expect(await getSellOrderById(sellOrderWithFile.id)).toEqual(sellOrderWithFile);
+    });
+
+    await test.step("deleting the file archives it and keeps the other files of the client", async () => {
+      await workflowDeleteSellOrderFile(page, dialogFile);
+      await expect(dialogFile).not.toBeVisible();
+
+      expect((await getSellOrderById(sellOrderWithFile.id))?.fileUploadedAt).toBeNull();
+      expect(await getSellOrderFilePath(sellOrderWithFile.id)).toBeNull();
+      const deletedFilePaths = await getDeletedSellOrderFilePaths(sellOrderWithFile.id);
+      expect(deletedFilePaths).toHaveLength(1);
+      expect(fs.readFileSync(deletedFilePaths[0]).equals(fileContent)).toBe(true);
+      await expect(buttonFile).toBeDisabled();
+      await expect(getTableButtonFile(sellOrderWithFile.id)).toBeDisabled();
+
+      expect(await getSellOrderById(sameClientSellOrderWithFile.id)).toEqual(sameClientSellOrderWithFile);
+      expect(await getSellOrderFilePath(sameClientSellOrderWithFile.id)).not.toBeNull();
+      await expect(getTableButtonFile(sameClientSellOrderWithFile.id)).toBeEnabled();
+    });
+
+    await test.step("a picked file can be cleared before saving", async () => {
+      const inputSellOrderFile = getFormInputByLabel(page, FILE_LABEL, InputElementType.File);
+      const buttonClearFile = inputSellOrderFile.getByTestId("button-clear");
+      await expect(inputSellOrderFile).toHaveText(DROP_FILE_PLACEHOLDER);
+      await expect(buttonClearFile).toHaveCount(0);
+      await setInputFiles(page, inputSellOrderFile, SAMPLE_PDF_PATH);
+      await expect(inputSellOrderFile).toContainText(path.basename(SAMPLE_PDF_PATH));
+      await buttonClearFile.click();
+      await expect(inputSellOrderFile).toHaveText(DROP_FILE_PLACEHOLDER);
+      await expect(buttonClearFile).toHaveCount(0);
+    });
+
+    await test.step("uploading a file when there is none archives nothing", async () => {
+      await workflowUploadSellOrderFile(page, SAMPLE_PDF_PATH);
+
+      expect((await getSellOrderById(sellOrderWithFile.id))?.fileUploadedAt).not.toBeNull();
+      expect(await getDeletedSellOrderFilePaths(sellOrderWithFile.id)).toHaveLength(1);
+      await expect(getTableButtonFile(sellOrderWithFile.id)).toBeEnabled();
+      await workflowDownloadSellOrderFile(
+        page,
+        await workflowOpenSellOrderFile(page, buttonFile),
+        sellOrderWithFile.id,
+      );
+    });
+
+    await test.step("replacing a file archives the old one and changes only the file", async () => {
+      const replacedButtonFile = getButtonFile(await workflowOpenSellOrder(page, sameClientSellOrderWithFile.id));
+      const oldContent = fs.readFileSync((await getSellOrderFilePath(sameClientSellOrderWithFile.id))!);
+      const oldUrl = await workflowDownloadSellOrderFile(
+        page,
+        await workflowOpenSellOrderFile(page, replacedButtonFile),
+        sameClientSellOrderWithFile.id,
+      );
+      await page.keyboard.press("Escape");
+
+      await workflowUploadSellOrderFile(page, SAMPLE_PDF_PATH);
+
+      const { fileUploadedAt, ...dbSellOrder } = (await getSellOrderById(sameClientSellOrderWithFile.id))!;
+      const { fileUploadedAt: oldFileUploadedAt, ...mockSellOrder } = sameClientSellOrderWithFile;
+      expect(fileUploadedAt!.getTime()).not.toBe(oldFileUploadedAt!.getTime());
+      expect(dbSellOrder).toEqual(mockSellOrder);
+      const deletedFilePaths = await getDeletedSellOrderFilePaths(sameClientSellOrderWithFile.id);
+      expect(deletedFilePaths).toHaveLength(1);
+      expect(fs.readFileSync(deletedFilePaths[0]).equals(oldContent)).toBe(true);
+      // A new file gets a new URL, so the browser cannot show the cached old one
+      expect(
+        await workflowDownloadSellOrderFile(
+          page,
+          await workflowOpenSellOrderFile(page, replacedButtonFile),
+          sameClientSellOrderWithFile.id,
+        ),
+      ).not.toBe(oldUrl);
+    });
+
+    await test.step("editing a sell order without uploading a file keeps it", async () => {
+      for (const sellOrderId of [sellOrderWithFile.id, sellOrderWithoutFile.id]) {
+        const { fileUploadedAt } = (await getSellOrderById(sellOrderId))!;
+        const deletedFilePaths = await getDeletedSellOrderFilePaths(sellOrderId);
+        const formSellOrder = await workflowOpenSellOrder(page, sellOrderId);
+        await getFormInputByLabel(page, NOTES_LABEL, InputElementType.Textarea).fill(`Notas ${sellOrderId}`);
+        await workflowSubmitSellOrder(page);
+
+        expect(await getSellOrderById(sellOrderId)).toMatchObject({ fileUploadedAt, notes: `Notas ${sellOrderId}` });
+        expect((await getSellOrderFilePath(sellOrderId)) !== null).toBe(fileUploadedAt !== null);
+        expect(await getDeletedSellOrderFilePaths(sellOrderId)).toEqual(deletedFilePaths);
+        await expect(getButtonFile(formSellOrder)).toBeEnabled({ enabled: fileUploadedAt !== null });
+      }
+    });
+
+    await test.step("a sell order created without a file has none", async () => {
+      const client = getMockClientById(sellOrderWithFile.clientId)!;
+      const newSellOrderId = Math.max(...mockSellOrders.map((sellOrder) => sellOrder.id)) + 1;
+      await page.goto("/create-sell-order");
+      const comboboxClient = getFormInputByLabel(page, CLIENT_LABEL, InputElementType.Combobox);
+      await openCombobox(comboboxClient);
+      await fillComboboxFilter(page, client.name);
+      await clickInComboboxOption(page, client.name);
+      await workflowSubmitSellOrder(page);
+      await expect(page).toHaveURL(`/sell-order/${newSellOrderId}`);
+
+      expect((await getSellOrderById(newSellOrderId))?.fileUploadedAt).toBeNull();
+      expect(await getSellOrderFilePath(newSellOrderId)).toBeNull();
+      await expect(getButtonFile(await workflowOpenSellOrder(page, newSellOrderId))).toBeDisabled();
+    });
+  },
+);
+
+test(
+  "the files changed outside the app do not match the sell orders",
+  { annotation: [TestAnnotations.ResetSellOrders, TestAnnotations.NonEmptyErrorsLogFile] },
+  async ({ page }) => {
+    await test.step("a file copied by hand is not shown until it is uploaded", async () => {
+      fs.copyFileSync(SAMPLE_PDF_PATH, (await getSellOrderPath({ sellOrderId: sellOrderWithoutFile.id }))!);
+      await expect(getButtonFile(await workflowOpenSellOrder(page, sellOrderWithoutFile.id))).toBeDisabled();
+    });
+
+    await test.step("deleting a file removed by hand fails and keeps reporting it", async () => {
+      fs.rmSync((await getSellOrderFilePath(sellOrderWithFile.id))!);
+      const dialogFile = await workflowOpenSellOrderFile(
+        page,
+        getButtonFile(await workflowOpenSellOrder(page, sellOrderWithFile.id)),
+      );
+      await workflowDeleteSellOrderFile(page, dialogFile, ToastType.Error);
+
+      expect(await getSellOrderById(sellOrderWithFile.id)).toEqual(sellOrderWithFile);
+      expect(await getDeletedSellOrderFilePaths(sellOrderWithFile.id)).toEqual([]);
+    });
   },
 );

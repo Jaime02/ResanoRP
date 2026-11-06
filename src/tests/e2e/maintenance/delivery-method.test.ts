@@ -3,7 +3,12 @@ import { eq } from "drizzle-orm";
 
 import { DELIVERY_METHOD_NAME_CONSTRAINT, dbTableDeliveryMethod } from "@/db/schema";
 import { DEFAULT_DELIVERY_METHOD_LABEL } from "@/messages/client";
-import { DELIVERY_METHOD_LABEL, NAME_LABEL } from "@/messages/common";
+import { STATUS_DELETED_LABEL, DELIVERY_METHOD_LABEL, NAME_LABEL } from "@/messages/common";
+import {
+  DELIVERY_METHOD_CREATE_TITLE,
+  DELIVERY_METHOD_RESTORED_MESSAGE,
+  SHOW_DELETED_DELIVERY_METHODS_LABEL,
+} from "@/messages/delivery-method";
 import { mockClients, mockDeliveryMethods, mockDeliveryNotes } from "@/tests/mock-data";
 import { openAndConfirmAlertDialog } from "@/tests/utils/components/alert-dialog";
 import { assertComboboxValue, fillComboboxFilter, openCombobox } from "@/tests/utils/components/combobox";
@@ -51,7 +56,7 @@ test("manage the Transportes", { annotation: TestAnnotations.NonEmptyErrorsLogFi
     await page.goto(MAINTENANCE_DELIVERY_METHOD_URL);
 
     for (const [index, deliveryMethod] of activeDeliveryMethods.entries()) {
-      await page.getByRole("button", { name: "Crear Transporte" }).click();
+      await page.getByRole("button", { name: DELIVERY_METHOD_CREATE_TITLE }).click();
       await submitDeliveryMethodName(deliveryMethod.name);
       await assertDuplicatedNameRejected();
 
@@ -158,7 +163,7 @@ test("manage the Transportes", { annotation: TestAnnotations.NonEmptyErrorsLogFi
         await expect(comboboxDeliveryMethod.getByTestId("button-trigger")).toHaveText(deliveryMethod.name);
         await comboboxDeliveryMethod.getByTestId("tooltip-deleted").hover();
         const popoverDeleted = getPopoverContent(page);
-        await expect(popoverDeleted).toContainText("Eliminado");
+        await expect(popoverDeleted).toContainText(STATUS_DELETED_LABEL);
         await popoverDeleted.getByTestId("button-link-delivery-methods").click();
         await expect(page).toHaveURL(/\/maintenance\?tab=deliveryMethod/);
         await expect(tableDeliveryMethod).toBeVisible();
@@ -172,7 +177,7 @@ test("manage the Transportes", { annotation: TestAnnotations.NonEmptyErrorsLogFi
 
       // Its name can be used again...
       await page.goto(MAINTENANCE_DELIVERY_METHOD_URL);
-      await page.getByRole("button", { name: "Crear Transporte" }).click();
+      await page.getByRole("button", { name: DELIVERY_METHOD_CREATE_TITLE }).click();
       await submitDeliveryMethodName(deliveryMethod.name);
       await expect(dialogCreateEditDeliveryMethod).not.toBeVisible();
       await expect(filterByExactText(getTableRows(tableDeliveryMethod), deliveryMethod.name)).toHaveCount(1);
@@ -192,7 +197,7 @@ test("manage the Transportes", { annotation: TestAnnotations.NonEmptyErrorsLogFi
 const DELETED_DELIVERY_METHOD_FILTER_PARAMS = {
   url: MAINTENANCE_DELIVERY_METHOD_URL,
   tableTestId: "table-delivery-method",
-  filterLabel: "Ver Transportes eliminados",
+  filterLabel: SHOW_DELETED_DELIVERY_METHODS_LABEL,
 };
 
 test("list the deleted Transportes only when asked for and restore them from the table", async ({ page, db }) => {
@@ -202,7 +207,7 @@ test("list the deleted Transportes only when asked for and restore them from the
     getDeletedAt: async (id) => (await db.query.dbTableDeliveryMethod.findFirst({ where: { id } }))?.deletedAt,
     ids: mockDeliveryMethods.filter((deliveryMethod) => deliveryMethod.deletedAt === null).map(({ id }) => id),
     editButton: EditButtonVisibility.OnlyActive,
-    restoredToastTitle: "Transporte restaurado",
+    restoredToastTitle: DELIVERY_METHOD_RESTORED_MESSAGE,
   });
 });
 

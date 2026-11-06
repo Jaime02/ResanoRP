@@ -95,7 +95,7 @@ export default function DialogPrintPendingSellOrders({
           <DialogHeader>
             <DialogTitle>{PENDING_SELL_ORDERS_TITLE}</DialogTitle>
           </DialogHeader>
-          {previewUrl !== undefined && <PDFViewer url={previewUrl} landscape />}
+          <PDFViewer url={previewUrl} landscape />
           <DialogFooter>
             <Button
               testId="button-download-pending-sell-orders"

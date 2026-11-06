@@ -16,6 +16,7 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
+import ButtonLink from "@/components/ui/button-link";
 import { Card, CardHeader, CardTitle } from "@/components/ui/card";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import Header from "@/components/ui/header";
@@ -98,7 +99,17 @@ export default function FormMachineProductionOrder({
           <div className="flex flex-row flex-wrap items-start justify-center gap-2">
             <Card>
               <CardHeader>
-                <CardTitle>{PART_LABEL}</CardTitle>
+                <CardTitle>
+                  <ButtonLink
+                    testId="button-link-part"
+                    to="/part/$id"
+                    params={{ id: activeProductionOrder?.part?.id }}
+                    target="_blank"
+                    disabled={activeProductionOrder?.part === undefined}
+                  >
+                    {PART_LABEL}
+                  </ButtonLink>
+                </CardTitle>
               </CardHeader>
               <PartFields part={activeProductionOrder?.part} />
             </Card>

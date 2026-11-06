@@ -5,7 +5,6 @@ import { and, eq, isNotNull } from "drizzle-orm";
 
 import type { TDatabase } from "@/db";
 import { removeProductionOrdersFromMachines } from "@/db/functions/machine-production-order-queue";
-import { getSellOrderById } from "@/db/functions/sell-order";
 import {
   SELL_ORDER_REFERENCE_CONSTRAINT,
   dbTableProductionOrder,
@@ -18,7 +17,7 @@ import { handleMutationError } from "@/lib/handlers";
 import { requiredIdObjectSchema, requiredIdSchema } from "@/schemas";
 import { createSellOrderFormDataSchema, updateSellOrderFormDataSchema } from "@/schemas/sell-order";
 import { dateToFileName } from "@/schemas/utils";
-import { adminProcedure, generateTxId, procedure, router } from "@/trpc";
+import { adminProcedure, generateTxId, router } from "@/trpc";
 import type { BaseSellOrder } from "@/types/sell-order";
 
 const uniqueConstraints = [
@@ -59,7 +58,12 @@ export default router({
       try {
         const txid = await generateTxId(tx);
         const { sellOrderFile, ...sellOrder } = input;
-        const newSellOrder = (await tx.insert(dbTableSellOrder).values(sellOrder).returning()).at(0);
+        const newSellOrder = (
+          await tx
+            .insert(dbTableSellOrder)
+            .values({ ...sellOrder, fileUploadedAt: sellOrderFile != null ? new Date() : null })
+            .returning()
+        ).at(0);
 
         if (!newSellOrder) {
           throw new TRPCError({
@@ -83,7 +87,11 @@ export default router({
         const txid = await generateTxId(tx);
         const { sellOrderFile, ...sellOrder } = input;
         const updatedSellOrder = (
-          await tx.update(dbTableSellOrder).set(sellOrder).where(eq(dbTableSellOrder.id, input.id)).returning()
+          await tx
+            .update(dbTableSellOrder)
+            .set({ ...sellOrder, ...(sellOrderFile != null ? { fileUploadedAt: new Date() } : {}) })
+            .where(eq(dbTableSellOrder.id, input.id))
+            .returning()
         ).at(0);
         if (!updatedSellOrder) {
           throw new TRPCError({
@@ -158,31 +166,24 @@ export default router({
       }
     }),
   ),
-  // The file is only on disk, so its existence is not synced with the Pedido de venta and is asked for when opened
-  hasFile: procedure
-    .input(requiredIdSchema)
-    .query(
-      async ({ ctx, input: sellOrderId }) =>
-        (await getSellOrderPath({ checkIfFileExists: true, logErrors: false, sellOrderId }, ctx.db)) !== null,
-    ),
   deleteFile: adminProcedure.input(requiredIdSchema).mutation(async ({ ctx, input: sellOrderId }) =>
     ctx.db.transaction(async (tx) => {
       try {
         const txid = await generateTxId(tx);
-        const sellOrder = await getSellOrderById(sellOrderId, tx);
-        if (!sellOrder) {
+        const updatedSellOrder = (
+          await tx
+            .update(dbTableSellOrder)
+            .set({ fileUploadedAt: null })
+            .where(eq(dbTableSellOrder.id, sellOrderId))
+            .returning()
+        ).at(0);
+        if (!updatedSellOrder) {
           throw new TRPCError({
             code: "NOT_FOUND",
             message: `Pedido de venta con ID ${sellOrderId} no encontrado`,
           });
         }
-        const filePath = await getSellOrderPath(
-          {
-            clientId: sellOrder.clientId,
-            sellOrderId: sellOrderId,
-          },
-          tx,
-        );
+        const filePath = await getSellOrderPath({ clientId: updatedSellOrder.clientId, sellOrderId }, tx);
         if (filePath === null) {
           throw new TRPCError({
             code: "NOT_FOUND",
@@ -191,9 +192,9 @@ export default router({
         }
         await renameFile({
           filePath,
-          newFileName: `DELETED_${dateToFileName(new Date())}.${sellOrder.id}.pdf`,
+          newFileName: `DELETED_${dateToFileName(new Date())}.${sellOrderId}.pdf`,
         });
-        return { txid };
+        return { item: updatedSellOrder, txid };
       } catch (error) {
         handleMutationError({ error });
       }

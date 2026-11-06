@@ -12,7 +12,8 @@ import { dbTableClient, dbTableDeliveryNote, dbTableDeliveryNoteLine, dbTableInv
 import { endOfAppDay, isSameAppDay, startOfAppDay } from "@/lib/dates";
 import { formatDate, formatPrice } from "@/lib/formatters";
 import { formatCents, getLineTotalInCents } from "@/lib/prices";
-import { CLIENT_LABEL, DATE_LABEL, FROM_LABEL, TO_LABEL } from "@/messages/common";
+import { NEXT_PAGE_LABEL, CLIENT_LABEL, DATE_LABEL, FROM_LABEL, TO_LABEL } from "@/messages/common";
+import { INVOICE_CREATE_TITLE } from "@/messages/invoice";
 import {
   MOCK_INITIAL_DATE,
   mockClientInvoiceEmails,
@@ -281,7 +282,7 @@ test("create, change and delete invoices", async ({ page, db, toasts }) => {
     expect(clientDeliveryNotes.length).toBeLessThan(mockPendingDeliveryNotes.length);
 
     await page.goto("/invoicing");
-    await page.getByRole("button", { name: "Crear Factura" }).click();
+    await page.getByRole("button", { name: INVOICE_CREATE_TITLE }).click();
     await expect(dialogCreateInvoice).toBeVisible();
 
     // Every pending Albarán is displayed until a Cliente is picked
@@ -363,7 +364,7 @@ test("create, change and delete invoices", async ({ page, db, toasts }) => {
     ).toBe(false);
 
     await page.goto("/invoicing");
-    await page.getByRole("button", { name: "Crear Factura" }).click();
+    await page.getByRole("button", { name: INVOICE_CREATE_TITLE }).click();
     await expect(dialogCreateInvoice).toBeVisible();
     const buttonSubmit = dialogCreateInvoice.getByTestId("button-submit");
     const inputStartDate = getFormInputByLabel(dialogCreateInvoice, FROM_LABEL, InputElementType.Date);
@@ -447,7 +448,7 @@ test("create, change and delete invoices", async ({ page, db, toasts }) => {
       await workflowDeleteInvoice(page, createdInvoice.id);
 
       await page.goto("/invoicing");
-      await page.getByRole("button", { name: "Crear Factura" }).click();
+      await page.getByRole("button", { name: INVOICE_CREATE_TITLE }).click();
       await expect(dialogCreateInvoice).toBeVisible();
       await assertDateRangeOfDeliveryNotes(dialogCreateInvoice, mockPendingDeliveryNotes);
 
@@ -610,12 +611,12 @@ test("the pending delivery notes are paged without keeping the page in the url",
   );
 
   await page.goto("/invoicing");
-  await page.getByRole("button", { name: "Crear Factura" }).click();
+  await page.getByRole("button", { name: INVOICE_CREATE_TITLE }).click();
   await expect(dialogCreateInvoice).toBeVisible();
   await expect(getTableRows(tablePendingDeliveryNotes)).toHaveCount(PENDING_DELIVERY_NOTES_PAGE_SIZE);
   await expect(dialogCreateInvoice.getByText(`Página 1 de ${pageCount}`)).toBeVisible();
 
-  await getTablePagerButton(tablePendingDeliveryNotes, "Página siguiente").click();
+  await getTablePagerButton(tablePendingDeliveryNotes, NEXT_PAGE_LABEL).click();
   await expect(dialogCreateInvoice.getByText(`Página 2 de ${pageCount}`)).toBeVisible();
   await expect(getTableRows(tablePendingDeliveryNotes)).toHaveCount(secondPageDeliveryNotes.length);
   for (const deliveryNote of secondPageDeliveryNotes) {
@@ -661,7 +662,7 @@ test(
     const unpricedDeliveryNoteIds = [firstDeliveryNote.id, lastDeliveryNote.id].sort((a, b) => a - b);
 
     await page.goto("/invoicing");
-    await page.getByRole("button", { name: "Crear Factura" }).click();
+    await page.getByRole("button", { name: INVOICE_CREATE_TITLE }).click();
     await expect(dialogCreateInvoice).toBeVisible();
     await workflowPickInvoiceClient(page, dialogCreateInvoice, client);
     await dialogCreateInvoice.getByTestId("button-submit").click();

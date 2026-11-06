@@ -29,8 +29,12 @@ import {
 import { getBlueprintPath } from "@/files/blueprint";
 import { formatPrice } from "@/lib/formatters";
 import { translatedEnums } from "@/lib/translations";
-import { BLUEPRINT_LABEL } from "@/messages/blueprint";
+import { BLUEPRINTS_TITLE, BLUEPRINT_LABEL } from "@/messages/blueprint";
 import {
+  ACTIONS_LABEL,
+  DELETE_FILTERS_LABEL,
+  NEXT_PAGE_LABEL,
+  PREVIOUS_PAGE_LABEL,
   DESCRIPTION_LABEL,
   NAME_LABEL,
   NOTES_LABEL,
@@ -38,12 +42,17 @@ import {
   QUANTITY_LABEL,
   REFERENCE_LABEL,
 } from "@/messages/common";
+import { MATERIALS_LABEL } from "@/messages/material";
 import {
+  GENERAL_LABEL,
+  NO_COMPATIBLE_MATERIALS_MESSAGE,
+  PART_SELECT_SHAPE_AND_SIZE_MESSAGE,
   CLIENT_REFERENCE_DESCRIPTION_LABEL,
   PART_FEATURE_LABEL,
   PART_REFERENCE_DELETED_TOOLTIP_MESSAGE,
   PART_STOCK_UPDATE_QUANTITY_LABEL,
 } from "@/messages/part";
+import { PRICES_TITLE } from "@/messages/part-price";
 import type { TTablePartState } from "@/schemas/part";
 import { ProductionOrderStatus } from "@/schemas/production-order";
 import { sanitizePath } from "@/schemas/utils";
@@ -370,7 +379,7 @@ test("manage the parts", { annotation: TestAnnotations.ResetBlueprints }, async 
       await assertFormLoaded(formPart);
       await inputDescription.fill(unsavedDescription);
 
-      await page.getByRole("tab", { name: "Planos" }).click();
+      await page.getByRole("tab", { name: BLUEPRINTS_TITLE }).click();
       await formPart.getByTestId("button-create-part-feature").click();
       const dialogCreatePartFeature = page.getByTestId("dialog-create-part-feature");
       await getFormInputByLabel(dialogCreatePartFeature, PART_FEATURE_LABEL).fill("Característica sin guardar");
@@ -380,7 +389,7 @@ test("manage the parts", { annotation: TestAnnotations.ResetBlueprints }, async 
       expect(await getToastType(toasts.first())).toBe(ToastType.Success);
       await clearToasts(page);
 
-      await page.getByRole("tab", { name: "General" }).click();
+      await page.getByRole("tab", { name: GENERAL_LABEL }).click();
       await expect(inputDescription).toHaveValue(unsavedDescription);
 
       // ...but a change of the Artículo itself reloads the form
@@ -718,7 +727,7 @@ test("list every material of a part at once, without paging", async ({ page, db 
   await assertFormLoaded(formPart);
   await assertTableRowCount(tablePartMaterials, partMaterialsCount);
   await expect(getTableRows(tablePartMaterials)).toHaveCount(partMaterialsCount);
-  await expect(getTablePagerButton(tablePartMaterials, "Página siguiente")).not.toBeVisible();
+  await expect(getTablePagerButton(tablePartMaterials, NEXT_PAGE_LABEL)).not.toBeVisible();
 });
 
 test("dismissing the delete dialog of a material keeps it in the part", async ({ page, db }) => {
@@ -1487,7 +1496,12 @@ test(
       expect(await getToastType(toasts.first())).toBe(ToastType.Error);
       await expect(toasts.first()).toContainText("El Cliente ya tiene una Referencia con ese nombre");
       await expectUniqueViolation(
-        db.insert(dbTablePartReference).values({ clientId: newClient.id, partId: part.id, reference: newReference }),
+        db.insert(dbTablePartReference).values({
+          clientDescription: newDescription,
+          clientId: newClient.id,
+          partId: part.id,
+          reference: newReference,
+        }),
         PART_REFERENCE_CONSTRAINT,
       );
       await clearToasts(page);
@@ -1700,7 +1714,7 @@ test("page through the compatible materials of a part", async ({ page, db, toast
   await assertFormLoaded(formPart);
 
   const tablePager = tableCompatiblePartMaterials.locator("xpath=preceding-sibling::div[1]");
-  const buttonNextPage = getTablePagerButton(tableCompatiblePartMaterials, "Página siguiente");
+  const buttonNextPage = getTablePagerButton(tableCompatiblePartMaterials, NEXT_PAGE_LABEL);
 
   await expect(tablePager.getByText("Página 1 de 2", { exact: true })).toBeVisible();
   await expectCompatibleMaterials(firstPageMaterials);
@@ -1762,7 +1776,7 @@ test("filter the compatible materials of a part by their raw material, starting 
 
   const tablePager = tableCompatiblePartMaterials.locator("xpath=preceding-sibling::div[1]");
   const comboboxRawMaterial = tableCompatiblePartMaterials.getByTestId("combobox-raw-material");
-  const buttonRemoveFilters = formPart.getByRole("button", { name: "Eliminar filtros" });
+  const buttonRemoveFilters = formPart.getByRole("button", { name: DELETE_FILTERS_LABEL });
 
   async function expectCompatibleMaterials(expectedMaterials: typeof allMaterials) {
     await expect(getTableRows(tableCompatiblePartMaterials)).toHaveCount(expectedMaterials.length);
@@ -1778,14 +1792,14 @@ test("filter the compatible materials of a part by their raw material, starting 
   await assertFormLoaded(formPart);
   await expect(buttonRemoveFilters).not.toBeVisible();
 
-  await getTablePagerButton(tableCompatiblePartMaterials, "Página siguiente").click();
+  await getTablePagerButton(tableCompatiblePartMaterials, NEXT_PAGE_LABEL).click();
   await expect(tablePager.getByText("Página 2 de 2", { exact: true })).toBeVisible();
 
   await selectComboboxOption(page, comboboxRawMaterial, pagedRawMaterial.name, String(pagedRawMaterial.id));
   await expect(tablePager.getByText("Página 1 de 2", { exact: true })).toBeVisible();
   await expectCompatibleMaterials(pagedMaterials.slice(0, COMPATIBLE_MATERIALS_PAGE_SIZE));
 
-  await getTablePagerButton(tableCompatiblePartMaterials, "Página siguiente").click();
+  await getTablePagerButton(tableCompatiblePartMaterials, NEXT_PAGE_LABEL).click();
   await expect(tablePager.getByText("Página 2 de 2", { exact: true })).toBeVisible();
 
   await buttonRemoveFilters.click();
@@ -1795,13 +1809,11 @@ test("filter the compatible materials of a part by their raw material, starting 
   await expectCompatibleMaterials(allMaterials.slice(0, COMPATIBLE_MATERIALS_PAGE_SIZE));
 
   await selectComboboxOption(page, comboboxRawMaterial, singleRawMaterial.name, String(singleRawMaterial.id));
-  await expect(getTablePagerButton(tableCompatiblePartMaterials, "Página siguiente")).not.toBeVisible();
+  await expect(getTablePagerButton(tableCompatiblePartMaterials, NEXT_PAGE_LABEL)).not.toBeVisible();
   await expectCompatibleMaterials([singleMaterial]);
 
   await selectComboboxOption(page, comboboxRawMaterial, emptyRawMaterial.name, String(emptyRawMaterial.id));
-  await expect(getTableNoDataRow(tableCompatiblePartMaterials)).toHaveText(
-    "No hay Materiales compatibles disponibles para los filtros actuales",
-  );
+  await expect(getTableNoDataRow(tableCompatiblePartMaterials)).toHaveText(NO_COMPATIBLE_MATERIALS_MESSAGE);
 });
 
 for (const missingField of ["width", "shape"] as const) {
@@ -1844,19 +1856,17 @@ for (const missingField of ["width", "shape"] as const) {
       await getClearComboboxButton(comboboxShape).click();
       await assertComboboxValue(comboboxShape, null);
     }
-    await page.getByRole("tab", { name: "Materiales" }).click();
-    await expect(getTableNoDataRow(tableCompatiblePartMaterials)).toHaveText(
-      "Selecciona una Forma y Medida para ver los Materiales compatibles",
-    );
-    await expect(getTablePagerButton(tableCompatiblePartMaterials, "Página siguiente")).not.toBeVisible();
+    await page.getByRole("tab", { name: MATERIALS_LABEL }).click();
+    await expect(getTableNoDataRow(tableCompatiblePartMaterials)).toHaveText(PART_SELECT_SHAPE_AND_SIZE_MESSAGE);
+    await expect(getTablePagerButton(tableCompatiblePartMaterials, NEXT_PAGE_LABEL)).not.toBeVisible();
 
-    await page.getByRole("tab", { name: "General" }).click();
+    await page.getByRole("tab", { name: GENERAL_LABEL }).click();
     if (missingField === "width") {
       await inputWidth.pressSequentially(partWidth);
     } else {
       await selectComboboxOption(page, comboboxShape, shape.name, String(shape.id));
     }
-    await page.getByRole("tab", { name: "Materiales" }).click();
+    await page.getByRole("tab", { name: MATERIALS_LABEL }).click();
     await expect(tablePager.getByText("Página 1 de 2", { exact: true })).toBeVisible();
     await expect(getTableRows(tableCompatiblePartMaterials)).toHaveCount(COMPATIBLE_MATERIALS_PAGE_SIZE);
     for (const [position, material] of materials.slice(0, COMPATIBLE_MATERIALS_PAGE_SIZE).entries()) {
@@ -1918,12 +1928,12 @@ test("page through the production history of a part, without storing its page in
     await expect(tablePager.getByText(`Página 1 de ${pageCount}`, { exact: true })).toBeVisible();
     await expectPartProductions(partProductions.slice(0, PART_PRODUCTION_HISTORY_PAGE_SIZE));
 
-    await getTablePagerButton(tablePartProductionHistory, "Página siguiente").click();
+    await getTablePagerButton(tablePartProductionHistory, NEXT_PAGE_LABEL).click();
     await expect(tablePager.getByText(`Página 2 de ${pageCount}`, { exact: true })).toBeVisible();
     await expectPartProductions(partProductions.slice(PART_PRODUCTION_HISTORY_PAGE_SIZE));
     expect(page.url()).toBe(initialUrl);
 
-    await getTablePagerButton(tablePartProductionHistory, "Página anterior").click();
+    await getTablePagerButton(tablePartProductionHistory, PREVIOUS_PAGE_LABEL).click();
     await expect(tablePager.getByText(`Página 1 de ${pageCount}`, { exact: true })).toBeVisible();
     await expectPartProductions(partProductions.slice(0, PART_PRODUCTION_HISTORY_PAGE_SIZE));
     expect(page.url()).toBe(initialUrl);
@@ -1961,7 +1971,7 @@ for (const userMode of [UserMode.Admin, UserMode.User]) {
       await expectShown(tablePartReferences.getByTestId("button-edit"), isAdmin && partReferencesCount > 0);
       await expectShown(tablePartReferences.getByTestId("button-delete"), isAdmin && partReferencesCount > 0);
       await expectShown(tablePartReferences.getByTestId("button-restore"), isAdmin && deletedPartReferencesCount > 0);
-      await expectShown(page.getByRole("tab", { name: "Precios" }), isAdmin);
+      await expectShown(page.getByRole("tab", { name: PRICES_TITLE }), isAdmin);
 
       await page.goto(`/part/${part.id}?tab=blueprints`);
       await assertFormLoaded(formPart);
@@ -1974,7 +1984,7 @@ for (const userMode of [UserMode.Admin, UserMode.User]) {
       await assertFormLoaded(formPart);
       await assertTableRowCount(tablePartMaterials, partMaterialsCount);
       await expectShown(tablePartMaterials.getByTestId("button-delete"), isAdmin && partMaterialsCount > 0);
-      await expectShown(tablePartMaterials.getByRole("columnheader", { name: "Acciones" }), isAdmin);
+      await expectShown(tablePartMaterials.getByRole("columnheader", { name: ACTIONS_LABEL }), isAdmin);
       await expectShown(tableCompatiblePartMaterials, isAdmin);
     }
 

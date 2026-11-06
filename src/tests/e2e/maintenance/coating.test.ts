@@ -3,6 +3,7 @@ import { eq } from "drizzle-orm";
 
 import { getCoatingById } from "@/db/functions/coating";
 import { COATING_NAME_CONSTRAINT, dbTableCoating } from "@/db/schema";
+import { COATING_CREATE_TITLE, COATING_RESTORED_MESSAGE, SHOW_DELETED_COATINGS_LABEL } from "@/messages/coating";
 import { COATING_LABEL, NAME_LABEL } from "@/messages/common";
 import { mockCoatings, mockParts } from "@/tests/mock-data";
 import { openAndConfirmAlertDialog } from "@/tests/utils/components/alert-dialog";
@@ -33,7 +34,7 @@ test("manage the Tratamientos", { annotation: TestAnnotations.NonEmptyErrorsLogF
   const dialogCreateEditCoating = page.getByTestId("dialog-create-edit-coating");
 
   const createCoating = async (name: string) => {
-    await page.getByRole("button", { name: "Crear Tratamiento" }).click();
+    await page.getByRole("button", { name: COATING_CREATE_TITLE }).click();
     await expect(dialogCreateEditCoating).toBeVisible();
     await getFormInputByLabel(dialogCreateEditCoating, NAME_LABEL).fill(name);
     await dialogCreateEditCoating.getByTestId("button-submit").click();
@@ -58,7 +59,7 @@ test("manage the Tratamientos", { annotation: TestAnnotations.NonEmptyErrorsLogF
     }
 
     // A cancelled draft is kept
-    await page.getByRole("button", { name: "Crear Tratamiento" }).click();
+    await page.getByRole("button", { name: COATING_CREATE_TITLE }).click();
     await expect(getFormInputByLabel(dialogCreateEditCoating, NAME_LABEL)).toHaveValue(activeCoatings.at(-1)!.name);
     await dialogCreateEditCoating.getByTestId("button-close").click();
     await expect(dialogCreateEditCoating).not.toBeVisible();
@@ -103,7 +104,7 @@ test("manage the Tratamientos", { annotation: TestAnnotations.NonEmptyErrorsLogF
       await expect(filterByExactText(getTableRows(tableCoating), coating.name)).toHaveCount(1);
 
       // ...the create dialog starts empty after a Tratamiento is created...
-      await page.getByRole("button", { name: "Crear Tratamiento" }).click();
+      await page.getByRole("button", { name: COATING_CREATE_TITLE }).click();
       await expect(getFormInputByLabel(dialogCreateEditCoating, NAME_LABEL)).toHaveValue("");
       await dialogCreateEditCoating.getByTestId("button-close").click();
       await expect(dialogCreateEditCoating).not.toBeVisible();
@@ -139,7 +140,7 @@ test("manage the Tratamientos", { annotation: TestAnnotations.NonEmptyErrorsLogF
 const DELETED_COATING_FILTER_PARAMS = {
   url: MAINTENANCE_COATING_URL,
   tableTestId: "table-coating",
-  filterLabel: "Ver Tratamientos eliminados",
+  filterLabel: SHOW_DELETED_COATINGS_LABEL,
   getDeletedAt: async (id: number) => (await getCoatingById(id))?.deletedAt,
 };
 
@@ -149,7 +150,7 @@ test("list the deleted Tratamientos only when asked for and restore them from th
     page,
     ids: mockCoatings.filter((coating) => coating.deletedAt === null).map(({ id }) => id),
     editButton: EditButtonVisibility.OnlyActive,
-    restoredToastTitle: "Tratamiento restaurado",
+    restoredToastTitle: COATING_RESTORED_MESSAGE,
   });
 });
 

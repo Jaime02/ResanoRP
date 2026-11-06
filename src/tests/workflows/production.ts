@@ -69,6 +69,16 @@ export async function getQueuedProductionOrderIds(machineId: number) {
   return (await getMachineProductionOrderQueue(machineId)).map((productionOrder) => productionOrder.id);
 }
 
+export async function assertPartLink(page: Page, partId: number | null) {
+  const buttonLinkPart = page.getByTestId("button-link-part");
+  if (partId === null) {
+    await expect(buttonLinkPart).toBeDisabled();
+    return;
+  }
+  await expect(buttonLinkPart).toBeEnabled();
+  await expect(page.getByRole("link").filter({ has: buttonLinkPart })).toHaveAttribute("href", `/part/${partId}`);
+}
+
 export async function workflowOpenProduction(page: Page, machine: BaseMachine) {
   await setUserMode(page, UserMode.Machine);
   await page.goto("/production");
@@ -204,6 +214,7 @@ export async function workflowStartProductionOrderFromQueue(
   const toasts = getToasts(page);
   await workflowOpenProduction(page, machine);
   expect((await getMachineById(machine.id))?.activeProductionOrderId).toBeNull();
+  await assertPartLink(page, null);
 
   await expect(dialogContentMachineProductionOrderQueue).toBeVisible();
   await expect(tableMachineProductionOrderQueue).toBeVisible();
@@ -225,6 +236,7 @@ export async function workflowStartProductionOrderFromQueue(
   const dbUpdatedProductionOrder = await getProductionOrderById(productionOrderId);
   expect(dbUpdatedProductionOrder).toBeDefined();
   expect(await dbGetProductionOrderStatus(dbUpdatedProductionOrder!)).toBe(ProductionOrderStatus.InProduction);
+  await assertPartLink(page, dbUpdatedProductionOrder!.partId);
 }
 
 export async function workflowAssignMachineToProductionOrder(

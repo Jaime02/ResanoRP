@@ -49,7 +49,7 @@ export default function DialogPrintInvoice({ invoiceId }: DialogPrintInvoiceProp
           <DialogHeader>
             <DialogTitle>Factura {invoiceId}</DialogTitle>
           </DialogHeader>
-          {previewUrl !== undefined && <PDFViewer url={previewUrl} />}
+          <PDFViewer url={previewUrl} />
           <DialogFooter>
             <Button
               testId="button-download-invoice"
