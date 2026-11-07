@@ -93,6 +93,6 @@
   },
   "patchedDependencies": {
     "@electric-sql/client@1.5.28": "patches/@electric-sql%2Fclient@1.5.28.patch",
-    "@tanstack/db@1.0.0-rc.1.3": "patches/@tanstack%2Fdb@1.0.0-rc.1.3.patch"
+    "@tanstack/db@1.0.0-rc.1.4": "patches/@tanstack%2Fdb@1.0.0-rc.1.4.patch"
   }
 }
