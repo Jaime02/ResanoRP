@@ -184,7 +184,10 @@ async function preparePage(page: Page) {
   const originalGoto = page.goto.bind(page);
   page.goto = async (url, options) => {
     const response = await originalGoto(url, options);
-    await page.waitForSelector("body[data-hydrated]");
+    // Only the pages of the app hydrate, not the plain responses of the file routes
+    if (!response || response.headers()["content-type"]?.startsWith("text/html")) {
+      await page.waitForSelector("body[data-hydrated]");
+    }
     return response;
   };
   const originalReload = page.reload.bind(page);

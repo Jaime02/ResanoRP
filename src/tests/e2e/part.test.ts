@@ -1450,13 +1450,11 @@ test(
     const tablePartReferencesRows = getTableRows(tablePartReferences);
     const clientCombobox = dialogCreateEditPartReference.getByTestId("combobox-client");
 
-    const submitPartReference = async (reference: string, clientName: string, description?: string) => {
+    const submitPartReference = async (reference: string, clientName: string, description = "Client Description") => {
       await formPart.getByTestId("button-add-reference").click();
       await expect(dialogCreateEditPartReference).toBeVisible();
       await getFormInputByLabel(dialogCreateEditPartReference, REFERENCE_LABEL).fill(reference);
-      if (description !== undefined) {
-        await getFormInputByLabel(dialogCreateEditPartReference, CLIENT_REFERENCE_DESCRIPTION_LABEL).fill(description);
-      }
+      await getFormInputByLabel(dialogCreateEditPartReference, CLIENT_REFERENCE_DESCRIPTION_LABEL).fill(description);
       await openCombobox(clientCombobox);
       await clickInComboboxOption(page, clientName);
       await dialogCreateEditPartReference.getByTestId("button-submit").click();

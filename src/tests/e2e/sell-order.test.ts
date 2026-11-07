@@ -1455,7 +1455,8 @@ test("filter the sell orders by part", async ({ page }) => {
   });
 });
 
-const SAMPLE_PDF_PATH = path.join(MOCK_DATA_PATH, "sample.pdf");
+// Not sample.pdf, as the files of the mock sell orders are copies of it and an upload must change the file
+const SAMPLE_PDF_PATH = path.join(MOCK_DATA_PATH, "BLUEPRINTS", "1 - Pieza grupilla", "ID-1-BLUEPRINT1.pdf");
 const sellOrderWithFile = mockSellOrders.find(
   (sellOrder) => sellOrder.fileUploadedAt !== null && sellOrder.deletedAt === null,
 )!;

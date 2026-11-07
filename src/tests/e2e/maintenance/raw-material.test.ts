@@ -37,6 +37,7 @@ import {
   getMockPartsShowingMaterials,
 } from "@/tests/workflows/material";
 import type { TDeletedMaterials } from "@/tests/workflows/material";
+import { workflowRejectRenameToTakenName } from "@/tests/workflows/unique-name";
 import { ToastType } from "@/types";
 import type { BaseRawMaterial } from "@/types/raw-material";
 
@@ -100,6 +101,20 @@ test(
         await dialogCreateEditRawMaterial.getByTestId("button-close").click();
         await expect(dialogCreateEditRawMaterial).not.toBeVisible();
       }
+
+      await workflowRejectRenameToTakenName({
+        page,
+        items: activeRawMaterials,
+        form: dialogCreateEditRawMaterial,
+        openEdit: async (rawMaterial) =>
+          (await findTableRowByText(tableRawMaterial, rawMaterial.name)).getByTestId("button-edit").click(),
+        closeEdit: async () => {
+          await dialogCreateEditRawMaterial.getByTestId("button-close").click();
+          await expect(dialogCreateEditRawMaterial).not.toBeVisible();
+        },
+        getName: async (id) => (await db.query.dbTableRawMaterial.findFirst({ where: { id } }))?.name,
+        errorMessage: "Existe una Materia Prima con el mismo nombre",
+      });
     });
 
     await test.step("edit every Materia prima", async () => {

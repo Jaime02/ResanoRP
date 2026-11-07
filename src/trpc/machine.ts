@@ -29,7 +29,6 @@ const uniqueConstraints = [
 
 export default router({
   create: adminProcedure.input(createMachineSchema).mutation(async ({ ctx, input }) =>
-    // TODO maquina con el mismo nombre
     ctx.db.transaction(async (tx) => {
       try {
         const txid = await generateTxId(tx);

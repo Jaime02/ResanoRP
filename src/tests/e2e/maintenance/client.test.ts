@@ -73,6 +73,7 @@ import {
   workflowDeletedFilterAndRestore,
   workflowRestoreTaken,
 } from "@/tests/workflows/deleted-filter";
+import { workflowRejectRenameToTakenName } from "@/tests/workflows/unique-name";
 import { ToastType } from "@/types";
 import type { BaseClient } from "@/types/client";
 
@@ -770,6 +771,17 @@ test(
       await dialogCreateClient.getByTestId("button-close").click();
       await expect(dialogCreateClient).not.toBeVisible();
     }
+
+    await workflowRejectRenameToTakenName({
+      page,
+      items: activeClients,
+      form: formClient,
+      openEdit: async (client) => {
+        await page.goto(`/client/${client.id}`);
+      },
+      getName: async (id) => (await getClientById(id))?.name,
+      errorMessage: "Existe un Cliente con el mismo nombre",
+    });
 
     for (const client of activeClients) {
       // Deleting a Cliente frees its name

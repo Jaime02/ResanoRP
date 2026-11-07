@@ -215,124 +215,125 @@ for (const { userMode, machineId, allowedPaths, blockedPaths } of [
     userMode: UserMode.Machine,
   })),
 ]) {
-  test(`as ${userMode}${machineId === undefined ? "" : ` ${machineId}`}, only open its own pages`, async ({
-    page,
-    db,
-  }) => {
-    await setUserMode(page, userMode, machineId);
+  test(
+    `as ${userMode}${machineId === undefined ? "" : ` ${machineId}`}, only open its own pages`,
+    { annotation: userMode === UserMode.Admin ? [] : TestAnnotations.NonEmptyErrorsLogFile },
+    async ({ page, db }) => {
+      await setUserMode(page, userMode, machineId);
 
-    for (const path of blockedPaths) {
-      await page.goto(path);
-      await expect(page, path).toHaveURL((url) => url.pathname === "/");
-    }
-    for (const path of allowedPaths) {
-      await page.goto(path);
-      await expect(page, path).toHaveURL((url) => url.pathname === path);
-    }
-    for (const sellOrder of mockSellOrders) {
-      await assertSellOrderPage(page, sellOrder.id, userMode);
-    }
-    // Hiding the button is not enough, the file URL must be refused too. The Administrador download is covered in sell-order.test
-    if (userMode !== UserMode.Admin) {
-      const sellOrderWithFile = mockSellOrders.find((sellOrder) => sellOrder.fileUploadedAt !== null)!;
-      const fileResponse = await page.goto(`/api/files/sell-order/${sellOrderWithFile.id}`);
-      expect(fileResponse?.status()).toBe(403);
-    }
+      for (const path of blockedPaths) {
+        await page.goto(path);
+        await expect(page, path).toHaveURL((url) => url.pathname === "/");
+      }
+      for (const path of allowedPaths) {
+        await page.goto(path);
+        await expect(page, path).toHaveURL((url) => url.pathname === path);
+      }
+      for (const sellOrder of mockSellOrders) {
+        await assertSellOrderPage(page, sellOrder.id, userMode);
+      }
+      // Hiding the button is not enough, the file URL must be refused too. The Administrador download is covered in sell-order.test
+      if (userMode !== UserMode.Admin) {
+        const sellOrderWithFile = mockSellOrders.find((sellOrder) => sellOrder.fileUploadedAt !== null)!;
+        const fileResponse = await page.goto(`/api/files/sell-order/${sellOrderWithFile.id}`);
+        expect(fileResponse?.status()).toBe(403);
+      }
 
-    if (machineId !== undefined) {
-      // A Máquina only looks up its own production history, even when the URL asks for every Máquina
-      const tableMachineProductionHistory = page.getByTestId("table-machine-production-history");
-      const machineProductions = mockPartProduction.filter((production) => production.machineId === machineId);
-      await page.goto(
-        `/production-history?${new URLSearchParams({
-          "table-machine-production-history": JSON.stringify({ filters: [{ id: "machineId", value: null }] }),
-        })}`,
-      );
-      await assertTableRowCount(tableMachineProductionHistory, machineProductions.length);
-      await expect(tableMachineProductionHistory.getByRole("columnheader", { name: REFERENCE_LABEL })).toBeVisible();
-      await expect(tableMachineProductionHistory.getByRole("columnheader", { name: MACHINE_LABEL })).toHaveCount(0);
+      if (machineId !== undefined) {
+        // A Máquina only looks up its own production history, even when the URL asks for every Máquina
+        const tableMachineProductionHistory = page.getByTestId("table-machine-production-history");
+        const machineProductions = mockPartProduction.filter((production) => production.machineId === machineId);
+        await page.goto(
+          `/production-history?${new URLSearchParams({
+            "table-machine-production-history": JSON.stringify({ filters: [{ id: "machineId", value: null }] }),
+          })}`,
+        );
+        await assertTableRowCount(tableMachineProductionHistory, machineProductions.length);
+        await expect(tableMachineProductionHistory.getByRole("columnheader", { name: REFERENCE_LABEL })).toBeVisible();
+        await expect(tableMachineProductionHistory.getByRole("columnheader", { name: MACHINE_LABEL })).toHaveCount(0);
 
-      for (const production of machineProductions) {
-        const rowProduction = getTableRowByTestId(tableMachineProductionHistory, production.id);
-        const productionOrder = mockProductionOrders.find(({ id }) => id === production.productionOrderId)!;
-        if (productionOrder.sellOrderLineId === null) {
-          // Without a Línea there is no Referencia of a Cliente, so it lists every Referencia of the Artículo
-          await expect(rowProduction.getByRole("link", { name: PART_LABEL, exact: true })).toBeVisible();
-          await expect(rowProduction.getByTestId("tooltip-part-references")).toBeVisible({
-            visible: mockPartReferences.some((partReference) => partReference.partId === productionOrder.partId),
-          });
-          // Only the Artículo and the Orden de producción, as there is no Pedido nor Cliente
-          await expect(rowProduction.getByRole("link")).toHaveCount(2);
-        } else {
-          const sellOrderLine = getMockSellOrderLineById(productionOrder.sellOrderLineId)!;
-          const sellOrder = getMockSellOrderById(sellOrderLine.sellOrderId)!;
-          await expect(
-            rowProduction.getByRole("link", {
-              name: getMockPartReferenceById(sellOrderLine.partReferenceId)?.reference ?? PART_LABEL,
-              exact: true,
-            }),
-          ).toBeVisible();
-          await expect(
-            rowProduction.getByRole("link", { name: getSellOrderReference(sellOrderLine.id), exact: true }),
-          ).toBeVisible();
-          // A Máquina can not open the Cliente, so its name is not a link
-          await expect(
-            rowProduction.getByText(getMockClientById(sellOrder.clientId)!.name, { exact: true }),
-          ).toBeVisible();
-          await expect(
-            rowProduction.getByRole("link", { name: getMockClientById(sellOrder.clientId)!.name }),
-          ).toHaveCount(0);
+        for (const production of machineProductions) {
+          const rowProduction = getTableRowByTestId(tableMachineProductionHistory, production.id);
+          const productionOrder = mockProductionOrders.find(({ id }) => id === production.productionOrderId)!;
+          if (productionOrder.sellOrderLineId === null) {
+            // Without a Línea there is no Referencia of a Cliente, so it lists every Referencia of the Artículo
+            await expect(rowProduction.getByRole("link", { name: PART_LABEL, exact: true })).toBeVisible();
+            await expect(rowProduction.getByTestId("tooltip-part-references")).toBeVisible({
+              visible: mockPartReferences.some((partReference) => partReference.partId === productionOrder.partId),
+            });
+            // Only the Artículo and the Orden de producción, as there is no Pedido nor Cliente
+            await expect(rowProduction.getByRole("link")).toHaveCount(2);
+          } else {
+            const sellOrderLine = getMockSellOrderLineById(productionOrder.sellOrderLineId)!;
+            const sellOrder = getMockSellOrderById(sellOrderLine.sellOrderId)!;
+            await expect(
+              rowProduction.getByRole("link", {
+                name: getMockPartReferenceById(sellOrderLine.partReferenceId)?.reference ?? PART_LABEL,
+                exact: true,
+              }),
+            ).toBeVisible();
+            await expect(
+              rowProduction.getByRole("link", { name: getSellOrderReference(sellOrderLine.id), exact: true }),
+            ).toBeVisible();
+            // A Máquina can not open the Cliente, so its name is not a link
+            await expect(
+              rowProduction.getByText(getMockClientById(sellOrder.clientId)!.name, { exact: true }),
+            ).toBeVisible();
+            await expect(
+              rowProduction.getByRole("link", { name: getMockClientById(sellOrder.clientId)!.name }),
+            ).toHaveCount(0);
+          }
         }
       }
-    }
 
-    // The pages every user mode opens link to the Pedido de venta
-    for (const deliveryNoteId of new Set(sellOrderDeliveryNoteLines.map((line) => line.deliveryNoteId))) {
-      await page.goto(`/delivery-note/${deliveryNoteId}`);
-      for (const deliveryNoteLine of sellOrderDeliveryNoteLines.filter(
-        (line) => line.deliveryNoteId === deliveryNoteId,
-      )) {
-        const sellOrderReference = getSellOrderReference(deliveryNoteLine.sellOrderLineId!);
-        const rowDeliveryNoteLine = getTableRowByTestId(
-          page.getByTestId("table-delivery-note-line"),
-          deliveryNoteLine.id,
-        );
-        await expect(rowDeliveryNoteLine).toContainText(sellOrderReference);
-        await expect(rowDeliveryNoteLine.getByRole("link", { name: sellOrderReference })).toHaveCount(1);
+      // The pages every user mode opens link to the Pedido de venta
+      for (const deliveryNoteId of new Set(sellOrderDeliveryNoteLines.map((line) => line.deliveryNoteId))) {
+        await page.goto(`/delivery-note/${deliveryNoteId}`);
+        for (const deliveryNoteLine of sellOrderDeliveryNoteLines.filter(
+          (line) => line.deliveryNoteId === deliveryNoteId,
+        )) {
+          const sellOrderReference = getSellOrderReference(deliveryNoteLine.sellOrderLineId!);
+          const rowDeliveryNoteLine = getTableRowByTestId(
+            page.getByTestId("table-delivery-note-line"),
+            deliveryNoteLine.id,
+          );
+          await expect(rowDeliveryNoteLine).toContainText(sellOrderReference);
+          await expect(rowDeliveryNoteLine.getByRole("link", { name: sellOrderReference })).toHaveCount(1);
+        }
       }
-    }
 
-    // Every user mode looks the Albaranes up, but a Máquina cannot create them
-    const canCreateDeliveryNotes = userMode !== UserMode.Machine;
-    await page.goto("/");
-    await expect(page.getByRole("link", { name: TREATMENT_LABEL, exact: true })).toBeVisible();
-    await expect(page.getByRole("link", { name: DELIVERY_NOTES_LABEL, exact: true })).toBeVisible();
-    await expect(page.getByRole("link", { name: SERVE_PARTS_LABEL })).toBeVisible({
-      visible: canCreateDeliveryNotes,
-    });
+      // Every user mode looks the Albaranes up, but a Máquina cannot create them
+      const canCreateDeliveryNotes = userMode !== UserMode.Machine;
+      await page.goto("/");
+      await expect(page.getByRole("link", { name: TREATMENT_LABEL, exact: true })).toBeVisible();
+      await expect(page.getByRole("link", { name: DELIVERY_NOTES_LABEL, exact: true })).toBeVisible();
+      await expect(page.getByRole("link", { name: SERVE_PARTS_LABEL })).toBeVisible({
+        visible: canCreateDeliveryNotes,
+      });
 
-    await page.goto("/delivery-note");
-    for (const deliveryNote of mockDeliveryNotes) {
-      await expect(getTableRowByTestId(page.getByTestId("table-delivery-note"), deliveryNote.id)).toBeVisible();
-    }
-    await expect(page.getByRole("link", { name: DELIVERY_NOTE_CREATE_TITLE })).toBeVisible({
-      visible: canCreateDeliveryNotes,
-    });
+      await page.goto("/delivery-note");
+      for (const deliveryNote of mockDeliveryNotes) {
+        await expect(getTableRowByTestId(page.getByTestId("table-delivery-note"), deliveryNote.id)).toBeVisible();
+      }
+      await expect(page.getByRole("link", { name: DELIVERY_NOTE_CREATE_TITLE })).toBeVisible({
+        visible: canCreateDeliveryNotes,
+      });
 
-    await page.goto("/delivery-note?createDeliveryNote=true");
-    await expect(page.getByTestId("dialog-create-edit-delivery-note")).toBeVisible({
-      visible: canCreateDeliveryNotes,
-    });
+      await page.goto("/delivery-note?createDeliveryNote=true");
+      await expect(page.getByTestId("dialog-create-edit-delivery-note")).toBeVisible({
+        visible: canCreateDeliveryNotes,
+      });
 
-    // Last, as deleting the Cliente changes the pages of its Pedidos de venta
-    const clientDeletedSellOrder = mockSellOrders.find((sellOrder) => sellOrder.deletedAt === null)!;
-    await db
-      .update(dbTableClient)
-      .set({ deletedAt: MOCK_INITIAL_DATE })
-      .where(eq(dbTableClient.id, clientDeletedSellOrder.clientId));
-    await assertSellOrderPage(page, clientDeletedSellOrder.id, userMode);
-    await expect(page.getByTestId("badge-sell-order-status")).toContainText(SELL_ORDER_STATUS_CLIENT_DELETED_LABEL);
-  });
+      // Last, as deleting the Cliente changes the pages of its Pedidos de venta
+      const clientDeletedSellOrder = mockSellOrders.find((sellOrder) => sellOrder.deletedAt === null)!;
+      await db
+        .update(dbTableClient)
+        .set({ deletedAt: MOCK_INITIAL_DATE })
+        .where(eq(dbTableClient.id, clientDeletedSellOrder.clientId));
+      await assertSellOrderPage(page, clientDeletedSellOrder.id, userMode);
+      await expect(page.getByTestId("badge-sell-order-status")).toContainText(SELL_ORDER_STATUS_CLIENT_DELETED_LABEL);
+    },
+  );
 }
 
 test(

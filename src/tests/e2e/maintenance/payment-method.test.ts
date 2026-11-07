@@ -23,6 +23,7 @@ import {
   workflowDeletedFilterAndRestore,
   workflowRestoreTaken,
 } from "@/tests/workflows/deleted-filter";
+import { workflowRejectRenameToTakenName } from "@/tests/workflows/unique-name";
 import { ToastType } from "@/types";
 import type { BaseClient } from "@/types/client";
 
@@ -140,6 +141,20 @@ test(
         await dialogCreateEditPaymentMethod.getByTestId("button-close").click();
         await expect(dialogCreateEditPaymentMethod).not.toBeVisible();
       }
+
+      await workflowRejectRenameToTakenName({
+        page,
+        items: activePaymentMethods,
+        form: dialogCreateEditPaymentMethod,
+        openEdit: async (paymentMethod) =>
+          (await findTableRowByText(tablePaymentMethod, paymentMethod.name)).getByTestId("button-edit").click(),
+        closeEdit: async () => {
+          await dialogCreateEditPaymentMethod.getByTestId("button-close").click();
+          await expect(dialogCreateEditPaymentMethod).not.toBeVisible();
+        },
+        getName: async (id) => (await db.query.dbTablePaymentMethod.findFirst({ where: { id } }))?.name,
+        errorMessage: "Existe una Forma de pago con el mismo nombre",
+      });
     });
 
     await test.step("deleting every Forma de pago frees its name and clears it as the default of its Clientes, but keeps it where it was used", async () => {

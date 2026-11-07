@@ -23,6 +23,7 @@ import {
   workflowDeletedFilterAndRestore,
   workflowRestoreTaken,
 } from "@/tests/workflows/deleted-filter";
+import { workflowRejectRenameToTakenName } from "@/tests/workflows/unique-name";
 import { ToastType } from "@/types";
 import type { BasePart } from "@/types/part";
 
@@ -63,6 +64,20 @@ test("manage the Tratamientos", { annotation: TestAnnotations.NonEmptyErrorsLogF
     await expect(getFormInputByLabel(dialogCreateEditCoating, NAME_LABEL)).toHaveValue(activeCoatings.at(-1)!.name);
     await dialogCreateEditCoating.getByTestId("button-close").click();
     await expect(dialogCreateEditCoating).not.toBeVisible();
+
+    await workflowRejectRenameToTakenName({
+      page,
+      items: activeCoatings,
+      form: dialogCreateEditCoating,
+      openEdit: async (coating) =>
+        (await findTableRowByText(tableCoating, coating.name)).getByTestId("button-edit").click(),
+      closeEdit: async () => {
+        await dialogCreateEditCoating.getByTestId("button-close").click();
+        await expect(dialogCreateEditCoating).not.toBeVisible();
+      },
+      getName: async (id) => (await getCoatingById(id))?.name,
+      errorMessage: "Existe un Tratamiento con el mismo nombre",
+    });
   });
 
   await test.step("deleting every Tratamiento frees its name and removes it from its Artículos", async () => {

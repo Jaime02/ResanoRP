@@ -17,7 +17,11 @@ export const Route = createFileRoute("/api/files/accounting-export/$fileName")({
     handlers: {
       GET: async ({ params }: { params: { fileName: string } }) => {
         if (!isAdminSession(getCookie(ADMIN_SESSION_COOKIE_NAME))) {
-          return new Response("Esta acción solo la puede hacer el Administrador", { status: 403 });
+          // Without a type, the browser sniffs the accented text as binary and downloads it
+          return new Response("Esta acción solo la puede hacer el Administrador", {
+            headers: { "Content-Type": "text/plain; charset=utf-8" },
+            status: 403,
+          });
         }
 
         let fileName: string;

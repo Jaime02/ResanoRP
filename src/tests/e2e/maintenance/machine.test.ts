@@ -41,6 +41,7 @@ import {
   workflowRestoreTaken,
 } from "@/tests/workflows/deleted-filter";
 import { workflowCreateMachine, workflowDeleteMachine, workflowEditMachine } from "@/tests/workflows/machine";
+import { workflowRejectRenameToTakenName } from "@/tests/workflows/unique-name";
 import { ToastType } from "@/types";
 import { MACHINE_PRODUCTION_HISTORY_PAGE_SIZE } from "@/types/machine";
 import type { BaseMachineProductionOrderQueue } from "@/types/machine-production-order-queue";
@@ -180,6 +181,17 @@ test("manage the machines", { annotation: TestAnnotations.NonEmptyErrorsLogFile 
       await dialogCreateMachine.getByTestId("button-close").click();
       await expect(dialogCreateMachine).not.toBeVisible();
     }
+
+    await workflowRejectRenameToTakenName({
+      page,
+      items: machines,
+      form: formMachine,
+      openEdit: async (machine) => {
+        await page.goto(`/machine/${machine.id}`);
+      },
+      getName: async (id) => (await getMachineById(id))?.name,
+      errorMessage: "Existe una Máquina con el mismo nombre",
+    });
 
     for (const machine of machines) {
       // Deleting a Máquina frees its name
