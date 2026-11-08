@@ -1,5 +1,6 @@
 import { dbGetProductionOrderStatus, getProductionOrders } from "@/db/functions/production-order";
 import { getSellOrderLineStatus } from "@/db/functions/sell-order-line";
+import { PART_IN_ACTIVE_SETS_ERROR_MESSAGE } from "@/messages/part";
 import { ProductionOrderStatus } from "@/schemas/production-order";
 import type { TProductionOrderFilters } from "@/schemas/production-order";
 import { SellOrderLineStatus } from "@/schemas/sell-order-line";
@@ -7,6 +8,7 @@ import {
   mockClients,
   mockDeliveryNoteLines,
   mockDeliveryNotes,
+  mockPartComponents,
   mockPartReferences,
   mockParts,
   mockPartProduction,
@@ -51,6 +53,28 @@ export function getMockClientParts({
       .map((pr) => pr.partId),
   );
   return mockParts.filter((part) => partIds.has(part.id) && (includeDeleted || !part.deletedAt));
+}
+
+export function getMockPartComponentsOfPart(partId: number) {
+  return mockPartComponents.filter((partComponent) => partComponent.parentPartId === partId);
+}
+
+export function getMockActivePartSetsOfPart(partId: number): Array<BasePart> {
+  return mockParts.filter(
+    (part) =>
+      part.deletedAt === null &&
+      mockPartComponents.some(
+        (partComponent) => partComponent.parentPartId === part.id && partComponent.componentPartId === partId,
+      ),
+  );
+}
+
+export function getPartInActiveSetsErrorMessage(partSets: Array<BasePart>) {
+  return `${PART_IN_ACTIVE_SETS_ERROR_MESSAGE} ${partSets
+    .map((partSet) => partSet.description)
+    .sort()
+    .map((description) => `"${description}"`)
+    .join(", ")}`;
 }
 
 export function getMockSellOrderLines(sellOrderId: number): Array<BaseSellOrderLine> {

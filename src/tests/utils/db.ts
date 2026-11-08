@@ -28,6 +28,7 @@ export async function seedDatabase(db: TDatabase) {
       await tx.insert(schema.dbTableMaterial).values(removeRowId(mockData.mockMaterials));
       await tx.insert(schema.dbTableBlueprint).values(removeRowId(mockData.mockBlueprints));
       await tx.insert(schema.dbTablePartMaterial).values(mockData.mockPartMaterials);
+      await tx.insert(schema.dbTablePartComponent).values(mockData.mockPartComponents);
       await tx.insert(schema.dbTablePartPriceEstimator).values(mockData.mockPartPriceEstimators);
       await tx.insert(schema.dbTablePartReference).values(removeRowId(mockData.mockPartReferences));
       await tx.insert(schema.dbTablePaymentMethod).values(removeRowId(mockData.mockPaymentMethods));

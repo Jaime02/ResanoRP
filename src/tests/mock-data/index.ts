@@ -11,6 +11,7 @@ import type { BaseMachine } from "@/types/machine";
 import type { BaseMachineProductionOrderQueue } from "@/types/machine-production-order-queue";
 import type { BaseMaterial } from "@/types/material";
 import type { BasePart } from "@/types/part";
+import type { BasePartComponent } from "@/types/part-component";
 import type { BasePartFeature } from "@/types/part-feature";
 import type { BasePartMaterial } from "@/types/part-material";
 import type { BasePartPrice } from "@/types/part-price";
@@ -341,6 +342,17 @@ export const mockPartMaterials: Array<BasePartMaterial> = [
     materialId: 2,
     partId: 4,
   },
+];
+
+// 1 > 2 > 4 and 1 > 3 > 4 share the leaf 4, the active set 3 holds the deleted 5, and 6 is only held by the
+// deleted set 5, so it is the only component that can be deleted
+export const mockPartComponents: Array<BasePartComponent> = [
+  { componentPartId: 2, parentPartId: 1, quantity: 2 },
+  { componentPartId: 3, parentPartId: 1, quantity: 1 },
+  { componentPartId: 4, parentPartId: 2, quantity: 4 },
+  { componentPartId: 4, parentPartId: 3, quantity: 1 },
+  { componentPartId: 5, parentPartId: 3, quantity: 3 },
+  { componentPartId: 6, parentPartId: 5, quantity: 1 },
 ];
 
 export const mockPartFeatures: Array<BasePartFeature> = [

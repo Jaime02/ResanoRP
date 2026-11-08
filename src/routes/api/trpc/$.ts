@@ -18,6 +18,7 @@ import machineRouter from "@/trpc/machine";
 import machineProductionOrderQueueRouter from "@/trpc/machine-production-order-queue";
 import materialRouter from "@/trpc/material";
 import partRouter from "@/trpc/part";
+import partComponentRouter from "@/trpc/part-component";
 import partFeatureRouter from "@/trpc/part-feature";
 import partMaterialRouter from "@/trpc/part-material";
 import partPriceRouter from "@/trpc/part-price";
@@ -46,6 +47,7 @@ const appRouter = router({
   machineProductionOrderQueue: machineProductionOrderQueueRouter,
   material: materialRouter,
   part: partRouter,
+  partComponent: partComponentRouter,
   partFeature: partFeatureRouter,
   partPrice: partPriceRouter,
   partPriceEstimator: partPriceEstimatorRouter,

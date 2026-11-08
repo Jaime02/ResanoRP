@@ -21,6 +21,7 @@ import sellOrderCollection from "@/collections/sell-order";
 import sellOrderLineCollection from "@/collections/sell-order-line";
 import shapeCollection from "@/collections/shape";
 import { getAccentInsensitiveLikePattern, includesIgnoringAccents } from "@/lib/utils";
+import { partComponentsQuery } from "@/queries/part-component";
 import { buildStockLedger } from "@/queries/part-stock";
 import type { TSort } from "@/schemas";
 import type { TPartFilters, TTablePartState } from "@/schemas/part";
@@ -208,6 +209,7 @@ function partSelectProjection({
           shape,
         })),
     ),
+    components: materialize(partComponentsQuery(q, part.id)),
     // Raw transaction streams for the stock ledger — merged and reduced to a running balance
     // in JS (see buildStockLedger) after the query, since the balance is imperative.
     // Nested via the table that holds `partId`: an include only narrows to the page's parts
@@ -312,6 +314,7 @@ export type TPartPriceForm = TPartForm["prices"][number];
 export type TPartFormPartReference = TPartForm["references"][number];
 export type TPartFormBlueprint = TPartForm["blueprints"][number];
 export type TPartFormPartFeature = TPartForm["features"][number];
+export type TPartFormPartComponent = TPartForm["components"][number];
 
 // Shared with the loaders that preload the table on the server, which only match queries built the same way
 export function partTableQueries({

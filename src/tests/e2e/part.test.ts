@@ -7,17 +7,21 @@ import { eq, inArray } from "drizzle-orm";
 
 import { AppContextStorage, UserMode } from "@/contexts/app-context";
 import { getBlueprintById, getBlueprintsByPartId } from "@/db/functions/blueprint";
-import { getPartById } from "@/db/functions/part";
+import { getPartById, getPartComponentsOfPart } from "@/db/functions/part";
 import { getPartPriceById, getPartPricesByPartId } from "@/db/functions/part-price";
 import { getPartReferenceById, getPartReferencesByPartId } from "@/db/functions/part-reference";
 import { getLatestPartStockTransactionByPartId } from "@/db/functions/part-stock";
 import { dbGetProductionOrderStatus, getProductionOrderById } from "@/db/functions/production-order";
 import {
+  PART_COMPONENT_CONSTRAINT,
+  PART_COMPONENT_NOT_SELF_CONSTRAINT,
+  PART_COMPONENT_QUANTITY_CONSTRAINT,
   PART_FEATURE_CONSTRAINT,
   PART_REFERENCE_CONSTRAINT,
   dbTableClient,
   dbTableMaterial,
   dbTablePart,
+  dbTablePartComponent,
   dbTablePartFeature,
   dbTablePartMaterial,
   dbTablePartPrice,
@@ -48,6 +52,10 @@ import {
   NO_COMPATIBLE_MATERIALS_MESSAGE,
   PART_SELECT_SHAPE_AND_SIZE_MESSAGE,
   CLIENT_REFERENCE_DESCRIPTION_LABEL,
+  PART_COMPONENT_CYCLE_ERROR_MESSAGE,
+  PART_COMPONENT_DUPLICATED_ERROR_MESSAGE,
+  PART_COMPONENT_EDIT_VALIDATION_ERROR_MESSAGE,
+  PART_COMPONENT_SELF_ERROR_MESSAGE,
   PART_FEATURE_LABEL,
   PART_REFERENCE_DELETED_TOOLTIP_MESSAGE,
   PART_STOCK_UPDATE_QUANTITY_LABEL,
@@ -66,6 +74,7 @@ import {
   mockDeliveryNoteLines,
   mockMachines,
   mockMaterials,
+  mockPartComponents,
   mockPartFeatures,
   mockPartMaterials,
   mockPartPrices,
@@ -91,6 +100,7 @@ import {
 } from "@/tests/utils/components/combobox";
 import { setInputFiles } from "@/tests/utils/components/file-input";
 import { InputElementType, assertFormLoaded, getFormInputByLabel } from "@/tests/utils/components/form";
+import { openPartPicker } from "@/tests/utils/components/picker";
 import { getPopoverContent } from "@/tests/utils/components/popover";
 import {
   assertTableRowCount,
@@ -103,17 +113,27 @@ import {
   getTableRows,
 } from "@/tests/utils/components/table";
 import { clearToasts, expectSingleToast, getToastType } from "@/tests/utils/components/toast";
-import { expectUniqueViolation } from "@/tests/utils/db";
+import { expectCheckViolation, expectUniqueViolation } from "@/tests/utils/db";
 import { TestAnnotations, setUserMode, test } from "@/tests/utils/fixtures";
 import {
   getMockClientParts,
+  getMockActivePartSetsOfPart,
   getMockDeliveryNoteById,
   getMockPartReferences,
+  getMockPartComponentsOfPart,
+  getPartInActiveSetsErrorMessage,
   getMockSellOrderById,
 } from "@/tests/utils/mock-data-utils";
 import { workflowOpenEditDeliveryNote } from "@/tests/workflows/delivery-note";
 import { getMockPartMaterials } from "@/tests/workflows/material";
-import { workflowDeletePart } from "@/tests/workflows/part";
+import {
+  getPartComponentQuantity,
+  gotoPartComponents,
+  workflowCreatePartComponent,
+  workflowDeletePart,
+  workflowDeletePartComponent,
+  workflowRemovePartFromActiveSets,
+} from "@/tests/workflows/part";
 import { gotoProductionOrdersWithStatuses } from "@/tests/workflows/production";
 import { workflowOpenSellOrderLinePartPicker } from "@/tests/workflows/sell-order";
 import { ToastType } from "@/types";
@@ -1144,6 +1164,18 @@ test(
       activeParts.some((part) => mockBlueprints.filter((blueprint) => blueprint.partId === part.id).length > 1),
       "Wrong test set up: Some Artículo should have several Planos",
     ).toBe(true);
+    expect(
+      activeParts.some((part) => getMockActivePartSetsOfPart(part.id).length > 1),
+      "Wrong test set up: Some Artículo should be a component of several active Conjuntos",
+    ).toBe(true);
+    expect(
+      activeParts.some(
+        (part) =>
+          getMockActivePartSetsOfPart(part.id).length === 0 &&
+          mockPartComponents.some((partComponent) => partComponent.componentPartId === part.id),
+      ),
+      "Wrong test set up: Some Artículo should only be a component of deleted Conjuntos",
+    ).toBe(true);
 
     for (const part of activeParts) {
       const tableRowPart = getTableRowByTestId(tablePart, part.id);
@@ -1154,6 +1186,13 @@ test(
         ),
       );
       expect(blueprintPaths).not.toContain(null);
+
+      // A component of an active Conjunto cannot be deleted until it is taken out of it
+      const partSets = getMockActivePartSetsOfPart(part.id);
+      if (partSets.length > 0) {
+        await workflowDeletePart(page, part.id, getPartInActiveSetsErrorMessage(partSets));
+        await workflowRemovePartFromActiveSets(page, part.id);
+      }
 
       await workflowDeletePart(page, part.id);
       await assertTableRowCount(tablePart, activeParts.length - 1);
@@ -1216,6 +1255,7 @@ for (const part of activeParts) {
         getMockDeliveryNoteById(line.deliveryNoteId)?.invoiceId === null,
     );
 
+    await workflowRemovePartFromActiveSets(page, part.id);
     await workflowDeletePart(page, part.id);
 
     // Its Órdenes de producción keep going
@@ -1984,6 +2024,15 @@ for (const userMode of [UserMode.Admin, UserMode.User]) {
       await expectShown(tablePartMaterials.getByTestId("button-delete"), isAdmin && partMaterialsCount > 0);
       await expectShown(tablePartMaterials.getByRole("columnheader", { name: ACTIONS_LABEL }), isAdmin);
       await expectShown(tableCompatiblePartMaterials, isAdmin);
+
+      const partComponentsCount = getMockPartComponentsOfPart(part.id).length;
+      const tablePartComponents = await gotoPartComponents(page, part.id);
+      await assertTableRowCount(tablePartComponents, partComponentsCount);
+      await expectShown(tablePartComponents.getByTestId("button-create-part-component"), isAdmin);
+      await expectShown(tablePartComponents.getByTestId("button-delete"), isAdmin && partComponentsCount > 0);
+      await expectShown(tablePartComponents.getByTestId("editable-cell-input"), isAdmin && partComponentsCount > 0);
+      // Anyone can look at the blueprints of the components
+      await expectShown(tablePartComponents.getByTestId("button-open-blueprints"), partComponentsCount > 0);
     }
 
     for (const deletedPart of deletedParts) {
@@ -2117,4 +2166,297 @@ test("create a part with its blueprint", { annotation: [TestAnnotations.ResetBlu
 
   await page.goto(`/part/${partId}?tab=blueprints`);
   await expect(formPart.getByTestId(`card-blueprint-${blueprint.id}`)).toContainText(blueprintFileName);
+});
+
+test("manage multi-level part sets", async ({ page, db }) => {
+  const getMockPart = (partId: number) => mockParts.find((part) => part.id === partId)!;
+  const isMockPartSet = (partId: number) => getMockPartComponentsOfPart(partId).length > 0;
+  const partComponents = mockPartComponents.map((partComponent) => ({ ...partComponent }));
+  const getMockPartBlueprints = (partId: number) => mockBlueprints.filter((blueprint) => blueprint.partId === partId);
+  const getExpectedTree = (partId: number): Array<{ label: string; part: BasePart }> =>
+    partComponents
+      .filter((partComponent) => partComponent.parentPartId === partId)
+      .sort((a, b) =>
+        getMockPart(a.componentPartId).description.localeCompare(getMockPart(b.componentPartId).description),
+      )
+      .flatMap((partComponent) => [
+        {
+          label: `${partComponent.quantity} × ${getMockPart(partComponent.componentPartId).description}`,
+          part: getMockPart(partComponent.componentPartId),
+        },
+        ...getExpectedTree(partComponent.componentPartId),
+      ]);
+
+  // The top set holds two sets that share a leaf, and one of them holds a deleted set with its own component
+  const setPart = activeParts.find(
+    (part) =>
+      getMockPartComponentsOfPart(part.id).filter(({ componentPartId }) => isMockPartSet(componentPartId)).length > 1,
+  )!;
+  const [subSetPart] = getMockPartComponentsOfPart(setPart.id).map(({ componentPartId }) =>
+    getMockPart(componentPartId),
+  );
+  const leafPart = getMockPart(getMockPartComponentsOfPart(subSetPart.id)[0].componentPartId);
+  const deletedSetPart = deletedParts.find((part) => isMockPartSet(part.id))!;
+  const deletedSetComponentPart = getMockPart(getMockPartComponentsOfPart(deletedSetPart.id)[0].componentPartId);
+  expect(isMockPartSet(leafPart.id), "Wrong test set up: the leaf of the tree should not be a Conjunto").toBe(false);
+  expect(
+    mockPartComponents.some(
+      ({ componentPartId, parentPartId }) =>
+        getMockPart(componentPartId).deletedAt !== null && getMockPart(parentPartId).deletedAt === null,
+    ),
+    "Wrong test set up: Some active Conjunto should hold a deleted Artículo",
+  ).toBe(true);
+  expect(
+    activeParts.some(
+      (part) => mockPartComponents.filter(({ componentPartId }) => componentPartId === part.id).length > 1,
+    ),
+    "Wrong test set up: Some Artículo should be shared by several Conjuntos",
+  ).toBe(true);
+
+  const getTooltipPartSet = (partId: number) => getTableRowByTestId(tablePart, partId).getByTestId("tooltip-part-set");
+  const dialogCreatePartComponent = page.getByTestId("dialog-create-part-component");
+
+  async function expectPartSetTooltip(partId: number) {
+    await page.goto("/part");
+    await getTooltipPartSet(partId).hover();
+    const popoverPartSet = getPopoverContent(page);
+    const expectedTree = getExpectedTree(partId);
+    const nodeLabels = popoverPartSet.getByTestId("part-set-node-label");
+    await expect(nodeLabels).toHaveText(expectedTree.map((node) => node.label));
+    // Shared components are listed under each of their sets, not at the top level
+    await expect(popoverPartSet.getByTestId("part-set-tree").first().locator(":scope > li")).toHaveCount(
+      partComponents.filter((partComponent) => partComponent.parentPartId === partId).length,
+    );
+    for (const [index, { part }] of expectedTree.entries()) {
+      const nodeRow = popoverPartSet.getByTestId("part-set-node-row").nth(index);
+      await expect(nodeRow.getByRole("link")).toHaveAttribute("href", `/part/${part.id}`);
+      await (getMockPartBlueprints(part.id).length > 0
+        ? expect(nodeRow.getByTestId("button-part-set-node-blueprints")).toBeEnabled()
+        : expect(nodeRow.getByTestId("button-part-set-node-blueprints")).toBeDisabled());
+      await expect(nodeRow.getByTestId("badge-part-set-node-deleted")).toHaveCount(part.deletedAt !== null ? 1 : 0);
+    }
+    await page.mouse.move(0, 0);
+    await expect(popoverPartSet).toBeHidden();
+  }
+
+  await test.step("every part lists its components, marking the deleted ones", async () => {
+    for (const part of mockParts) {
+      const tablePartComponents = await gotoPartComponents(page, part.id);
+      const components = getMockPartComponentsOfPart(part.id);
+      await assertTableRowCount(tablePartComponents, components.length);
+      if (components.length === 0) {
+        await expect(getTableNoDataRow(tablePartComponents)).toBeVisible();
+      }
+      for (const partComponent of components) {
+        const rowPartComponent = getTableRowByTestId(tablePartComponents, partComponent.componentPartId);
+        await expect(getEditableCellById(rowPartComponent, "quantity")).toHaveValue(String(partComponent.quantity));
+        await expect(rowPartComponent.getByTestId("tooltip-deleted")).toHaveCount(
+          getMockPart(partComponent.componentPartId).deletedAt !== null ? 1 : 0,
+        );
+        await (getMockPartBlueprints(partComponent.componentPartId).length > 0
+          ? expect(rowPartComponent.getByTestId("button-open-blueprints")).toBeEnabled()
+          : expect(rowPartComponent.getByTestId("button-open-blueprints")).toBeDisabled());
+      }
+    }
+
+    const componentWithBlueprints = mockPartComponents.find(
+      ({ componentPartId }) => getMockPartBlueprints(componentPartId).length > 0,
+    )!;
+    const tablePartComponents = await gotoPartComponents(page, componentWithBlueprints.parentPartId);
+    await getTableRowByTestId(tablePartComponents, componentWithBlueprints.componentPartId)
+      .getByTestId("button-open-blueprints")
+      .click();
+    const dialogBlueprints = page.getByTestId("dialog-part-component-blueprints");
+    await expect(dialogBlueprints).toContainText(getMockPart(componentWithBlueprints.componentPartId).description);
+    // The blueprints are stacked, so only one is shown at a time
+    for (const [index, blueprint] of getMockPartBlueprints(componentWithBlueprints.componentPartId).entries()) {
+      if (index > 0) await dialogBlueprints.getByTestId("button-next-file").click();
+      await expect(dialogBlueprints.getByTestId(`card-blueprint-${blueprint.id}`)).toBeVisible();
+    }
+    await page.keyboard.press("Escape");
+    await expect(dialogBlueprints).toBeHidden();
+  });
+
+  await test.step("the parts table marks every set with the tooltip of its full tree", async () => {
+    await page.goto("/part");
+    for (const part of activeParts) {
+      await expect(getTooltipPartSet(part.id)).toHaveCount(isMockPartSet(part.id) ? 1 : 0);
+    }
+    await expectPartSetTooltip(setPart.id);
+  });
+
+  await test.step("the tooltip opens the blueprints of a component without navigating or closing, and links to it", async () => {
+    const nodeWithBlueprints = getExpectedTree(setPart.id).find(
+      ({ part }) => getMockPartBlueprints(part.id).length > 0,
+    )!;
+    const popoverPartSet = getPopoverContent(page);
+    const nodeRow = popoverPartSet
+      .getByTestId("part-set-node-row")
+      .filter({ hasText: nodeWithBlueprints.label })
+      .first();
+    const dialogBlueprints = page.getByTestId("dialog-part-set-blueprints");
+
+    await page.goto("/part");
+    await getTooltipPartSet(setPart.id).hover();
+    await nodeRow.getByTestId("button-part-set-node-blueprints").click();
+    await expect(dialogBlueprints).toBeVisible();
+    await expect(dialogBlueprints).toContainText(nodeWithBlueprints.part.description);
+    // The blueprints are stacked, so only one is shown at a time
+    for (const [index, blueprint] of getMockPartBlueprints(nodeWithBlueprints.part.id).entries()) {
+      if (index > 0) await dialogBlueprints.getByTestId("button-next-file").click();
+      await expect(dialogBlueprints.getByTestId(`card-blueprint-${blueprint.id}`)).toBeVisible();
+    }
+    await expect(popoverPartSet).toBeVisible();
+    await expect(page).toHaveURL("/part");
+
+    // The tooltip stays open after the dialog closes, even with the pointer away from it, until it is dismissed
+    await page.keyboard.press("Escape");
+    await expect(dialogBlueprints).toBeHidden();
+    await page.mouse.move(0, 0);
+    await expect(popoverPartSet).toBeVisible();
+    await expect(page).toHaveURL("/part");
+
+    await nodeRow.getByTestId("button-part-set-node-blueprints").click();
+    await expect(dialogBlueprints).toBeVisible();
+    await dialogBlueprints.getByTestId("button-close").click();
+    await expect(dialogBlueprints).toBeHidden();
+    await expect(popoverPartSet).toBeVisible();
+
+    await page.keyboard.press("Escape");
+    await expect(popoverPartSet).toBeHidden();
+
+    await getTooltipPartSet(setPart.id).hover();
+    await nodeRow.getByTestId("button-link-part-set-node").click();
+    await expect(page).toHaveURL(`/part/${nodeWithBlueprints.part.id}`);
+    await assertFormLoaded(formPart);
+  });
+
+  await test.step("a component needs a part and a positive quantity", async () => {
+    const tablePartComponents = await gotoPartComponents(page, setPart.id);
+    await tablePartComponents.getByTestId("button-create-part-component").click();
+    await expect(dialogCreatePartComponent).toBeVisible();
+    const buttonSubmit = dialogCreatePartComponent.getByTestId("button-submit");
+    const inputQuantity = dialogCreatePartComponent.getByTestId("input-create-part-component-quantity");
+
+    await inputQuantity.pressSequentially("3");
+    await expect(buttonSubmit).toBeDisabled();
+    const { dialogPickerPartContent, tablePickerPart } = await openPartPicker(
+      page,
+      dialogCreatePartComponent.getByTestId("picker-create-part-component"),
+    );
+    // Deleted Artículos cannot be picked as components
+    await expect(getTableRowByTestId(tablePickerPart, deletedSetPart.id)).toHaveCount(0);
+    await getTableRowByTestId(tablePickerPart, leafPart.id).getByTestId("button-success").click();
+    await expect(dialogPickerPartContent).not.toBeVisible();
+    await expect(buttonSubmit).toBeEnabled();
+    await inputQuantity.clear();
+    await expect(buttonSubmit).toBeDisabled();
+    await inputQuantity.pressSequentially("0");
+    await expect(buttonSubmit).toBeDisabled();
+
+    await page.keyboard.press("Escape");
+    await expect(dialogCreatePartComponent).toBeHidden();
+    expect(await getPartComponentQuantity(setPart.id, leafPart.id)).toBeUndefined();
+  });
+
+  await test.step("a component added below the deepest level shows in the tree of every set above it", async () => {
+    const newPartComponent = {
+      componentPartId: deletedSetComponentPart.id,
+      parentPartId: leafPart.id,
+      quantity: 2,
+    };
+    await workflowCreatePartComponent(page, newPartComponent);
+    partComponents.push(newPartComponent);
+
+    await page.goto("/part");
+    await expect(getTooltipPartSet(leafPart.id)).toHaveCount(1);
+    await expectPartSetTooltip(setPart.id);
+  });
+
+  await test.step("a part cannot be added twice, to itself, below its own components or to a deleted set", async () => {
+    const deepestPartId = partComponents.at(-1)!.componentPartId;
+    for (const [partComponent, errorMessage] of [
+      [{ ...partComponents[0], quantity: 5 }, PART_COMPONENT_DUPLICATED_ERROR_MESSAGE],
+      [{ componentPartId: setPart.id, parentPartId: setPart.id, quantity: 1 }, PART_COMPONENT_SELF_ERROR_MESSAGE],
+      [{ componentPartId: setPart.id, parentPartId: subSetPart.id, quantity: 1 }, PART_COMPONENT_CYCLE_ERROR_MESSAGE],
+      [{ componentPartId: setPart.id, parentPartId: deepestPartId, quantity: 1 }, PART_COMPONENT_CYCLE_ERROR_MESSAGE],
+    ] as const) {
+      await workflowCreatePartComponent(page, partComponent, errorMessage);
+    }
+
+    await page.goto(`/part/${deletedSetPart.id}?tab=components&createPartComponent=true`);
+    await assertFormLoaded(formPart);
+    await assertTableRowCount(
+      formPart.getByTestId("table-part-components"),
+      getMockPartComponentsOfPart(deletedSetPart.id).length,
+    );
+    await expect(formPart.getByTestId("button-create-part-component")).toHaveCount(0);
+    await expect(dialogCreatePartComponent).toBeHidden();
+
+    await expectUniqueViolation(
+      db.insert(dbTablePartComponent).values(mockPartComponents[0]),
+      PART_COMPONENT_CONSTRAINT,
+    );
+    await expectCheckViolation(
+      db.insert(dbTablePartComponent).values({ componentPartId: leafPart.id, parentPartId: leafPart.id, quantity: 1 }),
+      PART_COMPONENT_NOT_SELF_CONSTRAINT,
+    );
+    await expectCheckViolation(
+      db.insert(dbTablePartComponent).values({ componentPartId: setPart.id, parentPartId: leafPart.id, quantity: 0 }),
+      PART_COMPONENT_QUANTITY_CONSTRAINT,
+    );
+  });
+
+  await test.step("edit the quantity of a component", async () => {
+    const tablePartComponents = await gotoPartComponents(page, setPart.id);
+    const inputQuantity = getEditableCellById(getTableRowByTestId(tablePartComponents, subSetPart.id), "quantity");
+
+    await inputQuantity.fill("7");
+    await inputQuantity.blur();
+    await expectSingleToast(page);
+    expect(await getPartComponentQuantity(setPart.id, subSetPart.id)).toBe(7);
+
+    await inputQuantity.fill("");
+    await inputQuantity.blur();
+    await expectSingleToast(page, PART_COMPONENT_EDIT_VALIDATION_ERROR_MESSAGE);
+    expect(await getPartComponentQuantity(setPart.id, subSetPart.id)).toBe(7);
+
+    await page.reload();
+    await assertFormLoaded(formPart);
+    await expect(inputQuantity).toHaveValue("7");
+  });
+
+  await test.step("dismissing the removal keeps the component, removing the last one makes it a plain part", async () => {
+    const tablePartComponents = await gotoPartComponents(page, subSetPart.id);
+    await getTableRowByTestId(tablePartComponents, leafPart.id).getByTestId("button-delete").click();
+    const dialogDeleteModel = page.getByTestId("dialog-delete-model-content");
+    await expect(dialogDeleteModel).toBeVisible();
+    await page.keyboard.press("Escape");
+    await expect(dialogDeleteModel).not.toBeVisible();
+    await assertTableRowCount(tablePartComponents, getMockPartComponentsOfPart(subSetPart.id).length);
+
+    for (const partComponent of getMockPartComponentsOfPart(subSetPart.id)) {
+      await workflowDeletePartComponent(page, subSetPart.id, partComponent.componentPartId);
+    }
+    await expect(getTableNoDataRow(tablePartComponents)).toBeVisible();
+
+    await page.goto("/part");
+    await expect(getTooltipPartSet(setPart.id)).toHaveCount(1);
+    await expect(getTooltipPartSet(subSetPart.id)).toHaveCount(0);
+  });
+
+  await test.step("deleting a set keeps its components, and restoring it brings them back", async () => {
+    await workflowDeletePart(page, setPart.id);
+    expect(await getPartComponentsOfPart(setPart.id)).toHaveLength(getMockPartComponentsOfPart(setPart.id).length);
+
+    await page.goto(`/part/${deletedSetPart.id}`);
+    await assertFormLoaded(formPart);
+    await openAndConfirmAlertDialog(page, formPart.getByTestId("button-restore"), "dialog-restore-model-content");
+    await expectSingleToast(page);
+
+    const tablePartComponents = await gotoPartComponents(page, deletedSetPart.id);
+    await assertTableRowCount(tablePartComponents, getMockPartComponentsOfPart(deletedSetPart.id).length);
+    await page.goto("/part");
+    await expect(getTooltipPartSet(deletedSetPart.id)).toHaveCount(1);
+  });
 });

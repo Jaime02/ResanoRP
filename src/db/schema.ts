@@ -438,6 +438,29 @@ export const dbTablePartMaterial = pgTable(
   (table) => [primaryKey({ columns: [table.materialId, table.partId] })],
 );
 
+export const PART_COMPONENT_CONSTRAINT = "part_component_pkey";
+export const PART_COMPONENT_NOT_SELF_CONSTRAINT = "part_component_not_self";
+export const PART_COMPONENT_QUANTITY_CONSTRAINT = "part_component_positive_quantity";
+// A Conjunto is an Artículo with components; cycles are rejected by the tRPC mutation, a CHECK cannot see other rows
+export const dbTablePartComponent = pgTable(
+  "part_component",
+  {
+    componentPartId: integer("componentPartId")
+      .notNull()
+      .references(() => dbTablePart.id),
+    parentPartId: integer("parentPartId")
+      .notNull()
+      .references(() => dbTablePart.id),
+    quantity: integer("quantity").notNull(),
+  },
+  (table) => [
+    primaryKey({ name: PART_COMPONENT_CONSTRAINT, columns: [table.parentPartId, table.componentPartId] }),
+    check(PART_COMPONENT_NOT_SELF_CONSTRAINT, sql`${table.parentPartId} <> ${table.componentPartId}`),
+    check(PART_COMPONENT_QUANTITY_CONSTRAINT, sql`${table.quantity} > 0`),
+    index().on(table.componentPartId),
+  ],
+);
+
 export const dbTableBlueprint = pgTable("blueprint", {
   createdAt: datetimeType("createdAt"),
   fileName: text("fileName").notNull(),

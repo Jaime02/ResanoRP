@@ -6,7 +6,7 @@ import { and, eq, isNotNull } from "drizzle-orm";
 
 import { getCoatingById } from "@/db/functions/coating";
 import { getDeliveryNoteLine } from "@/db/functions/delivery-note-line";
-import { getPartById } from "@/db/functions/part";
+import { getActivePartSetsUsingPart, getPartById } from "@/db/functions/part";
 import { getPartReferenceById } from "@/db/functions/part-reference";
 import { getSellOrderById } from "@/db/functions/sell-order";
 import { getSellOrderLineById } from "@/db/functions/sell-order-line";
@@ -16,6 +16,7 @@ import { removeOnRollback } from "@/files/functions";
 import { printTagPart } from "@/files/part-tag";
 import { formatDate } from "@/lib/formatters";
 import { handleMutationError } from "@/lib/handlers";
+import { PART_IN_ACTIVE_SETS_ERROR_MESSAGE } from "@/messages/part";
 import { requiredIdObjectSchema } from "@/schemas";
 import { printTagPartSchema } from "@/schemas/delivery-note-line";
 import { createPartFormDataSchema, updatePartSchema } from "@/schemas/part";
@@ -89,6 +90,13 @@ export default router({
     ctx.db.transaction(async (tx) => {
       try {
         const txid = await generateTxId(tx);
+        const partSetsUsingPart = await getActivePartSetsUsingPart(input.id, tx);
+        if (partSetsUsingPart.length > 0) {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: `${PART_IN_ACTIVE_SETS_ERROR_MESSAGE} ${partSetsUsingPart.map((partSet) => `"${partSet.description}"`).join(", ")}`,
+          });
+        }
         const deletedPart = (
           await tx.update(dbTablePart).set({ deletedAt: new Date() }).where(eq(dbTablePart.id, input.id)).returning()
         ).at(0);

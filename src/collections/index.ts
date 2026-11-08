@@ -12,6 +12,7 @@ import machineCollection from "./machine";
 import machineProductionOrderQueueCollection from "./machine-production-order-queue";
 import materialCollection from "./material";
 import partCollection from "./part";
+import partComponentCollection from "./part-component";
 import partFeatureCollection from "./part-feature";
 import partMaterialCollection from "./part-material";
 import partPriceCollection from "./part-price";
@@ -43,6 +44,7 @@ export const allCollections: Array<TElectricCollection> = [
   machineProductionOrderQueueCollection,
   materialCollection,
   partCollection,
+  partComponentCollection,
   partFeatureCollection,
   partMaterialCollection,
   partPriceCollection,

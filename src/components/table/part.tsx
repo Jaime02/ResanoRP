@@ -15,6 +15,7 @@ import BaseTable from "@/components/table/base-table";
 import CellVerticalList from "@/components/table/cell-vertical-list";
 import { DEFAULT_DESCRIPTION_COLUMN_SIZE, createTableColumnHelper } from "@/components/table/column-helper";
 import TooltipInactiveMaterial from "@/components/tooltip/inactive-material";
+import TooltipPartSet from "@/components/tooltip/part-set";
 import ButtonLink from "@/components/ui/button-link";
 import { InfoPopoverTrigger } from "@/components/ui/info-popover";
 import { ModelActions } from "@/components/ui/model-actions";
@@ -172,6 +173,12 @@ export default function TablePart({
         meta: { dataType: CellDataType.String },
       }),
       columnHelper.accessor("description", {
+        cell: ({ row }) => (
+          <div className="flex flex-row items-center gap-1">
+            {row.original.description}
+            <TooltipPartSet partId={row.original.id} componentsCount={row.original.components.length} />
+          </div>
+        ),
         enableColumnFilter: true,
         enableResizing: true,
         header: DESCRIPTION_LABEL,

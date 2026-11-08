@@ -373,7 +373,7 @@ export default function BaseTable<TRow extends TBaseModel, TState extends TTable
         testId={testId}
         data-row-count={isLoading || rows === undefined || rowCount === null ? undefined : table.getRowCount()}
         disabledMessage={disabledMessage}
-        tableClassName={cn("w-max", tableClassName)}
+        tableClassName={cn("w-max min-w-full", tableClassName)}
         style={getColumnSizeVars()}
       >
         <CustomFiltersContext value={customFiltersComponent}>

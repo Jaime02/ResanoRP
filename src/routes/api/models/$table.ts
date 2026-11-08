@@ -16,6 +16,7 @@ const TABLES = new Set([
   "machine_production_order_queue",
   "material",
   "part",
+  "part_component",
   "part_feature",
   "part_material",
   "part_price",

@@ -18,6 +18,7 @@ const routeParamsSchema = z.object({
 
 const routeSearchSchema = z.object({
   createBlueprint: z.boolean().optional().catch(undefined),
+  createPartComponent: z.boolean().optional().catch(undefined),
   createPartFeature: z.boolean().optional().catch(undefined),
   createPartReference: z.boolean().optional().catch(undefined),
   editPartPriceId: optionalIdSchema.catch(undefined),
@@ -36,8 +37,15 @@ export const Route = createFileRoute("/part/$id")({
 
 function RouteComponent() {
   const { id: partId } = Route.useParams();
-  const { tab, editPartPriceId, createBlueprint, createPartFeature, createPartReference, editPartReferenceId } =
-    Route.useSearch();
+  const {
+    tab,
+    editPartPriceId,
+    createBlueprint,
+    createPartComponent,
+    createPartFeature,
+    createPartReference,
+    editPartReferenceId,
+  } = Route.useSearch();
 
   const { isAdmin } = useAppContext();
   const navigate = useNavigate();
@@ -49,6 +57,7 @@ function RouteComponent() {
       search: (prev) => ({
         ...prev,
         createBlueprint: undefined,
+        createPartComponent: undefined,
         createPartFeature: undefined,
         createPartReference: undefined,
         editPartPriceId: undefined,
@@ -86,6 +95,7 @@ function RouteComponent() {
       isLoading={isLoading}
       editPartPriceId={editPartPriceId}
       createBlueprint={createBlueprint}
+      createPartComponent={createPartComponent}
       createPartFeature={createPartFeature}
       createPartReference={createPartReference}
       editPartReferenceId={editPartReferenceId}

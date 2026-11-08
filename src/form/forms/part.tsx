@@ -6,6 +6,7 @@ import partCollection from "@/collections/part";
 import DialogCreateBlueprint from "@/components/dialog/create-blueprint";
 import LayoutBlueprint from "@/components/pdf/layout-blueprint-viewer";
 import ButtonRestoreModel from "@/components/table/button-restore-model";
+import TablePartComponents from "@/components/table/part-component";
 import TablePartFeatures from "@/components/table/part-feature";
 import TablePartMaterials from "@/components/table/part-material";
 import TablePartPrice from "@/components/table/part-price";
@@ -26,6 +27,7 @@ import { DESCRIPTION_LABEL, HISTORY_LABEL, NOTES_LABEL, REFERENCE_LABEL, RESTORE
 import { MATERIALS_LABEL } from "@/messages/material";
 import {
   CLIENT_REFERENCE_DESCRIPTION_LABEL,
+  PART_COMPONENTS_TITLE,
   PART_CREATE_TITLE,
   PART_EDIT_TITLE,
   PART_FEATURES_TITLE,
@@ -63,6 +65,7 @@ interface FormPartProps extends Pick<
   createBlueprint?: boolean;
   createPartReference?: boolean;
   createPartFeature?: boolean;
+  createPartComponent?: boolean;
   editPartReferenceId?: number;
   leftHeaderComponents?: React.ReactNode;
   rightHeaderComponents?: React.ReactNode;
@@ -80,6 +83,7 @@ export default function FormPart({
   createBlueprint,
   createPartReference,
   createPartFeature,
+  createPartComponent,
   editPartReferenceId,
   leftHeaderComponents,
   rightHeaderComponents,
@@ -282,6 +286,21 @@ export default function FormPart({
             ),
             label: MATERIALS_LABEL,
             value: "materials",
+          },
+          {
+            content: (
+              <TablePartComponents
+                tableMode={formModeToTableModeMap[formMode]}
+                partComponents={part?.components}
+                partId={part?.id}
+                createPartComponent={createPartComponent}
+                showCreatePartComponent={part?.deletedAt == null}
+                skeletonRowsCount={2}
+                title={PART_COMPONENTS_TITLE}
+              />
+            ),
+            label: PART_COMPONENTS_TITLE,
+            value: "components",
           },
           {
             content: (
