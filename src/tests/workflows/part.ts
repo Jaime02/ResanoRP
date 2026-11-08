@@ -48,7 +48,7 @@ export async function workflowCreatePartComponent(
 ) {
   const previousQuantity = await getPartComponentQuantity(parentPartId, componentPartId);
   const tablePartComponents = await gotoPartComponents(page, parentPartId);
-  await tablePartComponents.getByTestId("button-create-part-component").click();
+  await page.getByTestId("form-part").getByTestId("button-create-part-component").click();
   const dialog = page.getByTestId("dialog-create-part-component");
   await expect(dialog).toBeVisible();
   const { dialogPickerPartContent, tablePickerPart } = await openPartPicker(

@@ -451,20 +451,22 @@ test("remove every client invoice email", async ({ page, db }) => {
   const removedEmailIds = new Set<number>();
 
   for (const emailToDelete of mockClientInvoiceEmails) {
+    const getRemainingClientEmails = () =>
+      mockClientInvoiceEmails
+        .filter((email) => email.clientId === emailToDelete.clientId && !removedEmailIds.has(email.id))
+        .map((email) => email.email);
+
     await page.goto(`/client/${emailToDelete.clientId}`);
     await assertFormLoaded(formClient);
-    await expect(formClient.getByText(emailToDelete.email, { exact: true })).toBeVisible();
+    // The emails of the previous test can still be synced in right after the database reset
+    await assertInvoiceEmailsCard({ isReadOnly: false, emails: getRemainingClientEmails() });
 
-    const emailCard = formClient.locator(`:has(:text("${emailToDelete.email}"))`);
-    await openAndConfirmAlertDialog(page, emailCard.getByTestId("button-delete"), "dialog-delete-model-content");
+    const emailRow = filterByExactText(formClient.getByRole("row"), emailToDelete.email);
+    await openAndConfirmAlertDialog(page, emailRow.getByTestId("button-delete"), "dialog-delete-model-content");
     removedEmailIds.add(emailToDelete.id);
 
     await expect(formClient.getByText(emailToDelete.email, { exact: true })).not.toBeVisible();
-    for (const clientEmail of mockClientInvoiceEmails.filter(
-      (email) => email.clientId === emailToDelete.clientId && !removedEmailIds.has(email.id),
-    )) {
-      await expect(formClient.getByText(clientEmail.email, { exact: true })).toBeVisible();
-    }
+    await assertInvoiceEmailsCard({ isReadOnly: false, emails: getRemainingClientEmails() });
 
     expect(await db.query.dbTableClientInvoiceEmail.findMany({ orderBy: { id: "asc" } })).toEqual(
       mockClientInvoiceEmails.filter((email) => !removedEmailIds.has(email.id)),

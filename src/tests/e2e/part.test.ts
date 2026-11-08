@@ -1158,7 +1158,7 @@ test(
 
 test(
   "delete every part when confirmed and restore it",
-  { annotation: TestAnnotations.ResetBlueprints },
+  { annotation: [TestAnnotations.ResetBlueprints, TestAnnotations.NonEmptyErrorsLogFile] },
   async ({ page, toasts }) => {
     expect(
       activeParts.some((part) => mockBlueprints.filter((blueprint) => blueprint.partId === part.id).length > 1),
@@ -2028,7 +2028,7 @@ for (const userMode of [UserMode.Admin, UserMode.User]) {
       const partComponentsCount = getMockPartComponentsOfPart(part.id).length;
       const tablePartComponents = await gotoPartComponents(page, part.id);
       await assertTableRowCount(tablePartComponents, partComponentsCount);
-      await expectShown(tablePartComponents.getByTestId("button-create-part-component"), isAdmin);
+      await expectShown(formPart.getByTestId("button-create-part-component"), isAdmin);
       await expectShown(tablePartComponents.getByTestId("button-delete"), isAdmin && partComponentsCount > 0);
       await expectShown(tablePartComponents.getByTestId("editable-cell-input"), isAdmin && partComponentsCount > 0);
       // Anyone can look at the blueprints of the components
@@ -2249,7 +2249,10 @@ test("manage multi-level part sets", async ({ page, db }) => {
       }
       for (const partComponent of components) {
         const rowPartComponent = getTableRowByTestId(tablePartComponents, partComponent.componentPartId);
-        await expect(getEditableCellById(rowPartComponent, "quantity")).toHaveValue(String(partComponent.quantity));
+        // A deleted Artículo is read only, so its quantities are not editable
+        await (part.deletedAt === null
+          ? expect(getEditableCellById(rowPartComponent, "quantity")).toHaveValue(String(partComponent.quantity))
+          : expect(rowPartComponent.getByTestId("quantity")).toHaveText(String(partComponent.quantity)));
         await expect(rowPartComponent.getByTestId("tooltip-deleted")).toHaveCount(
           getMockPart(partComponent.componentPartId).deletedAt !== null ? 1 : 0,
         );
@@ -2332,8 +2335,8 @@ test("manage multi-level part sets", async ({ page, db }) => {
   });
 
   await test.step("a component needs a part and a positive quantity", async () => {
-    const tablePartComponents = await gotoPartComponents(page, setPart.id);
-    await tablePartComponents.getByTestId("button-create-part-component").click();
+    await gotoPartComponents(page, setPart.id);
+    await formPart.getByTestId("button-create-part-component").click();
     await expect(dialogCreatePartComponent).toBeVisible();
     const buttonSubmit = dialogCreatePartComponent.getByTestId("button-submit");
     const inputQuantity = dialogCreatePartComponent.getByTestId("input-create-part-component-quantity");
