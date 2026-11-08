@@ -121,43 +121,47 @@ export default function TablePart({
       columnHelper.accessor((part) => part.references, {
         cell: ({ row }) => (
           <CellVerticalList>
-            {row.original.references.map((partReference, i) => (
-              <div
-                className="flex flex-row items-center justify-start gap-1"
-                key={i}
-                data-testid="div-part-reference-row"
-              >
-                {tableMode === TableMode.Picker &&
-                  pickerMode === TablePartPickerMode.PickReferences &&
-                  (partReference.client == undefined || partReference.client.id === currentClientId) && (
-                    <ModelActions
-                      onSuccess={() =>
-                        onRowSelect?.({
-                          activeItemId: row.original.id,
-                          clientDescription: partReference.clientDescription,
-                          description: row.original.description,
-                          formattedActiveItem: partReference.reference,
-                          partId: row.original.id,
-                          partReferenceId: partReference.id,
-                          pickerMode: TablePartPickerMode.PickReferences,
-                        })
-                      }
-                    />
+            {row.original.references.map((partReference) => {
+              const label = (
+                <span className="truncate">
+                  <span className="font-bold">{partReference.reference}</span>
+                  {partReference.client && <span> | {partReference.client.name}</span>}
+                </span>
+              );
+              return (
+                <div
+                  className="flex min-w-0 flex-row items-center justify-start gap-1"
+                  key={partReference.id}
+                  data-testid="div-part-reference-row"
+                >
+                  {tableMode === TableMode.Picker &&
+                    pickerMode === TablePartPickerMode.PickReferences &&
+                    (partReference.client == undefined || partReference.client.id === currentClientId) && (
+                      <ModelActions
+                        onSuccess={() =>
+                          onRowSelect?.({
+                            activeItemId: row.original.id,
+                            clientDescription: partReference.clientDescription,
+                            description: row.original.description,
+                            formattedActiveItem: partReference.reference,
+                            partId: row.original.id,
+                            partReferenceId: partReference.id,
+                            pickerMode: TablePartPickerMode.PickReferences,
+                          })
+                        }
+                      />
+                    )}
+                  {partReference.clientDescription !== row.original.description ? (
+                    <Popover>
+                      <InfoPopoverTrigger className="min-w-0">{label}</InfoPopoverTrigger>
+                      <PopoverContent>{partReference.clientDescription}</PopoverContent>
+                    </Popover>
+                  ) : (
+                    label
                   )}
-                {partReference.clientDescription !== row.original.description ? (
-                  <Popover>
-                    <InfoPopoverTrigger>
-                      {partReference.reference} {partReference.client && ` | ${partReference.client.name}`}
-                    </InfoPopoverTrigger>
-                    <PopoverContent>{partReference.clientDescription}</PopoverContent>
-                  </Popover>
-                ) : (
-                  <span>
-                    {partReference.reference} {partReference.client && ` | ${partReference.client.name}`}
-                  </span>
-                )}
-              </div>
-            ))}
+                </div>
+              );
+            })}
           </CellVerticalList>
         ),
         enableResizing: true,

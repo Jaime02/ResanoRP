@@ -31,7 +31,7 @@ export default function BaseTableHead<TRow extends TBaseModel = TBaseModel>({
             const canBeResized = header.column.getCanResize() && !isLastColumn;
             return (
               <TableHeader key={header.id} style={thStyle?.(header)} canBeResized={canBeResized}>
-                <div className="flex flex-col items-start gap-2 whitespace-nowrap">
+                <div className="flex flex-col items-start gap-2 overflow-clip whitespace-nowrap [overflow-clip-margin:4px]">
                   <div className="flex items-center gap-1">
                     {header.column.getCanSort() && (
                       <Button

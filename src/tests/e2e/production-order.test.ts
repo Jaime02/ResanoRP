@@ -426,13 +426,15 @@ test("deleting a production order takes it off the machines", async ({ page, bro
   );
   await expect(actionsProductionOrder.getByTestId("button-delete")).not.toBeAttached();
 
-  // Restoring it makes it pending again, but it is not queued again
-  await openAndConfirmAlertDialog(
-    page,
-    actionsProductionOrder.getByTestId("button-restore"),
-    "dialog-restore-model-content",
-  );
-  await expect(getTableRowByTestId(tableProductionOrders, activeProductionOrderId)).not.toBeVisible();
+  await expect(actionsProductionOrder.getByTestId("button-restore")).toBeVisible();
+
+  // Restoring it from its page makes it pending again, but it is not queued again
+  await page.goto(`/production-order/${activeProductionOrderId}`);
+  const badgeProductionOrderDeleted = page.getByTestId("badge-production-order-deleted");
+  await expect(badgeProductionOrderDeleted).toBeVisible();
+  await openAndConfirmAlertDialog(page, page.getByTestId("button-restore"), "dialog-restore-model-content");
+  await expect(badgeProductionOrderDeleted).not.toBeVisible();
+  await expect(page.getByTestId("button-submit")).toBeVisible();
   await page.goto("/production-order");
   expect(await dbGetProductionOrderStatus((await getProductionOrderById(activeProductionOrderId))!)).toBe(
     ProductionOrderStatus.Pending,
@@ -1023,7 +1025,11 @@ test(
 
       // The line has an Orden de producción now, so its pending quantity cannot be produced twice from it
       await page.goto(`/sell-order/${sellOrderLine.sellOrderId}`);
-      await expect(getTableRowByTestId(page.getByTestId("table-sell-order-line"), sellOrderLine.id)).toBeVisible();
+      const rowSellOrderLine = getTableRowByTestId(page.getByTestId("table-sell-order-line"), sellOrderLine.id);
+      await rowSellOrderLine.getByTestId("button-production-order").click();
+      await expect(page).toHaveURL(new RegExp(`/production-order/${newProductionOrders[1].id}$`));
+      await page.goBack();
+      await expect(rowSellOrderLine).toBeVisible();
       await expect(buttonCreateProductionOrder).not.toBeAttached();
     });
 

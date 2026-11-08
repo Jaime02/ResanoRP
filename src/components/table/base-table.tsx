@@ -209,6 +209,7 @@ export default function BaseTable<TRow extends TBaseModel, TState extends TTable
     (tableState) => ({ pagination: tableState.pagination }),
   );
 
+  const rootRef = useRef<HTMLDivElement>(null);
   const tableRef = useRef<HTMLTableElement>(null);
 
   const getColumnSizeVars = useCallback(
@@ -216,15 +217,25 @@ export default function BaseTable<TRow extends TBaseModel, TState extends TTable
       Object.fromEntries(table.getAllLeafColumns().map((column, i) => [`--col-${i}-size`, `${column.getSize()}px`])),
     [table],
   );
-  useLayoutEffect(
-    () =>
-      table.atoms.columnSizing.subscribe(() =>
-        Object.entries(getColumnSizeVars()).forEach(([name, value]) =>
-          tableRef.current?.style.setProperty(name, value),
-        ),
-      ).unsubscribe,
-    [table, getColumnSizeVars],
-  );
+  useLayoutEffect(() => {
+    // Centered tables re-center as they resize, so the left edge is held in place during the drag to keep the
+    // resize handle under the cursor
+    let resizeAnchorLeft: number | undefined;
+    return table.atoms.columnSizing.subscribe(() => {
+      const root = rootRef.current;
+      if (!root) return;
+      const heldTranslate = root.style.translate;
+      root.style.translate = "";
+      const isResizing = table.atoms.columnResizing.get().isResizingColumn !== false;
+      resizeAnchorLeft = isResizing ? (resizeAnchorLeft ?? root.getBoundingClientRect().left) : undefined;
+      Object.entries(getColumnSizeVars()).forEach(([name, value]) => tableRef.current?.style.setProperty(name, value));
+      if (resizeAnchorLeft !== undefined) {
+        root.style.translate = `${resizeAnchorLeft - root.getBoundingClientRect().left}px`;
+      } else if (heldTranslate !== "") {
+        root.animate({ translate: [heldTranslate, "0px"] }, { duration: 150, easing: "ease-out" });
+      }
+    }).unsubscribe;
+  }, [table, getColumnSizeVars]);
 
   const tableRows = table.getRowModel().rows;
   const tbodyRef = useRef<HTMLTableSectionElement>(null);
@@ -292,6 +303,7 @@ export default function BaseTable<TRow extends TBaseModel, TState extends TTable
 
   return (
     <RadioGroup
+      ref={rootRef}
       value={String(radioSelectedRowId)}
       className={cn("flex w-fit max-w-full flex-col items-stretch gap-2", className)}
     >
@@ -361,7 +373,7 @@ export default function BaseTable<TRow extends TBaseModel, TState extends TTable
         testId={testId}
         data-row-count={isLoading || rows === undefined || rowCount === null ? undefined : table.getRowCount()}
         disabledMessage={disabledMessage}
-        tableClassName={tableClassName}
+        tableClassName={cn("w-max", tableClassName)}
         style={getColumnSizeVars()}
       >
         <CustomFiltersContext value={customFiltersComponent}>
@@ -369,6 +381,7 @@ export default function BaseTable<TRow extends TBaseModel, TState extends TTable
             table={table}
             hasRows={rows ? rows.length > 0 : false}
             thStyle={(header) => ({
+              maxWidth: header.column.getCanResize() ? `var(--col-${header.index}-size)` : undefined,
               width: `var(--col-${header.index}-size)`,
             })}
             onStateChange={navigateOnStateChange}

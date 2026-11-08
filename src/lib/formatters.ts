@@ -75,6 +75,10 @@ export function formatDate(dateInput: string | Date | null, format: DateFormat =
   });
 }
 
+export function formatPartUnits(quantity: number): string {
+  return `${quantity} ${quantity === 1 ? "unidad" : "unidades"}`;
+}
+
 export function formatMaterial({ width, rawMaterialName }: { width: string; rawMaterialName?: string | null }): string {
   return rawMaterialName != null ? `${width} | ${rawMaterialName}` : width;
 }

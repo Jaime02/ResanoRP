@@ -1,4 +1,4 @@
-import { and, eq, gte, isNull, lte, materialize, not, sum, useLiveQuery } from "@tanstack/react-db";
+import { and, eq, gte, inArray, isNull, lte, materialize, not, or, sum, useLiveQuery } from "@tanstack/react-db";
 import type { InitialQueryBuilder, Ref } from "@tanstack/react-db";
 import { useMemo } from "react";
 
@@ -156,18 +156,41 @@ export function useQueryTreatmentBatches({
   date = null,
   enabled = true,
 }: TTreatmentBatchesQueryProps = {}) {
+  const { data: receptionsOfDate } = useLiveQuery({
+    queryKey: ["treatment-receptions-of-date", date?.getTime(), enabled],
+    query: (q) =>
+      enabled && date != null
+        ? q
+            .from({ treatmentReception: treatmentReceptionCollection })
+            .where(({ treatmentReception }) =>
+              and(
+                gte(treatmentReception.receivedAt, startOfAppDay(date)),
+                lte(treatmentReception.receivedAt, endOfAppDay(date)),
+              ),
+            )
+        : undefined,
+  });
+  const receivedShipmentIds = useMemo(
+    () => [...new Set((receptionsOfDate ?? []).map((treatmentReception) => treatmentReception.treatmentShipmentId))],
+    [receptionsOfDate],
+  );
+
   // shortcut: without filters it loads every shipment ever sent to find the pending ones, store a received flag once it grows too large
   const { data, ...rest } = useLiveQuery({
-    queryKey: ["treatment-batches", partId, date?.getTime(), enabled],
+    queryKey: ["treatment-batches", partId, date?.getTime(), receivedShipmentIds, enabled],
     query: (q) => {
       if (!enabled) return undefined;
       let query = q.from({ treatmentShipment: treatmentShipmentCollection });
       if (partId != null) {
         query = query.where(({ treatmentShipment }) => eq(treatmentShipment.partId, partId));
       }
+      // A shipment sent on another day is shown on the day its parts came back too
       if (date != null) {
         query = query.where(({ treatmentShipment }) =>
-          and(gte(treatmentShipment.sentAt, startOfAppDay(date)), lte(treatmentShipment.sentAt, endOfAppDay(date))),
+          or(
+            and(gte(treatmentShipment.sentAt, startOfAppDay(date)), lte(treatmentShipment.sentAt, endOfAppDay(date))),
+            inArray(treatmentShipment.id, receivedShipmentIds),
+          ),
         );
       }
       return query

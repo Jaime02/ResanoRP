@@ -20,6 +20,7 @@ import {
   dbTableTreatmentShipment,
 } from "@/db/schema";
 import { isSameAppDay } from "@/lib/dates";
+import { formatPartUnits } from "@/lib/formatters";
 import { getSellOrderLineStatusDisplay } from "@/lib/sell-order-line";
 import { translatedEnums } from "@/lib/translations";
 import {
@@ -222,7 +223,7 @@ test("list the parts pending to send and the batches out and back", async ({ pag
         await expect(row.getByTestId("pendingQuantity")).toHaveText(String(shipment.pendingQuantity));
         for (const reception of shipment.treatmentReceptions) {
           await expect(row.getByTestId(`div-treatment-reception-${reception.id}`)).toContainText(
-            String(reception.quantity),
+            `${formatPartUnits(reception.quantity)} |`,
           );
         }
         await expect(row.getByTestId("receiveQuantity").getByTestId("editable-cell-input")).toHaveCount(
@@ -267,6 +268,21 @@ test("the history defaults to today and needs a day or a part to be listed", asy
   await test.step("a day lists every shipment sent that day", async () => {
     await clearPicker(sectionHistory.getByTestId("picker-treatment-history-part"));
     await assertTableRowCount(tableBatchReceived, batchReceived.treatmentShipments.length);
+  });
+
+  await test.step("a day lists the shipments whose parts came back that day too", async () => {
+    const { receivedAt } = batchReceived.treatmentShipments[0].treatmentReceptions[0];
+    expect(
+      isSameAppDay(receivedAt, batchReceived.sentAt),
+      "Wrong test set up: The parts should come back on another day",
+    ).toBe(false);
+    await workflowFilterTreatmentHistory(page, { date: receivedAt });
+    await assertTableRowCount(
+      tableBatchReceived,
+      batchReceived.treatmentShipments.filter((shipment) =>
+        shipment.treatmentReceptions.some((reception) => isSameAppDay(reception.receivedAt, receivedAt)),
+      ).length,
+    );
   });
 
   await test.step("a day without shipments lists nothing", async () => {

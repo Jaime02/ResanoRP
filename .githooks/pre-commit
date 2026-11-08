@@ -1,5 +1,11 @@
 #!/bin/sh
 files=$(git diff --cached --name-only --diff-filter=ACM | grep -E '\.(ts|tsx|js|mjs|json|css|md)$')
 [ -z "$files" ] && exit 0
-# Only checked: formatting and adding the files back would also commit their unstaged changes
-echo "$files" | xargs bunx oxfmt --check || { echo "Run bun run format and stage the changes"; exit 1; }
+partial=$(echo "$files" | while read -r f; do git diff --quiet -- "$f" || echo "$f"; done)
+clean=$(echo "$files" | grep -vxF "$partial")
+# Re-adding a partially staged file would also commit its unstaged changes, so those are only checked
+if [ -n "$clean" ]; then
+  echo "$clean" | xargs bunx oxfmt && echo "$clean" | xargs git add
+fi
+[ -z "$partial" ] && exit 0
+echo "$partial" | xargs bunx oxfmt --check || { echo "Partially staged files: run bun run format and stage the changes"; exit 1; }

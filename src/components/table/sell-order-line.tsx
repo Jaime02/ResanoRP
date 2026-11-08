@@ -15,14 +15,10 @@ import { ModelActions } from "@/components/ui/model-actions";
 import PriceInput from "@/components/ui/price-input";
 import { useAppContext } from "@/contexts/app-context";
 import type { TSellOrderForm } from "@/form/hooks/use-sell-order";
-import {
-  type TSellOrderLineForm,
-  type TUseSellOrderStatusProps,
-  useSellOrderLineStatus,
-} from "@/form/hooks/use-sell-order";
+import type { TSellOrderLineForm, TUseSellOrderStatusProps } from "@/form/hooks/use-sell-order";
 import { formatDate, formatPrice } from "@/lib/formatters";
 import { formatCents, getLineTotalInCents, getLinesTotalInCents } from "@/lib/prices";
-import { clampPendingQuantity } from "@/lib/sell-order-line";
+import { clampPendingQuantity, computeSellOrderLineStatus } from "@/lib/sell-order-line";
 import { serializeSellOrderLine } from "@/lib/serializers";
 import clientLog from "@/logging/clientLog";
 import { LoggerLevels } from "@/logging/types";
@@ -51,6 +47,8 @@ import {
   SELL_ORDER_LINE_VALIDATION_ERROR_MESSAGE,
   DELIVERY_LABEL,
 } from "@/messages/sell-order";
+import { useQueryProductionOrderStatusesBySellOrderLineIds } from "@/queries/production-order";
+import { ProductionOrderStatus } from "@/schemas/production-order";
 import type { TUpdateSellOrderLine } from "@/schemas/sell-order-line";
 import { SellOrderLineStatus, updateSellOrderLineSchema } from "@/schemas/sell-order-line";
 import { CellDataType, TableMode } from "@/types";
@@ -69,14 +67,35 @@ const columnHelper = createTableColumnHelper<TSellOrderLineForm>();
 
 // Only Pending lines have no Orden de producción yet, otherwise its pending quantity would be produced twice. A return
 // is pending too, but it is delivered back without being produced
-function ButtonCreateProductionOrder(props: TUseSellOrderStatusProps) {
-  const status = useSellOrderLineStatus(props);
-  if (status !== SellOrderLineStatus.Pending || props.sellOrderLine.quantity < 0) return null;
+function ButtonProductionOrder({ sellOrderLine, sellOrder }: TUseSellOrderStatusProps) {
+  const sellOrderLineIds = useMemo(() => [sellOrderLine.id], [sellOrderLine.id]);
+  const { data: productionOrders } = useQueryProductionOrderStatusesBySellOrderLineIds(sellOrderLineIds);
+  const productionOrder = productionOrders.find(({ status }) => status !== ProductionOrderStatus.Deleted);
+  if (productionOrder) {
+    return (
+      <ButtonLink
+        testId="button-production-order"
+        to="/production-order/$id"
+        params={{ id: productionOrder.id }}
+        size="icon"
+        showExternalLinkIcon={false}
+      >
+        <BoltIcon />
+      </ButtonLink>
+    );
+  }
+  const status = computeSellOrderLineStatus({
+    productionOrderStatuses: productionOrders.map(({ status }) => status),
+    sellOrder,
+    sellOrderLine,
+  });
+  if (status !== SellOrderLineStatus.Pending || sellOrderLine.quantity < 0) return null;
   return (
     <ButtonLink
       testId="button-create-production-order"
       to="/create-production-order"
-      search={{ sellOrderLineId: props.sellOrderLine.id }}
+      search={{ sellOrderLineId: sellOrderLine.id }}
+      variant="success"
       size="icon"
       showExternalLinkIcon={false}
     >
@@ -213,7 +232,7 @@ export default function TableSellOrderLine({
                   blueprints={row.original.partReference?.part?.blueprints}
                 />
                 {isAdmin && row.original.partReference != null && sellOrder !== undefined && (
-                  <ButtonCreateProductionOrder sellOrderLine={row.original} sellOrder={sellOrder} />
+                  <ButtonProductionOrder sellOrderLine={row.original} sellOrder={sellOrder} />
                 )}
               </>
             }

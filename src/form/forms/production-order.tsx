@@ -1,11 +1,14 @@
 import { useDbClient } from "@tanstack/react-db";
 import { useSelector } from "@tanstack/react-store";
+import { TriangleAlertIcon } from "lucide-react";
 
 import productionOrderCollection from "@/collections/production-order";
 import LayoutBlueprintViewer from "@/components/pdf/layout-blueprint-viewer";
 import ButtonDeleteModel from "@/components/table/button-delete-model";
+import ButtonRestoreModel from "@/components/table/button-restore-model";
 import TablePartProductionHistory from "@/components/table/part-production-history";
 import TableQualityControl from "@/components/table/quality-control";
+import { Badge } from "@/components/ui/badge";
 import ButtonLink from "@/components/ui/button-link";
 import { Card, CardHeader, CardTitle } from "@/components/ui/card";
 import DateInput from "@/components/ui/date-input";
@@ -30,18 +33,23 @@ import {
   NOTES_LABEL,
   PART_LABEL,
   REFERENCE_LABEL,
+  RESTORE_LABEL,
 } from "@/messages/common";
 import {
   PRODUCTION_HISTORY_TITLE,
   PRODUCTION_ORDER_DELETE_MESSAGE,
   PRODUCTION_ORDER_DELETE_TITLE,
   PRODUCTION_ORDER_DELETED_MESSAGE,
+  PRODUCTION_ORDER_RESTORE_MESSAGE,
+  PRODUCTION_ORDER_RESTORE_TITLE,
+  PRODUCTION_ORDER_RESTORED_MESSAGE,
   QUALITY_CONTROL_LABEL,
   QUANTITY_TO_PRODUCE_LABEL,
 } from "@/messages/production-order";
 import { SELL_ORDER_LABEL, VIEW_SELL_ORDER_LABEL } from "@/messages/sell-order";
 import { useQueryPartBlueprints } from "@/queries/part";
 import { useQueryActiveProductionOrder } from "@/queries/production-order";
+import trpc from "@/trpc/trpc-client";
 import { FormMode, TablePartPickerMode } from "@/types";
 
 interface FormProductionOrderProps extends Pick<
@@ -58,7 +66,7 @@ export default function FormProductionOrder({
   onSubmit,
 }: FormProductionOrderProps) {
   const dbClient = useDbClient();
-  const { isAdmin, showToastOnTransaction } = useAppContext();
+  const { isAdmin, showToastOnTransaction, showToastOnTRPCMutation } = useAppContext();
   const { form, formMode, isLoading, productionOrder, sellOrderLine, validationSchema } = useProductionOrderForm({
     createSellOrderLineId,
     editProductionOrderId: productionOrderId,
@@ -88,6 +96,12 @@ export default function FormProductionOrder({
       <ResizablePanelGroup orientation="horizontal" className="h-auto grow">
         <ResizablePanel className="flex min-w-0 flex-col items-center gap-2">
           <div className="flex flex-col items-center gap-2">
+            {productionOrder?.deletedAt && (
+              <Badge variant="destructive" size="lg" testId="badge-production-order-deleted">
+                <TriangleAlertIcon className="size-icon" />
+                {PRODUCTION_ORDER_DELETED_MESSAGE}
+              </Badge>
+            )}
             {formMode !== FormMode.Create && (
               <div className="flex flex-row flex-wrap items-start justify-center gap-2">
                 <Card>
@@ -195,6 +209,24 @@ export default function FormProductionOrder({
                   />
                 )}
                 <form.ButtonSubmit disableIfPristine={formMode !== FormMode.Create} />
+              </div>
+            )}
+            {isAdmin && productionOrder?.deletedAt && (
+              <div className="flex w-full flex-row justify-end gap-2">
+                <ButtonRestoreModel
+                  dialogTitle={PRODUCTION_ORDER_RESTORE_TITLE}
+                  dialogDescription={PRODUCTION_ORDER_RESTORE_MESSAGE}
+                  serializedModel={serializeProductionOrder(productionOrder)}
+                  triggerExtraComponents={RESTORE_LABEL}
+                  size="default"
+                  onConfirm={() =>
+                    void showToastOnTRPCMutation({
+                      mutation: trpc.productionOrder.restore.mutate({ id: productionOrder.id }),
+                      onSuccess: { title: PRODUCTION_ORDER_RESTORED_MESSAGE },
+                      collection: productionOrderCollection,
+                    })
+                  }
+                />
               </div>
             )}
           </div>

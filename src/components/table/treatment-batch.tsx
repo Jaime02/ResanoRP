@@ -18,7 +18,7 @@ import { Button } from "@/components/ui/button";
 import ButtonLink from "@/components/ui/button-link";
 import { ModelActions } from "@/components/ui/model-actions";
 import { useAppContext } from "@/contexts/app-context";
-import { DateFormat, formatDate } from "@/lib/formatters";
+import { DateFormat, formatDate, formatPartUnits } from "@/lib/formatters";
 import {
   ACTIONS_LABEL,
   CLIENT_LABEL,
@@ -133,7 +133,8 @@ export default function TableTreatmentBatch({ batch }: { batch: TTreatmentBatch 
                 data-testid={`div-treatment-reception-${treatmentReception.id}`}
                 className="flex flex-row items-center justify-between gap-2"
               >
-                {treatmentReception.quantity} | {formatDate(treatmentReception.receivedAt, DateFormat.Datetime)}
+                {formatPartUnits(treatmentReception.quantity)} |{" "}
+                {formatDate(treatmentReception.receivedAt, DateFormat.Datetime)}
                 <ButtonDeleteModel
                   dialogTriggerTestId="button-delete-reception"
                   dialogTitle={DELETE_RECEPTION_TITLE}
