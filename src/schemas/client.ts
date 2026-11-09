@@ -1,6 +1,13 @@
 import { z } from "zod";
 
-import { nullableDateSchema, nullableIdSchema, requiredIdSchema, stringSchema, tableStateSchema } from "@/schemas";
+import {
+  nameSchema,
+  nullableDateSchema,
+  nullableIdSchema,
+  requiredIdSchema,
+  stringSchema,
+  tableStateSchema,
+} from "@/schemas";
 
 const baseClientSchema = z.object({
   address: stringSchema({ nullable: false }),
@@ -10,7 +17,7 @@ const baseClientSchema = z.object({
   defaultPaymentMethodId: nullableIdSchema,
   iban: stringSchema({ nullable: true }),
   legalName: stringSchema({ nullable: false }),
-  name: stringSchema({ nullable: false }),
+  name: nameSchema,
   phone: stringSchema({ nullable: true }),
   postalCode: stringSchema({ nullable: false }).regex(/^[0-9]+$/, "El campo solo puede contener dígitos"),
   // The account of the Cliente in Prisma, the accounting program, which is not

@@ -44,7 +44,7 @@ test("a machine that loses its active production order to an administrator picks
   page,
   openPage,
 }) => {
-  const adminPage = await openPage(UserMode.Admin);
+  const adminPage = await openPage({ userMode: UserMode.Admin });
   const { buttonCreate, table } = getQualityControlLocators(page);
   const dialogQueue = page.getByTestId("dialog-content-machine-production-order-queue");
   await workflowOpenProduction(page, qualityControlMachine);
@@ -84,7 +84,7 @@ test("what a machine has filled in survives an administrator editing its active 
   page,
   openPage,
 }) => {
-  const adminPage = await openPage(UserMode.Admin);
+  const adminPage = await openPage({ userMode: UserMode.Admin });
   const { buttonConfirm, inputQuantity } = getQualityControlLocators(page);
   const newNotes = "Notas editadas por el administrador";
   await workflowOpenProduction(page, qualityControlMachine);
@@ -114,8 +114,8 @@ test("a machine and an administrator see the checks another machine registers as
   page,
   openPage,
 }) => {
-  const adminPage = await openPage(UserMode.Admin);
-  const machinePage = await openPage(UserMode.Admin);
+  const adminPage = await openPage({ userMode: UserMode.Admin });
+  const machinePage = await openPage({ userMode: UserMode.Admin });
   await workflowRunProductionOrderOnMachines(machinePage, productionOrderId, [otherMachine]);
   await workflowOpenProduction(page, qualityControlMachine);
   await gotoQualityControl(adminPage, productionOrderId);
@@ -145,7 +145,7 @@ test("two machines registering a check of the same production order at the same 
   page,
   openPage,
 }) => {
-  const machinePage = await openPage(UserMode.Admin);
+  const machinePage = await openPage({ userMode: UserMode.Admin });
   await workflowRunProductionOrderOnMachines(machinePage, productionOrderId, [otherMachine]);
   await workflowOpenProduction(page, qualityControlMachine);
   const checksBefore = getMockQualityControl(productionOrderId).checks;
@@ -167,7 +167,7 @@ test("a machine keeps its table and its open dialog when another machine stops t
   page,
   openPage,
 }) => {
-  const machinePage = await openPage(UserMode.Admin);
+  const machinePage = await openPage({ userMode: UserMode.Admin });
   const { buttonConfirm, inputQuantity } = getQualityControlLocators(page);
   await workflowRunProductionOrderOnMachines(machinePage, productionOrderId, [otherMachine]);
   await workflowOpenProduction(page, qualityControlMachine);
@@ -188,7 +188,7 @@ test("a machine keeps its table and its open dialog when another machine stops t
 });
 
 test("a machine follows the features an administrator adds and removes while it checks", async ({ page, openPage }) => {
-  const adminPage = await openPage(UserMode.Admin);
+  const adminPage = await openPage({ userMode: UserMode.Admin });
   await workflowOpenProduction(page, qualityControlMachine);
 
   const createdFeature = await workflowCreatePartFeature(adminPage, partId, "Característica remota");
@@ -210,7 +210,7 @@ test(
   "an administrator cannot remove a feature that has checks, and the machine keeps seeing it",
   { annotation: TestAnnotations.NonEmptyErrorsLogFile },
   async ({ page, openPage }) => {
-    const adminPage = await openPage(UserMode.Admin);
+    const adminPage = await openPage({ userMode: UserMode.Admin });
     await workflowOpenProduction(page, qualityControlMachine);
 
     await workflowDeletePartFeature(adminPage, partId, firstFeature.id, CHECKED_FEATURE_DELETE_MESSAGE);
@@ -224,7 +224,7 @@ test("a machine open in two places follows the production orders started from th
   page,
   openPage,
 }) => {
-  const otherPlace = await openPage(UserMode.Machine);
+  const otherPlace = await openPage({ userMode: UserMode.Machine });
   const { buttonCreate, table } = getQualityControlLocators(page);
   await workflowOpenProduction(page, qualityControlMachine);
 

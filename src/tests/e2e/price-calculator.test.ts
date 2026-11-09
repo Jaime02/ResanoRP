@@ -25,9 +25,8 @@ import {
   getTableRowByTestId,
   getTableRows,
 } from "@/tests/utils/components/table";
-import { clearToasts, getToastType } from "@/tests/utils/components/toast";
+import { expectSingleToast } from "@/tests/utils/components/toast";
 import { test } from "@/tests/utils/fixtures";
-import { ToastType } from "@/types";
 import type { BasePart } from "@/types/part";
 
 const activeParts = mockParts.filter((part) => part.deletedAt === null);
@@ -250,9 +249,7 @@ for (const part of activeParts.filter((activePart) =>
         await formEstimator.getByTestId("button-submit").click();
         savedPartPriceCount++;
 
-        await expect(toasts).toHaveCount(1);
-        expect(await getToastType(toasts.first())).toBe(ToastType.Success);
-        await clearToasts(page);
+        await expectSingleToast(page);
 
         expect(await getPartPriceById(pendingPartPrice.id)).toMatchObject({
           clientId: pendingPartPrice.clientId,
@@ -297,9 +294,7 @@ for (const part of activeParts.filter((activePart) =>
         await formEstimator.getByTestId("button-submit").click();
         createdPartPriceCount++;
 
-        await expect(toasts).toHaveCount(1);
-        expect(await getToastType(toasts.first())).toBe(ToastType.Success);
-        await clearToasts(page);
+        await expectSingleToast(page);
 
         const dbPartPrices = await getPartPricesByPartId(part.id);
         expect(dbPartPrices).toHaveLength(

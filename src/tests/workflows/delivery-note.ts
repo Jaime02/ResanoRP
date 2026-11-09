@@ -16,12 +16,10 @@ import {
 } from "@/tests/utils/components/combobox";
 import { InputElementType, assertFormLoaded, getFormInputByLabel } from "@/tests/utils/components/form";
 import { getEditableCellById, getTableRowByTestId, getTableRows } from "@/tests/utils/components/table";
-import { expectSingleToast, getToasts, getToastType } from "@/tests/utils/components/toast";
-import { ToastType } from "@/types";
+import { expectSingleToast } from "@/tests/utils/components/toast";
 import type { BaseClient } from "@/types/client";
 
 export async function workflowDeleteDeliveryNote(page: Page, deliveryNoteId: number) {
-  const toasts = getToasts(page);
   await page.goto("/delivery-note");
   const rowDeliveryNote = getTableRowByTestId(page.getByTestId("table-delivery-note"), deliveryNoteId);
   await expect(rowDeliveryNote).toBeVisible();
@@ -32,8 +30,7 @@ export async function workflowDeleteDeliveryNote(page: Page, deliveryNoteId: num
   await openAndConfirmAlertDialog(page, rowDeliveryNote.getByTestId("button-delete"), "dialog-delete-model-content");
 
   await expect(rowDeliveryNote).not.toBeVisible();
-  await expect(toasts).toHaveCount(1);
-  expect(await getToastType(toasts.first())).toBe(ToastType.Success);
+  await expectSingleToast(page);
   const dbDeletedDeliveryNote = await getDeliveryNote({ id: deliveryNoteId });
   expect(dbDeletedDeliveryNote).toBeUndefined();
 

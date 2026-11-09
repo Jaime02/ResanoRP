@@ -2,13 +2,13 @@ import { createSelectSchema } from "drizzle-orm/zod";
 import { z } from "zod";
 
 import { dbTablePaymentMethod } from "@/db/schema";
-import { nameFiltersSchema, requiredIdObjectSchema, stringSchema, tableStateSchema } from "@/schemas";
+import { nameFiltersSchema, nameSchema, requiredIdObjectSchema, tableStateSchema } from "@/schemas";
 
 const paymentDeadlineDaysSchema = z.number().int().gte(0).nullable();
 
 const basePaymentMethodSchema = z.object({
   generatesReceipt: z.boolean(),
-  name: stringSchema({ nullable: false }),
+  name: nameSchema,
   paymentDeadlineDays: paymentDeadlineDaysSchema,
 });
 

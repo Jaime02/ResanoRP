@@ -35,7 +35,7 @@ import {
 } from "@/tests/mock-data";
 import { getFormInputByLabel, assertFormLoaded } from "@/tests/utils/components/form";
 import { getTableRowByTestId } from "@/tests/utils/components/table";
-import { clearToasts, getToastType } from "@/tests/utils/components/toast";
+import { expectSingleToast } from "@/tests/utils/components/toast";
 import { TestAnnotations, test } from "@/tests/utils/fixtures";
 import { getMockClientById, getMockPaymentMethodById, getMockSellOrderLineById } from "@/tests/utils/mock-data-utils";
 import { holdRequestWhile } from "@/tests/utils/trpc";
@@ -47,7 +47,6 @@ import {
   workflowCreateInvoice,
   workflowUnaccountInvoice,
 } from "@/tests/workflows/invoice";
-import { ToastType } from "@/types";
 
 const MOCK_INVOICES: Array<TAccountingExportInvoice> = [
   {
@@ -110,6 +109,22 @@ const MOCK_INVOICES: Array<TAccountingExportInvoice> = [
     id: 4606,
     vatBreakdown: [{ taxableBaseInCents: 5875, vatInCents: 1234, vatPercentage: 21 }],
   },
+  // A credit note, which the old program exported with the same records and negative amounts
+  {
+    client: {
+      accountingAccountId: "4300004",
+      address: "POL. IND. DEMO",
+      city: "VILLA CUATRO",
+      legalName: "TALLER DEMO, S.L.U.",
+      postalCode: "00004",
+      taxId: "B45678901",
+    },
+    createdAt: new Date("2026-09-30T10:00:00Z"),
+    dueDate: new Date("2026-12-30T10:00:00Z"),
+    generatesReceipt: true,
+    id: 4607,
+    vatBreakdown: [{ taxableBaseInCents: -196842, vatInCents: -41337, vatPercentage: 21 }],
+  },
 ];
 
 const MOCK_CSV = [
@@ -132,6 +147,11 @@ const MOCK_CSV = [
   '"3",260930,261015,"4300004  ",0000007109,"004606         ","C","               "',
   '"1",260930,"4770000  ","N/FACTURA 004606                   ","004606         ","H",0000001234,"TALLER DEMO, S.L.U.           ","B45678901      ","POL. IND. DEMO                     ","00004","VILLA CUATRO                      "',
   '"1",260930,"7050004  ","N/FACTURA 004606                   ","004606         ","H",0000005875,"PRES SERV TALLER DEMO, S.L.U. ","B45678901      ","POL. IND. DEMO                     ","00004","VILLA CUATRO                      "',
+  '"1",260930,"4300004  ","N/FACTURA 004607                   ","004607         ","D",-0000238179,"TALLER DEMO, S.L.U.           ","B45678901      ","POL. IND. DEMO                     ","00004","VILLA CUATRO                      "',
+  '"2",260930,"4300004  ","TALLER DEMO, S.L.U.           ","B45678901      ",2100,0500,-0000196842,-0000041337,0000000000,-0000238179,"004607         "," ","R"',
+  '"3",260930,261230,"4300004  ",-0000238179,"004607         ","C","               "',
+  '"1",260930,"4770000  ","N/FACTURA 004607                   ","004607         ","H",-0000041337,"TALLER DEMO, S.L.U.           ","B45678901      ","POL. IND. DEMO                     ","00004","VILLA CUATRO                      "',
+  '"1",260930,"7050004  ","N/FACTURA 004607                   ","004607         ","H",-0000196842,"PRES SERV TALLER DEMO, S.L.U. ","B45678901      ","POL. IND. DEMO                     ","00004","VILLA CUATRO                      "',
 ].join("\r\n");
 
 // Quoted fields may hold commas, like the addresses
@@ -187,7 +207,7 @@ async function assertTableInvoicesAccounted(tableInvoices: Locator, invoiceIds: 
 test(
   "account the invoices into the file for Prisma",
   { annotation: TestAnnotations.NonEmptyErrorsLogFile },
-  async ({ page, db, toasts }) => {
+  async ({ page, db }) => {
     await test.step("the export format", () => {
       // It reproduces the file exported by the old program, byte for byte
       const csv = getAccountingExportCsv(MOCK_INVOICES);
@@ -293,11 +313,7 @@ test(
 
       const downloads = trackDownloads(page);
       await confirmAccountInvoices(page);
-      await expect(toasts).toHaveCount(1);
-      expect(await getToastType(toasts.first())).toBe(ToastType.Error);
-      await expect(toasts.first()).toContainText(
-        `estos Clientes no tienen cuenta contable de Prisma: ${clientWithoutAccount.name}`,
-      );
+      await expectSingleToast(page, `estos Clientes no tienen cuenta contable de Prisma: ${clientWithoutAccount.name}`);
       expect(downloads).toHaveLength(0);
       for (const invoice of await getInvoices()) {
         expect(invoice.accounted, `Factura ${invoice.id}`).toBe(
@@ -306,7 +322,6 @@ test(
       }
 
       // Once the Cliente has its account the pending Facturas are accounted
-      await clearToasts(page);
       await page.goto(`/client/${clientWithoutAccount.id}`);
       const formClient = page.getByTestId("form-client");
       await assertFormLoaded(formClient);
@@ -314,9 +329,7 @@ test(
         clientWithoutAccount.prismaAccountingAccountId!,
       );
       await formClient.getByTestId("button-submit").click();
-      await expect(toasts).toHaveCount(1);
-      expect(await getToastType(toasts.first())).toBe(ToastType.Success);
-      await clearToasts(page);
+      await expectSingleToast(page);
 
       // Nothing is accounted while an Albarán has a Línea without price, added by hand or from a Pedido de venta,
       // as it would be exported at 0 €
@@ -346,9 +359,8 @@ test(
 
       await page.goto("/invoicing");
       await confirmAccountInvoices(page);
-      await expect(toasts).toHaveCount(1);
-      expect(await getToastType(toasts.first())).toBe(ToastType.Error);
-      await expect(toasts.first()).toContainText(
+      await expectSingleToast(
+        page,
         `estos Albaranes tienen Líneas sin precio: ${[unpricedLine.deliveryNoteId, linkedLine.deliveryNoteId].sort((a, b) => a - b).join(", ")}`,
       );
       expect(downloads).toHaveLength(0);
@@ -366,7 +378,6 @@ test(
         .update(dbTableSellOrderLine)
         .set({ partPrice: linkedSellOrderLine.partPrice })
         .where(eq(dbTableSellOrderLine.id, linkedSellOrderLine.id));
-      await clearToasts(page);
 
       // Nothing is accounted while an amount does not fit in its field of the file
       const [invoiceWithAmountTooLarge] = pendingInvoices;
@@ -383,9 +394,7 @@ test(
 
       await page.goto("/invoicing");
       await confirmAccountInvoices(page);
-      await expect(toasts).toHaveCount(1);
-      expect(await getToastType(toasts.first())).toBe(ToastType.Error);
-      await expect(toasts.first()).toContainText(`no caben en el fichero de Prisma: ${invoiceWithAmountTooLarge.id}`);
+      await expectSingleToast(page, `no caben en el fichero de Prisma: ${invoiceWithAmountTooLarge.id}`);
       expect(downloads).toHaveLength(0);
       for (const invoice of await getInvoices()) {
         expect(invoice.accounted, `Factura ${invoice.id}`).toBe(
@@ -397,14 +406,9 @@ test(
         .update(dbTableSellOrderLine)
         .set({ partPrice: sellOrderLine.partPrice })
         .where(eq(dbTableSellOrderLine.id, sellOrderLine.id));
-      await clearToasts(page);
 
       await page.goto("/invoicing");
       const { content, fileName } = await workflowAccountInvoices(page);
-
-      await expect(toasts).toHaveCount(1);
-      expect(await getToastType(toasts.first())).toBe(ToastType.Success);
-      await clearToasts(page);
 
       expect(fileName).toBe(`facturas-${pendingInvoices.at(0)!.id}-${pendingInvoices.at(-1)!.id}.csv`);
       expect(await fs.readFile(getAccountingExportPath(fileName)), "The server keeps the exported file").toEqual(
@@ -483,17 +487,13 @@ test(
       );
 
       // ...so a new export has nothing to download
-      await clearToasts(page);
       downloads.length = 0;
       await confirmAccountInvoices(page);
-      await expect(toasts).toHaveCount(1);
-      expect(await getToastType(toasts.first())).toBe(ToastType.Error);
-      await expect(toasts.first()).toContainText("No hay Facturas pendientes de contabilizar");
+      await expectSingleToast(page, "No hay Facturas pendientes de contabilizar");
       expect(downloads).toHaveLength(0);
     });
 
     await test.step("an accounted invoice can be marked as not accounted and is exported again", async () => {
-      await clearToasts(page);
       for (const invoice of mockInvoices) {
         await db.update(dbTableInvoice).set({ accounted: invoice.accounted }).where(eq(dbTableInvoice.id, invoice.id));
       }

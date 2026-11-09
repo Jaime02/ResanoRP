@@ -12,7 +12,7 @@ import { mockMachineProductionOrderQueues, mockMachines, mockProductionOrders } 
 import { getTestId } from "@/tests/utils/components";
 import { InputElementType, getFormInputByLabel } from "@/tests/utils/components/form";
 import { getTableRowByTestId, getTableRowByPosition, getTableRows } from "@/tests/utils/components/table";
-import { clearToasts, getToastType } from "@/tests/utils/components/toast";
+import { expectSingleToast } from "@/tests/utils/components/toast";
 import { TestAnnotations, test } from "@/tests/utils/fixtures";
 import {
   getMockProducedProductionOrderStatus,
@@ -32,7 +32,6 @@ import {
   workflowStopActiveProductionOrder,
 } from "@/tests/workflows/production";
 import { assertTagFileGenerated } from "@/tests/workflows/tag";
-import { ToastType } from "@/types";
 import type { BaseMachine } from "@/types/machine";
 
 const getMockQueue = (machine: BaseMachine) =>
@@ -91,9 +90,7 @@ test(
         await inputNotes.fill(newNotes);
         await inputNotes.blur();
 
-        await expect(toasts).toHaveCount(1);
-        expect(await getToastType(toasts.first())).toBe(ToastType.Success);
-        await clearToasts(page);
+        await expectSingleToast(page);
 
         const updatedDbProductionOrder = await getProductionOrderById(dbProductionOrder.id);
         expect(updatedDbProductionOrder).toBeDefined();
@@ -126,9 +123,7 @@ test(
         await expect(buttonMoveToQueueStart).toBeVisible();
         await buttonMoveToQueueStart.click();
 
-        await expect(toasts).toHaveCount(1);
-        expect(await getToastType(toasts.first())).toBe(ToastType.Success);
-        await clearToasts(page);
+        await expectSingleToast(page);
 
         const dbUpdatedMachineProductionOrdersQueue = await getMachineProductionOrderQueue(userMachine.id);
         expect(dbUpdatedMachineProductionOrdersQueue.length).toBe(machineProductionOrderQueue.length);
@@ -162,7 +157,7 @@ test(
         expect(await getProductionOrderProducedQuantity(activeProductionOrderId)).toBe(producedQuantityBefore);
       });
 
-      await test.step(`stop the production order of ${userMachine.name} without producing, no tag is required`, async () => {
+      await test.step(`stop the production order of ${userMachine.name} without producing or with an empty quantity, no tag is required`, async () => {
         await workflowOpenProduction(page, userMachine);
         const producedQuantityBefore = await getProductionOrderProducedQuantity(activeProductionOrderId);
 
@@ -175,14 +170,17 @@ test(
         await expect(inputProducedQuantity).toHaveValue("0");
         await expect(printTagButton).toBeDisabled();
 
+        // An empty quantity is stopped as nothing produced
+        await inputProducedQuantity.clear();
+        await expect(inputProducedQuantity).toHaveValue("");
+        await expect(printTagButton).toBeDisabled();
+
         await dialogContentStopProductionOrder.getByTestId("button-confirm-stop-production-order").click();
 
         await expect(dialogContentNoTagPrinted).toBeHidden();
         await expect(dialogContentStopProductionOrder).toBeHidden();
 
-        await expect(toasts).toHaveCount(1);
-        expect(await getToastType(toasts.first())).toBe(ToastType.Success);
-        await clearToasts(page);
+        await expectSingleToast(page);
 
         expect((await getMachineById(userMachine.id))?.activeProductionOrderId).toBeNull();
         expect(await getProductionOrderProducedQuantity(activeProductionOrderId)).toBe(producedQuantityBefore);
@@ -218,9 +216,7 @@ test(
         await expect(printTagButton).toBeEnabled();
         await printTagButton.click();
 
-        await expect(toasts).toHaveCount(1);
-        expect(await getToastType(toasts.first())).toBe(ToastType.Success);
-        await clearToasts(page);
+        await expectSingleToast(page);
 
         assertTagFileGenerated(tagFilePath);
 

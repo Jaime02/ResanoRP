@@ -1,3 +1,4 @@
+import fs from "node:fs";
 import path from "node:path";
 
 import { expect } from "@playwright/test";
@@ -19,7 +20,6 @@ import { CLOSE_LABEL, STATUS_PENDING_LABEL } from "@/messages/common";
 import { INVOICE_CREATE_TITLE } from "@/messages/invoice";
 import { SHOW_PREPARED_LINES_LABEL } from "@/messages/sell-order";
 import { SellOrderStatus } from "@/schemas/sell-order";
-import { assertPartStockConsumption } from "@/tests/assertions/part-stock";
 import { MOCK_INITIAL_DATE, mockClients, mockDeliveryNotes, mockInvoices, mockSellOrderLines } from "@/tests/mock-data";
 import { getTestId } from "@/tests/utils/components";
 import {
@@ -37,7 +37,7 @@ import {
   getTableRows,
   getTableSubrowById,
 } from "@/tests/utils/components/table";
-import { clearToasts, getToastType } from "@/tests/utils/components/toast";
+import { expectSingleToast } from "@/tests/utils/components/toast";
 import { TestAnnotations, inAnotherTab, setUserMode, test } from "@/tests/utils/fixtures";
 import {
   getMockPartByPartReferenceId,
@@ -55,8 +55,8 @@ import {
   workflowStageSingleSellOrderLine,
 } from "@/tests/workflows/delivery-note";
 import { workflowPickInvoiceClient } from "@/tests/workflows/invoice";
+import { assertPartStockConsumption } from "@/tests/workflows/part-stock";
 import { workflowPrintTag } from "@/tests/workflows/tag";
-import { ToastType } from "@/types";
 import type { BaseDeliveryNote } from "@/types/delivery-note";
 import type { BaseDeliveryNoteLine } from "@/types/delivery-note-line";
 import type { BaseSellOrderLine } from "@/types/sell-order-line";
@@ -70,6 +70,8 @@ test.beforeEach(({ page }) => {
   tableStagedSellOrderLines = page.getByTestId("table-staged-sell-order-lines");
   buttonSubmitFormDeliveryNote = page.getByTestId("button-submit-form-delivery-note");
 });
+
+const PENDING_QUANTITY_EXCEEDED_MESSAGE = "no puede pasar de su cantidad";
 
 const activeClients = mockClients.filter((client) => client.deletedAt === null);
 const clientsWithPendingLines = mockClients.filter(
@@ -90,7 +92,7 @@ for (const selectedClient of clientsWithPendingLines) {
   test(
     `create delivery notes from the pending sell order lines of ${selectedClient.name}`,
     { annotation: TestAnnotations.ResetTags },
-    async ({ page, toasts }) => {
+    async ({ page }) => {
       const pendingSellOrderLine = (await getMockPendingSellOrderLines(selectedClient.id)).at(0)!;
       expect(pendingSellOrderLine).toBeDefined();
       const pendingSellOrder = getMockSellOrderById(pendingSellOrderLine.sellOrderId)!;
@@ -174,9 +176,7 @@ for (const selectedClient of clientsWithPendingLines) {
         await expect(buttonSubmitFormDeliveryNote).toBeEnabled();
         await buttonSubmitFormDeliveryNote.click();
 
-        await expect(toasts).toHaveCount(1);
-        expect(await getToastType(toasts.first())).toBe(ToastType.Success);
-        await clearToasts(page);
+        await expectSingleToast(page);
 
         // The delivered quantity is taken from the stock, which never goes below zero
         const remainingPartStock = await getLatestPartStockTransactionByPartId(stagedPart!.id);
@@ -197,9 +197,6 @@ for (const selectedClient of clientsWithPendingLines) {
         const createdDeliveryNoteLine = (await getDeliveryNoteLinesByDeliveryNoteId(createdDeliveryNote!.id)).at(0);
         expect(createdDeliveryNoteLine).toBeDefined();
         expect(createdDeliveryNoteLine!.quantity).toBe(quantityToStage);
-
-        const dbSellOrder = await getSellOrders({ filters: [{ id: "id", value: pendingSellOrder.id }] });
-        expect(dbSellOrder).toBeDefined();
 
         const dbSellOrderLine = await getSellOrderLineById(pendingSellOrderLine.id);
         expect(dbSellOrderLine).toBeDefined();
@@ -272,8 +269,7 @@ for (const selectedClient of clientsWithPendingLines) {
         await expect(buttonSubmitFormDeliveryNote).toBeEnabled();
         await buttonSubmitFormDeliveryNote.click();
 
-        await expect(toasts).toHaveCount(1);
-        expect(await getToastType(toasts.first())).toBe(ToastType.Success);
+        await expectSingleToast(page);
 
         // The previous step used the next id of the sequence, so the created Albarán is the only new one
         const createdDeliveryNotes = (await getDeliveryNotes()).filter(
@@ -338,7 +334,7 @@ for (const client of clientsWithPendingLines) {
   test(
     `deliver and invoice a sell order line without part of ${client.name}`,
     { annotation: TestAnnotations.ResetTags },
-    async ({ db, page, toasts }) => {
+    async ({ db, page }) => {
       const sellOrder = getMockSellOrderById((await getMockPendingSellOrderLines(client.id)).at(0)!.sellOrderId)!;
       const [customSellOrderLine] = await db
         .insert(dbTableSellOrderLine)
@@ -376,9 +372,7 @@ for (const client of clientsWithPendingLines) {
         const previousDeliveryNoteIds = (await getDeliveryNotes()).map((deliveryNote) => deliveryNote.id);
         await expect(getTableRowByTestId(tableStagedSellOrderLines, customSellOrderLine.id)).toBeVisible();
         await buttonSubmitFormDeliveryNote.click();
-        await expect(toasts).toHaveCount(1);
-        expect(await getToastType(toasts.first())).toBe(ToastType.Success);
-        await clearToasts(page);
+        await expectSingleToast(page);
 
         const createdDeliveryNote = (await getDeliveryNotes()).find(
           (deliveryNote) => !previousDeliveryNoteIds.includes(deliveryNote.id),
@@ -407,9 +401,7 @@ for (const client of clientsWithPendingLines) {
         await expect(deliveryNoteLineRow.getByTestId("partReference")).toHaveText("");
 
         await workflowEditDeliveryNoteLineQuantity(page, deliveryNoteLine.id, 2);
-        await expect(toasts).toHaveCount(1);
-        expect(await getToastType(toasts.first())).toBe(ToastType.Success);
-        await clearToasts(page);
+        await expectSingleToast(page);
         deliveryNoteLine = (await getDeliveryNoteLine({ id: deliveryNoteLine.id }))!;
         expect(deliveryNoteLine.quantity).toBe(2);
         // The part no longer delivered is pending again
@@ -475,7 +467,7 @@ for (const client of clientsWithPendingLines) {
   test(
     `deliver the returns of ${client.name}`,
     { annotation: TestAnnotations.NonEmptyErrorsLogFile },
-    async ({ db, page, toasts }) => {
+    async ({ db, page }) => {
       const partSellOrderLine = (await getMockPendingSellOrderLines(client.id)).find(
         (line) => line.partReferenceId !== null,
       )!;
@@ -503,11 +495,6 @@ for (const client of clientsWithPendingLines) {
       const getPendingQuantity = async (sellOrderLineId: number) =>
         (await getSellOrderLineById(sellOrderLineId))?.pendingQuantity;
       const getStock = async () => (await getLatestPartStockTransactionByPartId(partId))?.finalQuantity ?? 0;
-      const expectSingleToastOfType = async (toastType: ToastType) => {
-        await expect(toasts).toHaveCount(1);
-        expect(await getToastType(toasts.first())).toBe(toastType);
-        await clearToasts(page);
-      };
       const submitStagedQuantities = async (stagedQuantities: Array<[BaseSellOrderLine, number]>) => {
         await workflowOpenCreateDeliveryNoteForClient(page, client);
         for (const [sellOrderLine, quantity] of stagedQuantities) {
@@ -527,7 +514,7 @@ for (const client of clientsWithPendingLines) {
       const createDeliveryNote = async (stagedQuantities: Array<[BaseSellOrderLine, number]>) => {
         const previousDeliveryNoteIds = (await getDeliveryNotes()).map((deliveryNote) => deliveryNote.id);
         await submitStagedQuantities(stagedQuantities);
-        await expectSingleToastOfType(ToastType.Success);
+        await expectSingleToast(page);
         const createdDeliveryNote = (await getDeliveryNotes()).find(
           (deliveryNote) => !previousDeliveryNoteIds.includes(deliveryNote.id),
         )!;
@@ -536,7 +523,7 @@ for (const client of clientsWithPendingLines) {
       const expectDeliveryNoteRejected = async (stagedQuantities: Array<[BaseSellOrderLine, number]>) => {
         const previousDeliveryNotesCount = (await getDeliveryNotes()).length;
         await submitStagedQuantities(stagedQuantities);
-        await expectSingleToastOfType(ToastType.Error);
+        await expectSingleToast(page, PENDING_QUANTITY_EXCEEDED_MESSAGE);
         expect(await getDeliveryNotes()).toHaveLength(previousDeliveryNotesCount);
       };
 
@@ -583,7 +570,7 @@ for (const client of clientsWithPendingLines) {
         await inputUnitPrice.clear();
         await inputUnitPrice.pressSequentially("-0.5");
         await inputUnitPrice.blur();
-        await expectSingleToastOfType(ToastType.Success);
+        await expectSingleToast(page);
         expect((await getDeliveryNoteLine({ id: returnDeliveryNoteLine.id }))?.unitPrice).toBe("-0.5");
         await expect(row.getByTestId("total")).toHaveText(formatCents(8500));
         await expect(dialogCreateEditDeliveryNote.getByTestId("span-delivery-note-lines-total")).toContainText(
@@ -593,7 +580,6 @@ for (const client of clientsWithPendingLines) {
 
       await test.step("deleting the delivered return makes it pending again", async () => {
         await workflowDeleteDeliveryNote(page, returnDeliveryNoteLine.deliveryNoteId);
-        await clearToasts(page);
         expect(await getPendingQuantity(returnSellOrderLine.id)).toBe(-170);
       });
 
@@ -617,12 +603,11 @@ for (const client of clientsWithPendingLines) {
 
         // Nothing was clamped, so deleting the Albarán takes away exactly what it gave back
         await workflowDeleteDeliveryNote(page, secondReturnLine.deliveryNoteId);
-        await clearToasts(page);
         expect(await getPendingQuantity(orderedSellOrderLine.id)).toBe(70);
 
         await workflowOpenEditDeliveryNote(page, firstReturnLine.deliveryNoteId);
         const inputQuantity = await workflowEditDeliveryNoteLineQuantity(page, firstReturnLine.id, -100);
-        await expectSingleToastOfType(ToastType.Error);
+        await expectSingleToast(page, PENDING_QUANTITY_EXCEEDED_MESSAGE);
         await expect(inputQuantity).toHaveValue("-30");
         expect((await getDeliveryNoteLine({ id: firstReturnLine.id }))?.quantity).toBe(-30);
         expect(await getPendingQuantity(orderedSellOrderLine.id)).toBe(70);
@@ -758,6 +743,28 @@ for (const client of clientsWithPendingLines) {
     const dialogCheckboxes = page.getByTestId("dialog-pending-sell-orders-checkboxes-content");
     const dialogPrint = page.getByTestId("dialog-print-pending-sell-orders-content");
 
+    // The download is the file the preview shows
+    const downloadPreviewAndClose = async (withCheckboxes: boolean) => {
+      const downloadPromise = page.waitForEvent("download");
+      await dialogPrint.getByTestId("button-download-pending-sell-orders").click();
+      const download = await downloadPromise;
+      const url = new URL(download.url());
+      expect(url.pathname).toBe(`/api/files/pending-sell-orders/${client.id}`);
+      expect(url.searchParams.get("withCheckboxes")).toBe(String(withCheckboxes));
+      expect(download.suggestedFilename()).toBe(
+        `Pedidos Pendientes ${client.name} ${formatDate(new Date())!.replaceAll("/", "-")}.pdf`,
+      );
+      expect(
+        fs
+          .readFileSync(await download.path())
+          .subarray(0, 5)
+          .toString(),
+      ).toBe("%PDF-");
+
+      await dialogPrint.getByRole("button", { name: CLOSE_LABEL }).click();
+      await expect(dialogPrint).not.toBeVisible();
+    };
+
     await test.step("a user opens the preview without being asked for the extra columns", async () => {
       await setUserMode(page, UserMode.User);
       await page.goto("/create-delivery-note");
@@ -769,23 +776,29 @@ for (const client of clientsWithPendingLines) {
 
       await expect(dialogPrint).toBeVisible();
       await expect(dialogCheckboxes).not.toBeVisible();
-      await dialogPrint.getByRole("button", { name: CLOSE_LABEL }).click();
-      await expect(dialogPrint).not.toBeVisible();
+      await downloadPreviewAndClose(false);
     });
 
     await test.step("an admin is asked for the extra columns before the preview", async () => {
       await setUserMode(page, UserMode.Admin);
       await workflowOpenCreateDeliveryNoteForClient(page, client);
-      await buttonPrint.click();
 
-      await expect(dialogCheckboxes).toBeVisible();
-      await expect(dialogPrint).not.toBeVisible();
-      await dialogCheckboxes.getByTestId("button-print-pending-sell-orders-without-checkboxes").click();
+      for (const withCheckboxes of [false, true]) {
+        await buttonPrint.click();
+        await expect(dialogCheckboxes).toBeVisible();
+        await expect(dialogPrint).not.toBeVisible();
+        await dialogCheckboxes
+          .getByTestId(
+            withCheckboxes
+              ? "button-print-pending-sell-orders-with-checkboxes"
+              : "button-print-pending-sell-orders-without-checkboxes",
+          )
+          .click();
 
-      await expect(dialogCheckboxes).not.toBeVisible();
-      await expect(dialogPrint).toBeVisible();
-      await dialogPrint.getByRole("button", { name: CLOSE_LABEL }).click();
-      await expect(dialogPrint).not.toBeVisible();
+        await expect(dialogCheckboxes).not.toBeVisible();
+        await expect(dialogPrint).toBeVisible();
+        await downloadPreviewAndClose(withCheckboxes);
+      }
     });
 
     await test.step("the button is disabled once the client has no pending lines", async () => {
@@ -805,35 +818,21 @@ for (const client of clientsWithPendingLines) {
   });
 }
 
-for (const client of activeClients) {
-  test(
-    `the pending sell orders file is generated for ${client.name}`,
-    { annotation: TestAnnotations.NonEmptyErrorsLogFile },
-    async ({ page }) => {
-      for (const withCheckboxes of [true, false]) {
-        const response = await page.request.get(
-          `/api/files/pending-sell-orders/${client.id}?withCheckboxes=${withCheckboxes}`,
-        );
-        expect(response.status()).toBe(200);
-        expect(response.headers()["content-type"]).toBe("application/pdf");
-        expect(decodeURIComponent(response.headers()["content-disposition"].split("''")[1])).toBe(
-          `Pedidos Pendientes ${client.name} ${formatDate(new Date())!.replaceAll("/", "-")}.pdf`,
-        );
-        expect((await response.body()).subarray(0, 5).toString()).toBe("%PDF-");
-      }
-
-      expect((await page.request.get("/api/files/pending-sell-orders/invalid")).status()).toBe(400);
-      const missingClientId = Math.max(...mockClients.map((mockClient) => mockClient.id)) + 1;
-      expect((await page.request.get(`/api/files/pending-sell-orders/${missingClientId}`)).status()).toBe(404);
-    },
-  );
-}
+test(
+  "the pending sell orders file of a wrong or missing client is not found",
+  { annotation: TestAnnotations.NonEmptyErrorsLogFile },
+  async ({ page }) => {
+    const missingClientId = Math.max(...mockClients.map((mockClient) => mockClient.id)) + 1;
+    expect((await page.goto("/api/files/pending-sell-orders/invalid"))?.status()).toBe(400);
+    expect((await page.goto(`/api/files/pending-sell-orders/${missingClientId}`))?.status()).toBe(404);
+  },
+);
 
 for (const client of clientsWithPendingLines) {
   test(
     `add the staged lines of ${client.name} to an existing delivery note`,
     { annotation: TestAnnotations.NonEmptyErrorsLogFile },
-    async ({ db, page, toasts }) => {
+    async ({ db, page }) => {
       const partLine = (await getMockPendingSellOrderLines(client.id)).find((line) => line.partReferenceId !== null)!;
       expect(partLine, "A pending line of the Cliente with part is needed").toBeDefined();
       const sellOrder = getMockSellOrderById(partLine.sellOrderId)!;
@@ -900,9 +899,7 @@ for (const client of clientsWithPendingLines) {
         await assertComboboxValue(comboboxDeliveryNote, String(deliveryNoteId));
 
         await buttonSubmit.click();
-        await expect(toasts).toHaveCount(1);
-        expect(await getToastType(toasts.first())).toBe(ToastType.Success);
-        await clearToasts(page);
+        await expectSingleToast(page);
 
         await expect(dialog).not.toBeVisible();
         await expect(getDivDisabledMessage(tableStagedSellOrderLines)).toBeVisible();

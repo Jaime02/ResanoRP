@@ -7,8 +7,7 @@ import { MACHINE_CREATE_TITLE } from "@/messages/machine";
 import { openAndConfirmAlertDialog } from "@/tests/utils/components/alert-dialog";
 import { assertFormLoaded, getFormInputByLabel } from "@/tests/utils/components/form";
 import { findTableRowByText } from "@/tests/utils/components/table";
-import { getToastType, getToasts } from "@/tests/utils/components/toast";
-import { ToastType } from "@/types";
+import { expectSingleToast } from "@/tests/utils/components/toast";
 
 export async function workflowCreateMachine(page: Page, machineId: number, machineName: string) {
   const tableMaintenanceMachine = page.getByTestId("table-machine");
@@ -27,6 +26,7 @@ export async function workflowCreateMachine(page: Page, machineId: number, machi
   await dialogCreateMachine.getByTestId("button-submit").click();
 
   await expect(dialogCreateMachine).not.toBeVisible();
+  await expectSingleToast(page);
   await expect(tableMaintenanceMachine.getByText(machineName, { exact: true })).toBeVisible();
 
   const dbMachine = await getMachineById(machineId);
@@ -37,7 +37,6 @@ export async function workflowCreateMachine(page: Page, machineId: number, machi
 export async function workflowEditMachine(page: Page, machineId: number, currentName: string, updatedName: string) {
   const tableMaintenanceMachine = page.getByTestId("table-machine");
   const formMachine = page.getByTestId("form-machine");
-  const toasts = getToasts(page);
 
   await page.goto("/maintenance?tab=machine");
 
@@ -50,8 +49,7 @@ export async function workflowEditMachine(page: Page, machineId: number, current
   await formMachine.locator(`input[value="${currentName}"]`).fill(updatedName);
   await formMachine.getByTestId("button-submit").click();
 
-  await expect(toasts).toHaveCount(1);
-  expect(await getToastType(toasts.first())).toBe(ToastType.Success);
+  await expectSingleToast(page);
 
   const dbMachine = await getMachineById(machineId);
   expect(dbMachine).toBeDefined();
@@ -75,9 +73,8 @@ export async function workflowDeleteMachine(page: Page, machineId: number, machi
     "dialog-delete-model-content",
   );
 
+  await expectSingleToast(page);
   await expect(tableMaintenanceMachine.getByText(machineName, { exact: true })).not.toBeVisible();
 
-  const deletedMachine = await getMachineById(machineId);
-  expect(deletedMachine).toBeDefined();
-  expect(deletedMachine!.deletedAt).not.toBeNull();
+  expect((await getMachineById(machineId))?.deletedAt).toBeInstanceOf(Date);
 }

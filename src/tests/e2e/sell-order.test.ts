@@ -42,6 +42,7 @@ import {
   SELL_ORDER_LINE_ORDER_DELETED_LABEL,
   CLIENT_REFERENCE_LABEL,
   RECEPTION_DATE_LABEL,
+  SELL_ORDER_REFERENCE_EXISTS_MESSAGE,
 } from "@/messages/sell-order";
 import { ProductionOrderStatus } from "@/schemas/production-order";
 import type { TTableSellOrderState } from "@/schemas/sell-order";
@@ -92,7 +93,7 @@ import {
   getTableSkeletonRows,
   getTableSubrowById,
 } from "@/tests/utils/components/table";
-import { clearToasts, getToastType } from "@/tests/utils/components/toast";
+import { expectSingleToast } from "@/tests/utils/components/toast";
 import { expectCheckViolation, expectUniqueViolation } from "@/tests/utils/db";
 import { TestAnnotations, test } from "@/tests/utils/fixtures";
 import {
@@ -104,6 +105,7 @@ import {
   getMockSellOrderLines,
   getMockSellOrdersOfPart,
 } from "@/tests/utils/mock-data-utils";
+import { holdRequestWhile } from "@/tests/utils/trpc";
 import {
   getSellOrderFilePath,
   workflowDeleteSellOrder,
@@ -173,26 +175,16 @@ test(
       await expect(buttonSubmit).toBeEnabled();
 
       // Holding the request keeps the form saving long enough to check that the Cliente can not change meanwhile
-      let releaseCreateSellOrder!: () => void;
-      const createSellOrderReleased = new Promise<void>((resolve) => {
-        releaseCreateSellOrder = resolve;
+      await holdRequestWhile({
+        page,
+        procedurePath: "sellOrder.create",
+        send: async () => buttonSubmit.click(),
+        meanwhile: async () => expect(comboboxClient.getByTestId("button-trigger")).toBeDisabled(),
       });
-      await page.route(
-        "**/api/trpc/sellOrder.create*",
-        async (route) => {
-          await createSellOrderReleased;
-          await route.continue();
-        },
-        { times: 1 },
-      );
-      await buttonSubmit.click();
-      await expect(comboboxClient.getByTestId("button-trigger")).toBeDisabled();
-      releaseCreateSellOrder();
 
       await expect(page).toHaveURL(`/sell-order/${newSellOrder.id}`);
 
-      await expect(toasts).toHaveCount(1);
-      expect(await getToastType(toasts.first())).toBe(ToastType.Success);
+      await expectSingleToast(page);
 
       const dbSellOrder = await getSellOrderById(newSellOrder.id);
       expect(dbSellOrder).toBeDefined();
@@ -201,7 +193,7 @@ test(
       const { receptionDate: newSellOrderReceptionDate, ...newSellOrderWithoutReceptionDate } = newSellOrder;
       expect(isSameAppDay(dbReceptionDate, newSellOrderReceptionDate)).toBeTruthy();
       expect(dbSellOrderWithoutReceptionDate).toMatchObject(newSellOrderWithoutReceptionDate);
-      expect(dbSellOrder!.fileUploadedAt).not.toBeNull();
+      expect(dbSellOrder!.fileUploadedAt).toBeInstanceOf(Date);
 
       expect(
         await getSellOrderPath({
@@ -229,9 +221,7 @@ test(
       await getFormInputByLabel(formSellOrder, NOTES_LABEL, InputElementType.Textarea).clear();
       await selectComboboxOption(page, comboboxPaymentMethod, paymentMethod.name, String(paymentMethod.id));
       await buttonSubmit.click();
-      await expect(toasts).toHaveCount(1);
-      expect(await getToastType(toasts.first())).toBe(ToastType.Success);
-      await clearToasts(page);
+      await expectSingleToast(page);
       expect(await getSellOrderById(sellOrder.id)).toMatchObject({
         clientReference: null,
         notes: null,
@@ -242,9 +232,7 @@ test(
       await getClearComboboxButton(comboboxPaymentMethod).click();
       await assertComboboxValue(comboboxPaymentMethod, null);
       await buttonSubmit.click();
-      await expect(toasts).toHaveCount(1);
-      expect(await getToastType(toasts.first())).toBe(ToastType.Success);
-      await clearToasts(page);
+      await expectSingleToast(page);
       expect((await getSellOrderById(sellOrder.id))?.paymentMethodId).toBeNull();
     });
 
@@ -262,17 +250,11 @@ test(
       const existingSellOrderLinesPartReferencesIds = existingSellOrderLines.map((line) => line.partReferenceId);
       const pickedPartReference = clientPartReferences.find(
         (ref) => !ref.deletedAt && !existingSellOrderLinesPartReferencesIds.includes(ref.id),
-      );
+      )!;
       expect(pickedPartReference).toBeDefined();
-      if (!pickedPartReference) {
-        return;
-      }
 
-      const partToBeAdded = clientParts.find((part) => part.id === pickedPartReference.partId);
+      const partToBeAdded = clientParts.find((part) => part.id === pickedPartReference.partId)!;
       expect(partToBeAdded).toBeDefined();
-      if (!partToBeAdded) {
-        return;
-      }
 
       const pickedPartPrice = mockPartPrices.find((price) => price.partId === partToBeAdded.id)!;
       expect(pickedPartPrice).toBeDefined();
@@ -347,22 +329,14 @@ test(
 
       await expect(dialogCreateSellOrderLine).not.toBeVisible();
 
-      const dbSellOrder = await getSellOrderById(sellOrder.id);
-      expect(dbSellOrder).not.toBeNull();
-      const dbSellOrderLines = await getSellOrderLinesBySellOrderId(dbSellOrder!.id);
+      const dbSellOrderLines = await getSellOrderLinesBySellOrderId(sellOrder.id);
 
       const sellOrderLines = getMockSellOrderLines(sellOrder.id);
       expect(dbSellOrderLines.length).toBe(sellOrderLines.length + 1);
 
-      const newDbSellOrderLine = dbSellOrderLines.find((line) => line.id === newSellOrderLine.id);
-      expect(newDbSellOrderLine).toBeDefined();
-      expect(newDbSellOrderLine).toMatchObject({
-        ...newSellOrderLine,
-        sellOrderId: dbSellOrder!.id,
-      });
+      expect(dbSellOrderLines.find((line) => line.id === newSellOrderLine.id)).toMatchObject(newSellOrderLine);
 
-      await expect(toasts).toHaveCount(1);
-      expect(await getToastType(toasts.first())).toBe(ToastType.Success);
+      await expectSingleToast(page);
     });
 
     await test.step("add a sell order line with a reference without client", async () => {
@@ -416,8 +390,7 @@ test(
       );
       await dialogCreateSellOrderLine.getByTestId("button-submit").click();
       await expect(dialogCreateSellOrderLine).not.toBeVisible();
-      await expect(toasts).toHaveCount(1);
-      expect(await getToastType(toasts.first())).toBe(ToastType.Success);
+      await expectSingleToast(page);
 
       const dbSellOrderLines = await getSellOrderLinesBySellOrderId(sellOrder.id);
       expect(dbSellOrderLines).toHaveLength(existingDbSellOrderLines.length + 1);
@@ -521,9 +494,7 @@ test(
         actionsProductionOrder.getByTestId("button-delete"),
         "dialog-delete-model-content",
       );
-      await expect(toasts).toHaveCount(1);
-      expect(await getToastType(toasts.first())).toBe(ToastType.Success);
-      await clearToasts(page);
+      await expectSingleToast(page);
       await expect(rowProductionOrder.getByTestId("status")).toHaveText(STATUS_DELETED_LABEL);
       await expect(actionsProductionOrder.getByTestId("button-delete")).not.toBeAttached();
       expect(
@@ -536,9 +507,7 @@ test(
         actionsProductionOrder.getByTestId("button-restore"),
         "dialog-restore-model-content",
       );
-      await expect(toasts).toHaveCount(1);
-      expect(await getToastType(toasts.first())).toBe(ToastType.Success);
-      await clearToasts(page);
+      await expectSingleToast(page);
       await expect(rowProductionOrder.getByTestId("status")).toHaveText(SELL_ORDER_LINE_ORDER_DELETED_LABEL);
       await expect(actionsProductionOrder.getByTestId("button-restore")).not.toBeAttached();
       expect(
@@ -580,11 +549,8 @@ test(
     await test.step("update a sell order line", async () => {
       const sellOrder = mockSellOrders[0];
       const sellOrderLines = getMockSellOrderLines(sellOrder.id);
-      const sellOrderLineToBeUpdated = sellOrderLines.at(0);
+      const sellOrderLineToBeUpdated = sellOrderLines.at(0)!;
       expect(sellOrderLineToBeUpdated).toBeDefined();
-      if (!sellOrderLineToBeUpdated) {
-        return;
-      }
 
       const updatedSellOrderLineData: Partial<TSellOrderLine> = {
         pendingQuantity: 2,
@@ -605,9 +571,7 @@ test(
       await inputQuantity.pressSequentially(String(updatedSellOrderLineData.quantity));
       await inputQuantity.press("Enter");
 
-      await expect(toasts).toHaveCount(1);
-      expect(await getToastType(toasts.first())).toBe(ToastType.Success);
-      await clearToasts(page);
+      await expectSingleToast(page);
 
       let updatedSellOrderLine = await getSellOrderLineById(sellOrderLineToBeUpdated.id);
       expect(updatedSellOrderLine).toBeDefined();
@@ -619,9 +583,7 @@ test(
       await inputPendingQuantity.pressSequentially(String(updatedSellOrderLineData.pendingQuantity));
       await inputPendingQuantity.press("Enter");
 
-      await expect(toasts).toHaveCount(1);
-      expect(await getToastType(toasts.first())).toBe(ToastType.Success);
-      await clearToasts(page);
+      await expectSingleToast(page);
 
       updatedSellOrderLine = await getSellOrderLineById(sellOrderLineToBeUpdated.id);
       expect(updatedSellOrderLine).toBeDefined();
@@ -638,18 +600,14 @@ test(
       await inputNotes.fill(newNotes);
       await inputNotes.press("Enter");
 
-      await expect(toasts).toHaveCount(1);
-      expect(await getToastType(toasts.first())).toBe(ToastType.Success);
-      await clearToasts(page);
+      await expectSingleToast(page);
       expect((await getSellOrderLineById(sellOrderLineWithNotes.id))?.notes).toBe(newNotes);
 
       // Clearing the notes stores them as empty
       await inputNotes.clear();
       await inputNotes.press("Enter");
 
-      await expect(toasts).toHaveCount(1);
-      expect(await getToastType(toasts.first())).toBe(ToastType.Success);
-      await clearToasts(page);
+      await expectSingleToast(page);
       expect((await getSellOrderLineById(sellOrderLineWithNotes.id))?.notes).toBeNull();
 
       const cellInputPartPicker = rowSellOrderLine.getByTestId("partPrice");
@@ -681,11 +639,8 @@ test(
         (price) =>
           price.partId === getMockPartReferenceById(sellOrderLineToBeUpdated.partReferenceId)?.partId &&
           price.price !== sellOrderLineToBeUpdated.partPrice,
-      );
+      )!;
       expect(pickedPartPrice).toBeDefined();
-      if (!pickedPartPrice) {
-        return;
-      }
 
       const pickedPartPriceRow = getTableRowByTestId(tablePickerPartPrice, pickedPartPrice.id);
       await expect(pickedPartPriceRow).toBeVisible();
@@ -697,42 +652,27 @@ test(
 
       await expect(inputPartPrice).toHaveValue(formatPrice(pickedPartPrice.price, { replaceNBSP: true }));
 
-      await expect(toasts).toHaveCount(1);
-      expect(await getToastType(toasts.first())).toBe(ToastType.Success);
+      await expectSingleToast(page);
 
       updatedSellOrderLine = await getSellOrderLineById(sellOrderLineToBeUpdated.id);
       expect(updatedSellOrderLine).toBeDefined();
-      if (!updatedSellOrderLine) {
-        return;
-      }
-      expect(updatedSellOrderLine.partPrice).not.toBe(sellOrderLineToBeUpdated.partPrice);
-      await clearToasts(page);
+      expect(updatedSellOrderLine!.partPrice).not.toBe(sellOrderLineToBeUpdated.partPrice);
 
       // Update the part price through the price input
       const newPartPrice = "69.69";
       expect(newPartPrice, "Wrong test dummy value, it is equal to the existing part price").not.toStrictEqual(
-        updatedSellOrderLine.partPrice,
+        updatedSellOrderLine!.partPrice,
       );
       await inputPartPrice.clear();
       await inputPartPrice.pressSequentially(newPartPrice);
       await inputPartPrice.press("Enter");
 
-      await expect(toasts).toHaveCount(1);
-      expect(await getToastType(toasts.first())).toBe(ToastType.Success);
+      await expectSingleToast(page);
 
-      updatedSellOrderLine = await getSellOrderLineById(sellOrderLineToBeUpdated.id);
-      expect(updatedSellOrderLine).toBeDefined();
-      if (!updatedSellOrderLine) {
-        return;
-      }
-      expect(updatedSellOrderLine.partPrice).toBe(newPartPrice);
-      await clearToasts(page);
+      expect((await getSellOrderLineById(sellOrderLineToBeUpdated.id))?.partPrice).toBe(newPartPrice);
 
-      const sellOrderLineWithoutPrice = sellOrderLines.find((sellOrderLine) => sellOrderLine.partPrice === null);
+      const sellOrderLineWithoutPrice = sellOrderLines.find((sellOrderLine) => sellOrderLine.partPrice === null)!;
       expect(sellOrderLineWithoutPrice).toBeDefined();
-      if (!sellOrderLineWithoutPrice) {
-        return;
-      }
       const cellPartPriceWithoutPrice = getTableRowByTestId(
         sellOrderLinesTable,
         sellOrderLineWithoutPrice.id,
@@ -746,17 +686,13 @@ test(
       await inputPartPriceWithoutPrice.pressSequentially(newPartPrice);
       await inputPartPriceWithoutPrice.press("Enter");
 
-      await expect(toasts).toHaveCount(1);
-      expect(await getToastType(toasts.first())).toBe(ToastType.Success);
-      await clearToasts(page);
+      await expectSingleToast(page);
       expect((await getSellOrderLineById(sellOrderLineWithoutPrice.id))?.partPrice).toBe(newPartPrice);
       await expect(buttonClearPartPrice).toBeVisible();
 
       await clearPicker(pickerPartPriceWithoutPrice);
 
-      await expect(toasts).toHaveCount(1);
-      expect(await getToastType(toasts.first())).toBe(ToastType.Success);
-      await clearToasts(page);
+      await expectSingleToast(page);
       expect((await getSellOrderLineById(sellOrderLineWithoutPrice.id))?.partPrice).toBeNull();
       await expect(inputPartPriceWithoutPrice).toHaveValue("");
       await expect(buttonClearPartPrice).not.toBeAttached();
@@ -765,11 +701,8 @@ test(
     await test.step("delete a sell order line", async () => {
       const sellOrder = mockSellOrders[0];
       const sellOrderLines = getMockSellOrderLines(sellOrder.id);
-      const sellOrderLineToBeDeleted = sellOrderLines.at(0);
+      const sellOrderLineToBeDeleted = sellOrderLines.at(0)!;
       expect(sellOrderLineToBeDeleted).toBeDefined();
-      if (!sellOrderLineToBeDeleted) {
-        return;
-      }
 
       await page.goto(`/sell-order/${sellOrder.id}`);
 
@@ -862,8 +795,7 @@ test(
         rowSellOrderLine.getByTestId("actions").getByTestId("button-restore"),
         "dialog-restore-model-content",
       );
-      await expect(toasts).toHaveCount(1);
-      expect(await getToastType(toasts.first())).toBe(ToastType.Success);
+      await expectSingleToast(page);
       await expect(badgeSellOrderStatus).toContainText(STATUS_PENDING_LABEL);
       await expect(rowSellOrderLine.getByTestId("status")).not.toHaveText(STATUS_DELETED_LABEL);
       expect((await getSellOrderLineById(sellOrderLine.id))?.deletedAt).toBeNull();
@@ -881,12 +813,23 @@ test(
 
       const existingSellOrderClient = getMockClientById(existingSellOrder.clientId);
       expect(existingSellOrderClient).toBeDefined();
+      const otherClient = mockClients.find(
+        (client) => client.id !== existingSellOrder.clientId && client.deletedAt === null,
+      )!;
       const previousSellOrderIds = (await getSellOrders()).map((sellOrder) => sellOrder.id);
-
-      await page.goto("/create-sell-order");
-
       const comboboxClient = getFormInputByLabel(page, CLIENT_LABEL, InputElementType.Combobox);
       const buttonClearComboboxClient = getClearComboboxButton(comboboxClient);
+      const inputClientReference = getFormInputByLabel(page, CLIENT_REFERENCE_LABEL);
+      const buttonSubmit = page.getByTestId("button-submit-form-sell-order");
+
+      // Another Cliente can use the same reference
+      await page.goto("/create-sell-order");
+      await selectComboboxOption(page, comboboxClient, otherClient.name, String(otherClient.id));
+      await inputClientReference.fill(existingSellOrder.clientReference);
+      await expect(buttonSubmit).toBeEnabled();
+      await expect(toasts).toHaveCount(0);
+
+      await page.goto("/create-sell-order");
       await expect(comboboxClient).toBeVisible();
       await expect(buttonClearComboboxClient).not.toBeVisible();
       await assertComboboxValue(comboboxClient, null);
@@ -896,22 +839,16 @@ test(
       await assertComboboxValue(comboboxClient, String(existingSellOrderClient!.id));
       await expect(buttonClearComboboxClient).toBeVisible();
 
-      const inputClientReference = getFormInputByLabel(page, CLIENT_REFERENCE_LABEL);
-
       await expect(inputClientReference).toBeVisible();
       await inputClientReference.fill(existingSellOrder.clientReference);
 
-      const buttonSubmit = page.getByTestId("button-submit-form-sell-order");
       await expect(buttonSubmit).toBeDisabled();
-
-      await expect(toasts).toHaveCount(1);
-      expect(await getToastType(toasts.first())).toBe(ToastType.Error);
+      await expectSingleToast(page, SELL_ORDER_REFERENCE_EXISTS_MESSAGE);
 
       const finalDbSellOrders = await getSellOrders();
       expect(finalDbSellOrders.length).toEqual(previousSellOrderIds.length);
 
       // Deleting the Pedido de venta frees its reference
-      await clearToasts(page);
       await workflowDeleteSellOrder(page, existingSellOrder.id);
 
       // A previous step created a Pedido de venta, so the replacement is the one after it
@@ -927,24 +864,21 @@ test(
         path.join(MOCK_DATA_PATH, "sample.pdf"),
       );
 
-      await clearToasts(page);
       await expect(buttonSubmit).toBeEnabled();
       await buttonSubmit.click();
       await expect(page).toHaveURL(`/sell-order/${replacementSellOrderId}`);
+      await expectSingleToast(page);
 
       // ...so the deleted Pedido de venta can no longer be restored
       await page.goto(`/sell-order/${existingSellOrder.id}`);
-      await clearToasts(page);
       await openAndConfirmAlertDialog(
         page,
         page.getByTestId("button-restore-sell-order"),
         "dialog-restore-model-content",
       );
 
-      await expect(toasts).toHaveCount(1);
-      expect(await getToastType(toasts.first())).toBe(ToastType.Error);
-      await expect(toasts.first()).toContainText("El Cliente ya tiene un Pedido de venta con esa referencia");
-      expect((await getSellOrderById(existingSellOrder.id))!.deletedAt).not.toBeNull();
+      await expectSingleToast(page, "El Cliente ya tiene un Pedido de venta con esa referencia");
+      expect((await getSellOrderById(existingSellOrder.id))?.deletedAt).toBeInstanceOf(Date);
 
       // The index rejects the duplicate even when the form is bypassed
       await expectUniqueViolation(
@@ -956,7 +890,12 @@ test(
         SELL_ORDER_REFERENCE_CONSTRAINT,
       );
 
-      // Pedidos de venta without a reference never collide
+      // ...but not the one of another Cliente, nor Pedidos de venta without a reference
+      await db.insert(dbTableSellOrder).values({
+        clientId: otherClient.id,
+        clientReference: existingSellOrder.clientReference,
+        receptionDate: new Date(),
+      });
       const sellOrderWithoutReference = {
         clientId: existingSellOrder.clientId,
         clientReference: null,
@@ -970,7 +909,7 @@ test(
 test(
   "create a sell order with a file for a client inserted outside the app",
   { annotation: TestAnnotations.ResetSellOrders },
-  async ({ page, db, toasts }) => {
+  async ({ page, db }) => {
     const client = (
       await db
         .insert(dbTableClient)
@@ -1000,8 +939,7 @@ test(
     );
     await page.getByTestId("button-submit-form-sell-order").click();
 
-    await expect(toasts).toHaveCount(1);
-    expect(await getToastType(toasts.first())).toBe(ToastType.Success);
+    await expectSingleToast(page);
 
     const sellOrder = await db.query.dbTableSellOrder.findFirst({ where: { clientId: client.id } });
     expect(sellOrder).toBeDefined();
@@ -1011,7 +949,7 @@ test(
   },
 );
 
-test("manage the sell order lines without part", async ({ page, db, toasts }) => {
+test("manage the sell order lines without part", async ({ page, db }) => {
   const sellOrder = mockSellOrders[0];
   const formSellOrder = page.getByTestId("form-sell-order");
   const tableSellOrderLine = formSellOrder.getByTestId("table-sell-order-line");
@@ -1095,9 +1033,7 @@ test("manage the sell order lines without part", async ({ page, db, toasts }) =>
     await expect(buttonSubmit).toBeEnabled();
     await buttonSubmit.click();
     await expect(dialogCreateSellOrderLine).not.toBeVisible();
-    await expect(toasts).toHaveCount(1);
-    expect(await getToastType(toasts.first())).toBe(ToastType.Success);
-    await clearToasts(page);
+    await expectSingleToast(page);
 
     const newDbSellOrderLine = (await getSellOrderLinesBySellOrderId(sellOrder.id)).find(
       (line) => !existingDbSellOrderLines.some((existingLine) => existingLine.id === line.id),
@@ -1143,16 +1079,12 @@ test("manage the sell order lines without part", async ({ page, db, toasts }) =>
     await expect(inputRowPartPrice).toHaveValue("");
     await inputRowPartPrice.pressSequentially(customLinePartPrice);
     await inputRowPartPrice.press("Enter");
-    await expect(toasts).toHaveCount(1);
-    expect(await getToastType(toasts.first())).toBe(ToastType.Success);
-    await clearToasts(page);
+    await expectSingleToast(page);
     expect((await getSellOrderLineById(customSellOrderLineId))?.partPrice).toBe(customLinePartPrice);
 
     await inputRowPartPrice.clear();
     await inputRowPartPrice.press("Enter");
-    await expect(toasts).toHaveCount(1);
-    expect(await getToastType(toasts.first())).toBe(ToastType.Success);
-    await clearToasts(page);
+    await expectSingleToast(page);
     expect((await getSellOrderLineById(customSellOrderLineId))?.partPrice).toBeNull();
 
     // Delivering all of it by hand completes it, like any other line
@@ -1160,129 +1092,118 @@ test("manage the sell order lines without part", async ({ page, db, toasts }) =>
     await inputPendingQuantity.clear();
     await inputPendingQuantity.pressSequentially("0");
     await inputPendingQuantity.press("Enter");
-    await expect(toasts).toHaveCount(1);
-    expect(await getToastType(toasts.first())).toBe(ToastType.Success);
+    await expectSingleToast(page);
     expect((await getSellOrderLineById(customSellOrderLineId))?.pendingQuantity).toBe(0);
     await expect(rowSellOrderLine.getByTestId("status")).toHaveText(STATUS_COMPLETED_LABEL);
   });
 });
 
-test(
-  "manage the returns of a sell order",
-  { annotation: TestAnnotations.NonEmptyErrorsLogFile },
-  async ({ page, toasts }) => {
-    const sellOrder = mockSellOrders[0];
-    const formSellOrder = page.getByTestId("form-sell-order");
-    const tableSellOrderLine = formSellOrder.getByTestId("table-sell-order-line");
-    const dialogCreateSellOrderLine = page.getByTestId("dialog-create-sell-order-line");
-    const inputQuantity = getFormInputByLabel(dialogCreateSellOrderLine, QUANTITY_LABEL, InputElementType.Number);
-    const inputPartPrice = getFormInputByLabel(dialogCreateSellOrderLine, PRICE_LABEL, InputElementType.Number);
-    const inputTotal = dialogCreateSellOrderLine.locator("#dialog-create-sell-order-line-total");
-    const buttonSubmit = dialogCreateSellOrderLine.getByTestId("button-submit");
-    const returnLine = { description: "Devolución pieza", quantity: -170 };
-    let returnSellOrderLineId: number;
+test("manage the returns of a sell order", { annotation: TestAnnotations.NonEmptyErrorsLogFile }, async ({ page }) => {
+  const sellOrder = mockSellOrders[0];
+  const formSellOrder = page.getByTestId("form-sell-order");
+  const tableSellOrderLine = formSellOrder.getByTestId("table-sell-order-line");
+  const dialogCreateSellOrderLine = page.getByTestId("dialog-create-sell-order-line");
+  const inputQuantity = getFormInputByLabel(dialogCreateSellOrderLine, QUANTITY_LABEL, InputElementType.Number);
+  const inputPartPrice = getFormInputByLabel(dialogCreateSellOrderLine, PRICE_LABEL, InputElementType.Number);
+  const inputTotal = dialogCreateSellOrderLine.locator("#dialog-create-sell-order-line-total");
+  const buttonSubmit = dialogCreateSellOrderLine.getByTestId("button-submit");
+  const returnLine = { description: "Devolución pieza", quantity: -170 };
+  let returnSellOrderLineId: number;
 
-    const expectSingleToastOfType = async (toastType: ToastType) => {
-      await expect(toasts).toHaveCount(1);
-      expect(await getToastType(toasts.first())).toBe(toastType);
-      await clearToasts(page);
+  await test.step("a line can not have a quantity of 0", async () => {
+    await workflowOpenCreateSellOrderLine(page, sellOrder.id);
+    await dialogCreateSellOrderLine.getByTestId("checkbox-custom-line").click();
+    await getFormInputByLabel(dialogCreateSellOrderLine, DESCRIPTION_LABEL).fill(returnLine.description);
+    await inputQuantity.pressSequentially("0");
+    await inputQuantity.blur();
+    await buttonSubmit.click();
+    await expect(dialogCreateSellOrderLine.getByText("La cantidad no puede ser 0")).toBeVisible();
+    await expect(dialogCreateSellOrderLine).toBeVisible();
+  });
+
+  await test.step("create a return, which is pending for its whole negative quantity", async () => {
+    const existingDbSellOrderLines = await getSellOrderLinesBySellOrderId(sellOrder.id);
+    await inputQuantity.clear();
+    await inputQuantity.pressSequentially(String(returnLine.quantity));
+    await expect(inputQuantity).toHaveValue(String(returnLine.quantity));
+    await inputPartPrice.pressSequentially("0.82");
+    await inputPartPrice.blur();
+    // The read-only total keeps the sign of a negative amount
+    await expect(inputTotal).toHaveValue(/^-139,40\s€$/);
+    await buttonSubmit.click();
+    await expect(dialogCreateSellOrderLine).not.toBeVisible();
+    await expectSingleToast(page);
+
+    const newDbSellOrderLine = (await getSellOrderLinesBySellOrderId(sellOrder.id)).find(
+      (line) => !existingDbSellOrderLines.some((existingLine) => existingLine.id === line.id),
+    );
+    expect(newDbSellOrderLine).toMatchObject({
+      ...returnLine,
+      partPrice: "0.82",
+      pendingQuantity: returnLine.quantity,
+    });
+    returnSellOrderLineId = newDbSellOrderLine!.id;
+
+    const rowSellOrderLine = getTableRowByTestId(tableSellOrderLine, returnSellOrderLineId);
+    await expect(rowSellOrderLine.getByTestId("status")).toHaveText(STATUS_PENDING_LABEL);
+    // A return is delivered back without being produced
+    await expect(rowSellOrderLine.getByTestId("button-create-production-order")).toHaveCount(0);
+  });
+
+  await test.step("the pending quantity of a return can not leave its range", async () => {
+    const rowSellOrderLine = getTableRowByTestId(tableSellOrderLine, returnSellOrderLineId);
+    const inputPendingQuantity = getEditableCellById(rowSellOrderLine, "pendingQuantity");
+    for (const pendingQuantity of [5, -171]) {
+      await inputPendingQuantity.clear();
+      await inputPendingQuantity.pressSequentially(String(pendingQuantity));
+      await inputPendingQuantity.press("Enter");
+      await expectSingleToast(page, "La cantidad pendiente debe estar entre 0 y la cantidad");
+      expect((await getSellOrderLineById(returnSellOrderLineId))?.pendingQuantity).toBe(returnLine.quantity);
+    }
+
+    await inputPendingQuantity.clear();
+    await inputPendingQuantity.pressSequentially("-20");
+    await inputPendingQuantity.press("Enter");
+    await expectSingleToast(page);
+    expect((await getSellOrderLineById(returnSellOrderLineId))?.pendingQuantity).toBe(-20);
+  });
+
+  await test.step("changing the quantity brings the pending quantity into its new range", async () => {
+    const rowSellOrderLine = getTableRowByTestId(tableSellOrderLine, returnSellOrderLineId);
+    const inputRowQuantity = getEditableCellById(rowSellOrderLine, "quantity");
+    const inputPendingQuantity = getEditableCellById(rowSellOrderLine, "pendingQuantity");
+    const editCell = async (input: Locator, value: number) => {
+      await input.clear();
+      await input.pressSequentially(String(value));
+      await input.press("Enter");
+      await expectSingleToast(page);
     };
 
-    await test.step("a line can not have a quantity of 0", async () => {
-      await workflowOpenCreateSellOrderLine(page, sellOrder.id);
-      await dialogCreateSellOrderLine.getByTestId("checkbox-custom-line").click();
-      await getFormInputByLabel(dialogCreateSellOrderLine, DESCRIPTION_LABEL).fill(returnLine.description);
-      await inputQuantity.pressSequentially("0");
-      await inputQuantity.blur();
-      await buttonSubmit.click();
-      await expect(dialogCreateSellOrderLine.getByText("La cantidad no puede ser 0")).toBeVisible();
-      await expect(dialogCreateSellOrderLine).toBeVisible();
-    });
+    // A return turned into an ordered line has nothing pending until it is set again
+    await editCell(inputRowQuantity, 100);
+    expect(await getSellOrderLineById(returnSellOrderLineId)).toMatchObject({ pendingQuantity: 0, quantity: 100 });
+    await expect(rowSellOrderLine.getByTestId("status")).toHaveText(STATUS_COMPLETED_LABEL);
 
-    await test.step("create a return, which is pending for its whole negative quantity", async () => {
-      const existingDbSellOrderLines = await getSellOrderLinesBySellOrderId(sellOrder.id);
-      await inputQuantity.clear();
-      await inputQuantity.pressSequentially(String(returnLine.quantity));
-      await expect(inputQuantity).toHaveValue(String(returnLine.quantity));
-      await inputPartPrice.pressSequentially("0.82");
-      await inputPartPrice.blur();
-      // The read-only total keeps the sign of a negative amount
-      await expect(inputTotal).toHaveValue(/^-139,40\s€$/);
-      await buttonSubmit.click();
-      await expect(dialogCreateSellOrderLine).not.toBeVisible();
-      await expectSingleToastOfType(ToastType.Success);
+    await editCell(inputPendingQuantity, 40);
+    expect(await getSellOrderLineById(returnSellOrderLineId)).toMatchObject({ pendingQuantity: 40, quantity: 100 });
+    await expect(rowSellOrderLine.getByTestId("status")).toHaveText(STATUS_PENDING_LABEL);
 
-      const newDbSellOrderLine = (await getSellOrderLinesBySellOrderId(sellOrder.id)).find(
-        (line) => !existingDbSellOrderLines.some((existingLine) => existingLine.id === line.id),
-      );
-      expect(newDbSellOrderLine).toMatchObject({
-        ...returnLine,
-        partPrice: "0.82",
-        pendingQuantity: returnLine.quantity,
-      });
-      returnSellOrderLineId = newDbSellOrderLine!.id;
+    await editCell(inputRowQuantity, 30);
+    expect(await getSellOrderLineById(returnSellOrderLineId)).toMatchObject({ pendingQuantity: 30, quantity: 30 });
 
-      const rowSellOrderLine = getTableRowByTestId(tableSellOrderLine, returnSellOrderLineId);
-      await expect(rowSellOrderLine.getByTestId("status")).toHaveText(STATUS_PENDING_LABEL);
-      // A return is delivered back without being produced
-      await expect(rowSellOrderLine.getByTestId("button-create-production-order")).toHaveCount(0);
-    });
+    await editCell(inputRowQuantity, -30);
+    expect(await getSellOrderLineById(returnSellOrderLineId)).toMatchObject({ pendingQuantity: 0, quantity: -30 });
 
-    await test.step("the pending quantity of a return can not leave its range", async () => {
-      const rowSellOrderLine = getTableRowByTestId(tableSellOrderLine, returnSellOrderLineId);
-      const inputPendingQuantity = getEditableCellById(rowSellOrderLine, "pendingQuantity");
-      for (const pendingQuantity of [5, -171]) {
-        await inputPendingQuantity.clear();
-        await inputPendingQuantity.pressSequentially(String(pendingQuantity));
-        await inputPendingQuantity.press("Enter");
-        await expectSingleToastOfType(ToastType.Error);
-        expect((await getSellOrderLineById(returnSellOrderLineId))?.pendingQuantity).toBe(returnLine.quantity);
-      }
+    // 0 is rejected, keeping the line as it was
+    await inputRowQuantity.clear();
+    await inputRowQuantity.pressSequentially("0");
+    await inputRowQuantity.press("Enter");
+    await expectSingleToast(page, "La cantidad no puede ser 0");
+    expect(await getSellOrderLineById(returnSellOrderLineId)).toMatchObject({ pendingQuantity: 0, quantity: -30 });
+  });
+});
 
-      await inputPendingQuantity.clear();
-      await inputPendingQuantity.pressSequentially("-20");
-      await inputPendingQuantity.press("Enter");
-      await expectSingleToastOfType(ToastType.Success);
-      expect((await getSellOrderLineById(returnSellOrderLineId))?.pendingQuantity).toBe(-20);
-    });
-
-    await test.step("changing the quantity brings the pending quantity into its new range", async () => {
-      const rowSellOrderLine = getTableRowByTestId(tableSellOrderLine, returnSellOrderLineId);
-      const inputRowQuantity = getEditableCellById(rowSellOrderLine, "quantity");
-      const inputPendingQuantity = getEditableCellById(rowSellOrderLine, "pendingQuantity");
-      const editCell = async (input: Locator, value: number) => {
-        await input.clear();
-        await input.pressSequentially(String(value));
-        await input.press("Enter");
-        await expectSingleToastOfType(ToastType.Success);
-      };
-
-      // A return turned into an ordered line has nothing pending until it is set again
-      await editCell(inputRowQuantity, 100);
-      expect(await getSellOrderLineById(returnSellOrderLineId)).toMatchObject({ pendingQuantity: 0, quantity: 100 });
-      await expect(rowSellOrderLine.getByTestId("status")).toHaveText(STATUS_COMPLETED_LABEL);
-
-      await editCell(inputPendingQuantity, 40);
-      expect(await getSellOrderLineById(returnSellOrderLineId)).toMatchObject({ pendingQuantity: 40, quantity: 100 });
-      await expect(rowSellOrderLine.getByTestId("status")).toHaveText(STATUS_PENDING_LABEL);
-
-      await editCell(inputRowQuantity, 30);
-      expect(await getSellOrderLineById(returnSellOrderLineId)).toMatchObject({ pendingQuantity: 30, quantity: 30 });
-
-      await editCell(inputRowQuantity, -30);
-      expect(await getSellOrderLineById(returnSellOrderLineId)).toMatchObject({ pendingQuantity: 0, quantity: -30 });
-
-      // 0 is rejected, keeping the line as it was
-      await inputRowQuantity.clear();
-      await inputRowQuantity.pressSequentially("0");
-      await inputRowQuantity.press("Enter");
-      await expectSingleToastOfType(ToastType.Error);
-      expect(await getSellOrderLineById(returnSellOrderLineId)).toMatchObject({ pendingQuantity: 0, quantity: -30 });
-    });
-  },
-);
-
-test("create the part prices of a sell order for its client", async ({ page, toasts }) => {
+test("create the part prices of a sell order for its client", async ({ page }) => {
   const sellOrder = mockSellOrders[0];
   const sellOrderClient = getMockClientById(sellOrder.clientId);
   expect(sellOrderClient, "Wrong test set up values").toBeDefined();
@@ -1318,9 +1239,7 @@ test("create the part prices of a sell order for its client", async ({ page, toa
     await getFormInputByLabel(card, QUANTITY_LABEL, InputElementType.Number).pressSequentially(String(quantity));
     await getFormInputByLabel(card, PRICE_LABEL, InputElementType.Number).pressSequentially(price);
     await card.getByTestId("button-submit").click();
-    await expect(toasts).toHaveCount(1);
-    expect(await getToastType(toasts.first())).toBe(ToastType.Success);
-    await clearToasts(page);
+    await expectSingleToast(page);
 
     const newPartPrice = (await getPartPricesByPartId(partId)).find(
       (partPrice) => !existingPartPriceIds.includes(partPrice.id),
@@ -1457,6 +1376,7 @@ test("filter the sell orders by part", async ({ page }) => {
 
 // Not sample.pdf, as the files of the mock sell orders are copies of it and an upload must change the file
 const SAMPLE_PDF_PATH = path.join(MOCK_DATA_PATH, "BLUEPRINTS", "1 - Pieza grupilla", "ID-1-BLUEPRINT1.pdf");
+const NOT_A_PDF_FILE = { buffer: Buffer.from("No es un PDF"), mimeType: "text/plain", name: "pedido.txt" };
 const sellOrderWithFile = mockSellOrders.find(
   (sellOrder) => sellOrder.fileUploadedAt !== null && sellOrder.deletedAt === null,
 )!;
@@ -1542,7 +1462,7 @@ test(
     );
 
     // Another tab with the table sees every change without reloading
-    const tablePage = await openPage(UserMode.Admin);
+    const tablePage = await openPage({ userMode: UserMode.Admin });
     await tablePage.goto("/sell-order");
     const getTableButtonFile = (sellOrderId: number) =>
       getButtonFile(getTableRowByTestId(tablePage.getByTestId("table-sell-order"), sellOrderId));
@@ -1578,11 +1498,17 @@ test(
       await expect(getTableButtonFile(sameClientSellOrderWithFile.id)).toBeEnabled();
     });
 
-    await test.step("a picked file can be cleared before saving", async () => {
+    await test.step("only a PDF can be picked, and it can be cleared before saving", async () => {
       const inputSellOrderFile = getFormInputByLabel(page, FILE_LABEL, InputElementType.File);
       const buttonClearFile = inputSellOrderFile.getByTestId("button-clear");
       await expect(inputSellOrderFile).toHaveText(DROP_FILE_PLACEHOLDER);
       await expect(buttonClearFile).toHaveCount(0);
+
+      await setInputFiles(page, inputSellOrderFile, NOT_A_PDF_FILE);
+      await expect(inputSellOrderFile).toHaveText(DROP_FILE_PLACEHOLDER);
+      await expect(buttonClearFile).toHaveCount(0);
+      await expect(page.getByTestId("button-submit-form-sell-order")).toBeDisabled();
+
       await setInputFiles(page, inputSellOrderFile, SAMPLE_PDF_PATH);
       await expect(inputSellOrderFile).toContainText(path.basename(SAMPLE_PDF_PATH));
       await buttonClearFile.click();
@@ -1593,7 +1519,7 @@ test(
     await test.step("uploading a file when there is none archives nothing", async () => {
       await workflowUploadSellOrderFile(page, SAMPLE_PDF_PATH);
 
-      expect((await getSellOrderById(sellOrderWithFile.id))?.fileUploadedAt).not.toBeNull();
+      expect((await getSellOrderById(sellOrderWithFile.id))?.fileUploadedAt).toBeInstanceOf(Date);
       expect(await getDeletedSellOrderFilePaths(sellOrderWithFile.id)).toHaveLength(1);
       await expect(getTableButtonFile(sellOrderWithFile.id)).toBeEnabled();
       await workflowDownloadSellOrderFile(
@@ -1680,7 +1606,7 @@ test(
         page,
         getButtonFile(await workflowOpenSellOrder(page, sellOrderWithFile.id)),
       );
-      await workflowDeleteSellOrderFile(page, dialogFile, ToastType.Error);
+      await workflowDeleteSellOrderFile(page, dialogFile, { type: ToastType.Error });
 
       expect(await getSellOrderById(sellOrderWithFile.id)).toEqual(sellOrderWithFile);
       expect(await getDeletedSellOrderFilePaths(sellOrderWithFile.id)).toEqual([]);

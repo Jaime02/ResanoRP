@@ -2,7 +2,7 @@ import { expect } from "@playwright/test";
 import type { Locator } from "@playwright/test";
 import { eq } from "drizzle-orm";
 
-import { AppContextStorage, UserMode } from "@/contexts/app-context";
+import { UserMode } from "@/contexts/app-context";
 import { getMachineById } from "@/db/functions/machine";
 import { MACHINE_NAME_CONSTRAINT, dbTableMachine, dbTablePartProduction } from "@/db/schema";
 import { NO_MACHINES_MESSAGE } from "@/messages/combobox";
@@ -32,8 +32,7 @@ import {
   getTableRowByTestId,
   getTableRows,
 } from "@/tests/utils/components/table";
-import { clearToasts, getToastType } from "@/tests/utils/components/toast";
-import { expectUniqueViolation } from "@/tests/utils/db";
+import { expectSingleToast } from "@/tests/utils/components/toast";
 import { TestAnnotations, test } from "@/tests/utils/fixtures";
 import {
   EditButtonVisibility,
@@ -41,12 +40,12 @@ import {
   workflowRestoreTaken,
 } from "@/tests/workflows/deleted-filter";
 import { workflowCreateMachine, workflowDeleteMachine, workflowEditMachine } from "@/tests/workflows/machine";
-import { workflowRejectRenameToTakenName } from "@/tests/workflows/unique-name";
-import { ToastType } from "@/types";
+import { workflowRejectCreateWithTakenName, workflowRejectRenameToTakenName } from "@/tests/workflows/unique-name";
 import { MACHINE_PRODUCTION_HISTORY_PAGE_SIZE } from "@/types/machine";
 import type { BaseMachineProductionOrderQueue } from "@/types/machine-production-order-queue";
 
 const MAINTENANCE_MACHINE_URL = "/maintenance?tab=machine";
+const NAME_TAKEN_MESSAGE = "Existe una Máquina con el mismo nombre";
 const NEW_MACHINE_ID = Math.max(...mockMachines.map((machine) => machine.id)) + 1;
 
 const activeMachines = mockMachines.filter((machine) => machine.deletedAt === null);
@@ -67,8 +66,12 @@ test.beforeEach(({ page }) => {
   tableMachineProductionHistory = page.getByTestId("table-machine-production-history");
 });
 
-test("manage the machines", { annotation: TestAnnotations.NonEmptyErrorsLogFile }, async ({ page, db, toasts }) => {
+test("manage the machines", { annotation: TestAnnotations.NonEmptyErrorsLogFile }, async ({ page, db }) => {
   const newMachineName = "ID-4 Fresadora";
+  const openCreateMachine = async () => {
+    await page.getByRole("button", { name: MACHINE_CREATE_TITLE }).click();
+    await expect(dialogCreateMachine).toBeVisible();
+  };
 
   await test.step("render the machines table at /maintenance", async () => {
     await page.goto(MAINTENANCE_MACHINE_URL);
@@ -163,24 +166,19 @@ test("manage the machines", { annotation: TestAnnotations.NonEmptyErrorsLogFile 
     expect(machines).toHaveLength(activeMachines.length + 1);
 
     await page.goto(MAINTENANCE_MACHINE_URL);
-    for (const machine of machines) {
-      await page.getByRole("button", { name: MACHINE_CREATE_TITLE }).click();
-      await expect(dialogCreateMachine).toBeVisible();
-
-      await getFormInputByLabel(dialogCreateMachine, NAME_LABEL).fill(machine.name);
-      await dialogCreateMachine.getByTestId("button-submit").click();
-
-      await expect(toasts).toHaveCount(1);
-      expect(await getToastType(toasts.first())).toBe(ToastType.Error);
-      await expect(toasts.first()).toContainText("Existe una Máquina con el mismo nombre");
-      await expect(dialogCreateMachine).toBeVisible();
-
-      await expectUniqueViolation(db.insert(dbTableMachine).values({ name: machine.name }), MACHINE_NAME_CONSTRAINT);
-
-      await clearToasts(page);
-      await dialogCreateMachine.getByTestId("button-close").click();
-      await expect(dialogCreateMachine).not.toBeVisible();
-    }
+    await workflowRejectCreateWithTakenName({
+      page,
+      items: machines,
+      form: dialogCreateMachine,
+      openCreate: openCreateMachine,
+      closeCreate: async () => {
+        await dialogCreateMachine.getByTestId("button-close").click();
+        await expect(dialogCreateMachine).not.toBeVisible();
+      },
+      insertDuplicate: async (name) => db.insert(dbTableMachine).values({ name }),
+      constraintName: MACHINE_NAME_CONSTRAINT,
+      errorMessage: NAME_TAKEN_MESSAGE,
+    });
 
     await workflowRejectRenameToTakenName({
       page,
@@ -190,32 +188,28 @@ test("manage the machines", { annotation: TestAnnotations.NonEmptyErrorsLogFile 
         await page.goto(`/machine/${machine.id}`);
       },
       getName: async (id) => (await getMachineById(id))?.name,
-      errorMessage: "Existe una Máquina con el mismo nombre",
+      errorMessage: NAME_TAKEN_MESSAGE,
     });
 
     for (const machine of machines) {
-      // Deleting a Máquina frees its name
+      // Deleting a Máquina frees its name, also typed with spaces around it...
       await workflowDeleteMachine(page, machine.id, machine.name);
 
-      await page.getByRole("button", { name: MACHINE_CREATE_TITLE }).click();
-      await expect(dialogCreateMachine).toBeVisible();
-      await getFormInputByLabel(dialogCreateMachine, NAME_LABEL).fill(machine.name);
+      await openCreateMachine();
+      await getFormInputByLabel(dialogCreateMachine, NAME_LABEL).fill(`  ${machine.name}  `);
       await dialogCreateMachine.getByTestId("button-submit").click();
 
       await expect(dialogCreateMachine).not.toBeVisible();
+      await expectSingleToast(page);
       await expect(tableMaintenanceMachine.getByText(machine.name, { exact: true })).toBeVisible();
 
       // ...so the deleted Máquina can no longer be restored
       await page.goto(`/machine/${machine.id}`);
       await assertFormLoaded(formMachine);
-      await clearToasts(page);
       await openAndConfirmAlertDialog(page, formMachine.getByTestId("button-restore"), "dialog-restore-model-content");
+      await expectSingleToast(page, NAME_TAKEN_MESSAGE);
 
-      await expect(toasts).toHaveCount(1);
-      expect(await getToastType(toasts.first())).toBe(ToastType.Error);
-      await expect(toasts.first()).toContainText("Existe una Máquina con el mismo nombre");
-
-      expect((await getMachineById(machine.id))?.deletedAt).not.toBeNull();
+      expect((await getMachineById(machine.id))?.deletedAt).toBeInstanceOf(Date);
     }
   });
 });
@@ -311,9 +305,10 @@ test("delete every machine, emptying its queue but keeping what it produced, and
     await dialogRestoreMachine.getByTestId("button-close").click();
     await expect(dialogRestoreMachine).not.toBeVisible();
     await expect(formMachine.getByText(MACHINE_DELETED_MESSAGE, { exact: true })).toBeVisible();
-    expect((await getMachineById(machine.id))?.deletedAt).not.toBeNull();
+    expect((await getMachineById(machine.id))?.deletedAt).toBeInstanceOf(Date);
 
     await openAndConfirmAlertDialog(page, formMachine.getByTestId("button-restore"), "dialog-restore-model-content");
+    await expectSingleToast(page);
 
     await expect(formMachine.getByText(MACHINE_DELETED_MESSAGE, { exact: true })).not.toBeVisible();
     await expect(formMachine.getByTestId("button-submit")).toBeVisible();
@@ -328,16 +323,11 @@ test("delete every machine, emptying its queue but keeping what it produced, and
   }
 });
 
-test("close the session of every Machine that is deleted while in use", async ({ page, baseURL, browser }) => {
+test("close the session of every Machine that is deleted while in use", async ({ page, openPage }) => {
   for (const [index, machine] of activeMachines.entries()) {
     const remainingMachines = activeMachines.slice(index + 1);
-    // The user mode lives in a cookie, which is shared by every page of the same context
-    await using machineContext = await browser.newContext({ baseURL, ignoreHTTPSErrors: true });
-    await machineContext.addCookies([AppContextStorage.testCookie(baseURL!, UserMode.Machine, machine.id)]);
-    const machinePage = await machineContext.newPage();
-
+    const machinePage = await openPage({ machineId: machine.id, userMode: UserMode.Machine });
     await machinePage.goto("/production");
-    await machinePage.waitForSelector("body[data-hydrated]");
 
     await expect(machinePage.getByTestId("span-current-user-mode")).toHaveText(machine.name);
     await expect(machinePage.getByTestId("form-login")).not.toBeVisible();
@@ -377,6 +367,7 @@ test("set the diameter range of the machines", async ({ page, toasts }) => {
     await dialogCreateMachine.getByTestId("button-submit").click();
 
     await expect(dialogCreateMachine).not.toBeVisible();
+    await expectSingleToast(page);
     const createdMachine = await getMachineById(NEW_MACHINE_ID);
     expect(createdMachine?.name).toBe(newMachineName);
     expect(createdMachine?.minDiameter).toBe(15);
@@ -411,8 +402,7 @@ test("set the diameter range of the machines", async ({ page, toasts }) => {
       await getFormInputByLabel(formMachine, MACHINE_MAX_DIAMETER_LABEL).fill("80");
       await formMachine.getByTestId("button-submit").click();
 
-      await expect(toasts).toHaveCount(1);
-      expect(await getToastType(toasts.first())).toBe(ToastType.Success);
+      await expectSingleToast(page);
       const updatedMachine = await getMachineById(machine.id);
       expect(updatedMachine?.minDiameter).toBe(50);
       expect(updatedMachine?.maxDiameter).toBe(80);
@@ -424,17 +414,26 @@ test("set the diameter range of the machines", async ({ page, toasts }) => {
     });
 
     await test.step(`both diameters of ${machine.name} are optional`, async () => {
-      await clearToasts(page);
       await getFormInputByLabel(formMachine, MACHINE_MIN_DIAMETER_LABEL).clear();
       await getFormInputByLabel(formMachine, MACHINE_MAX_DIAMETER_LABEL).clear();
       await formMachine.getByTestId("button-submit").click();
 
-      await expect(toasts).toHaveCount(1);
-      expect(await getToastType(toasts.first())).toBe(ToastType.Success);
+      await expectSingleToast(page);
       const updatedMachine = await getMachineById(machine.id);
       expect(updatedMachine?.minDiameter).toBeNull();
       expect(updatedMachine?.maxDiameter).toBeNull();
-      await clearToasts(page);
+    });
+
+    await test.step(`a diameter of 0 mm is rejected for ${machine.name}`, async () => {
+      for (const label of [MACHINE_MIN_DIAMETER_LABEL, MACHINE_MAX_DIAMETER_LABEL]) {
+        const inputDiameter = getFormInputByLabel(formMachine, label);
+        await inputDiameter.fill("0");
+        await formMachine.getByTestId("button-submit").click();
+        await expect(formMachine.getByTestId("button-submit")).toBeDisabled();
+        await expect(toasts).toHaveCount(0);
+        expect(await getMachineById(machine.id)).toMatchObject({ maxDiameter: null, minDiameter: null });
+        await inputDiameter.clear();
+      }
     });
   }
 });
@@ -503,7 +502,7 @@ test(
       page,
       id: machine.id,
       insertDuplicate: async () => db.insert(dbTableMachine).values({ name: machine.name }),
-      errorMessage: "Existe una Máquina con el mismo nombre",
+      errorMessage: NAME_TAKEN_MESSAGE,
     });
   },
 );

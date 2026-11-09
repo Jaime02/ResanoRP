@@ -12,8 +12,7 @@ import { setInputFiles } from "@/tests/utils/components/file-input";
 import { InputElementType, assertFormLoaded, getFormInputByLabel } from "@/tests/utils/components/form";
 import { openPartPicker } from "@/tests/utils/components/picker";
 import { getTableRowByTestId } from "@/tests/utils/components/table";
-import { clearToasts, getToastType, getToasts } from "@/tests/utils/components/toast";
-import { ToastType } from "@/types";
+import { expectSingleToast } from "@/tests/utils/components/toast";
 
 export async function workflowDeleteSellOrder(page: Page, sellOrderId: number) {
   await page.goto(`/sell-order/${sellOrderId}`);
@@ -29,16 +28,14 @@ export async function workflowDeleteSellOrder(page: Page, sellOrderId: number) {
   await expect(buttonDeleteSellOrder).toBeEnabled();
 
   await openAndConfirmAlertDialog(page, buttonDeleteSellOrder, "dialog-delete-model-content");
-  const toasts = getToasts(page);
-  await expect(toasts).toHaveCount(1);
-  expect(await getToastType(toasts.first())).toBe(ToastType.Success);
+  await expectSingleToast(page);
 
   await expect(buttonDeleteSellOrder).toBeHidden();
   await expect(buttonRestoreSellOrder).toBeVisible();
   await expect(buttonRestoreSellOrder).toBeEnabled();
 
   dbSellOrder = await getSellOrderById(sellOrderId);
-  expect(dbSellOrder!.deletedAt).not.toBeNull();
+  expect(dbSellOrder?.deletedAt).toBeInstanceOf(Date);
 }
 
 export async function workflowOpenSellOrder(page: Page, sellOrderId: number) {
@@ -49,11 +46,8 @@ export async function workflowOpenSellOrder(page: Page, sellOrderId: number) {
 }
 
 export async function workflowSubmitSellOrder(page: Page) {
-  const toasts = getToasts(page);
   await page.getByTestId("button-submit-form-sell-order").click();
-  await expect(toasts).toHaveCount(1);
-  expect(await getToastType(toasts.first())).toBe(ToastType.Success);
-  await clearToasts(page);
+  await expectSingleToast(page);
 }
 
 export async function workflowUploadSellOrderFile(page: Page, filePath: string) {
@@ -92,17 +86,14 @@ export async function workflowDownloadSellOrderFile(page: Page, dialogFile: Loca
 export async function workflowDeleteSellOrderFile(
   page: Page,
   dialogFile: Locator,
-  expectedToastType = ToastType.Success,
+  expectedToast?: Parameters<typeof expectSingleToast>[1],
 ) {
-  const toasts = getToasts(page);
   await openAndConfirmAlertDialog(
     page,
     dialogFile.getByTestId("button-delete-sell-order-file"),
     "dialog-delete-model-content",
   );
-  await expect(toasts).toHaveCount(1);
-  expect(await getToastType(toasts.first())).toBe(expectedToastType);
-  await clearToasts(page);
+  await expectSingleToast(page, expectedToast);
 }
 
 export async function workflowOpenCreateSellOrderLine(page: Page, sellOrderId: number) {
@@ -120,16 +111,13 @@ export async function workflowOpenCreateSellOrderLine(page: Page, sellOrderId: n
 
 // The Pedido de venta has to be opened already, so the test can assert it before the Línea is deleted
 export async function workflowDeleteSellOrderLine(page: Page, sellOrderLineId: number) {
-  const toasts = getToasts(page);
   const rowSellOrderLine = getTableRowByTestId(page.getByTestId("table-sell-order-line"), sellOrderLineId);
   await expect(rowSellOrderLine).toBeVisible();
 
   await openAndConfirmAlertDialog(page, rowSellOrderLine.getByTestId("button-delete"), "dialog-delete-model-content");
-  await expect(toasts).toHaveCount(1);
-  expect(await getToastType(toasts.first())).toBe(ToastType.Success);
-  await clearToasts(page);
+  await expectSingleToast(page);
 
-  expect((await getSellOrderLineById(sellOrderLineId))?.deletedAt).toBeTruthy();
+  expect((await getSellOrderLineById(sellOrderLineId))?.deletedAt).toBeInstanceOf(Date);
   return rowSellOrderLine;
 }
 

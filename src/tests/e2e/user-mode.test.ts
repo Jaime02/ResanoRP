@@ -36,6 +36,7 @@ import {
   getTableRowByTestId,
   getTableRows,
 } from "@/tests/utils/components/table";
+import { expectSingleToast } from "@/tests/utils/components/toast";
 import { TestAnnotations, inAnotherTab, setUserMode, test } from "@/tests/utils/fixtures";
 import {
   getMockClientById,
@@ -339,7 +340,7 @@ for (const { userMode, machineId, allowedPaths, blockedPaths } of [
 test(
   "only the Administrador session can make admin changes",
   { annotation: [TestAnnotations.UserModeNull, TestAnnotations.NonEmptyErrorsLogFile] },
-  async ({ page, db, baseURL, toasts }) => {
+  async ({ page, db, baseURL }) => {
     const accountedInvoice = mockInvoices.find((invoice) => invoice.accounted)!;
     const dialogLogin = page.getByTestId("form-login");
     const dialogInputAdminPassword = page.getByTestId("form-admin-password");
@@ -382,8 +383,7 @@ test(
       await dialogLogin.getByRole("button", { name: UserMode.Admin }).click();
       await inputAdminPassword.fill(`${process.env.ADMIN_PASSWORD}-incorrecta`);
       await dialogInputAdminPassword.getByTestId("button-submit").click();
-      await expect(toasts).toHaveCount(1);
-      await expect(toasts.first()).toContainText(WRONG_PASSWORD_MESSAGE);
+      await expectSingleToast(page, WRONG_PASSWORD_MESSAGE);
       await expect(dialogInputAdminPassword).toBeVisible();
       expect(await getAdminSessionCookie()).toBeUndefined();
     });
@@ -404,7 +404,8 @@ test(
     await test.step("a request from another page of the same host is rejected even with the session", async () => {
       await db.update(dbTableInvoice).set({ accounted: true }).where(eq(dbTableInvoice.id, accountedInvoice.id));
 
-      // Sent outside the page, so it carries the session cookie while saying where it comes from, as a browser would
+      // No page of the app sends a request from another site of the host, so it is sent from outside the page, with the
+      // session cookie and the header a browser would add
       const unaccountInvoiceFrom = async (fetchSite: string) =>
         page.request.post("/api/trpc/invoice.unaccount", {
           data: { id: accountedInvoice.id },

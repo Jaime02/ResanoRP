@@ -24,9 +24,8 @@ import { clickInComboboxOption, fillComboboxFilter, openCombobox } from "@/tests
 import { InputElementType, assertFormLoaded, getFormInputByLabel } from "@/tests/utils/components/form";
 import { openPartPicker } from "@/tests/utils/components/picker";
 import { getTableRowByTestId } from "@/tests/utils/components/table";
-import { clearToasts, expectSingleToast, getToastType, getToasts } from "@/tests/utils/components/toast";
+import { expectSingleToast } from "@/tests/utils/components/toast";
 import { pickActiveMachine, setUserMode } from "@/tests/utils/fixtures";
-import { ToastType } from "@/types";
 import type { BaseMachine } from "@/types/machine";
 import type { BasePart } from "@/types/part";
 import type { BaseProductionOrder } from "@/types/production-order";
@@ -52,7 +51,7 @@ export function getProductionLocators(page: Page) {
 
 export async function getActiveProductionOrder(machine: BaseMachine): Promise<BaseProductionOrder> {
   const dbMachine = await getMachineById(machine.id);
-  expect(dbMachine?.activeProductionOrderId).not.toBeNull();
+  expect(dbMachine?.activeProductionOrderId).toEqual(expect.any(Number));
   const dbProductionOrder = await getProductionOrderById(dbMachine!.activeProductionOrderId!);
   expect(dbProductionOrder).toBeDefined();
   return dbProductionOrder!;
@@ -132,11 +131,8 @@ export async function assertProductionOrderStopped(
     dialogContentStopProductionOrder,
     tableMachineProductionOrderQueue,
   } = getProductionLocators(page);
-  const toasts = getToasts(page);
   await expect(dialogContentStopProductionOrder).toBeHidden();
-  await expect(toasts).toHaveCount(1);
-  expect(await getToastType(toasts.first())).toBe(ToastType.Success);
-  await clearToasts(page);
+  await expectSingleToast(page);
 
   const dbUpdatedProductionOrder = await getProductionOrderById(productionOrder.id);
   expect(dbUpdatedProductionOrder).toBeDefined();
@@ -211,7 +207,6 @@ export async function workflowStartProductionOrderFromQueue(
   productionOrderId: number,
 ) {
   const { dialogContentMachineProductionOrderQueue, tableMachineProductionOrderQueue } = getProductionLocators(page);
-  const toasts = getToasts(page);
   await workflowOpenProduction(page, machine);
   expect((await getMachineById(machine.id))?.activeProductionOrderId).toBeNull();
   await assertPartLink(page, null);
@@ -225,9 +220,7 @@ export async function workflowStartProductionOrderFromQueue(
   const buttonStartProductionOrder = rowToStart.getByTestId("button-start-production-order");
   await expect(buttonStartProductionOrder).toBeVisible();
   await buttonStartProductionOrder.click();
-  await expect(toasts).toHaveCount(1);
-  expect(await getToastType(toasts.first())).toBe(ToastType.Success);
-  await clearToasts(page);
+  await expectSingleToast(page);
 
   expect((await getMachineById(machine.id))?.activeProductionOrderId).toBe(productionOrderId);
   // Starting a production order moves it to the top of the queue
@@ -287,9 +280,10 @@ export async function gotoProductionOrdersWithStatuses(page: Page, statuses: Arr
 export async function workflowDeleteProductionOrder(page: Page, productionOrderId: number) {
   const rowProductionOrder = getTableRowByTestId(page.getByTestId("table-production-order"), productionOrderId);
   await openAndConfirmAlertDialog(page, rowProductionOrder.getByTestId("button-delete"), "dialog-delete-model-content");
+  await expectSingleToast(page);
   // The table only lists the pending Órdenes de producción and the ones in production
   await expect(rowProductionOrder).not.toBeVisible();
-  expect((await getProductionOrderById(productionOrderId))?.deletedAt).not.toBeNull();
+  expect((await getProductionOrderById(productionOrderId))?.deletedAt).toBeInstanceOf(Date);
 }
 
 export async function workflowRestoreProductionOrder(page: Page, productionOrderId: number) {
@@ -300,6 +294,7 @@ export async function workflowRestoreProductionOrder(page: Page, productionOrder
     rowProductionOrder.getByTestId("button-restore"),
     "dialog-restore-model-content",
   );
+  await expectSingleToast(page);
   await expect(rowProductionOrder).not.toBeVisible();
   expect((await getProductionOrderById(productionOrderId))?.deletedAt).toBeNull();
 }
@@ -307,7 +302,7 @@ export async function workflowRestoreProductionOrder(page: Page, productionOrder
 // The part is only picked when the Orden de producción is made by hand or its line has no part
 export async function workflowCreateProductionOrder(
   page: Page,
-  { sellOrderLineId, part }: { sellOrderLineId?: number; part?: BasePart },
+  { sellOrderLineId, part, quantity = 1 }: { sellOrderLineId?: number; part?: BasePart; quantity?: number | null },
   expectedErrorMessage?: string,
 ) {
   await setUserMode(page, UserMode.Admin);
@@ -330,7 +325,8 @@ export async function workflowCreateProductionOrder(
     await getTableRowByTestId(tablePickerPart, part.id).getByTestId("button-success").click();
     await expect(dialogPickerPartContent).not.toBeVisible();
   }
-  await getFormInputByLabel(page, QUANTITY_TO_PRODUCE_LABEL, InputElementType.Number).fill("1");
+  const inputQuantity = getFormInputByLabel(page, QUANTITY_TO_PRODUCE_LABEL, InputElementType.Number);
+  await (quantity === null ? inputQuantity.clear() : inputQuantity.fill(String(quantity)));
   await page.getByTestId("button-submit").click();
   await expectSingleToast(page, expectedErrorMessage);
   if (expectedErrorMessage === undefined) {

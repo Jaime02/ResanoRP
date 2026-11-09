@@ -21,7 +21,7 @@ const idType = integer("id").generatedByDefaultAsIdentity({ startWith: 1 }).prim
 const activeNameIndex = (tableName: string) => `unique_${tableName}_name_active` as const;
 const uniqueIndexByName = (table: { name: PgColumn; deletedAt: PgColumn }, tableName: string) =>
   uniqueIndex(activeNameIndex(tableName))
-    .on(table.name)
+    .on(sql`lower(${table.name})`)
     .where(sql`${table.deletedAt} IS NULL`);
 
 export const COATING_NAME_CONSTRAINT = activeNameIndex("coating");

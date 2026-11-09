@@ -62,7 +62,7 @@ import {
   getTableRowByTestId,
   getTableRows,
 } from "@/tests/utils/components/table";
-import { clearToasts, getToastType } from "@/tests/utils/components/toast";
+import { expectSingleToast } from "@/tests/utils/components/toast";
 import { expectUniqueViolation } from "@/tests/utils/db";
 import { TestAnnotations, inAnotherTab, test } from "@/tests/utils/fixtures";
 import { getMockPartReferenceById, getMockSellOrderLines } from "@/tests/utils/mock-data-utils";
@@ -73,14 +73,14 @@ import {
   workflowDeletedFilterAndRestore,
   workflowRestoreTaken,
 } from "@/tests/workflows/deleted-filter";
-import { workflowRejectRenameToTakenName } from "@/tests/workflows/unique-name";
-import { ToastType } from "@/types";
+import { workflowRejectCreateWithTakenName, workflowRejectRenameToTakenName } from "@/tests/workflows/unique-name";
 import type { BaseClient } from "@/types/client";
 
 const activeClients = mockClients.filter((client) => client.deletedAt === null);
 const activeDeliveryMethods = mockDeliveryMethods.filter((deliveryMethod) => deliveryMethod.deletedAt === null);
 const activePaymentMethods = mockPaymentMethods.filter((paymentMethod) => paymentMethod.deletedAt === null);
 const NEW_CLIENT_ID = Math.max(...mockClients.map((client) => client.id)) + 1;
+const NAME_TAKEN_MESSAGE = "Existe un Cliente con el mismo nombre";
 
 let tableMaintenanceClient: Locator;
 let dialogCreateClient: Locator;
@@ -92,10 +92,18 @@ test.beforeEach(({ page }) => {
   formClient = page.getByTestId("form-client");
 });
 
-async function fillRequiredClientFields(
-  form: Locator,
-  client: Pick<BaseClient, "name" | "legalName" | "address" | "city" | "postalCode" | "taxId">,
-) {
+type TRequiredClientFields = Pick<BaseClient, "name" | "legalName" | "address" | "city" | "postalCode" | "taxId">;
+
+const getRequiredClientFields = ({ address, city, legalName, name, postalCode, taxId }: TRequiredClientFields) => ({
+  address,
+  city,
+  legalName,
+  name,
+  postalCode,
+  taxId,
+});
+
+async function fillRequiredClientFields(form: Locator, client: TRequiredClientFields) {
   await getFormInputByLabel(form, NAME_LABEL).fill(client.name);
   await getFormInputByLabel(form, LEGAL_NAME_LABEL).fill(client.legalName);
   await getFormInputByLabel(form, ADDRESS_LABEL).fill(client.address);
@@ -121,7 +129,7 @@ async function assertInvoiceEmailsCard({ isReadOnly, emails }: { isReadOnly: boo
   await expect(cardInvoiceEmails.getByTestId("button-delete")).toHaveCount(isReadOnly ? 0 : emails.length);
 }
 
-test("set and remove the default delivery method of every client", async ({ page, toasts }) => {
+test("set and remove the default delivery method of every client", async ({ page }) => {
   for (const client of activeClients) {
     await page.goto(`/client/${client.id}`);
     await workflowAssertClientFormData(formClient, client);
@@ -132,7 +140,6 @@ test("set and remove the default delivery method of every client", async ({ page
     );
 
     for (const deliveryMethod of activeDeliveryMethods) {
-      await clearToasts(page);
       await selectComboboxOption(page, comboboxDeliveryMethod, deliveryMethod.name);
 
       // Picking the default it already has leaves nothing to save
@@ -142,19 +149,16 @@ test("set and remove the default delivery method of every client", async ({ page
       }
       await formClient.getByTestId("button-submit").click();
 
-      await expect(toasts).toHaveCount(1);
-      expect(await getToastType(toasts.first())).toBe(ToastType.Success);
+      await expectSingleToast(page);
       expect((await getClientById(client.id))?.defaultDeliveryMethodId).toBe(deliveryMethod.id);
       await page.reload();
       await workflowAssertClientFormData(formClient, { ...client, defaultDeliveryMethodId: deliveryMethod.id });
     }
 
-    await clearToasts(page);
     await getClearComboboxButton(comboboxDeliveryMethod).click();
     await formClient.getByTestId("button-submit").click();
 
-    await expect(toasts).toHaveCount(1);
-    expect(await getToastType(toasts.first())).toBe(ToastType.Success);
+    await expectSingleToast(page);
     expect((await getClientById(client.id))?.defaultDeliveryMethodId).toBeNull();
     await page.reload();
     await workflowAssertClientFormData(formClient, { ...client, defaultDeliveryMethodId: null });
@@ -164,7 +168,7 @@ test("set and remove the default delivery method of every client", async ({ page
 test(
   "manage the clients",
   { annotation: [TestAnnotations.ResetSellOrders, TestAnnotations.NonEmptyErrorsLogFile] },
-  async ({ page, db, toasts }) => {
+  async ({ page, db }) => {
     const newClient = {
       address: "Test Address",
       city: "Test City",
@@ -243,7 +247,6 @@ test(
         );
 
         for (const paymentMethod of activePaymentMethods) {
-          await clearToasts(page);
           await openCombobox(comboboxPaymentMethod);
           await assertComboboxOptionsCount(page, activePaymentMethods.length);
           await fillComboboxFilter(page, paymentMethod.name);
@@ -253,8 +256,7 @@ test(
 
           await formClient.getByTestId("button-submit").click();
 
-          await expect(toasts).toHaveCount(1);
-          expect(await getToastType(toasts.first())).toBe(ToastType.Success);
+          await expectSingleToast(page);
           expect((await getClientById(client.id))?.defaultPaymentMethodId).toBe(paymentMethod.id);
 
           await page.reload();
@@ -263,16 +265,13 @@ test(
         }
 
         // Clearing the combobox removes the default payment method
-        await clearToasts(page);
         const buttonClearCombobox = getClearComboboxButton(comboboxPaymentMethod);
         await buttonClearCombobox.click();
         await expect(buttonClearCombobox).not.toBeVisible();
 
         await formClient.getByTestId("button-submit").click();
 
-        await expect(toasts).toHaveCount(1);
-        expect(await getToastType(toasts.first())).toBe(ToastType.Success);
-        await clearToasts(page);
+        await expectSingleToast(page);
 
         await page.reload();
         await assertFormLoaded(formClient);
@@ -298,6 +297,7 @@ test(
         await inputAddEmail.fill(newEmail);
         await buttonAddEmail.click();
 
+        await expectSingleToast(page);
         await expect(formClient.getByText(newEmail, { exact: true })).toBeVisible();
         await expect(inputAddEmail).toHaveValue("");
         expect(
@@ -308,14 +308,10 @@ test(
         );
 
         // The same Cliente cannot hold the email twice
-        await clearToasts(page);
         await inputAddEmail.fill(newEmail);
         await buttonAddEmail.click();
 
-        await expect(toasts).toHaveCount(1);
-        expect(await getToastType(toasts.first())).toBe(ToastType.Error);
-        await expect(toasts.first()).toContainText("El Cliente ya tiene ese correo");
-        await clearToasts(page);
+        await expectSingleToast(page, "El Cliente ya tiene ese correo");
 
         await expectUniqueViolation(
           db.insert(dbTableClientInvoiceEmail).values({ clientId: client.id, email: newEmail }),
@@ -378,12 +374,10 @@ test(
         }
         expect(await getClientById(client.id)).toEqual(currentClient);
 
-        await clearToasts(page);
         await inputAccountingAccountId.fill(updatedAccountingAccountId);
         await formClient.getByTestId("button-submit").click();
 
-        await expect(toasts).toHaveCount(1);
-        expect(await getToastType(toasts.first())).toBe(ToastType.Success);
+        await expectSingleToast(page);
 
         expect(await getClientById(client.id)).toEqual({
           ...currentClient,
@@ -431,6 +425,7 @@ test(
       await dialogCreateClient.getByTestId("button-submit").click();
 
       await expect(page).toHaveURL(`/client/${NEW_CLIENT_ID}`);
+      await expectSingleToast(page);
       await assertFormLoaded(formClient);
       await expect(getFormInputByLabel(formClient, NAME_LABEL)).toHaveValue(newClient.name);
       await expect(formClient.getByTestId("card-table-client-invoice-email")).not.toHaveAttribute("inert");
@@ -463,6 +458,7 @@ test("remove every client invoice email", async ({ page, db }) => {
 
     const emailRow = filterByExactText(formClient.getByRole("row"), emailToDelete.email);
     await openAndConfirmAlertDialog(page, emailRow.getByTestId("button-delete"), "dialog-delete-model-content");
+    await expectSingleToast(page);
     removedEmailIds.add(emailToDelete.id);
 
     await expect(formClient.getByText(emailToDelete.email, { exact: true })).not.toBeVisible();
@@ -490,13 +486,14 @@ test("delete every client when confirmed and restore it", async ({ page, db }) =
       (await findTableRowByText(tableMaintenanceClient, client.name)).getByTestId("button-delete"),
       "dialog-delete-model-content",
     );
+    await expectSingleToast(page);
     deletedClientIds.add(client.id);
 
     await expect(getClientRows(client.name)).toHaveCount(0);
     for (const otherClient of activeClients.filter(({ id }) => !deletedClientIds.has(id))) {
       await expect(getClientRows(otherClient.name)).toHaveCount(1);
     }
-    expect((await getClientById(client.id))?.deletedAt).not.toBeNull();
+    expect((await getClientById(client.id))?.deletedAt).toBeInstanceOf(Date);
 
     // Its invoice emails are deleted, the ones of the other Clientes are kept
     expect(await db.query.dbTableClientInvoiceEmail.findMany({ orderBy: { id: "asc" } })).toEqual(
@@ -512,6 +509,7 @@ test("delete every client when confirmed and restore it", async ({ page, db }) =
     await assertInvoiceEmailsCard({ isReadOnly: true, emails: [] });
 
     await openAndConfirmAlertDialog(page, formClient.getByTestId("button-restore"), "dialog-restore-model-content");
+    await expectSingleToast(page);
 
     await expect(formClient.getByTestId("badge-client-deleted")).not.toBeVisible();
     await expect(formClient.getByTestId("button-submit")).toBeVisible();
@@ -526,7 +524,7 @@ test("delete every client when confirmed and restore it", async ({ page, db }) =
 test(
   "no invoice email can be added to a client deleted in another tab meanwhile",
   { annotation: TestAnnotations.NonEmptyErrorsLogFile },
-  async ({ page, db, toasts }) => {
+  async ({ page, db }) => {
     for (const client of activeClients) {
       await page.goto(`/client/${client.id}`);
       await assertFormLoaded(formClient);
@@ -539,10 +537,7 @@ test(
         meanwhile: async () => inAnotherTab(page, async (anotherPage) => workflowDeleteClient(anotherPage, client)),
       });
 
-      await expect(toasts).toHaveCount(1);
-      expect(await getToastType(toasts.first())).toBe(ToastType.Error);
-      await expect(toasts.first()).toContainText("No se pueden añadir correos de facturación a un Cliente eliminado");
-      await clearToasts(page);
+      await expectSingleToast(page, "No se pueden añadir correos de facturación a un Cliente eliminado");
 
       await assertInvoiceEmailsCard({ isReadOnly: true, emails: [] });
       expect(await db.query.dbTableClientInvoiceEmail.findMany({ where: { clientId: client.id } })).toHaveLength(0);
@@ -598,16 +593,8 @@ test(
       ...DELETED_CLIENT_FILTER_PARAMS,
       page,
       id: client.id,
-      insertDuplicate: async () =>
-        db.insert(dbTableClient).values({
-          address: client.address,
-          city: client.city,
-          legalName: client.legalName,
-          name: client.name,
-          postalCode: client.postalCode,
-          taxId: client.taxId,
-        }),
-      errorMessage: "Existe un Cliente con el mismo nombre",
+      insertDuplicate: async () => db.insert(dbTableClient).values(getRequiredClientFields(client)),
+      errorMessage: NAME_TAKEN_MESSAGE,
     });
   },
 );
@@ -743,36 +730,28 @@ test("a deleted client keeps its history, but its references and prices are hidd
 test(
   "keep the name of a Cliente unique while it is not deleted",
   { annotation: [TestAnnotations.ResetSellOrders, TestAnnotations.NonEmptyErrorsLogFile] },
-  async ({ page, db, toasts }) => {
-    await page.goto("/maintenance");
-    for (const client of activeClients) {
+  async ({ page, db }) => {
+    const openCreateClient = async () => {
       await page.getByRole("button", { name: CLIENT_CREATE_TITLE }).click();
       await expect(dialogCreateClient).toBeVisible();
+    };
 
-      await fillRequiredClientFields(dialogCreateClient, client);
-      await dialogCreateClient.getByTestId("button-submit").click();
-
-      await expect(toasts).toHaveCount(1);
-      expect(await getToastType(toasts.first())).toBe(ToastType.Error);
-      await expect(toasts.first()).toContainText("Existe un Cliente con el mismo nombre");
-      await expect(dialogCreateClient).toBeVisible();
-
-      await expectUniqueViolation(
-        db.insert(dbTableClient).values({
-          address: client.address,
-          city: client.city,
-          legalName: client.legalName,
-          name: client.name,
-          postalCode: client.postalCode,
-          taxId: client.taxId,
-        }),
-        CLIENT_NAME_CONSTRAINT,
-      );
-
-      await clearToasts(page);
-      await dialogCreateClient.getByTestId("button-close").click();
-      await expect(dialogCreateClient).not.toBeVisible();
-    }
+    await page.goto("/maintenance");
+    await workflowRejectCreateWithTakenName({
+      page,
+      items: activeClients,
+      form: dialogCreateClient,
+      openCreate: openCreateClient,
+      closeCreate: async () => {
+        await dialogCreateClient.getByTestId("button-close").click();
+        await expect(dialogCreateClient).not.toBeVisible();
+      },
+      fill: async (client, name) => fillRequiredClientFields(dialogCreateClient, { ...client, name }),
+      insertDuplicate: async (name) =>
+        db.insert(dbTableClient).values({ ...getRequiredClientFields(activeClients[0]), name }),
+      constraintName: CLIENT_NAME_CONSTRAINT,
+      errorMessage: NAME_TAKEN_MESSAGE,
+    });
 
     await workflowRejectRenameToTakenName({
       page,
@@ -782,34 +761,30 @@ test(
         await page.goto(`/client/${client.id}`);
       },
       getName: async (id) => (await getClientById(id))?.name,
-      errorMessage: "Existe un Cliente con el mismo nombre",
+      errorMessage: NAME_TAKEN_MESSAGE,
     });
 
     for (const client of activeClients) {
-      // Deleting a Cliente frees its name
+      // Deleting a Cliente frees its name, also typed with spaces around it...
       await workflowDeleteClient(page, client);
       await expect(getClientRows(client.name)).toHaveCount(0);
 
-      await page.getByRole("button", { name: CLIENT_CREATE_TITLE }).click();
-      await expect(dialogCreateClient).toBeVisible();
-      await fillRequiredClientFields(dialogCreateClient, client);
+      await openCreateClient();
+      await fillRequiredClientFields(dialogCreateClient, { ...client, name: `  ${client.name}  ` });
       await dialogCreateClient.getByTestId("button-submit").click();
 
       await expect(dialogCreateClient).not.toBeVisible();
+      await expectSingleToast(page);
       await assertFormLoaded(formClient);
       await expect(getFormInputByLabel(formClient, NAME_LABEL)).toHaveValue(client.name);
 
       // ...so the deleted Cliente can no longer be restored
       await page.goto(`/client/${client.id}`);
       await assertFormLoaded(formClient);
-      await clearToasts(page);
       await openAndConfirmAlertDialog(page, formClient.getByTestId("button-restore"), "dialog-restore-model-content");
+      await expectSingleToast(page, NAME_TAKEN_MESSAGE);
 
-      await expect(toasts).toHaveCount(1);
-      expect(await getToastType(toasts.first())).toBe(ToastType.Error);
-      await expect(toasts.first()).toContainText("Existe un Cliente con el mismo nombre");
-
-      expect((await getClientById(client.id))?.deletedAt).not.toBeNull();
+      expect((await getClientById(client.id))?.deletedAt).toBeInstanceOf(Date);
     }
   },
 );

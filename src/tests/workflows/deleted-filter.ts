@@ -4,7 +4,7 @@ import type { Locator, Page } from "@playwright/test";
 import { openAndConfirmAlertDialog } from "@/tests/utils/components/alert-dialog";
 import { getPopoverContent } from "@/tests/utils/components/popover";
 import { assertTableRowCount, getTableRowByTestId } from "@/tests/utils/components/table";
-import { clearToasts, getToastType, getToasts } from "@/tests/utils/components/toast";
+import { expectSingleToast } from "@/tests/utils/components/toast";
 import { ToastType } from "@/types";
 
 export enum EditButtonVisibility {
@@ -70,7 +70,6 @@ export async function workflowDeletedFilterAndRestore({
 }: WorkflowDeletedFilterAndRestoreParams) {
   expect(ids.length, "Wrong test set up: Some model should be active").toBeGreaterThan(0);
   const table = page.getByTestId(tableTestId);
-  const toasts = getToasts(page);
   const deletedIds = new Set<number>();
 
   // Every row shows the actions of its state, and the deleted ones are only listed when asked for
@@ -98,11 +97,11 @@ export async function workflowDeletedFilterAndRestore({
     await page.goto(url);
     await assertRows(false);
 
-    await clearToasts(page);
     await openAndConfirmAlertDialog(page, row.getByTestId("button-delete"), "dialog-delete-model-content");
+    await expectSingleToast(page);
     deletedIds.add(id);
     await assertRows(false);
-    expect(await getDeletedAt(id)).not.toBeNull();
+    expect(await getDeletedAt(id)).toBeInstanceOf(Date);
 
     await toggleDeletedFilter(page, table, filterLabel, true);
     await assertRows(true);
@@ -120,23 +119,20 @@ export async function workflowDeletedFilterAndRestore({
     await dialogRestore.getByTestId("button-close").click();
     await expect(dialogRestore).not.toBeVisible();
     await assertRows(true);
-    expect(await getDeletedAt(id)).not.toBeNull();
+    expect(await getDeletedAt(id)).toBeInstanceOf(Date);
 
-    await clearToasts(page);
     await openAndConfirmAlertDialog(page, row.getByTestId("button-restore"), "dialog-restore-model-content");
-    await expect(toasts).toHaveCount(1);
-    expect(await getToastType(toasts.first())).toBe(ToastType.Success);
-    await expect(toasts.first()).toContainText(restoredToastTitle);
+    await expectSingleToast(page, { message: restoredToastTitle, type: ToastType.Success });
     deletedIds.delete(id);
     await assertRows(true);
     expect(await getDeletedAt(id)).toBeNull();
 
     // Deleting it while the deleted ones are listed keeps its row, which can be restored again
-    await clearToasts(page);
     await openAndConfirmAlertDialog(page, row.getByTestId("button-delete"), "dialog-delete-model-content");
+    await expectSingleToast(page);
     deletedIds.add(id);
     await assertRows(true);
-    expect(await getDeletedAt(id)).not.toBeNull();
+    expect(await getDeletedAt(id)).toBeInstanceOf(Date);
 
     await toggleDeletedFilter(page, table, filterLabel, false);
     await assertRows(false);
@@ -154,24 +150,20 @@ export async function workflowRestoreTaken({
   errorMessage,
 }: WorkflowRestoreTakenParams) {
   const table = page.getByTestId(tableTestId);
-  const toasts = getToasts(page);
   const row = getTableRowByTestId(table, id);
 
   await page.goto(url);
-  await clearToasts(page);
   await openAndConfirmAlertDialog(page, row.getByTestId("button-delete"), "dialog-delete-model-content");
+  await expectSingleToast(page);
   await expect(row).toHaveCount(0);
 
   await insertDuplicate();
   await toggleDeletedFilter(page, table, filterLabel, true);
 
-  await clearToasts(page);
   await openAndConfirmAlertDialog(page, row.getByTestId("button-restore"), "dialog-restore-model-content");
-  await expect(toasts).toHaveCount(1);
-  expect(await getToastType(toasts.first())).toBe(ToastType.Error);
-  await expect(toasts.first()).toContainText(errorMessage);
+  await expectSingleToast(page, errorMessage);
 
   await expect(row.getByTestId("button-restore")).toBeVisible();
   await expect(row.getByTestId("button-delete")).toHaveCount(0);
-  expect(await getDeletedAt(id)).not.toBeNull();
+  expect(await getDeletedAt(id)).toBeInstanceOf(Date);
 }

@@ -24,8 +24,9 @@ export async function workflowDeletePart(page: Page, partId: number, expectedErr
     expect((await getPartById(partId))?.deletedAt).toBeNull();
     return;
   }
+  await expectSingleToast(page);
   await expect(rowPart).not.toBeVisible();
-  expect((await getPartById(partId))?.deletedAt).not.toBeNull();
+  expect((await getPartById(partId))?.deletedAt).toBeInstanceOf(Date);
 }
 
 export async function gotoPartComponents(page: Page, partId: number) {

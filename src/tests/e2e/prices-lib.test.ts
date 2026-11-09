@@ -33,4 +33,18 @@ test("the price library", async () => {
     expect(getVatInCents("-2.50")).toBe(-53);
     expect(getVatInCents("-0.01")).toBe(0);
   });
+
+  await test.step("the VAT is rounded once for each rate, which are listed from the highest", () => {
+    // 21 % of each 2 cent line rounds to nothing, but 21 % of the 4 cents of the rate does not
+    expect(
+      getVatBreakdown([
+        { quantity: 1, unitPrice: "0.02", vatPercentage: 21 },
+        { quantity: 1, unitPrice: "1", vatPercentage: 10 },
+        { quantity: 1, unitPrice: "0.02", vatPercentage: 21 },
+      ]),
+    ).toEqual([
+      { taxableBaseInCents: 4, vatInCents: 1, vatPercentage: 21 },
+      { taxableBaseInCents: 100, vatInCents: 10, vatPercentage: 10 },
+    ]);
+  });
 });

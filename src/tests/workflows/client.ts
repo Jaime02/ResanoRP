@@ -9,6 +9,7 @@ import { openAndConfirmAlertDialog } from "@/tests/utils/components/alert-dialog
 import { assertComboboxValue } from "@/tests/utils/components/combobox";
 import { InputElementType, assertFormLoaded, getFormInputByLabel } from "@/tests/utils/components/form";
 import { filterByExactText, findTableRow, getTableRowByTestId } from "@/tests/utils/components/table";
+import { expectSingleToast } from "@/tests/utils/components/toast";
 import { CLIENT_FIELD_LABELS } from "@/types/client";
 import type { BaseClient } from "@/types/client";
 
@@ -66,5 +67,6 @@ export async function workflowDeleteClient(page: Page, client: BaseClient) {
   await expect(filterByExactText(rowClient, client.name)).toBeVisible();
   await openAndConfirmAlertDialog(page, rowClient.getByTestId("button-delete"), "dialog-delete-model-content");
   await expect(rowClient).toHaveCount(0);
-  expect((await getClientById(client.id))?.deletedAt).not.toBeNull();
+  await expectSingleToast(page);
+  expect((await getClientById(client.id))?.deletedAt).toBeInstanceOf(Date);
 }

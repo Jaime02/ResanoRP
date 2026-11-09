@@ -53,8 +53,11 @@ const sortSchema = z.object({
 });
 export type TSort = z.infer<typeof sortSchema>;
 
+// Trimmed before it is checked, so a name of only spaces is empty and the unique index sees the name without them
+export const nameSchema = z.string({ error: "Campo obligatorio" }).trim().min(1, "Campo obligatorio");
+
 const baseModelWithNameSchema = z.object({
-  name: stringSchema({ nullable: false }),
+  name: nameSchema,
 });
 
 const modelWithNameSchema = baseModelWithNameSchema.extend(requiredIdObjectSchema.shape);

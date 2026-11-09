@@ -173,6 +173,18 @@ test("the quality control table of a machine", async ({ page }) => {
     await page.keyboard.press("Escape");
   });
 
+  await test.step("a check can be registered before any part is counted", async () => {
+    const checksBefore = (await getDbQualityControl(productionOrderId)).checks;
+    await workflowOpenProduction(page, qualityControlMachine);
+
+    await workflowCreateQualityCheck(page, 0);
+    const afterCheck = await getDbQualityControl(productionOrderId);
+    expect(afterCheck.checks.slice(checksBefore.length).map(({ producedQuantity }) => producedQuantity)).toEqual(
+      features.map(() => 0),
+    );
+    await assertQualityControlTable(page, afterCheck, { editable: true });
+  });
+
   await test.step("the table of the machine follows the production orders it starts", async () => {
     const { buttonCreate, table } = getQualityControlLocators(page);
     const queueWithoutQualityControl = mockMachineProductionOrderQueues.find(
@@ -255,7 +267,7 @@ for (const { name, message, tableStaysMounted, setUp, change } of rejectedCheckC
     `the machine cannot save a check when its production order is ${name} meanwhile`,
     { annotation: TestAnnotations.NonEmptyErrorsLogFile },
     async ({ page, db, openPage }) => {
-      const adminPage = await openPage(UserMode.Admin);
+      const adminPage = await openPage({ userMode: UserMode.Admin });
       const { buttonConfirm, inputQuantity } = getQualityControlLocators(page);
       await workflowOpenProduction(page, qualityControlMachine);
       const setUpResult = await setUp?.({ adminPage });

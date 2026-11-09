@@ -3,16 +3,16 @@ import { z } from "zod";
 import {
   decimalSchema,
   nameFiltersSchema,
+  nameSchema,
   priceSchema,
   requiredIdObjectSchema,
   requiredIdSchema,
-  stringSchema,
   tableStateSchema,
   nullableDateSchema,
 } from "@/schemas";
 
 const baseRawMaterialSchema = z.object({
-  name: stringSchema({ nullable: false }),
+  name: nameSchema,
   price: priceSchema.nullable(),
   density: decimalSchema(3).nullable(),
 });

@@ -14,8 +14,7 @@ import { selectComboboxOption } from "@/tests/utils/components/combobox";
 import { selectDateInputDate } from "@/tests/utils/components/date-input";
 import { InputElementType, getFormInputByLabel } from "@/tests/utils/components/form";
 import { assertTableRowCount, getTableRowByTestId } from "@/tests/utils/components/table";
-import { clearToasts, expectSingleToast, getToasts, getToastType } from "@/tests/utils/components/toast";
-import { ToastType } from "@/types";
+import { expectSingleToast } from "@/tests/utils/components/toast";
 import type { BaseClient } from "@/types/client";
 import type { BaseDeliveryNote } from "@/types/delivery-note";
 
@@ -122,7 +121,6 @@ export async function workflowCreateInvoice(
   page: Page,
   { client, startDate, endDate }: { client: BaseClient; startDate?: Date; endDate?: Date },
 ) {
-  const toasts = getToasts(page);
   const previousInvoiceIds = (await getInvoices()).map((invoice) => invoice.id);
 
   await page.goto("/invoicing");
@@ -147,9 +145,7 @@ export async function workflowCreateInvoice(
   await dialogCreateInvoice.getByTestId("button-submit").click();
 
   await expect(dialogCreateInvoice).not.toBeVisible();
-  await expect(toasts).toHaveCount(1);
-  expect(await getToastType(toasts.first())).toBe(ToastType.Success);
-  await clearToasts(page);
+  await expectSingleToast(page);
 
   // A single Factura is created, holding only the Albaranes of the picked Cliente
   const newInvoices = (await getInvoices()).filter((invoice) => !previousInvoiceIds.includes(invoice.id));
@@ -163,8 +159,6 @@ export async function workflowCreateInvoice(
 }
 
 export async function workflowDeleteInvoice(page: Page, invoiceId: number) {
-  const toasts = getToasts(page);
-
   const invoice = await getInvoiceById(invoiceId);
   expect(invoice).toBeDefined();
 
@@ -175,9 +169,7 @@ export async function workflowDeleteInvoice(page: Page, invoiceId: number) {
   await openAndConfirmAlertDialog(page, rowInvoice.getByTestId("button-delete"), "dialog-delete-model-content");
 
   await expect(rowInvoice).not.toBeVisible();
-  await expect(toasts).toHaveCount(1);
-  expect(await getToastType(toasts.first())).toBe(ToastType.Success);
-  await clearToasts(page);
+  await expectSingleToast(page);
 
   expect(await getInvoiceById(invoiceId)).toBeUndefined();
 
@@ -211,6 +203,7 @@ export async function workflowAccountInvoices(page: Page) {
   const downloadPromise = page.waitForEvent("download");
   await confirmAccountInvoices(page);
   const download: Download = await downloadPromise;
+  await expectSingleToast(page);
   const content = await fs.readFile(await download.path());
   return { content, fileName: download.suggestedFilename() };
 }

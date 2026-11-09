@@ -22,7 +22,7 @@ import {
 } from "@/tests/utils/components/combobox";
 import { InputElementType, getFormInputByLabel } from "@/tests/utils/components/form";
 import { assertTableRowCount, getTableNoDataRow, getTableRowByTestId } from "@/tests/utils/components/table";
-import { clearToasts, getToastType } from "@/tests/utils/components/toast";
+import { expectSingleToast } from "@/tests/utils/components/toast";
 import { expectUniqueViolation } from "@/tests/utils/db";
 import { TestAnnotations, test } from "@/tests/utils/fixtures";
 import {
@@ -36,9 +36,9 @@ import {
   getMockPartsShowingMaterials,
 } from "@/tests/workflows/material";
 import type { TDeletedMaterials } from "@/tests/workflows/material";
-import { ToastType } from "@/types";
 
 const MAINTENANCE_MATERIAL_URL = "/maintenance?tab=material";
+const COMBINATION_TAKEN_MESSAGE = "Existe un Material con la misma Materia Prima, Forma y ancho";
 
 async function getMaterial(db: TDatabase, id: number) {
   return db.query.dbTableMaterial.findFirst({ where: { id } });
@@ -66,7 +66,7 @@ async function fillMaterialForm(page: Page, material: (typeof mockMaterials)[num
   await inputWidth.pressSequentially(material.width);
 }
 
-test("manage the Materiales", { annotation: TestAnnotations.NonEmptyErrorsLogFile }, async ({ page, db, toasts }) => {
+test("manage the Materiales", { annotation: TestAnnotations.NonEmptyErrorsLogFile }, async ({ page, db }) => {
   const activeMaterials = mockMaterials.filter((material) => material.deletedAt === null);
   const tableMaterial = page.getByTestId("table-material");
 
@@ -161,9 +161,7 @@ test("manage the Materiales", { annotation: TestAnnotations.NonEmptyErrorsLogFil
       await fillMaterialForm(page, material);
       await dialogCreateMaterial.getByTestId("button-submit").click();
 
-      await expect(toasts).toHaveCount(1);
-      expect(await getToastType(toasts.first())).toBe(ToastType.Error);
-      await expect(toasts.first()).toContainText("Existe un Material con la misma Materia Prima, Forma y ancho");
+      await expectSingleToast(page, COMBINATION_TAKEN_MESSAGE);
       await expect(dialogCreateMaterial).toBeVisible();
 
       await expectUniqueViolation(
@@ -173,7 +171,6 @@ test("manage the Materiales", { annotation: TestAnnotations.NonEmptyErrorsLogFil
         MATERIAL_COMBINATION_CONSTRAINT,
       );
 
-      await clearToasts(page);
       await dialogCreateMaterial.getByTestId("button-close").click();
       await expect(dialogCreateMaterial).not.toBeVisible();
     }
@@ -194,6 +191,7 @@ test("manage the Materiales", { annotation: TestAnnotations.NonEmptyErrorsLogFil
         getTableRowByTestId(tableMaterial, material.id).getByTestId("button-delete"),
         "dialog-delete-model-content",
       );
+      await expectSingleToast(page);
       deleted.materialIds.add(material.id);
 
       await expectVisibleMaterials(
@@ -228,6 +226,7 @@ test("manage the Materiales", { annotation: TestAnnotations.NonEmptyErrorsLogFil
       await fillMaterialForm(page, material);
       await dialogCreateMaterial.getByTestId("button-submit").click();
       await expect(dialogCreateMaterial).not.toBeVisible();
+      await expectSingleToast(page);
       deleted.materialIds.delete(material.id);
 
       await expectVisibleMaterials(
@@ -277,7 +276,7 @@ test(
         db
           .insert(dbTableMaterial)
           .values({ rawMaterialId: material.rawMaterialId, shapeId: material.shapeId, width: material.width }),
-      errorMessage: "Existe un Material con la misma Materia Prima, Forma y ancho",
+      errorMessage: COMBINATION_TAKEN_MESSAGE,
     });
   },
 );

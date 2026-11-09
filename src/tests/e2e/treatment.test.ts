@@ -41,7 +41,6 @@ import {
   mockTreatmentReceptions,
   mockTreatmentShipments,
 } from "@/tests/mock-data";
-import { openAndConfirmAlertDialog } from "@/tests/utils/components/alert-dialog";
 import { getDateInputValue } from "@/tests/utils/components/date-input";
 import { clearPicker } from "@/tests/utils/components/picker";
 import {
@@ -50,7 +49,7 @@ import {
   getTableRowByTestId,
   getTableRows,
 } from "@/tests/utils/components/table";
-import { TestAnnotations, setUserMode, test } from "@/tests/utils/fixtures";
+import { TestAnnotations, inAnotherTab, setUserMode, test } from "@/tests/utils/fixtures";
 import { getMockSellOrderLineById, getMockTreatmentQuantities } from "@/tests/utils/mock-data-utils";
 import { holdRequestWhile } from "@/tests/utils/trpc";
 import { gotoProductionOrdersWithStatuses } from "@/tests/workflows/production";
@@ -430,11 +429,7 @@ test("undo a shipment and a reception", async ({ page, db }) => {
     const pendingRow = getTableRowByTestId(tablePending, shipmentWithoutReceptions.productionOrderId!);
     const unsentBefore = Number(await pendingRow.getByTestId("unsentQuantity").textContent());
 
-    await openAndConfirmAlertDialog(
-      page,
-      getTableRowByTestId(tableBatchOut, shipmentWithoutReceptions.id).getByTestId("button-delete"),
-      "dialog-delete-model-content",
-    );
+    await workflowDeleteTreatmentShipment(page, batchOut.sentAt, shipmentWithoutReceptions.id);
 
     await expect(getTableRowByTestId(tableBatchOut, shipmentWithoutReceptions.id)).toHaveCount(0);
     await expect(pendingRow.getByTestId("unsentQuantity")).toHaveText(
@@ -451,11 +446,7 @@ test("undo a shipment and a reception", async ({ page, db }) => {
   await test.step("deleting the receptions of a shipment lets it be deleted", async () => {
     const row = getTableRowByTestId(tableBatchOut, shipmentWithReceptions.id);
     for (const reception of shipmentWithReceptions.treatmentReceptions) {
-      await openAndConfirmAlertDialog(
-        page,
-        row.getByTestId(`div-treatment-reception-${reception.id}`).getByTestId("button-delete-reception"),
-        "dialog-delete-model-content",
-      );
+      await workflowDeleteTreatmentReception(page, batchOut.sentAt, reception.id);
       await expect(row.getByTestId(`div-treatment-reception-${reception.id}`)).toHaveCount(0);
     }
     await expect(row.getByTestId("receivedQuantity")).toHaveText("0");
@@ -465,12 +456,7 @@ test("undo a shipment and a reception", async ({ page, db }) => {
 
   await test.step("deleting a reception of a received batch takes it back out", async () => {
     const reception = batchReceived.treatmentShipments[0].treatmentReceptions[0];
-    const tableBatchReceived = sectionHistory.getByTestId(`table-treatment-batch-${batchReceived.sentAt.getTime()}`);
-    await openAndConfirmAlertDialog(
-      page,
-      tableBatchReceived.getByTestId(`div-treatment-reception-${reception.id}`).getByTestId("button-delete-reception"),
-      "dialog-delete-model-content",
-    );
+    await workflowDeleteTreatmentReception(page, batchReceived.sentAt, reception.id);
     await expect(sectionOut.getByTestId(`table-treatment-batch-${batchReceived.sentAt.getTime()}`)).toBeVisible();
     await expect(sectionHistory.getByTestId(`table-treatment-batch-${batchReceived.sentAt.getTime()}`)).toHaveCount(0);
   });
@@ -673,6 +659,41 @@ test(
       });
       expect(await getNewTreatmentReceptions()).toHaveLength(0);
     });
+  },
+);
+
+test(
+  "receiving the parts another tab receives meanwhile is rejected",
+  { annotation: TestAnnotations.NonEmptyErrorsLogFile },
+  async ({ page }) => {
+    const shipment = batchOut.treatmentShipments.find((treatmentShipment) => treatmentShipment.pendingQuantity > 1)!;
+    await gotoTreatment(page);
+
+    await holdRequestWhile({
+      page,
+      procedurePath: "treatment.receive",
+      send: async () =>
+        workflowReceiveFromTreatment(
+          page,
+          batchOut.sentAt,
+          [{ quantity: shipment.pendingQuantity, treatmentShipmentId: shipment.id }],
+          `solo tiene ${shipment.pendingQuantity - 1} piezas pendientes de recibir`,
+        ),
+      meanwhile: async () =>
+        inAnotherTab(page, async (anotherPage) => {
+          await gotoTreatment(anotherPage);
+          await workflowReceiveFromTreatment(anotherPage, batchOut.sentAt, [
+            { quantity: 1, treatmentShipmentId: shipment.id },
+          ]);
+        }),
+    });
+
+    expect(
+      (await getNewTreatmentReceptions()).map(({ quantity, treatmentShipmentId }) => ({
+        quantity,
+        treatmentShipmentId,
+      })),
+    ).toEqual([{ quantity: 1, treatmentShipmentId: shipment.id }]);
   },
 );
 

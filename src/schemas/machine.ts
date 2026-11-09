@@ -2,7 +2,7 @@ import { createSelectSchema } from "drizzle-orm/zod";
 import { z } from "zod";
 
 import { dbTableMachine } from "@/db/schema";
-import { requiredIdObjectSchema, stringSchema, tableStateSchema } from "@/schemas";
+import { nameSchema, requiredIdObjectSchema, tableStateSchema } from "@/schemas";
 
 export const machineSchema = createSelectSchema(dbTableMachine);
 
@@ -11,7 +11,7 @@ const diameterSchema = z.number().int().positive().nullable();
 const baseMachineSchema = z.object({
   maxDiameter: diameterSchema,
   minDiameter: diameterSchema,
-  name: stringSchema({ nullable: false }),
+  name: nameSchema,
 });
 
 function isValidDiameterRange({

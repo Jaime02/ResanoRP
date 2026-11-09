@@ -64,7 +64,7 @@ import {
   getTableRows,
   getTableSubrowById,
 } from "@/tests/utils/components/table";
-import { clearToasts, getToastType } from "@/tests/utils/components/toast";
+import { expectSingleToast } from "@/tests/utils/components/toast";
 import { TestAnnotations, setUserMode, test } from "@/tests/utils/fixtures";
 import {
   getMockClientParts,
@@ -99,7 +99,7 @@ test.beforeEach(({ page }) => {
 test(
   "manage the delivery notes",
   { annotation: [TestAnnotations.NonEmptyErrorsLogFile, TestAnnotations.ResetTags] },
-  async ({ page, db, toasts }) => {
+  async ({ page, db }) => {
     await test.step("show query error dialog when navigating to unexisting delivery note", async () => {
       await page.goto(`/delivery-note?editDeliveryNoteId=${mockDeliveryNotes.length + 1}`);
 
@@ -490,8 +490,7 @@ test(
         ).pressSequentially("3");
         await dialogCreateDeliveryNoteLine.getByTestId("button-submit").click();
         await expect(dialogCreateDeliveryNoteLine).not.toBeVisible();
-        await expect(toasts).toHaveCount(1);
-        await clearToasts(page);
+        await expectSingleToast(page);
 
         const userDeliveryNoteLine = (await getDeliveryNoteLinesByDeliveryNoteId(deliveryNote.id)).find(
           (line) => !mockDeliveryNoteLines.some((mockLine) => mockLine.id === line.id),
@@ -515,10 +514,7 @@ test(
       )!;
       expect(userDeliveryNoteLine).toBeDefined();
       const assertRejected = async (message: string) => {
-        await expect(toasts).toHaveCount(1);
-        expect(await getToastType(toasts.first())).toBe(ToastType.Error);
-        await expect(toasts.first()).toContainText(message);
-        await clearToasts(page);
+        await expectSingleToast(page, message);
         await setUserMode(page, UserMode.Admin);
       };
 
@@ -592,9 +588,7 @@ test(
           await inputLinkedUnitPrice.clear();
           await inputLinkedUnitPrice.pressSequentially(linkedUnitPrice);
           await inputLinkedUnitPrice.blur();
-          await expect(toasts).toHaveCount(1);
-          expect(await getToastType(toasts.first())).toBe(ToastType.Success);
-          await clearToasts(page);
+          await expectSingleToast(page);
           expect(await getDeliveryNoteLine({ id: linkedDeliveryNoteLine.id })).toMatchObject({
             sellOrderLineId: linkedSellOrderLine.id,
             unitPrice: linkedUnitPrice,
@@ -616,9 +610,7 @@ test(
         await inputUnitPrice.pressSequentially(newUnitPrice);
         await inputUnitPrice.blur();
 
-        await expect(toasts).toHaveCount(1);
-        expect(await getToastType(toasts.first())).toBe(ToastType.Success);
-        await clearToasts(page);
+        await expectSingleToast(page);
         expect(Number((await getDeliveryNoteLine({ id: userDeliveryNoteLine.id }))?.unitPrice)).toBe(
           Number(newUnitPrice),
         );
@@ -626,9 +618,7 @@ test(
         // Once set, a price can be changed but not removed
         await inputUnitPrice.clear();
         await inputUnitPrice.blur();
-        await expect(toasts).toHaveCount(1);
-        expect(await getToastType(toasts.first())).toBe(ToastType.Error);
-        await clearToasts(page);
+        await expectSingleToast(page, { type: ToastType.Error });
         expect(Number((await getDeliveryNoteLine({ id: userDeliveryNoteLine.id }))?.unitPrice)).toBe(
           Number(newUnitPrice),
         );
@@ -666,9 +656,7 @@ test(
         await inputUnitPrice.pressSequentially(String(unitPrice));
         await inputUnitPrice.blur();
 
-        await expect(toasts).toHaveCount(1);
-        expect(await getToastType(toasts.first())).toBe(ToastType.Success);
-        await clearToasts(page);
+        await expectSingleToast(page);
         expect(Number((await getDeliveryNoteLine({ id: unpricedMockLine.id }))?.unitPrice)).toBe(unitPrice);
         expect(await getInvoiceById(invoicedDeliveryNote.invoiceId!)).toMatchObject({ accounted: false, sent: false });
       }
@@ -729,9 +717,7 @@ test(
             Number(newPartQuantity),
           );
 
-          await expect(toasts).toHaveCount(1);
-          expect(await getToastType(toasts.first())).toBe(ToastType.Success);
-          await clearToasts(page);
+          await expectSingleToast(page);
 
           let updatedDeliveryNoteLine = await getDeliveryNoteLine({ id: deliveryNoteLine.id });
           expect(updatedDeliveryNoteLine).toBeDefined();
@@ -741,9 +727,7 @@ test(
           await inputQuantity.clear();
           await inputQuantity.blur();
 
-          await expect(toasts).toHaveCount(1);
-          expect(await getToastType(toasts.first())).toBe(ToastType.Error);
-          await clearToasts(page);
+          await expectSingleToast(page, { type: ToastType.Error });
           await expect(inputQuantity).toHaveValue(newPartQuantity);
 
           updatedDeliveryNoteLine = await getDeliveryNoteLine({ id: deliveryNoteLine.id });
@@ -862,8 +846,7 @@ test(
           await dialogCreateDeliveryNoteLine.getByTestId("button-submit").click();
 
           await expect(dialogCreateDeliveryNoteLine).not.toBeVisible();
-          await expect(toasts).toHaveCount(1);
-          await clearToasts(page);
+          await expectSingleToast(page);
           const newDbLines = (await getDeliveryNoteLinesByDeliveryNoteId(deliveryNote.id)).filter(
             (line) => !existingDbLineIds.includes(line.id),
           );
@@ -1017,9 +1000,7 @@ test(
         await inputUnitPrice.pressSequentially(customLine.unitPrice);
         await buttonSubmit.click();
         await expect(dialogCreateDeliveryNoteLine).not.toBeVisible();
-        await expect(toasts).toHaveCount(1);
-        expect(await getToastType(toasts.first())).toBe(ToastType.Success);
-        await clearToasts(page);
+        await expectSingleToast(page);
 
         const newDbLines = (await getDeliveryNoteLinesByDeliveryNoteId(deliveryNote.id)).filter(
           (line) => !existingDbLineIds.includes(line.id),
@@ -1140,8 +1121,7 @@ test(
         await expect(getDivDisabledMessage(cardTableDeliveryNoteLines)).not.toBeVisible();
         expect(await countGetDeliveryNoteByIdQueryErrors()).toBe(0);
 
-        await expect(toasts).toHaveCount(1);
-        expect(await getToastType(toasts.first())).toBe(ToastType.Success);
+        await expectSingleToast(page);
 
         const dbDeliveryNote = await getDeliveryNote({ id: newDeliveryNoteId });
         expect(dbDeliveryNote).toBeDefined();
@@ -1149,7 +1129,6 @@ test(
         expect(dbDeliveryNote!.clientId).toBe(deliveryNoteClient.id);
         expect(dbDeliveryNote!.deliveryMethodId).toBe(deliveryMethod.id);
         expect(isSameAppDay(dbDeliveryNote!.deliveryDate!, MOCK_INITIAL_DATE)).toBeTruthy();
-        await clearToasts(page);
       });
     }
 
@@ -1201,7 +1180,6 @@ test(
       const remainingDeliveryNoteIds = (await db.query.dbTableDeliveryNote.findMany()).map(({ id }) => id);
       for (const deliveryNote of [...mockDeliveryNotes].reverse()) {
         await workflowDeleteDeliveryNote(page, deliveryNote.id);
-        await clearToasts(page);
         remainingDeliveryNoteIds.splice(remainingDeliveryNoteIds.indexOf(deliveryNote.id), 1);
         expect((await db.query.dbTableDeliveryNote.findMany()).map(({ id }) => id).sort((a, b) => a - b)).toEqual(
           remainingDeliveryNoteIds.sort((a, b) => a - b),

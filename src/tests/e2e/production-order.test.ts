@@ -2,7 +2,7 @@ import { expect } from "@playwright/test";
 import type { Locator } from "@playwright/test";
 import { eq, gt } from "drizzle-orm";
 
-import { AppContextStorage, UserMode } from "@/contexts/app-context";
+import { UserMode } from "@/contexts/app-context";
 import { getMachineById } from "@/db/functions/machine";
 import { getMachineProductionOrderQueue } from "@/db/functions/machine-production-order-queue";
 import { getPartById } from "@/db/functions/part";
@@ -55,7 +55,7 @@ import {
   getTableRowByTestId,
   getTableRows,
 } from "@/tests/utils/components/table";
-import { clearToasts, getToastType } from "@/tests/utils/components/toast";
+import { expectSingleToast } from "@/tests/utils/components/toast";
 import { TestAnnotations, inAnotherTab, setUserMode, test } from "@/tests/utils/fixtures";
 import {
   getMockStartedProductionOrdersWithoutQuantity,
@@ -75,7 +75,6 @@ import {
   workflowRunProductionOrderOnMachines,
   workflowStopActiveProductionOrder,
 } from "@/tests/workflows/production";
-import { ToastType } from "@/types";
 import type { BaseMachine } from "@/types/machine";
 import type { BasePart } from "@/types/part";
 import type { BaseProductionOrder } from "@/types/production-order";
@@ -87,7 +86,7 @@ test.beforeEach(({ page }) => {
   tableProductionOrders = page.getByTestId("table-production-order");
 });
 
-test("assign, unassign and filter the machines of the production orders", async ({ page, toasts }) => {
+test("assign, unassign and filter the machines of the production orders", async ({ page }) => {
   await test.step("filter production orders by machine", async () => {
     const machineWithActiveProductionOrder = mockMachines.find((machine) => machine.activeProductionOrderId !== null)!;
     const machineWithoutProductionOrders = mockMachines.find(
@@ -154,9 +153,7 @@ test("assign, unassign and filter the machines of the production orders", async 
 
     await selectComboboxOption(page, tableRowToAssign.getByTestId("combobox-assign-machine"), assignedMachine!.name);
 
-    await expect(toasts).toHaveCount(1);
-    expect(await getToastType(toasts.first())).toBe(ToastType.Success);
-    await clearToasts(page);
+    await expectSingleToast(page);
 
     const updatedAssignedMachines = await getProductionOrderAssignedMachines(productionOrderToAssign.id);
     expect(updatedAssignedMachines.length).toBe(previouslyAssignedMachines.length + 1);
@@ -207,9 +204,7 @@ test("assign, unassign and filter the machines of the production orders", async 
     await expect(buttonUnassignMachine).toBeVisible();
     await buttonUnassignMachine.click();
 
-    await expect(toasts).toHaveCount(1);
-    expect(await getToastType(toasts.first())).toBe(ToastType.Success);
-    await clearToasts(page);
+    await expectSingleToast(page);
 
     const updatedAssignedMachines = await getProductionOrderAssignedMachines(productionOrderToUnassign!.id);
     expect(updatedAssignedMachines.some((m) => m.id === selectedMachine!.id)).toBe(false);
@@ -368,7 +363,7 @@ test("filter production orders by unchecking and checking statuses", async ({ pa
 });
 
 // It takes the Orden de producción a Máquina is working on, so it cannot share the database with the other test
-test("deleting a production order takes it off the machines", async ({ page, browser, baseURL }) => {
+test("deleting a production order takes it off the machines", async ({ page, openPage }) => {
   const machine = mockMachines.find(
     (mockMachine) =>
       mockMachine.activeProductionOrderId !== null &&
@@ -394,10 +389,7 @@ test("deleting a production order takes it off the machines", async ({ page, bro
     ProductionOrderStatus.Deleted,
   );
 
-  // So the Máquina is asked to start another Orden de producción
-  await using machineContext = await browser.newContext({ baseURL, ignoreHTTPSErrors: true });
-  await machineContext.addCookies([AppContextStorage.testCookie(baseURL!, UserMode.Machine, machine.id)]);
-  const machinePage = await machineContext.newPage();
+  const machinePage = await openPage({ machineId: machine.id, userMode: UserMode.Machine });
   await machinePage.goto("/production");
   await machinePage.waitForSelector("body[data-hydrated]");
   const dialogContentMachineProductionOrderQueue = machinePage.getByTestId(
@@ -448,11 +440,10 @@ test("deleting a production order takes it off the machines", async ({ page, bro
 test(
   "restoring a production order that another tab restores meanwhile is rejected",
   { annotation: TestAnnotations.NonEmptyErrorsLogFile },
-  async ({ page, toasts }) => {
+  async ({ page }) => {
     const productionOrder = (await getProductionOrdersByStatuses([ProductionOrderStatus.Pending])).at(0)!;
     await gotoProductionOrdersWithStatuses(page, [ProductionOrderStatus.Pending]);
     await workflowDeleteProductionOrder(page, productionOrder.id);
-    await clearToasts(page);
 
     await gotoProductionOrdersWithStatuses(page, [ProductionOrderStatus.Deleted]);
     await holdRequestWhile({
@@ -468,11 +459,7 @@ test(
         inAnotherTab(page, async (anotherPage) => workflowRestoreProductionOrder(anotherPage, productionOrder.id)),
     });
 
-    await expect(toasts).toHaveCount(1);
-    expect(await getToastType(toasts.first())).toBe(ToastType.Error);
-    await expect(toasts.first()).toContainText(
-      `Orden de producción con ID ${productionOrder.id} no encontrada o no eliminada`,
-    );
+    await expectSingleToast(page, `Orden de producción con ID ${productionOrder.id} no encontrada o no eliminada`);
     expect((await getProductionOrderById(productionOrder.id))?.deletedAt).toBeNull();
   },
 );
@@ -934,7 +921,7 @@ test(
 test(
   "create production orders by hand and from a sell order line",
   { annotation: TestAnnotations.NonEmptyErrorsLogFile },
-  async ({ page, db, toasts }) => {
+  async ({ page, db }) => {
     const lastMockProductionOrderId = Math.max(...mockProductionOrders.map((productionOrder) => productionOrder.id));
     const getNewProductionOrders = async () =>
       db
@@ -978,15 +965,20 @@ test(
       await getTableRowByTestId(tablePickerPart, part.id).getByTestId("button-success").click();
       await expect(dialogPickerPartContent).not.toBeVisible();
       await assertBlueprintsShown(part.id);
+      // Nothing is produced of a quantity of 0
+      await inputQuantity.fill("0");
+      await page.getByTestId("button-submit").click();
+      await expect(page.getByText("La cantidad debe ser un número positivo")).toBeVisible();
+      expect(await getNewProductionOrders()).toEqual([]);
+
       await inputQuantity.fill("7");
       await page.getByTestId("button-submit").click();
 
       await expect(page).toHaveURL(/\/production-order\/\d+$/);
-      expect(await getToastType(toasts.first())).toBe(ToastType.Success);
+      await expectSingleToast(page);
       const [newProductionOrder] = await getNewProductionOrders();
       expect(newProductionOrder).toMatchObject({ partId: part.id, quantity: 7, sellOrderLineId: null });
       expect(page.url()).toMatch(new RegExp(`/production-order/${newProductionOrder.id}$`));
-      await clearToasts(page);
     });
 
     await test.step("from a sell order line, with its part, its blueprints and its pending quantity", async () => {
@@ -1014,7 +1006,7 @@ test(
       await page.getByTestId("button-submit").click();
 
       await expect(page).toHaveURL(/\/production-order\/\d+$/);
-      expect(await getToastType(toasts.first())).toBe(ToastType.Success);
+      await expectSingleToast(page);
       const newProductionOrders = await getNewProductionOrders();
       expect(newProductionOrders).toHaveLength(2);
       expect(newProductionOrders[1]).toMatchObject({
@@ -1031,6 +1023,15 @@ test(
       await page.goBack();
       await expect(rowSellOrderLine).toBeVisible();
       await expect(buttonCreateProductionOrder).not.toBeAttached();
+    });
+
+    await test.step("by hand without a quantity, which is produced until its machines stop", async () => {
+      const part = mockParts.find((mockPart) => mockPart.deletedAt === null)!;
+      const productionOrdersBefore = await getNewProductionOrders();
+      await workflowCreateProductionOrder(page, { part, quantity: null });
+      expect((await getNewProductionOrders()).slice(productionOrdersBefore.length)).toEqual([
+        expect.objectContaining({ partId: part.id, quantity: null, sellOrderLineId: null }),
+      ]);
     });
 
     await test.step("the server rejects deleted parts and lines that cannot be produced", async () => {

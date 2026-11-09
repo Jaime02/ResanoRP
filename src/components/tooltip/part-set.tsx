@@ -93,7 +93,7 @@ function PartComponentTree({
         <li key={component.componentPartId} data-testid="part-set-node">
           <div className="flex flex-row items-center gap-2" data-testid="part-set-node-row">
             <span className="flex flex-row items-center gap-2" data-testid="part-set-node-label">
-              <span className="font-medium whitespace-nowrap">{component.quantity} ×</span>
+              <span className="font-medium whitespace-nowrap">{component.quantity} x </span>
               <ButtonLink testId="button-link-part-set-node" to="/part/$id" params={{ id: component.componentPartId }}>
                 {component.part.description}
               </ButtonLink>

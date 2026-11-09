@@ -15,55 +15,55 @@ import {
   getTableRowByTestId,
   getTableRows,
 } from "@/tests/utils/components/table";
-import { clearToasts, getToastType } from "@/tests/utils/components/toast";
-import { expectUniqueViolation } from "@/tests/utils/db";
+import { expectSingleToast } from "@/tests/utils/components/toast";
 import { TestAnnotations, test } from "@/tests/utils/fixtures";
 import {
   EditButtonVisibility,
   workflowDeletedFilterAndRestore,
   workflowRestoreTaken,
 } from "@/tests/workflows/deleted-filter";
-import { workflowRejectRenameToTakenName } from "@/tests/workflows/unique-name";
-import { ToastType } from "@/types";
+import {
+  workflowRejectCreateWithTakenName,
+  workflowRejectRenameToTakenName,
+  workflowReuseDeletedName,
+} from "@/tests/workflows/unique-name";
 import type { BasePart } from "@/types/part";
 
 const MAINTENANCE_COATING_URL = "/maintenance?tab=coating";
+const NAME_TAKEN_MESSAGE = "Existe un Tratamiento con el mismo nombre";
 
-test("manage the Tratamientos", { annotation: TestAnnotations.NonEmptyErrorsLogFile }, async ({ page, db, toasts }) => {
+test("manage the Tratamientos", { annotation: TestAnnotations.NonEmptyErrorsLogFile }, async ({ page, db }) => {
   const activeCoatings = mockCoatings.filter((coating) => coating.deletedAt === null);
   const tableCoating = page.getByTestId("table-coating");
   const dialogCreateEditCoating = page.getByTestId("dialog-create-edit-coating");
 
-  const createCoating = async (name: string) => {
+  const openCreateCoating = async () => {
     await page.getByRole("button", { name: COATING_CREATE_TITLE }).click();
     await expect(dialogCreateEditCoating).toBeVisible();
-    await getFormInputByLabel(dialogCreateEditCoating, NAME_LABEL).fill(name);
-    await dialogCreateEditCoating.getByTestId("button-submit").click();
+  };
+  const closeDialog = async () => {
+    await dialogCreateEditCoating.getByTestId("button-close").click();
+    await expect(dialogCreateEditCoating).not.toBeVisible();
   };
 
   await test.step("reject a Tratamiento with the name of any active one", async () => {
     await page.goto(MAINTENANCE_COATING_URL);
 
-    for (const coating of activeCoatings) {
-      await createCoating(coating.name);
-
-      await expect(toasts).toHaveCount(1);
-      expect(await getToastType(toasts.first())).toBe(ToastType.Error);
-      await expect(toasts.first()).toContainText("Existe un Tratamiento con el mismo nombre");
-      await expect(dialogCreateEditCoating).toBeVisible();
-
-      await expectUniqueViolation(db.insert(dbTableCoating).values({ name: coating.name }), COATING_NAME_CONSTRAINT);
-
-      await clearToasts(page);
-      await dialogCreateEditCoating.getByTestId("button-close").click();
-      await expect(dialogCreateEditCoating).not.toBeVisible();
-    }
+    await workflowRejectCreateWithTakenName({
+      page,
+      items: activeCoatings,
+      form: dialogCreateEditCoating,
+      openCreate: openCreateCoating,
+      closeCreate: closeDialog,
+      insertDuplicate: async (name) => db.insert(dbTableCoating).values({ name }),
+      constraintName: COATING_NAME_CONSTRAINT,
+      errorMessage: NAME_TAKEN_MESSAGE,
+    });
 
     // A cancelled draft is kept
-    await page.getByRole("button", { name: COATING_CREATE_TITLE }).click();
+    await openCreateCoating();
     await expect(getFormInputByLabel(dialogCreateEditCoating, NAME_LABEL)).toHaveValue(activeCoatings.at(-1)!.name);
-    await dialogCreateEditCoating.getByTestId("button-close").click();
-    await expect(dialogCreateEditCoating).not.toBeVisible();
+    await closeDialog();
 
     await workflowRejectRenameToTakenName({
       page,
@@ -71,12 +71,9 @@ test("manage the Tratamientos", { annotation: TestAnnotations.NonEmptyErrorsLogF
       form: dialogCreateEditCoating,
       openEdit: async (coating) =>
         (await findTableRowByText(tableCoating, coating.name)).getByTestId("button-edit").click(),
-      closeEdit: async () => {
-        await dialogCreateEditCoating.getByTestId("button-close").click();
-        await expect(dialogCreateEditCoating).not.toBeVisible();
-      },
+      closeEdit: closeDialog,
       getName: async (id) => (await getCoatingById(id))?.name,
-      errorMessage: "Existe un Tratamiento con el mismo nombre",
+      errorMessage: NAME_TAKEN_MESSAGE,
     });
   });
 
@@ -100,35 +97,36 @@ test("manage the Tratamientos", { annotation: TestAnnotations.NonEmptyErrorsLogF
         (await findTableRowByText(tableCoating, coating.name)).getByTestId("button-delete"),
         "dialog-delete-model-content",
       );
+      await expectSingleToast(page);
       deletedCoatingIds.add(coating.id);
 
       await expect(filterByExactText(getTableRows(tableCoating), coating.name)).toHaveCount(0);
       for (const otherCoating of activeCoatings.filter((activeCoating) => !deletedCoatingIds.has(activeCoating.id))) {
         await expect(filterByExactText(getTableRows(tableCoating), otherCoating.name)).toHaveCount(1);
       }
-      expect((await getCoatingById(coating.id))?.deletedAt).not.toBeNull();
+      expect((await getCoatingById(coating.id))?.deletedAt).toBeInstanceOf(Date);
 
       // Only the Artículos of the deleted Tratamientos lose theirs, including the deleted Artículos
       expect(
         await db.query.dbTablePart.findMany({ columns: { coatingId: true, id: true }, orderBy: { id: "asc" } }),
       ).toEqual(mockParts.map((part) => ({ coatingId: getExpectedCoatingId(part), id: part.id })));
 
-      // Its name can be used again...
-      await createCoating(coating.name);
-      await expect(dialogCreateEditCoating).not.toBeVisible();
+      // Its name can be used again, so the deleted Tratamiento can no longer be restored
+      await workflowReuseDeletedName({
+        page,
+        item: coating,
+        form: dialogCreateEditCoating,
+        openCreate: openCreateCoating,
+        restoreDeleted: async () =>
+          db.update(dbTableCoating).set({ deletedAt: null }).where(eq(dbTableCoating.id, coating.id)),
+        constraintName: COATING_NAME_CONSTRAINT,
+      });
       await expect(filterByExactText(getTableRows(tableCoating), coating.name)).toHaveCount(1);
 
-      // ...the create dialog starts empty after a Tratamiento is created...
-      await page.getByRole("button", { name: COATING_CREATE_TITLE }).click();
+      // The create dialog starts empty after a Tratamiento is created
+      await openCreateCoating();
       await expect(getFormInputByLabel(dialogCreateEditCoating, NAME_LABEL)).toHaveValue("");
-      await dialogCreateEditCoating.getByTestId("button-close").click();
-      await expect(dialogCreateEditCoating).not.toBeVisible();
-
-      // ...so the deleted Tratamiento can no longer be restored
-      await expectUniqueViolation(
-        db.update(dbTableCoating).set({ deletedAt: null }).where(eq(dbTableCoating.id, coating.id)),
-        COATING_NAME_CONSTRAINT,
-      );
+      await closeDialog();
 
       await page.goto("/part");
       for (const part of mockParts.filter((mockPart) => mockPart.deletedAt === null)) {
@@ -179,7 +177,7 @@ test(
       page,
       id: coating.id,
       insertDuplicate: async () => db.insert(dbTableCoating).values({ name: coating.name }),
-      errorMessage: "Existe un Tratamiento con el mismo nombre",
+      errorMessage: NAME_TAKEN_MESSAGE,
     });
   },
 );

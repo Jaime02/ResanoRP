@@ -37,8 +37,8 @@ import {
   getTableRows,
   getTableSubrowById,
 } from "@/tests/utils/components/table";
-import { clearToasts, getToastType } from "@/tests/utils/components/toast";
-import { TestAnnotations, test } from "@/tests/utils/fixtures";
+import { expectSingleToast } from "@/tests/utils/components/toast";
+import { TestAnnotations, inAnotherTab, test } from "@/tests/utils/fixtures";
 import {
   getMockClientById,
   getMockDeliveryNoteById,
@@ -48,6 +48,7 @@ import {
   getMockSellOrderById,
   getMockSellOrderLineById,
 } from "@/tests/utils/mock-data-utils";
+import { holdRequestWhile } from "@/tests/utils/trpc";
 import {
   workflowDeleteDeliveryNote,
   workflowEditDeliveryNoteLineQuantity,
@@ -65,7 +66,6 @@ import {
   workflowDeleteInvoice,
   workflowPickInvoiceClient,
 } from "@/tests/workflows/invoice";
-import { ToastType } from "@/types";
 import { PENDING_DELIVERY_NOTES_PAGE_SIZE } from "@/types/invoice";
 
 let tableInvoices: Locator;
@@ -88,7 +88,7 @@ function getClientDeliveryNotes(clientId: number) {
     .sort((a, b) => a.deliveryDate!.getTime() - b.deliveryDate!.getTime());
 }
 
-test("create, change and delete invoices", async ({ page, db, toasts }) => {
+test("create, change and delete invoices", async ({ page, db }) => {
   const client = mockClients[0];
   const clientDeliveryNotes = getClientDeliveryNotes(client.id);
   // The range ends on an Albarán of another Cliente, which is not invoiced, and leaves the last Albarán of the
@@ -182,8 +182,7 @@ test("create, change and delete invoices", async ({ page, db, toasts }) => {
       ).getByTestId("button-delete"),
       "dialog-delete-model-content",
     );
-    await expect(toasts).toHaveCount(1);
-    expect(await getToastType(toasts.first())).toBe(ToastType.Success);
+    await expectSingleToast(page);
 
     expect(await getInvoiceById(invoice.id)).toMatchObject({ accounted: false, sent: false });
 
@@ -202,9 +201,7 @@ test("create, change and delete invoices", async ({ page, db, toasts }) => {
 
     await workflowOpenEditDeliveryNote(page, deliveryNote.id);
     await workflowEditDeliveryNoteLineQuantity(page, deliveryNoteLine.id, deliveryNoteLine.quantity + 1);
-    await expect(toasts).toHaveCount(1);
-    expect(await getToastType(toasts.first())).toBe(ToastType.Success);
-    await clearToasts(page);
+    await expectSingleToast(page);
 
     expect(await getInvoiceById(invoice.id)).toMatchObject({ accounted: false, sent: false });
 
@@ -220,9 +217,7 @@ test("create, change and delete invoices", async ({ page, db, toasts }) => {
       unitPrice: "1",
     });
     await buttonSubmitLine.click();
-    await expect(toasts).toHaveCount(1);
-    expect(await getToastType(toasts.first())).toBe(ToastType.Success);
-    await clearToasts(page);
+    await expectSingleToast(page);
     expect(await getInvoiceById(invoice.id)).toMatchObject({ accounted: false, sent: false });
   });
 
@@ -484,7 +479,7 @@ test("create, change and delete invoices", async ({ page, db, toasts }) => {
       expect(newInvoice.deliveryNotes.map((deliveryNote) => deliveryNote.id).sort((a, b) => a - b)).toEqual(
         invoicedDeliveryNotes.map((deliveryNote) => deliveryNote.id).sort((a, b) => a - b),
       );
-      await clearToasts(page);
+      await expectSingleToast(page);
       return newInvoice;
     });
 
@@ -520,9 +515,7 @@ test("create, change and delete invoices", async ({ page, db, toasts }) => {
       getTableRowByTestId(tableDeliveryNoteLines, deletedDeliveryNoteLine.id).getByTestId("button-delete"),
       "dialog-delete-model-content",
     );
-    await expect(toasts).toHaveCount(1);
-    expect(await getToastType(toasts.first())).toBe(ToastType.Success);
-    await clearToasts(page);
+    await expectSingleToast(page);
 
     await selectDateInputDate(
       page,
@@ -531,8 +524,7 @@ test("create, change and delete invoices", async ({ page, db, toasts }) => {
     );
     await dialogCreateEditDeliveryNote.getByTestId("button-submit").click();
     await expect(dialogCreateEditDeliveryNote).not.toBeVisible();
-    await expect(toasts).toHaveCount(1);
-    expect(await getToastType(toasts.first())).toBe(ToastType.Success);
+    await expectSingleToast(page);
 
     await page.goto("/invoicing");
     const rowInvoice = getTableRowByTestId(tableInvoices, invoice.id);
@@ -628,7 +620,7 @@ test("the pending delivery notes are paged without keeping the page in the url",
 test(
   "an invoice is not created while its delivery notes have lines without price",
   { annotation: [TestAnnotations.NonEmptyErrorsLogFile] },
-  async ({ page, db, toasts }) => {
+  async ({ page, db }) => {
     const client = mockClients[0];
     const clientDeliveryNotes = getClientDeliveryNotes(client.id);
     expect(clientDeliveryNotes.length).toBeGreaterThan(1);
@@ -667,11 +659,7 @@ test(
     await workflowPickInvoiceClient(page, dialogCreateInvoice, client);
     await dialogCreateInvoice.getByTestId("button-submit").click();
 
-    await expect(toasts).toHaveCount(1);
-    expect(await getToastType(toasts.first())).toBe(ToastType.Error);
-    await expect(toasts.first()).toContainText(
-      `Los Albaranes ${unpricedDeliveryNoteIds.join(", ")} tienen Líneas sin precio`,
-    );
+    await expectSingleToast(page, `Los Albaranes ${unpricedDeliveryNoteIds.join(", ")} tienen Líneas sin precio`);
     await expect(dialogCreateInvoice).toBeVisible();
 
     expect(await getInvoices()).toHaveLength(mockInvoices.length);
@@ -684,28 +672,22 @@ test(
 test(
   "a user cannot change the lines of an accounted invoice",
   { annotation: [TestAnnotations.UserModeUser, TestAnnotations.NonEmptyErrorsLogFile] },
-  async ({ page, toasts }) => {
+  async ({ page }) => {
     const invoice = mockInvoices.find((mockInvoice) => mockInvoice.accounted)!;
     const deliveryNote = mockDeliveryNotes.find((mockDeliveryNote) => mockDeliveryNote.invoiceId === invoice.id)!;
     const deliveryNoteLine = getMockDeliveryNoteLines(deliveryNote.id)[0];
     const forbiddenMessage = `El Albarán ${deliveryNote.id} pertenece a una Factura contabilizada, solo el Administrador puede cambiar sus líneas`;
-    const assertForbidden = async () => {
-      await expect(toasts).toHaveCount(1);
-      expect(await getToastType(toasts.first())).toBe(ToastType.Error);
-      await expect(toasts.first()).toContainText(forbiddenMessage);
-      await clearToasts(page);
-    };
 
     await workflowOpenEditDeliveryNote(page, deliveryNote.id);
     await workflowEditDeliveryNoteLineQuantity(page, deliveryNoteLine.id, deliveryNoteLine.quantity + 1);
-    await assertForbidden();
+    await expectSingleToast(page, forbiddenMessage);
 
     const buttonSubmitLine = await workflowFillCustomDeliveryNoteLine(page, {
       description: deliveryNoteLine.description,
       quantity: 1,
     });
     await buttonSubmitLine.click();
-    await assertForbidden();
+    await expectSingleToast(page, forbiddenMessage);
 
     expect(await getDeliveryNoteLinesByDeliveryNoteId(deliveryNote.id)).toEqual(
       getMockDeliveryNoteLines(deliveryNote.id).map((line) =>
@@ -719,7 +701,6 @@ test(
 test("changing the price of a sell order line marks the invoices that take it to be accounted and sent again", async ({
   page,
   db,
-  toasts,
 }) => {
   const invoice = mockInvoices.find((mockInvoice) => mockInvoice.accounted && mockInvoice.sent)!;
   const deliveryNote = mockDeliveryNotes.find((mockDeliveryNote) => mockDeliveryNote.invoiceId === invoice.id)!;
@@ -738,9 +719,7 @@ test("changing the price of a sell order line marks the invoices that take it to
     await inputPartPrice.clear();
     await inputPartPrice.pressSequentially(partPrice);
     await inputPartPrice.press("Enter");
-    await expect(toasts).toHaveCount(1);
-    expect(await getToastType(toasts.first())).toBe(ToastType.Success);
-    await clearToasts(page);
+    await expectSingleToast(page);
   };
 
   // The same price typed with more trailing zeros does not change the Factura
@@ -783,7 +762,7 @@ test("changing the price of a sell order line marks the invoices that take it to
 test(
   "an invoice is not sent while its delivery notes have lines without price",
   { annotation: TestAnnotations.NonEmptyErrorsLogFile },
-  async ({ page, db, toasts }) => {
+  async ({ page, db }) => {
     const unpricedLine = mockDeliveryNoteLines.find((line) => {
       const invoiceId = getMockDeliveryNoteById(line.deliveryNoteId)?.invoiceId;
       const invoice = mockInvoices.find((mockInvoice) => mockInvoice.id === invoiceId);
@@ -797,16 +776,11 @@ test(
     await page.goto("/invoicing");
     const rowInvoice = getTableRowByTestId(tableInvoices, invoiceId);
     await rowInvoice.getByTestId("button-send-invoice").click();
-    await expect(toasts).toHaveCount(1);
-    expect(await getToastType(toasts.first())).toBe(ToastType.Error);
-    await expect(toasts.first()).toContainText(
-      `estos Albaranes tienen Líneas sin precio: ${unpricedLine.deliveryNoteId}`,
-    );
+    await expectSingleToast(page, `estos Albaranes tienen Líneas sin precio: ${unpricedLine.deliveryNoteId}`);
     // The email is not handed over either
     expect(downloads).toHaveLength(0);
     await expect(rowInvoice.getByTestId("checkbox-sent")).not.toBeChecked();
     expect((await getInvoiceById(invoiceId))?.sent).toBe(false);
-    await clearToasts(page);
 
     await db
       .update(dbTableDeliveryNoteLine)
@@ -817,5 +791,43 @@ test(
     expect((await downloadPromise).suggestedFilename()).toBe(`Factura ${invoiceId}.eml`);
     await expect(rowInvoice.getByTestId("checkbox-sent")).toBeChecked();
     expect((await getInvoiceById(invoiceId))?.sent).toBe(true);
+  },
+);
+
+test(
+  "an invoice is not created from the delivery notes another tab invoices meanwhile",
+  { annotation: TestAnnotations.NonEmptyErrorsLogFile },
+  async ({ page }) => {
+    const client = mockClients[0];
+    const clientDeliveryNotes = getClientDeliveryNotes(client.id);
+    expect(clientDeliveryNotes.length, "The Cliente should have pending Albaranes").toBeGreaterThan(0);
+
+    await page.goto("/invoicing");
+    await page.getByRole("button", { name: INVOICE_CREATE_TITLE }).click();
+    await expect(dialogCreateInvoice).toBeVisible();
+    await workflowPickInvoiceClient(page, dialogCreateInvoice, client);
+
+    let otherTabInvoice!: Awaited<ReturnType<typeof workflowCreateInvoice>>;
+    await holdRequestWhile({
+      page,
+      procedurePath: "invoice.create",
+      send: async () => dialogCreateInvoice.getByTestId("button-submit").click(),
+      meanwhile: async () =>
+        inAnotherTab(page, async (anotherPage) => {
+          otherTabInvoice = await workflowCreateInvoice(anotherPage, { client });
+        }),
+    });
+
+    await expectSingleToast(
+      page,
+      `No hay Albaranes del Cliente ${client.name} pendientes de facturar entre las fechas seleccionadas`,
+    );
+    await expect(dialogCreateInvoice).toBeVisible();
+
+    // Every Albarán is only in the Factura of the other tab
+    expect(await getInvoices()).toHaveLength(mockInvoices.length + 1);
+    for (const deliveryNote of clientDeliveryNotes) {
+      expect((await getDeliveryNote({ id: deliveryNote.id }))?.invoiceId).toBe(otherTabInvoice.id);
+    }
   },
 );

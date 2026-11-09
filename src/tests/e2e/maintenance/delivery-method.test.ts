@@ -3,7 +3,7 @@ import { eq } from "drizzle-orm";
 
 import { DELIVERY_METHOD_NAME_CONSTRAINT, dbTableDeliveryMethod } from "@/db/schema";
 import { DEFAULT_DELIVERY_METHOD_LABEL } from "@/messages/client";
-import { STATUS_DELETED_LABEL, DELIVERY_METHOD_LABEL, NAME_LABEL } from "@/messages/common";
+import { STATUS_DELETED_LABEL, DELIVERY_METHOD_LABEL } from "@/messages/common";
 import {
   DELIVERY_METHOD_CREATE_TITLE,
   DELIVERY_METHOD_RESTORED_MESSAGE,
@@ -15,8 +15,7 @@ import { assertComboboxValue, fillComboboxFilter, openCombobox } from "@/tests/u
 import { InputElementType, assertFormLoaded, getFormInputByLabel } from "@/tests/utils/components/form";
 import { getPopoverContent } from "@/tests/utils/components/popover";
 import { filterByExactText, findTableRowByText, getTableRows } from "@/tests/utils/components/table";
-import { clearToasts, getToastType } from "@/tests/utils/components/toast";
-import { expectUniqueViolation } from "@/tests/utils/db";
+import { expectSingleToast } from "@/tests/utils/components/toast";
 import { TestAnnotations, test } from "@/tests/utils/fixtures";
 import {
   EditButtonVisibility,
@@ -24,57 +23,54 @@ import {
   workflowRestoreTaken,
 } from "@/tests/workflows/deleted-filter";
 import { workflowOpenEditDeliveryNote } from "@/tests/workflows/delivery-note";
-import { ToastType } from "@/types";
+import {
+  workflowRejectCreateWithTakenName,
+  workflowRejectRenameToTakenName,
+  workflowReuseDeletedName,
+} from "@/tests/workflows/unique-name";
 import type { BaseClient } from "@/types/client";
 
 const MAINTENANCE_DELIVERY_METHOD_URL = "/maintenance?tab=deliveryMethod";
+const NAME_TAKEN_MESSAGE = "Existe un Transporte con el mismo nombre";
 
-test("manage the Transportes", { annotation: TestAnnotations.NonEmptyErrorsLogFile }, async ({ page, db, toasts }) => {
+test("manage the Transportes", { annotation: TestAnnotations.NonEmptyErrorsLogFile }, async ({ page, db }) => {
   const activeDeliveryMethods = mockDeliveryMethods.filter((deliveryMethod) => deliveryMethod.deletedAt === null);
   const tableDeliveryMethod = page.getByTestId("table-delivery-method");
   const dialogCreateEditDeliveryMethod = page.getByTestId("dialog-create-edit-delivery-method");
 
-  const submitDeliveryMethodName = async (name: string) => {
+  const openCreateDeliveryMethod = async () => {
+    await page.getByRole("button", { name: DELIVERY_METHOD_CREATE_TITLE }).click();
     await expect(dialogCreateEditDeliveryMethod).toBeVisible();
-    await getFormInputByLabel(dialogCreateEditDeliveryMethod, NAME_LABEL).fill(name);
-    await dialogCreateEditDeliveryMethod.getByTestId("button-submit").click();
   };
-
-  const assertDuplicatedNameRejected = async () => {
-    await expect(toasts).toHaveCount(1);
-    expect(await getToastType(toasts.first())).toBe(ToastType.Error);
-    await expect(toasts.first()).toContainText("Existe un Transporte con el mismo nombre");
-    await expect(dialogCreateEditDeliveryMethod).toBeVisible();
-
-    await clearToasts(page);
+  const closeDialog = async () => {
     await dialogCreateEditDeliveryMethod.getByTestId("button-close").click();
     await expect(dialogCreateEditDeliveryMethod).not.toBeVisible();
   };
 
   await test.step("reject a Transporte with the name of any active one", async () => {
-    expect(activeDeliveryMethods.length, "Wrong test set up: Some Transportes should be active").toBeGreaterThan(1);
     await page.goto(MAINTENANCE_DELIVERY_METHOD_URL);
 
-    for (const [index, deliveryMethod] of activeDeliveryMethods.entries()) {
-      await page.getByRole("button", { name: DELIVERY_METHOD_CREATE_TITLE }).click();
-      await submitDeliveryMethodName(deliveryMethod.name);
-      await assertDuplicatedNameRejected();
+    await workflowRejectCreateWithTakenName({
+      page,
+      items: activeDeliveryMethods,
+      form: dialogCreateEditDeliveryMethod,
+      openCreate: openCreateDeliveryMethod,
+      closeCreate: closeDialog,
+      insertDuplicate: async (name) => db.insert(dbTableDeliveryMethod).values({ name }),
+      constraintName: DELIVERY_METHOD_NAME_CONSTRAINT,
+      errorMessage: NAME_TAKEN_MESSAGE,
+    });
 
-      await expectUniqueViolation(
-        db.insert(dbTableDeliveryMethod).values({ name: deliveryMethod.name }),
-        DELIVERY_METHOD_NAME_CONSTRAINT,
-      );
-
-      // Renaming another Transporte to it is rejected too
-      const otherDeliveryMethod = activeDeliveryMethods[(index + 1) % activeDeliveryMethods.length];
-      await (
-        await findTableRowByText(tableDeliveryMethod, otherDeliveryMethod.name)
-      )
-        .getByTestId("button-edit")
-        .click();
-      await submitDeliveryMethodName(deliveryMethod.name);
-      await assertDuplicatedNameRejected();
-    }
+    await workflowRejectRenameToTakenName({
+      page,
+      items: activeDeliveryMethods,
+      form: dialogCreateEditDeliveryMethod,
+      openEdit: async (deliveryMethod) =>
+        (await findTableRowByText(tableDeliveryMethod, deliveryMethod.name)).getByTestId("button-edit").click(),
+      closeEdit: closeDialog,
+      getName: async (id) => (await db.query.dbTableDeliveryMethod.findFirst({ where: { id } }))?.name,
+      errorMessage: NAME_TAKEN_MESSAGE,
+    });
 
     expect(await db.query.dbTableDeliveryMethod.findMany({ orderBy: { id: "asc" } })).toEqual(mockDeliveryMethods);
   });
@@ -102,6 +98,7 @@ test("manage the Transportes", { annotation: TestAnnotations.NonEmptyErrorsLogFi
         (await findTableRowByText(tableDeliveryMethod, deliveryMethod.name)).getByTestId("button-delete"),
         "dialog-delete-model-content",
       );
+      await expectSingleToast(page);
       deletedDeliveryMethodIds.add(deliveryMethod.id);
 
       await expect(filterByExactText(getTableRows(tableDeliveryMethod), deliveryMethod.name)).toHaveCount(0);
@@ -113,7 +110,7 @@ test("manage the Transportes", { annotation: TestAnnotations.NonEmptyErrorsLogFi
 
       expect(
         (await db.query.dbTableDeliveryMethod.findFirst({ where: { id: deliveryMethod.id } }))?.deletedAt,
-      ).not.toBeNull();
+      ).toBeInstanceOf(Date);
       expect(
         await db.query.dbTableClient.findMany({
           columns: { defaultDeliveryMethodId: true, id: true },
@@ -175,21 +172,21 @@ test("manage the Transportes", { annotation: TestAnnotations.NonEmptyErrorsLogFi
         await expect(page.getByTestId("combobox-list").locator("[role='option']")).toHaveCount(0);
       }
 
-      // Its name can be used again...
+      // Its name can be used again, so the deleted Transporte can no longer be restored
       await page.goto(MAINTENANCE_DELIVERY_METHOD_URL);
-      await page.getByRole("button", { name: DELIVERY_METHOD_CREATE_TITLE }).click();
-      await submitDeliveryMethodName(deliveryMethod.name);
-      await expect(dialogCreateEditDeliveryMethod).not.toBeVisible();
+      await workflowReuseDeletedName({
+        page,
+        item: deliveryMethod,
+        form: dialogCreateEditDeliveryMethod,
+        openCreate: openCreateDeliveryMethod,
+        restoreDeleted: async () =>
+          db
+            .update(dbTableDeliveryMethod)
+            .set({ deletedAt: null })
+            .where(eq(dbTableDeliveryMethod.id, deliveryMethod.id)),
+        constraintName: DELIVERY_METHOD_NAME_CONSTRAINT,
+      });
       await expect(filterByExactText(getTableRows(tableDeliveryMethod), deliveryMethod.name)).toHaveCount(1);
-
-      // ...so the deleted Transporte can no longer be restored
-      await expectUniqueViolation(
-        db
-          .update(dbTableDeliveryMethod)
-          .set({ deletedAt: null })
-          .where(eq(dbTableDeliveryMethod.id, deliveryMethod.id)),
-        DELIVERY_METHOD_NAME_CONSTRAINT,
-      );
     }
   });
 });
@@ -222,7 +219,7 @@ test(
       getDeletedAt: async (id) => (await db.query.dbTableDeliveryMethod.findFirst({ where: { id } }))?.deletedAt,
       id: deliveryMethod.id,
       insertDuplicate: async () => db.insert(dbTableDeliveryMethod).values({ name: deliveryMethod.name }),
-      errorMessage: "Existe un Transporte con el mismo nombre",
+      errorMessage: NAME_TAKEN_MESSAGE,
     });
   },
 );

@@ -3,15 +3,19 @@ import type { Locator, Page } from "@playwright/test";
 
 import { ToastType } from "@/types";
 
-// Without an error message, the toast has to be a success one
-export async function expectSingleToast(page: Page, expectedErrorMessage?: string) {
+interface TExpectedToast {
+  type: ToastType;
+  message?: string;
+}
+
+// A string is the message of an error toast, and without anything the toast has to be a success one
+export async function expectSingleToast(page: Page, expected: string | TExpectedToast = { type: ToastType.Success }) {
+  const { type, message } = typeof expected === "string" ? { message: expected, type: ToastType.Error } : expected;
   const toasts = getToasts(page);
   await expect(toasts).toHaveCount(1);
-  expect(await getToastType(toasts.first())).toBe(
-    expectedErrorMessage === undefined ? ToastType.Success : ToastType.Error,
-  );
-  if (expectedErrorMessage !== undefined) {
-    await expect(toasts.first()).toContainText(expectedErrorMessage);
+  expect(await getToastType(toasts.first())).toBe(type);
+  if (message !== undefined) {
+    await expect(toasts.first()).toContainText(message);
   }
   await clearToasts(page);
 }
