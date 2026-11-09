@@ -33,7 +33,7 @@ import {
   getTableRows,
 } from "@/tests/utils/components/table";
 import { expectSingleToast } from "@/tests/utils/components/toast";
-import { uniqueNameViolation } from "@/tests/utils/errors-log";
+import { expectUniqueViolationRejected, uniqueNameViolation } from "@/tests/utils/errors-log";
 import { test } from "@/tests/utils/fixtures";
 import {
   EditButtonVisibility,
@@ -212,6 +212,10 @@ test("manage the machines", async ({ page, db }) => {
       await assertFormLoaded(formMachine);
       await openAndConfirmAlertDialog(page, formMachine.getByTestId("button-restore"), "dialog-restore-model-content");
       await expectSingleToast(page, NAME_TAKEN_MESSAGE);
+      expectUniqueViolationRejected(
+        uniqueNameViolation(MACHINE_NAME_CONSTRAINT, dbTableMachine, machine.name),
+        NAME_TAKEN_MESSAGE,
+      );
 
       expect((await getMachineById(machine.id))?.deletedAt).toBeInstanceOf(Date);
     }

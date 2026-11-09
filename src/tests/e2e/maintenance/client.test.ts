@@ -793,6 +793,10 @@ test(
       await assertFormLoaded(formClient);
       await openAndConfirmAlertDialog(page, formClient.getByTestId("button-restore"), "dialog-restore-model-content");
       await expectSingleToast(page, NAME_TAKEN_MESSAGE);
+      expectUniqueViolationRejected(
+        uniqueNameViolation(CLIENT_NAME_CONSTRAINT, dbTableClient, client.name),
+        NAME_TAKEN_MESSAGE,
+      );
 
       expect((await getClientById(client.id))?.deletedAt).toBeInstanceOf(Date);
     }
