@@ -61,6 +61,7 @@ export interface PublicBaseTableProps<TRow extends TBaseModel, TState extends TT
   className?: string;
   tableClassName?: string;
   highlightRowOnHover?: boolean;
+  getRowVariant?: (row: TRow) => React.ComponentProps<typeof TableRow>["variant"];
   noDataMessage?: React.ReactNode;
   isLoading?: boolean;
   rowCount?: number | null;
@@ -103,6 +104,7 @@ export default function BaseTable<TRow extends TBaseModel, TState extends TTable
   disabledMessage,
   noDataMessage = NO_DATA_MESSAGE,
   highlightRowOnHover = true,
+  getRowVariant,
   isLoading = false,
   rowCount,
   virtualized = false,
@@ -229,6 +231,10 @@ export default function BaseTable<TRow extends TBaseModel, TState extends TTable
       const isResizing = table.atoms.columnResizing.get().isResizingColumn !== false;
       resizeAnchorLeft = isResizing ? (resizeAnchorLeft ?? root.getBoundingClientRect().left) : undefined;
       Object.entries(getColumnSizeVars()).forEach(([name, value]) => tableRef.current?.style.setProperty(name, value));
+      tableRef.current?.style.setProperty(
+        "max-width",
+        Object.keys(table.atoms.columnSizing.get()).length > 0 ? "none" : "",
+      );
       if (resizeAnchorLeft !== undefined) {
         root.style.translate = `${resizeAnchorLeft - root.getBoundingClientRect().left}px`;
       } else if (heldTranslate !== "") {
@@ -251,6 +257,7 @@ export default function BaseTable<TRow extends TBaseModel, TState extends TTable
         data-index={measureElement ? rowIndex : undefined}
         testId={String(row.original.id)}
         highlightOnHover={highlightRowOnHover}
+        variant={getRowVariant?.(row.original)}
       >
         {row.getAllCells().map((cell, cellIndex, cells) => {
           const isHiddenExpanderCell = (columnId?: string) => columnId === EXPANDER_COLUMN_ID && !row.getCanExpand();
@@ -373,7 +380,8 @@ export default function BaseTable<TRow extends TBaseModel, TState extends TTable
         testId={testId}
         data-row-count={isLoading || rows === undefined || rowCount === null ? undefined : table.getRowCount()}
         disabledMessage={disabledMessage}
-        tableClassName={cn("w-max min-w-full", tableClassName)}
+        className="self-start"
+        tableClassName={cn("w-max max-w-full", tableClassName)}
         style={getColumnSizeVars()}
       >
         <CustomFiltersContext value={customFiltersComponent}>

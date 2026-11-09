@@ -380,6 +380,7 @@ export default function TableProductionOrder({
       virtualized={state?.pagination === null}
       isLoading={props.isLoading === true || isLoadingProductionOrders}
       renderSubRows={ProductionOrderSubRow}
+      getRowVariant={(row) => (row.urgent ? "urgent" : undefined)}
       headerExtraComponents={
         <>
           <Button

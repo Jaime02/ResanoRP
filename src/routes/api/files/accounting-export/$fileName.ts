@@ -6,6 +6,7 @@ import { z } from "zod";
 
 import { getAccountingExportPath } from "@/files/invoice";
 import { ADMIN_SESSION_COOKIE_NAME, isAdminSession } from "@/lib/admin-session";
+import { textResponse } from "@/lib/responses";
 import logger from "@/logging/logger";
 
 const routeParamsSchema = z.object({
@@ -17,11 +18,7 @@ export const Route = createFileRoute("/api/files/accounting-export/$fileName")({
     handlers: {
       GET: async ({ params }: { params: { fileName: string } }) => {
         if (!isAdminSession(getCookie(ADMIN_SESSION_COOKIE_NAME))) {
-          // Without a type, the browser sniffs the accented text as binary and downloads it
-          return new Response("Esta acción solo la puede hacer el Administrador", {
-            headers: { "Content-Type": "text/plain; charset=utf-8" },
-            status: 403,
-          });
+          return textResponse("Esta acción solo la puede hacer el Administrador", 403);
         }
 
         let fileName: string;
@@ -29,7 +26,7 @@ export const Route = createFileRoute("/api/files/accounting-export/$fileName")({
           ({ fileName } = routeParamsSchema.parse(params));
         } catch {
           logger.error("Invalid file name received", { params });
-          return new Response("Invalid file name received", { status: 400 });
+          return textResponse("Invalid file name received", 400);
         }
 
         try {
@@ -44,7 +41,7 @@ export const Route = createFileRoute("/api/files/accounting-export/$fileName")({
           });
         } catch (error) {
           logger.error("Error reading Accounting Export file", { error, fileName });
-          return new Response("Failed to read file", { status: 500 });
+          return textResponse("Failed to read file", 500);
         }
       },
     },

@@ -4,6 +4,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { z } from "zod";
 
 import { getDeliveryNotePath } from "@/files/delivery-note";
+import { textResponse } from "@/lib/responses";
 import logger from "@/logging/logger";
 import { coercedIdObjectSchema } from "@/schemas";
 
@@ -20,7 +21,7 @@ export const Route = createFileRoute("/api/files/delivery-note/$id")({
           ({ id } = coercedIdObjectSchema.parse(params));
         } catch {
           logger.error("Invalid ID received", { params });
-          return new Response("Invalid ID received", { status: 400 });
+          return textResponse("Invalid ID received", 400);
         }
 
         const { copies } = routeSearchSchema.parse(Object.fromEntries(new URL(request.url).searchParams.entries()));
@@ -38,7 +39,7 @@ export const Route = createFileRoute("/api/files/delivery-note/$id")({
           });
         } catch (error) {
           logger.error("Error reading Delivery Note file", { error, id });
-          return new Response("Failed to read file", { status: 500 });
+          return textResponse("Failed to read file", 500);
         }
       },
     },

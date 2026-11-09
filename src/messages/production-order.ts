@@ -53,6 +53,7 @@ export const PRODUCTION_ORDER_EDITED_MESSAGE = "Órden de producción editada";
 export const PRODUCTION_ORDER_STOPPED_MESSAGE = "Órden de producción detenida";
 export const MACHINE_PRODUCTION_ORDER_VALIDATION_ERROR_MESSAGE = "Error al validar la Órden de producción";
 export const QUALITY_CONTROL_LABEL = "Control de calidad";
+export const URGENT_LABEL = "Urgente";
 export const QUALITY_CHECK_SAVED_MESSAGE = "Control de calidad guardado";
 export const QUALITY_CHECK_MEASUREMENT_LABEL = "Medición";
 export const REGISTER_QUALITY_CHECK_LABEL = "Registrar medición";

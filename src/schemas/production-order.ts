@@ -14,6 +14,7 @@ import {
 const baseProductionOrderSchema = z.object({
   notes: stringSchema({ nullable: true }),
   qualityControl: z.boolean(),
+  urgent: z.boolean(),
 });
 
 export enum ProductionOrderStatus {

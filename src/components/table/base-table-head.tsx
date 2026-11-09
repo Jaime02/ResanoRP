@@ -22,6 +22,20 @@ export default function BaseTableHead<TRow extends TBaseModel = TBaseModel>({
   thStyle,
   onStateChange,
 }: BaseTableHeadProps<TRow>) {
+  // Until the first resize the table is capped to its container, which shrinks columns below their sizes, so the
+  // rendered widths become the sizes before the drag starts from them
+  const freezeRenderedSizes = (resizeHandle: HTMLElement) => {
+    const cells = resizeHandle.closest("tr")?.cells;
+    if (!cells || Object.keys(table.atoms.columnSizing.get()).length > 0) return;
+    table.setColumnSizing(
+      Object.fromEntries(
+        table
+          .getLeafHeaders()
+          .map((header, i) => [header.column.id, cells.item(i)?.getBoundingClientRect().width ?? header.getSize()]),
+      ),
+    );
+  };
+
   return (
     <TableHead>
       {table.getHeaderGroups().map((headerGroup) => (
@@ -70,8 +84,14 @@ export default function BaseTableHead<TRow extends TBaseModel = TBaseModel>({
                     onDoubleClick={() => {
                       header.column.resetSize();
                     }}
-                    onMouseDown={header.getResizeHandler()}
-                    onTouchStart={header.getResizeHandler()}
+                    onMouseDown={(event) => {
+                      freezeRenderedSizes(event.currentTarget);
+                      header.getResizeHandler()(event);
+                    }}
+                    onTouchStart={(event) => {
+                      freezeRenderedSizes(event.currentTarget);
+                      header.getResizeHandler()(event);
+                    }}
                   >
                     <EllipsisVerticalIcon />
                   </Button>

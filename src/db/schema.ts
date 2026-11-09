@@ -309,6 +309,7 @@ export const dbTableProductionOrder = pgTable("production_order", {
   qualityControl: boolean("qualityControl").notNull().default(false),
   quantity: integer("quantity"),
   sellOrderLineId: integer("sellOrderLineId").references(() => dbTableSellOrderLine.id),
+  urgent: boolean("urgent").notNull().default(false),
 });
 
 export const TREATMENT_SHIPMENT_QUANTITY_CONSTRAINT = "treatment_shipment_positive_quantity";

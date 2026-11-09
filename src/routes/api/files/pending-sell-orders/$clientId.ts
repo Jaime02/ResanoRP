@@ -5,6 +5,7 @@ import { getClientById } from "@/db/functions/client";
 import { getPendingSellOrderLinesByClientId, getSellOrderLineStatus } from "@/db/functions/sell-order-line";
 import { renderPendingSellOrders } from "@/files/pending-sell-orders";
 import { DateFormat, formatDate } from "@/lib/formatters";
+import { textResponse } from "@/lib/responses";
 import { sortPendingSellOrderLines } from "@/lib/sell-order-line";
 import logger from "@/logging/logger";
 import { sanitizePath } from "@/schemas/utils";
@@ -26,7 +27,7 @@ export const Route = createFileRoute("/api/files/pending-sell-orders/$clientId")
           ({ clientId } = routeParamsSchema.parse(params));
         } catch {
           logger.error("Invalid Client ID received", { params });
-          return new Response("Invalid Client ID received", { status: 400 });
+          return textResponse("Invalid Client ID received", 400);
         }
 
         const { withCheckboxes } = routeSearchSchema.parse(
@@ -38,7 +39,7 @@ export const Route = createFileRoute("/api/files/pending-sell-orders/$clientId")
           getPendingSellOrderLinesByClientId(clientId),
         ]);
         if (!client) {
-          return new Response("Client not found", { status: 404 });
+          return textResponse("Client not found", 404);
         }
 
         const now = new Date();
@@ -73,7 +74,7 @@ export const Route = createFileRoute("/api/files/pending-sell-orders/$clientId")
           });
         } catch (error) {
           logger.error("Error generating Pending Sell Orders file", { clientId, error });
-          return new Response("Failed to generate file", { status: 500 });
+          return textResponse("Failed to generate file", 500);
         }
       },
     },

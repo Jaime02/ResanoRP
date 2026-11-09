@@ -15,6 +15,9 @@ When writing tests:
 - Drive them through the user UI. Do not send custom HTTP or tRPC requests (`page.request`), force clicks or use similar hacks to reach states the UI cannot reach.
 - Put repeated UI actions in reusable workflows in `src/tests/workflows/`, and reuse the existing ones before writing new ones.
 - Keep tests as compact as possible without reducing coverage: merge related scenarios into `test.step`s of one test and share setup instead of repeating it.
+- Tests must not repeat hardcoded values from the app code. Import the shared constant or message, or assert on a stable hook (e.g. a `data-*` attribute) instead of the implementation detail.
+
+Do not duplicate hardcoded values (colors, class names, labels, test ids, magic numbers) in app code. Define them once as a constant or message and reuse it.
 
 Do not add comments to describe your changes. The code should be self-explanatory.
 Comments are only allowed when they are necessary to explain why a change was made, not what the change does.

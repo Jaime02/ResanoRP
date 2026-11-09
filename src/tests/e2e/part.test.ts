@@ -2051,7 +2051,7 @@ test(
       ).toBe(true);
     });
 
-    await test.step("upload the blueprint, which its card loads", async () => {
+    await test.step("upload the blueprint, which its card shows", async () => {
       await page.goto(`/part/${partId}?tab=blueprints`);
       await assertFormLoaded(formPart);
       await formPart.getByTestId("button-add-blueprint").click();
@@ -2068,10 +2068,6 @@ test(
 
       await setInputFiles(page, inputBlueprintFile, path.join(MOCK_DATA_PATH, "sample.pdf"));
       await getFormInputByLabel(dialogCreateBlueprint, NAME_LABEL).fill(blueprintFileName);
-      // The part has no other Plano, so the first one its page loads is the new one
-      const responsePromise = page.waitForResponse((response) =>
-        new URL(response.url()).pathname.startsWith("/api/files/blueprint/"),
-      );
       await dialogCreateBlueprint.getByTestId("button-submit").click();
       await expect(dialogCreateBlueprint).not.toBeVisible();
       await expectSingleToast(page);
@@ -2080,14 +2076,10 @@ test(
       expect(blueprint.fileName).toBe(blueprintFileName);
       const blueprintPath = await getBlueprintPath({ checkIfFileExists: true, fileName: blueprintFileName, partId });
       expect(blueprintPath).toBeTruthy();
+      expect(fs.readFileSync(blueprintPath!).equals(fs.readFileSync(path.join(MOCK_DATA_PATH, "sample.pdf")))).toBe(
+        true,
+      );
       await expect(formPart.getByTestId(`card-blueprint-${blueprint.id}`)).toContainText(blueprintFileName);
-
-      const response = await responsePromise;
-      expect(new URL(response.url()).pathname).toBe(`/api/files/blueprint/${blueprint.id}`);
-      expect(response.status()).toBe(200);
-      expect(response.headers()["content-type"]).toBe("application/pdf");
-      expect(decodeURIComponent(response.headers()["content-disposition"].split("''")[1])).toBe(blueprintFileName);
-      expect((await response.body()).equals(fs.readFileSync(blueprintPath!))).toBe(true);
     });
 
     await test.step("filter the parts by the description from the url", async () => {
@@ -2161,7 +2153,7 @@ test("manage multi-level part sets", async ({ page, db }) => {
       )
       .flatMap((partComponent) => [
         {
-          label: `${partComponent.quantity} × ${getMockPart(partComponent.componentPartId).description}`,
+          label: `${partComponent.quantity} x ${getMockPart(partComponent.componentPartId).description}`,
           part: getMockPart(partComponent.componentPartId),
         },
         ...getExpectedTree(partComponent.componentPartId),

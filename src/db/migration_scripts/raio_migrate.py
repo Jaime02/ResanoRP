@@ -98,7 +98,7 @@ def raio_migrate_machines_production_orders() -> tuple[OldRefToNewId, OldRefToNe
                     f'client reference "{production_order.spod}", reference "{production_order.reference}"'
                 )
             postgres_cursor.execute(
-                'INSERT INTO production_order ("quantity", "notes", "sellOrderLineId", "partId", "createdAt") VALUES (%s, %s, %s, %s, %s) RETURNING id',
+                'INSERT INTO production_order ("quantity", "notes", "sellOrderLineId", "partId", "createdAt", "urgent") VALUES (%s, %s, %s, %s, %s, %s) RETURNING id',
                 (
                     # RAIO closes orders manually, sometimes short of quantity (e.g. covered by stock), and status here is derived from produced quantity
                     min(production_order.counter, production_order.quantity)
@@ -108,6 +108,7 @@ def raio_migrate_machines_production_orders() -> tuple[OldRefToNewId, OldRefToNe
                     sell_order_line_id,
                     part_id,
                     production_order.date_order,
+                    production_order.importance == 1,
                 ),
             )
             production_order_id = fetch_id(postgres_cursor)

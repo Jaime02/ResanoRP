@@ -41,32 +41,28 @@ function TableHead({ className, ...props }: React.ComponentProps<"thead">) {
 }
 
 function TableBody({ className, ...props }: React.ComponentProps<"tbody">) {
-  return (
-    <tbody
-      className={cn(
-        "[&>tr:last-child]:border-0 [&>tr:nth-child(odd_of_[data-row-type=row])]:bg-blue-100/80 [&>tr[data-highlight-on-hover]]:transition-colors [&>tr[data-highlight-on-hover]:not(:has(input:focus))]:hover:bg-accent",
-        className,
-      )}
-      {...props}
-    />
-  );
+  return <tbody className={cn("[&>tr:last-child]:border-0", className)} {...props} />;
 }
 
 function TableFooter({ className, ...props }: React.ComponentProps<"tfoot">) {
   return <tfoot className={cn("border-t border-border font-medium [&>tr]:last:border-b-0", className)} {...props} />;
 }
 
-const tableRowVariants = cva("border-b border-border", {
-  defaultVariants: {
-    variant: "default",
-  },
-  variants: {
-    variant: {
-      default: "bg-tr-background",
-      subrow: "bg-tr-subrow-background",
+const tableRowVariants = cva(
+  "border-b border-border [&[data-highlight-on-hover]]:transition-colors [&[data-highlight-on-hover]:not(:has(input:focus))]:hover:bg-accent",
+  {
+    defaultVariants: {
+      variant: "default",
+    },
+    variants: {
+      variant: {
+        default: "bg-tr-background [tbody>&:nth-child(odd_of_[data-row-type=row])]:bg-blue-100/80",
+        subrow: "bg-tr-subrow-background",
+        urgent: "bg-red-200 dark:bg-red-950",
+      },
     },
   },
-});
+);
 
 interface TableRowProps extends React.ComponentProps<"tr">, VariantProps<typeof tableRowVariants> {
   testId?: string;
@@ -79,6 +75,7 @@ function TableRow({ testId, highlightOnHover = false, className, rowType = "row"
     <tr
       data-testid={testId}
       data-row-type={rowType}
+      data-variant={variant}
       {...(highlightOnHover ? { "data-highlight-on-hover": true } : {})}
       className={tableRowVariants({ className, variant })}
       {...props}

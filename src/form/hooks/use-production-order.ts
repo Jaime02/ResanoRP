@@ -66,7 +66,11 @@ export default function useProductionOrderForm({
       : null;
   const defaultValues = {
     ...(formMode !== FormMode.Create
-      ? { id: productionOrder?.id, qualityControl: productionOrder?.qualityControl ?? false }
+      ? {
+          id: productionOrder?.id,
+          qualityControl: productionOrder?.qualityControl ?? false,
+          urgent: productionOrder?.urgent ?? false,
+        }
       : {}),
     notes: formMode === FormMode.Create ? null : (productionOrder?.notes ?? null),
     ...(formMode === FormMode.Create
@@ -75,6 +79,7 @@ export default function useProductionOrderForm({
           qualityControl: hasDefaultQualityControl(createQuantity),
           quantity: createQuantity,
           sellOrderLineId: createSellOrderLineId ?? null,
+          urgent: false,
         }
       : {}),
   };

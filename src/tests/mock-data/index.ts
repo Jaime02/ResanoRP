@@ -1046,6 +1046,7 @@ export const mockProductionOrders: Array<BaseProductionOrder> = [
     qualityControl: true,
     quantity: 10,
     sellOrderLineId: 1,
+    urgent: false,
   },
   {
     // Status: Pending
@@ -1057,6 +1058,7 @@ export const mockProductionOrders: Array<BaseProductionOrder> = [
     qualityControl: false,
     quantity: 40,
     sellOrderLineId: 2,
+    urgent: true,
   },
   {
     // Status: Completed
@@ -1068,6 +1070,7 @@ export const mockProductionOrders: Array<BaseProductionOrder> = [
     qualityControl: true,
     quantity: 5,
     sellOrderLineId: 3,
+    urgent: false,
   },
   {
     // Status: Cancelled
@@ -1079,6 +1082,7 @@ export const mockProductionOrders: Array<BaseProductionOrder> = [
     qualityControl: false,
     quantity: 666,
     sellOrderLineId: 4,
+    urgent: false,
   },
   {
     // Status: InProduction
@@ -1090,6 +1094,7 @@ export const mockProductionOrders: Array<BaseProductionOrder> = [
     qualityControl: true,
     quantity: 15,
     sellOrderLineId: 5,
+    urgent: false,
   },
   {
     // status: Pending
@@ -1101,6 +1106,7 @@ export const mockProductionOrders: Array<BaseProductionOrder> = [
     qualityControl: true,
     quantity: 50,
     sellOrderLineId: null,
+    urgent: false,
   },
   {
     // Status: Completed, without a quantity it is done once a machine finishes it having produced something
@@ -1112,6 +1118,7 @@ export const mockProductionOrders: Array<BaseProductionOrder> = [
     qualityControl: false,
     quantity: null,
     sellOrderLineId: null,
+    urgent: false,
   },
   {
     // Status: Pending, without a quantity and nothing produced yet
@@ -1123,6 +1130,7 @@ export const mockProductionOrders: Array<BaseProductionOrder> = [
     qualityControl: false,
     quantity: null,
     sellOrderLineId: null,
+    urgent: false,
   },
   {
     // Status: SellOrderDeleted, its sell order 6 is deleted
@@ -1134,6 +1142,7 @@ export const mockProductionOrders: Array<BaseProductionOrder> = [
     qualityControl: false,
     quantity: 1,
     sellOrderLineId: 8,
+    urgent: false,
   },
   {
     // Status: SellOrderLineDeleted, its sell order line 10 is deleted
@@ -1145,6 +1154,7 @@ export const mockProductionOrders: Array<BaseProductionOrder> = [
     qualityControl: false,
     quantity: 5,
     sellOrderLineId: 10,
+    urgent: false,
   },
   {
     // Status: PendingTreatment, its part 4 has a coating and nothing produced has been sent to the treatment
@@ -1156,6 +1166,7 @@ export const mockProductionOrders: Array<BaseProductionOrder> = [
     qualityControl: false,
     quantity: 6,
     sellOrderLineId: null,
+    urgent: false,
   },
 ];
 

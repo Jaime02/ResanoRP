@@ -45,6 +45,7 @@ import {
   PRODUCTION_ORDER_RESTORED_MESSAGE,
   QUALITY_CONTROL_LABEL,
   QUANTITY_TO_PRODUCE_LABEL,
+  URGENT_LABEL,
 } from "@/messages/production-order";
 import { SELL_ORDER_LABEL, VIEW_SELL_ORDER_LABEL } from "@/messages/sell-order";
 import { useQueryPartBlueprints } from "@/queries/part";
@@ -84,18 +85,26 @@ export default function FormProductionOrder({
       children={(field) => <field.TextareaInput id="form-production-order-notes" label={NOTES_LABEL} />}
     />
   );
-  const qualityControlField = (formMode === FormMode.Create || (formMode === FormMode.Update && isAdmin)) && (
-    <form.AppField
-      name="qualityControl"
-      children={(field) => <field.Checkbox id="form-production-order-quality-control" label={QUALITY_CONTROL_LABEL} />}
-    />
+  const checkboxFields = (formMode === FormMode.Create || (formMode === FormMode.Update && isAdmin)) && (
+    <div className="flex flex-row gap-4">
+      <form.AppField
+        name="qualityControl"
+        children={(field) => (
+          <field.Checkbox id="form-production-order-quality-control" label={QUALITY_CONTROL_LABEL} />
+        )}
+      />
+      <form.AppField
+        name="urgent"
+        children={(field) => <field.Checkbox id="form-production-order-urgent" label={URGENT_LABEL} />}
+      />
+    </div>
   );
 
   return (
     <FormContextProvider form={form} formMode={formMode} validationSchema={validationSchema} className="w-full grow">
       <ResizablePanelGroup orientation="horizontal" className="h-auto grow">
-        <ResizablePanel className="flex min-w-0 flex-col items-center gap-2">
-          <div className="flex flex-col items-center gap-2">
+        <ResizablePanel className="flex min-w-0 flex-col items-center gap-3">
+          <div className="flex flex-col items-center gap-3">
             {productionOrder?.deletedAt && (
               <Badge variant="destructive" size="lg" testId="badge-production-order-deleted">
                 <TriangleAlertIcon className="size-icon" />
@@ -103,7 +112,7 @@ export default function FormProductionOrder({
               </Badge>
             )}
             {formMode !== FormMode.Create && (
-              <div className="flex flex-row flex-wrap items-start justify-center gap-2">
+              <div className="flex flex-row flex-wrap items-start justify-center gap-3">
                 <Card>
                   <CardHeader>
                     <CardTitle>
@@ -129,8 +138,15 @@ export default function FormProductionOrder({
                     producedQuantity={productionOrder?.producedQuantity?.producedQuantity}
                   />
                   {notesField}
-                  {qualityControlField}
+                  {checkboxFields}
                 </Card>
+                {productionOrderDetail?.qualityControl === true && (
+                  <TableQualityControl
+                    key={productionOrderDetail.id}
+                    productionOrder={productionOrderDetail}
+                    readOnly
+                  />
+                )}
               </div>
             )}
             {/* Created by hand there is no Pedido to show yet */}
@@ -184,7 +200,7 @@ export default function FormProductionOrder({
                   )}
                 />
                 {notesField}
-                {qualityControlField}
+                {checkboxFields}
               </>
             )}
             {formMode !== FormMode.ReadOnly && (
@@ -230,9 +246,6 @@ export default function FormProductionOrder({
               </div>
             )}
           </div>
-          {productionOrderDetail?.qualityControl === true && (
-            <TableQualityControl key={productionOrderDetail.id} productionOrder={productionOrderDetail} readOnly />
-          )}
           <Separator orientation="horizontal" />
           <TablePartProductionHistory
             title={PRODUCTION_HISTORY_TITLE}

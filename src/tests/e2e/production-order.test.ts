@@ -972,12 +972,18 @@ test(
       expect(await getNewProductionOrders()).toEqual([]);
 
       await inputQuantity.fill("7");
+      await page.getByTestId("form-production-order-urgent").click();
       await page.getByTestId("button-submit").click();
 
       await expect(page).toHaveURL(/\/production-order\/\d+$/);
       await expectSingleToast(page);
       const [newProductionOrder] = await getNewProductionOrders();
-      expect(newProductionOrder).toMatchObject({ partId: part.id, quantity: 7, sellOrderLineId: null });
+      expect(newProductionOrder).toMatchObject({
+        partId: part.id,
+        quantity: 7,
+        sellOrderLineId: null,
+        urgent: true,
+      });
       expect(page.url()).toMatch(new RegExp(`/production-order/${newProductionOrder.id}$`));
     });
 
@@ -1013,6 +1019,7 @@ test(
         partId: getPartIdOfLine(sellOrderLine),
         quantity: sellOrderLine.pendingQuantity,
         sellOrderLineId: sellOrderLine.id,
+        urgent: false,
       });
 
       // The line has an Orden de producción now, so its pending quantity cannot be produced twice from it
@@ -1127,3 +1134,35 @@ test(
     });
   },
 );
+
+test("urgent production orders are tinted and their urgency can be edited", async ({ page }) => {
+  const urgentProductionOrder = mockProductionOrders.find((productionOrder) => productionOrder.urgent)!;
+  const regularProductionOrder = (await getProductionOrdersByStatuses([ProductionOrderStatus.Pending])).find(
+    (productionOrder) => !productionOrder.urgent,
+  )!;
+
+  const checkboxUrgent = page.getByTestId("form-production-order-urgent");
+  const getRow = (productionOrderId: number) => getTableRowByTestId(tableProductionOrders, productionOrderId);
+  const submitUrgent = async (productionOrderId: number, urgent: boolean) => {
+    await page.goto(`/production-order/${productionOrderId}`);
+    await assertFormLoaded(page);
+    await expect(checkboxUrgent).toBeChecked({ checked: !urgent });
+    await checkboxUrgent.click();
+    await page.getByTestId("button-submit").click();
+    await expectSingleToast(page);
+    expect((await getProductionOrderById(productionOrderId))?.urgent).toBe(urgent);
+  };
+
+  await test.step("mark a production order as urgent", async () => {
+    await setUserMode(page, UserMode.Admin);
+    await submitUrgent(regularProductionOrder.id, true);
+    await gotoProductionOrdersWithStatuses(page, [ProductionOrderStatus.Pending]);
+    await expect(getRow(regularProductionOrder.id)).toHaveAttribute("data-variant", "urgent");
+  });
+
+  await test.step("mark a production order as not urgent", async () => {
+    await submitUrgent(urgentProductionOrder.id, false);
+    await gotoProductionOrdersWithStatuses(page, [ProductionOrderStatus.Pending]);
+    await expect(getRow(urgentProductionOrder.id)).not.toHaveAttribute("data-variant", "urgent");
+  });
+});

@@ -776,7 +776,7 @@ for (const client of clientsWithPendingLines) {
 
       await expect(dialogPrint).toBeVisible();
       await expect(dialogCheckboxes).not.toBeVisible();
-      await downloadPreviewAndClose(false);
+      await downloadPreviewAndClose(true);
     });
 
     await test.step("an admin is asked for the extra columns before the preview", async () => {
