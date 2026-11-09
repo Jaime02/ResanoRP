@@ -2140,7 +2140,7 @@ test("create a part with its blueprint", { annotation: [TestAnnotations.ResetBlu
   await expect(formPart.getByTestId(`card-blueprint-${blueprint.id}`)).toContainText(blueprintFileName);
 });
 
-test("manage multi-level part sets", async ({ page, db }) => {
+test("manage multi-level part sets", { annotation: TestAnnotations.NonEmptyErrorsLogFile }, async ({ page, db }) => {
   const getMockPart = (partId: number) => mockParts.find((part) => part.id === partId)!;
   const isMockPartSet = (partId: number) => getMockPartComponentsOfPart(partId).length > 0;
   const partComponents = mockPartComponents.map((partComponent) => ({ ...partComponent }));

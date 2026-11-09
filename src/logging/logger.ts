@@ -9,9 +9,10 @@ if (process.env.LOGS_PATH === undefined) {
   throw new Error("Environment variable LOGS_PATH is not set");
 }
 
-const env = process.env.NODE_ENV;
+// The production bundle inlines NODE_ENV as "production", so it cannot tell the test build apart
+const env = process.env.VITE_ENV_NAME;
 if (env === undefined) {
-  throw new Error("process.env.NODE_ENV is not defined");
+  throw new Error("process.env.VITE_ENV_NAME is not defined");
 }
 
 const isProd = env === "production";
