@@ -23,7 +23,8 @@ import {
   getTableRows,
 } from "@/tests/utils/components/table";
 import { expectSingleToast } from "@/tests/utils/components/toast";
-import { TestAnnotations, test } from "@/tests/utils/fixtures";
+import { uniqueNameViolation } from "@/tests/utils/errors-log";
+import { test } from "@/tests/utils/fixtures";
 import {
   EditButtonVisibility,
   workflowDeletedFilterAndRestore,
@@ -62,7 +63,7 @@ test("filter the Materias primas by name ignoring accents and case", async ({ pa
   await expect(getTableNoDataRow(tableRawMaterial)).toBeVisible();
 });
 
-test("manage the Materias primas", { annotation: TestAnnotations.NonEmptyErrorsLogFile }, async ({ page, db }) => {
+test("manage the Materias primas", async ({ page, db }) => {
   const activeRawMaterials = mockRawMaterials.filter((rawMaterial) => rawMaterial.deletedAt === null);
   const tableRawMaterial = page.getByTestId("table-raw-material");
   const dialogCreateEditRawMaterial = page.getByTestId("dialog-create-edit-raw-material");
@@ -98,6 +99,7 @@ test("manage the Materias primas", { annotation: TestAnnotations.NonEmptyErrorsL
       fill: fillRawMaterial,
       insertDuplicate: async (name) => db.insert(dbTableRawMaterial).values({ name }),
       constraintName: RAW_MATERIAL_NAME_CONSTRAINT,
+      table: dbTableRawMaterial,
       errorMessage: NAME_TAKEN_MESSAGE,
     });
 
@@ -109,6 +111,8 @@ test("manage the Materias primas", { annotation: TestAnnotations.NonEmptyErrorsL
         (await findTableRowByText(tableRawMaterial, rawMaterial.name)).getByTestId("button-edit").click(),
       closeEdit: closeDialog,
       getName: async (id) => (await db.query.dbTableRawMaterial.findFirst({ where: { id } }))?.name,
+      table: dbTableRawMaterial,
+      constraintName: RAW_MATERIAL_NAME_CONSTRAINT,
       errorMessage: NAME_TAKEN_MESSAGE,
     });
   });
@@ -255,18 +259,18 @@ test("list the deleted Materias primas only when asked for and restore them from
   });
 });
 
-test(
-  "a deleted Materia prima cannot be restored from the table while another one has its name",
-  { annotation: TestAnnotations.NonEmptyErrorsLogFile },
-  async ({ page, db }) => {
-    const rawMaterial = mockRawMaterials.find((mockRawMaterial) => mockRawMaterial.deletedAt === null)!;
-    await workflowRestoreTaken({
-      ...DELETED_RAW_MATERIAL_FILTER_PARAMS,
-      page,
-      getDeletedAt: async (id) => (await db.query.dbTableRawMaterial.findFirst({ where: { id } }))?.deletedAt,
-      id: rawMaterial.id,
-      insertDuplicate: async () => db.insert(dbTableRawMaterial).values({ name: rawMaterial.name }),
-      errorMessage: NAME_TAKEN_MESSAGE,
-    });
-  },
-);
+test("a deleted Materia prima cannot be restored from the table while another one has its name", async ({
+  page,
+  db,
+}) => {
+  const rawMaterial = mockRawMaterials.find((mockRawMaterial) => mockRawMaterial.deletedAt === null)!;
+  await workflowRestoreTaken({
+    ...DELETED_RAW_MATERIAL_FILTER_PARAMS,
+    page,
+    getDeletedAt: async (id) => (await db.query.dbTableRawMaterial.findFirst({ where: { id } }))?.deletedAt,
+    id: rawMaterial.id,
+    insertDuplicate: async () => db.insert(dbTableRawMaterial).values({ name: rawMaterial.name }),
+    uniqueViolation: uniqueNameViolation(RAW_MATERIAL_NAME_CONSTRAINT, dbTableRawMaterial, rawMaterial.name),
+    errorMessage: NAME_TAKEN_MESSAGE,
+  });
+});

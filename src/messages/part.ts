@@ -74,3 +74,7 @@ export const PART_COMPONENT_DELETED_ERROR_MESSAGE = "El Artículo no existe o es
 export const PART_COMPONENT_SELF_ERROR_MESSAGE = "Un Artículo no puede ser componente de sí mismo";
 export const PART_COMPONENT_CYCLE_ERROR_MESSAGE = "El Artículo contiene al Conjunto y no puede ser su componente";
 export const PART_IN_ACTIVE_SETS_ERROR_MESSAGE = "El Artículo es componente de estos Conjuntos y no se puede eliminar:";
+export const PART_FEATURE_CHECKED_DELETE_ERROR_MESSAGE =
+  "La Característica tiene Controles de calidad y no se puede eliminar";
+export const PART_FEATURE_CHECKED_RANGE_ERROR_MESSAGE =
+  "La Característica tiene Controles de calidad y no se puede cambiar su rango";

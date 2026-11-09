@@ -24,13 +24,19 @@ if (!fs.existsSync(process.env.LOGS_PATH)) {
   fs.mkdirSync(process.env.LOGS_PATH, { recursive: true });
 }
 
+// One JSON object per line, so the tests can parse every event. The fields of an Error are not enumerable, so
+// JSON.stringify would write the errors nested in the metadata as {}
 const fileFormat = winston.format.combine(
   winston.format.timestamp({
     format: "YYYY-MM-DD HH:mm:ss",
   }),
   winston.format.errors({ stack: true }),
-  winston.format.json(),
-  winston.format.prettyPrint(),
+  winston.format.json({
+    replacer: (_key, value: unknown) =>
+      value instanceof Error
+        ? Object.assign({}, value, { cause: value.cause, message: value.message, name: value.name, stack: value.stack })
+        : value,
+  }),
 );
 
 const consoleFormat = winston.format.combine(

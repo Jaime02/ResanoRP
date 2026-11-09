@@ -3,6 +3,7 @@ import { DrizzleQueryError } from "drizzle-orm/errors";
 import { DatabaseError } from "pg";
 
 import logger from "@/logging/logger";
+import { LogMessages } from "@/logging/types";
 
 export const PG_UNIQUE_VIOLATION = "23505";
 const PG_NOT_NULL_VIOLATION = "23502";
@@ -14,7 +15,7 @@ export function handleMutationError({
   error: unknown;
   uniqueConstraints?: Array<{ constraintName: string; errorMessage: string }>;
 }): never {
-  logger.error("Error en la mutación", { error });
+  logger.error(LogMessages.mutationError, { error });
 
   if (error instanceof TRPCError) throw error;
   if (error instanceof DrizzleQueryError) {

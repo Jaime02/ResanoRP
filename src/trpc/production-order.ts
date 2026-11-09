@@ -13,6 +13,7 @@ import { dbTableProductionOrder } from "@/db/schema";
 import { printTagPart } from "@/files/part-tag";
 import { formatDate } from "@/lib/formatters";
 import { handleMutationError } from "@/lib/handlers";
+import { SELL_ORDER_LINE_NOT_OF_PART_MESSAGE } from "@/messages/production-order";
 import { requiredIdObjectSchema } from "@/schemas";
 import {
   createProductionOrderSchema,
@@ -52,7 +53,7 @@ async function assertSellOrderLineCanBeProduced(sellOrderLineId: number, partId:
   if (partReference?.partId !== partId) {
     throw new TRPCError({
       code: "BAD_REQUEST",
-      message: `La Línea de pedido de venta ${sellOrderLineId} no es del Artículo ${partId}`,
+      message: SELL_ORDER_LINE_NOT_OF_PART_MESSAGE(sellOrderLineId, partId),
     });
   }
 }

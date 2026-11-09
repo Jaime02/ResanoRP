@@ -26,6 +26,12 @@ import { addAppDays, endOfAppDay, startOfAppDay } from "@/lib/dates";
 import { formatDate } from "@/lib/formatters";
 import { handleMutationError } from "@/lib/handlers";
 import { formatCents, getDeliveryNoteLineUnitPrice, getUnpricedDeliveryNoteIds, getVatBreakdown } from "@/lib/prices";
+import {
+  INVOICE_NOT_SENT_UNPRICED_MESSAGE,
+  INVOICES_NOT_ACCOUNTED_AMOUNT_TOO_LARGE_MESSAGE,
+  INVOICES_NOT_ACCOUNTED_UNPRICED_MESSAGE,
+  INVOICES_NOT_ACCOUNTED_WITHOUT_ACCOUNT_MESSAGE,
+} from "@/messages/invoice";
 import { requiredIdObjectSchema } from "@/schemas";
 import { createInvoiceSchema } from "@/schemas/invoice";
 import { router, generateTxId } from "@/trpc";
@@ -65,7 +71,7 @@ export default router({
           if (clientNamesWithoutAccount.length > 0) {
             throw new TRPCError({
               code: "BAD_REQUEST",
-              message: `No se han contabilizado las Facturas porque estos Clientes no tienen cuenta contable de Prisma: ${clientNamesWithoutAccount.join(", ")}`,
+              message: INVOICES_NOT_ACCOUNTED_WITHOUT_ACCOUNT_MESSAGE(clientNamesWithoutAccount),
             });
           }
 
@@ -76,7 +82,7 @@ export default router({
           if (unpricedDeliveryNoteIds.length > 0) {
             throw new TRPCError({
               code: "BAD_REQUEST",
-              message: `No se han contabilizado las Facturas porque estos Albaranes tienen Líneas sin precio: ${unpricedDeliveryNoteIds.join(", ")}`,
+              message: INVOICES_NOT_ACCOUNTED_UNPRICED_MESSAGE(unpricedDeliveryNoteIds),
             });
           }
 
@@ -100,7 +106,10 @@ export default router({
           if (invoiceIdsWithAmountTooLarge.length > 0) {
             throw new TRPCError({
               code: "BAD_REQUEST",
-              message: `No se han contabilizado las Facturas porque estas tienen importes mayores de ${formatCents(MAX_AMOUNT_IN_CENTS)}, que no caben en el fichero de Prisma: ${invoiceIdsWithAmountTooLarge.join(", ")}`,
+              message: INVOICES_NOT_ACCOUNTED_AMOUNT_TOO_LARGE_MESSAGE(
+                formatCents(MAX_AMOUNT_IN_CENTS),
+                invoiceIdsWithAmountTooLarge,
+              ),
             });
           }
 
@@ -145,7 +154,7 @@ export default router({
         if (unpricedDeliveryNoteIds.length > 0) {
           throw new TRPCError({
             code: "BAD_REQUEST",
-            message: `No se ha enviado la Factura porque estos Albaranes tienen Líneas sin precio: ${unpricedDeliveryNoteIds.join(", ")}`,
+            message: INVOICE_NOT_SENT_UNPRICED_MESSAGE(unpricedDeliveryNoteIds),
           });
         }
         const sentInvoice = await sendInvoice(input.id, tx);

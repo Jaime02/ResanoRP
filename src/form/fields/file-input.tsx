@@ -3,8 +3,8 @@ import { Dropzone } from "@/components/ui/dropzone";
 import FieldLayout from "@/form/components/field-layout";
 import { useFieldContext, useFormContext } from "@/form/context";
 import { isFieldRequired } from "@/form/utils";
-import clientLog from "@/logging/clientLog";
-import { LoggerLevels } from "@/logging/types";
+import log from "@/logging/log";
+import { LogMessages, LoggerLevels } from "@/logging/types";
 import { FormMode } from "@/types";
 
 interface FieldFileInputProps extends Omit<DropzoneProps, "filterFieldName" | "onDrop" | "required"> {
@@ -39,7 +39,7 @@ export default function FieldFilesInput({
           field.handleChange(props.allowMultipleFiles === true ? acceptedFiles : acceptedFiles[0]);
         }}
         onClear={() => field.handleChange(props.allowMultipleFiles === true ? [] : null)}
-        onError={(error) => void clientLog(LoggerLevels.debug, "Dropzone error", { error })}
+        onError={(error) => void log(LoggerLevels.debug, LogMessages.dropzoneError, { error })}
         src={field.state.value}
         disabled={readOnly}
         required={isRequired}

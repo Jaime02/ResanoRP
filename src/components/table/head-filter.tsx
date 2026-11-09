@@ -12,8 +12,8 @@ import { DebouncedInput } from "@/components/ui/debounced-input";
 import NumberInput from "@/components/ui/number-input";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import PriceInput from "@/components/ui/price-input";
-import clientLog from "@/logging/clientLog";
-import { LoggerLevels } from "@/logging/types";
+import log from "@/logging/log";
+import { LogMessages, LoggerLevels } from "@/logging/types";
 import { FROM_LABEL, SEARCH_PLACEHOLDER, TO_LABEL } from "@/messages/common";
 import type { DateRangeFilter, TBaseModel, TTableState } from "@/schemas";
 import type { TFilterValue } from "@/schemas";
@@ -63,7 +63,7 @@ export function TableHeadFilter<TRow extends TBaseModel = TBaseModel>({
   );
 
   if (header.column.getCanFilter() && header.column.columnDef.meta?.dataType === undefined) {
-    void clientLog(LoggerLevels.error, `Column ${String(header.column.id)} is filterable but has no dataType defined`);
+    void log(LoggerLevels.error, LogMessages.columnDataTypeMissing(String(header.column.id)));
     return null;
   }
 
@@ -187,17 +187,11 @@ export function TableHeadFilter<TRow extends TBaseModel = TBaseModel>({
 
   if (dataType === CellDataType.Enum) {
     if (!header.column.columnDef.meta?.enumName) {
-      void clientLog(
-        LoggerLevels.error,
-        `Column ${String(header.column.id)} is of type Enum but has no enumName defined`,
-      );
+      void log(LoggerLevels.error, LogMessages.columnEnumNameMissing(String(header.column.id)));
       return null;
     }
     if (header.column.columnDef.meta.filterFieldName === undefined) {
-      void clientLog(
-        LoggerLevels.error,
-        `Column ${String(header.column.id)} is of type Enum but has no filterFieldName defined`,
-      );
+      void log(LoggerLevels.error, LogMessages.columnFilterFieldNameMissing(String(header.column.id)));
       return null;
     }
 
@@ -213,10 +207,7 @@ export function TableHeadFilter<TRow extends TBaseModel = TBaseModel>({
   }
 
   if (dataType === CellDataType.Combobox) {
-    void clientLog(
-      LoggerLevels.error,
-      `Column ${String(header.column.id)} is of type Combobox but has no renderFilter defined in column meta`,
-    );
+    void log(LoggerLevels.error, LogMessages.columnRenderFilterMissing(String(header.column.id)));
     return null;
   }
 

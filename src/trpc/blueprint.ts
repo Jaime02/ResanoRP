@@ -7,6 +7,7 @@ import { dbTableBlueprint } from "@/db/schema";
 import { archiveBlueprintFiles, getBlueprintPath } from "@/files/blueprint";
 import { removeOnRollback, renameFile, saveUpload } from "@/files/functions";
 import { handleMutationError } from "@/lib/handlers";
+import { BLUEPRINT_FILE_NAME_TAKEN_MESSAGE } from "@/messages/blueprint";
 import { requiredIdObjectSchema } from "@/schemas";
 import { updateBlueprintSchema, createBlueprintFormDataSchema } from "@/schemas/blueprint";
 import { router, generateTxId } from "@/trpc";
@@ -17,7 +18,7 @@ async function assertBlueprintFileNameIsFree({ partId, fileName }: { partId: num
   if ((await getBlueprintPath({ checkIfFileExists: true, fileName, logErrors: false, partId })) !== null) {
     throw new TRPCError({
       code: "CONFLICT",
-      message: `El Artículo ya tiene un Plano llamado ${fileName}`,
+      message: BLUEPRINT_FILE_NAME_TAKEN_MESSAGE(fileName),
     });
   }
 }

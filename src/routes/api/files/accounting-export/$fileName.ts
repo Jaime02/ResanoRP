@@ -8,6 +8,8 @@ import { getAccountingExportPath } from "@/files/invoice";
 import { ADMIN_SESSION_COOKIE_NAME, isAdminSession } from "@/lib/admin-session";
 import { textResponse } from "@/lib/responses";
 import logger from "@/logging/logger";
+import { LogMessages } from "@/logging/types";
+import { ADMIN_ONLY_MESSAGE } from "@/messages/common";
 
 const routeParamsSchema = z.object({
   fileName: z.string().regex(/^facturas-\d+-\d+\.csv$/),
@@ -18,15 +20,15 @@ export const Route = createFileRoute("/api/files/accounting-export/$fileName")({
     handlers: {
       GET: async ({ params }: { params: { fileName: string } }) => {
         if (!isAdminSession(getCookie(ADMIN_SESSION_COOKIE_NAME))) {
-          return textResponse("Esta acción solo la puede hacer el Administrador", 403);
+          return textResponse(ADMIN_ONLY_MESSAGE, 403);
         }
 
         let fileName: string;
         try {
           ({ fileName } = routeParamsSchema.parse(params));
         } catch {
-          logger.error("Invalid file name received", { params });
-          return textResponse("Invalid file name received", 400);
+          logger.error(LogMessages.invalidFileName, { params });
+          return textResponse(LogMessages.invalidFileName, 400);
         }
 
         try {
@@ -40,7 +42,7 @@ export const Route = createFileRoute("/api/files/accounting-export/$fileName")({
             status: 200,
           });
         } catch (error) {
-          logger.error("Error reading Accounting Export file", { error, fileName });
+          logger.error(LogMessages.accountingExportReadFailed, { error, fileName });
           return textResponse("Failed to read file", 500);
         }
       },

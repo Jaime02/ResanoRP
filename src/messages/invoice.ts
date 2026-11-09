@@ -23,3 +23,11 @@ export const MARK_LABEL = "Marcar";
 export const INVOICE_ACCOUNTED_LABEL = "Contabilizada";
 export const INVOICE_SENT_LABEL = "Enviada";
 export const DUE_DATE_LABEL = "Vencimiento";
+export const INVOICES_NOT_ACCOUNTED_WITHOUT_ACCOUNT_MESSAGE = (clientNames: Array<string>) =>
+  `No se han contabilizado las Facturas porque estos Clientes no tienen cuenta contable de Prisma: ${clientNames.join(", ")}`;
+export const INVOICES_NOT_ACCOUNTED_UNPRICED_MESSAGE = (deliveryNoteIds: Array<number>) =>
+  `No se han contabilizado las Facturas porque estos Albaranes tienen Líneas sin precio: ${deliveryNoteIds.join(", ")}`;
+export const INVOICES_NOT_ACCOUNTED_AMOUNT_TOO_LARGE_MESSAGE = (maxAmount: string, invoiceIds: Array<number>) =>
+  `No se han contabilizado las Facturas porque estas tienen importes mayores de ${maxAmount}, que no caben en el fichero de Prisma: ${invoiceIds.join(", ")}`;
+export const INVOICE_NOT_SENT_UNPRICED_MESSAGE = (deliveryNoteIds: Array<number>) =>
+  `No se ha enviado la Factura porque estos Albaranes tienen Líneas sin precio: ${deliveryNoteIds.join(", ")}`;

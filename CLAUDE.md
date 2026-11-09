@@ -25,3 +25,11 @@ Comments are only allowed when they are necessary to explain why a change was ma
 Instead of running `tsc --noEmit` use `bun run lint`. Do not run linting or formatting unless required and don't run it on the entire project unless you have to. Use `bun run lint src/...` or `bun run lint src/... --fix` to fix issues in a specific file. Oxlint is type-aware and will catch more issues than eslint. Use `bun run format` to format code.
 
 Do not use Python scripts or similar to do simple edits.
+
+## Gotchas
+
+- E2E tests run against a Docker image that bakes in `src/`. After changing anything under `src/` except `src/tests/`, run `bun run test:restart` before Playwright, otherwise the old build is tested. Test-only edits don't need it.
+- `@tanstack/db` and `@electric-sql/client` are patched (`patches/`, `patchedDependencies`). Bumping either version silently drops the patch from `bun.lock`. Recreate it with `bun patch`, delete the old patch file and its stale `patchedDependencies` entry.
+  - `@tanstack/db`: `getServerSnapshot` in `live-query-observer-client.*` needs `&& this.collection`. Without it every e2e test fails with React error #423.
+  - `@electric-sql/client`: `requestSnapshot` must only advance the stream offset on cold start. Otherwise rows revert in the UI after a successful mutation.
+- `oxc-transform-react` looks unused but is loaded dynamically by the React Compiler (`viteReact({ compiler: true })`). Do not remove it or flag it as unused.

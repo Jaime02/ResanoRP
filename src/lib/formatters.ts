@@ -1,6 +1,6 @@
 import { APP_TIME_ZONE } from "@/lib/dates";
-import clientLog from "@/logging/clientLog";
-import { LoggerLevels } from "@/logging/types";
+import log from "@/logging/log";
+import { LogMessages, LoggerLevels } from "@/logging/types";
 import { INACTIVE_MATERIAL_DELETED_MESSAGE, INACTIVE_RAW_MATERIAL_DELETED_MESSAGE } from "@/messages/material";
 
 const priceFormatters = new Map<number, Intl.NumberFormat>();
@@ -62,7 +62,7 @@ export function formatDate(dateInput: string | Date | null, format: DateFormat =
 
   const date = new Date(dateInput);
   if (isNaN(date.getTime())) {
-    void clientLog(LoggerLevels.error, "Invalid date", { dateInput: dateInput.toString() });
+    void log(LoggerLevels.error, LogMessages.invalidDate, { dateInput: dateInput.toString() });
     return null;
   }
 

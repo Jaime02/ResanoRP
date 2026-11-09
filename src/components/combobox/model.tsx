@@ -2,8 +2,8 @@ import { useMemo, useState } from "react";
 
 import type { ComboboxProps } from "@/components/ui/combobox";
 import { Combobox } from "@/components/ui/combobox";
-import clientLog from "@/logging/clientLog";
-import { LoggerLevels } from "@/logging/types";
+import log from "@/logging/log";
+import { LogMessages, LoggerLevels } from "@/logging/types";
 import type { TBaseModel } from "@/schemas";
 
 export type ComboboxModelProps<TItem extends TBaseModel> = Omit<
@@ -42,7 +42,7 @@ export default function ComboboxModel<TItem extends TBaseModel & { name: string 
   const { data: items, isLoading, isLoadingError, isCrashed } = useQueryItems(queryFilters);
 
   if (isLoadingError || isCrashed) {
-    void clientLog(LoggerLevels.error, `Error fetching ${modelName} for ComboboxModel`);
+    void log(LoggerLevels.error, LogMessages.comboboxFetchFailed(modelName, "ComboboxModel"));
   }
 
   return (

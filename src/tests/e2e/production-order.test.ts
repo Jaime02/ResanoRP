@@ -22,7 +22,12 @@ import {
 import { formatPartDimension } from "@/lib/formatters";
 import { translatedEnums } from "@/lib/translations";
 import { STATUS_PENDING_LABEL, PART_LABEL } from "@/messages/common";
-import { PRODUCTION_ORDERS_LABEL, QUANTITY_TO_PRODUCE_LABEL } from "@/messages/production-order";
+import {
+  PRODUCTION_ORDERS_LABEL,
+  PRODUCTION_ORDER_NOT_ASSIGNABLE_MESSAGE,
+  QUANTITY_TO_PRODUCE_LABEL,
+  SELL_ORDER_LINE_NOT_OF_PART_MESSAGE,
+} from "@/messages/production-order";
 import { ProductionOrderStatus } from "@/schemas/production-order";
 import type { TProductionOrderFilters, TTableProductionOrderState } from "@/schemas/production-order";
 import {
@@ -56,7 +61,8 @@ import {
   getTableRows,
 } from "@/tests/utils/components/table";
 import { expectSingleToast } from "@/tests/utils/components/toast";
-import { TestAnnotations, inAnotherTab, setUserMode, test } from "@/tests/utils/fixtures";
+import { expectRejectedMutation, type TErrorCode } from "@/tests/utils/errors-log";
+import { inAnotherTab, setUserMode, test } from "@/tests/utils/fixtures";
 import {
   getMockStartedProductionOrdersWithoutQuantity,
   getMockSellOrderById,
@@ -437,32 +443,34 @@ test("deleting a production order takes it off the machines", async ({ page, ope
   );
 });
 
-test(
-  "restoring a production order that another tab restores meanwhile is rejected",
-  { annotation: TestAnnotations.NonEmptyErrorsLogFile },
-  async ({ page }) => {
-    const productionOrder = (await getProductionOrdersByStatuses([ProductionOrderStatus.Pending])).at(0)!;
-    await gotoProductionOrdersWithStatuses(page, [ProductionOrderStatus.Pending]);
-    await workflowDeleteProductionOrder(page, productionOrder.id);
+test("restoring a production order that another tab restores meanwhile is rejected", async ({ page }) => {
+  const productionOrder = (await getProductionOrdersByStatuses([ProductionOrderStatus.Pending])).at(0)!;
+  await gotoProductionOrdersWithStatuses(page, [ProductionOrderStatus.Pending]);
+  await workflowDeleteProductionOrder(page, productionOrder.id);
 
-    await gotoProductionOrdersWithStatuses(page, [ProductionOrderStatus.Deleted]);
-    await holdRequestWhile({
-      page,
-      procedurePath: "productionOrder.restore",
-      send: async () =>
-        openAndConfirmAlertDialog(
-          page,
-          getTableRowByTestId(tableProductionOrders, productionOrder.id).getByTestId("button-restore"),
-          "dialog-restore-model-content",
-        ),
-      meanwhile: async () =>
-        inAnotherTab(page, async (anotherPage) => workflowRestoreProductionOrder(anotherPage, productionOrder.id)),
-    });
+  await gotoProductionOrdersWithStatuses(page, [ProductionOrderStatus.Deleted]);
+  await holdRequestWhile({
+    page,
+    procedurePath: "productionOrder.restore",
+    send: async () =>
+      openAndConfirmAlertDialog(
+        page,
+        getTableRowByTestId(tableProductionOrders, productionOrder.id).getByTestId("button-restore"),
+        "dialog-restore-model-content",
+      ),
+    meanwhile: async () =>
+      inAnotherTab(page, async (anotherPage) => workflowRestoreProductionOrder(anotherPage, productionOrder.id)),
+  });
 
-    await expectSingleToast(page, `Orden de producción con ID ${productionOrder.id} no encontrada o no eliminada`);
-    expect((await getProductionOrderById(productionOrder.id))?.deletedAt).toBeNull();
-  },
-);
+  const notRestorableMessage = `Orden de producción con ID ${productionOrder.id} no encontrada o no eliminada`;
+  await expectSingleToast(page, notRestorableMessage);
+  expectRejectedMutation({
+    code: "NOT_FOUND",
+    message: notRestorableMessage,
+    procedurePath: "productionOrder.restore",
+  });
+  expect((await getProductionOrderById(productionOrder.id))?.deletedAt).toBeNull();
+});
 
 test("the heading only counts the production orders once they are loaded", async ({ page }) => {
   // The count of a loading table is only shown for a moment, so every heading is recorded as the page renders it
@@ -847,293 +855,292 @@ test("show and filter the status of the production orders without a quantity", a
   }
 });
 
-test(
-  "only pending and in production orders can be assigned to a machine",
-  { annotation: TestAnnotations.NonEmptyErrorsLogFile },
-  async ({ page, db }) => {
-    const assignableStatuses = [ProductionOrderStatus.Pending, ProductionOrderStatus.InProduction];
-    const statuses = await Promise.all(
-      mockProductionOrders.map(async (productionOrder) => dbGetProductionOrderStatus(productionOrder)),
+test("only pending and in production orders can be assigned to a machine", async ({ page, db }) => {
+  const assignableStatuses = [ProductionOrderStatus.Pending, ProductionOrderStatus.InProduction];
+  const statuses = await Promise.all(
+    mockProductionOrders.map(async (productionOrder) => dbGetProductionOrderStatus(productionOrder)),
+  );
+  expect(new Set(statuses), "Every status should be shown").toEqual(new Set(Object.values(ProductionOrderStatus)));
+
+  await gotoProductionOrdersWithStatuses(page, Object.values(ProductionOrderStatus));
+  for (const [index, productionOrder] of mockProductionOrders.entries()) {
+    const row = getTableRowByTestId(tableProductionOrders, productionOrder.id);
+    await expect(row).toBeVisible();
+    await expect(row.getByTestId("combobox-assign-machine")).toBeAttached({
+      attached: assignableStatuses.includes(statuses[index]),
+    });
+  }
+
+  // The server rejects them too, when the status changes while the page assigns them
+  const productionOrder = (await getProductionOrdersByStatuses([ProductionOrderStatus.Pending])).find(
+    (pendingProductionOrder) => pendingProductionOrder.sellOrderLineId !== null,
+  )!;
+  const { sellOrderId } = getMockSellOrderLineById(productionOrder.sellOrderLineId!)!;
+  const activeMachines = mockMachines.filter((mockMachine) => mockMachine.deletedAt === null);
+  const queues = await Promise.all(activeMachines.map(async (machine) => getQueuedProductionOrderIds(machine.id)));
+  const machine = activeMachines.find((_, index) => !queues[index].includes(productionOrder.id))!;
+  const statusChanges: Array<[ProductionOrderStatus, (deletedAt: Date | null) => Promise<void>]> = [
+    [
+      ProductionOrderStatus.Deleted,
+      async (deletedAt) => {
+        await db
+          .update(dbTableProductionOrder)
+          .set({ deletedAt })
+          .where(eq(dbTableProductionOrder.id, productionOrder.id));
+      },
+    ],
+    [
+      ProductionOrderStatus.SellOrderLineDeleted,
+      async (deletedAt) => {
+        await db
+          .update(dbTableSellOrderLine)
+          .set({ deletedAt })
+          .where(eq(dbTableSellOrderLine.id, productionOrder.sellOrderLineId!));
+      },
+    ],
+    [
+      ProductionOrderStatus.SellOrderDeleted,
+      async (deletedAt) => {
+        await db.update(dbTableSellOrder).set({ deletedAt }).where(eq(dbTableSellOrder.id, sellOrderId));
+      },
+    ],
+  ];
+  for (const [status, setDeletedAt] of statusChanges) {
+    const message = PRODUCTION_ORDER_NOT_ASSIGNABLE_MESSAGE(
+      productionOrder.id,
+      translatedEnums.ProductionOrderStatus[status],
     );
-    expect(new Set(statuses), "Every status should be shown").toEqual(new Set(Object.values(ProductionOrderStatus)));
+    await holdRequestWhile({
+      page,
+      procedurePath: "machineProductionOrderQueue.create",
+      send: async () => workflowAssignMachineToProductionOrder(page, productionOrder.id, machine, message),
+      meanwhile: async () => setDeletedAt(new Date()),
+    });
+    expectRejectedMutation({ code: "BAD_REQUEST", message, procedurePath: "machineProductionOrderQueue.create" });
+    await setDeletedAt(null);
+  }
+});
 
-    await gotoProductionOrdersWithStatuses(page, Object.values(ProductionOrderStatus));
-    for (const [index, productionOrder] of mockProductionOrders.entries()) {
-      const row = getTableRowByTestId(tableProductionOrders, productionOrder.id);
-      await expect(row).toBeVisible();
-      await expect(row.getByTestId("combobox-assign-machine")).toBeAttached({
-        attached: assignableStatuses.includes(statuses[index]),
-      });
+test("create production orders by hand and from a sell order line", async ({ page, db }) => {
+  const lastMockProductionOrderId = Math.max(...mockProductionOrders.map((productionOrder) => productionOrder.id));
+  const getNewProductionOrders = async () =>
+    db
+      .select()
+      .from(dbTableProductionOrder)
+      .where(gt(dbTableProductionOrder.id, lastMockProductionOrderId))
+      .orderBy(dbTableProductionOrder.id);
+  const getPartIdOfLine = (sellOrderLine: BaseSellOrderLine) =>
+    mockPartReferences.find((partReference) => partReference.id === sellOrderLine.partReferenceId)!.partId;
+  const isActivePart = (partId: number) => mockParts.find((part) => part.id === partId)!.deletedAt === null;
+  const getPartBlueprints = (partId: number) => mockBlueprints.filter((blueprint) => blueprint.partId === partId);
+  const deletedPart = mockParts.find((part) => part.deletedAt !== null)!;
+  const inputQuantity = getFormInputByLabel(page, QUANTITY_TO_PRODUCE_LABEL, InputElementType.Number);
+  const assertBlueprintsShown = async (partId: number) => {
+    const blueprints = getPartBlueprints(partId);
+    expect(blueprints.length, `Part ${partId} needs blueprints`).toBeGreaterThan(0);
+    // The blueprints are stacked, so only one is shown at a time
+    for (const [index, blueprint] of blueprints.entries()) {
+      if (index > 0) await page.getByTestId("button-next-file").click();
+      await expect(page.getByTestId(`card-blueprint-${blueprint.id}`)).toBeVisible();
     }
+  };
 
-    // The server rejects them too, when the status changes while the page assigns them
-    const productionOrder = (await getProductionOrdersByStatuses([ProductionOrderStatus.Pending])).find(
-      (pendingProductionOrder) => pendingProductionOrder.sellOrderLineId !== null,
+  await test.step("by hand, picking the part, whose blueprints are shown", async () => {
+    const part = mockParts.find(
+      (mockPart) => mockPart.deletedAt === null && getPartBlueprints(mockPart.id).length > 0,
     )!;
-    const { sellOrderId } = getMockSellOrderLineById(productionOrder.sellOrderLineId!)!;
-    const activeMachines = mockMachines.filter((mockMachine) => mockMachine.deletedAt === null);
-    const queues = await Promise.all(activeMachines.map(async (machine) => getQueuedProductionOrderIds(machine.id)));
-    const machine = activeMachines.find((_, index) => !queues[index].includes(productionOrder.id))!;
-    const statusChanges: Array<[ProductionOrderStatus, (deletedAt: Date | null) => Promise<void>]> = [
-      [
-        ProductionOrderStatus.Deleted,
-        async (deletedAt) => {
-          await db
-            .update(dbTableProductionOrder)
-            .set({ deletedAt })
-            .where(eq(dbTableProductionOrder.id, productionOrder.id));
-        },
-      ],
-      [
-        ProductionOrderStatus.SellOrderLineDeleted,
-        async (deletedAt) => {
-          await db
-            .update(dbTableSellOrderLine)
-            .set({ deletedAt })
-            .where(eq(dbTableSellOrderLine.id, productionOrder.sellOrderLineId!));
-        },
-      ],
-      [
-        ProductionOrderStatus.SellOrderDeleted,
-        async (deletedAt) => {
-          await db.update(dbTableSellOrder).set({ deletedAt }).where(eq(dbTableSellOrder.id, sellOrderId));
-        },
-      ],
-    ];
-    for (const [status, setDeletedAt] of statusChanges) {
+    await page.goto("/create-production-order");
+    await assertFormLoaded(page);
+
+    const { dialogPickerPartContent, tablePickerPart } = await openPartPicker(
+      page,
+      getFormInputByLabel(page, PART_LABEL, InputElementType.Picker),
+    );
+    const inputFilterDescription = tablePickerPart.getByTestId("input-filter-description");
+    // A deleted part cannot be picked
+    await inputFilterDescription.fill(deletedPart.description);
+    await expect(getTableNoDataRow(tablePickerPart)).toBeVisible();
+
+    await inputFilterDescription.fill(part.description);
+    await getTableRowByTestId(tablePickerPart, part.id).getByTestId("button-success").click();
+    await expect(dialogPickerPartContent).not.toBeVisible();
+    await assertBlueprintsShown(part.id);
+    // Nothing is produced of a quantity of 0
+    await inputQuantity.fill("0");
+    await page.getByTestId("button-submit").click();
+    await expect(page.getByText("La cantidad debe ser un número positivo")).toBeVisible();
+    expect(await getNewProductionOrders()).toEqual([]);
+
+    await inputQuantity.fill("7");
+    await page.getByTestId("form-production-order-urgent").click();
+    await page.getByTestId("button-submit").click();
+
+    await expect(page).toHaveURL(/\/production-order\/\d+$/);
+    await expectSingleToast(page);
+    const [newProductionOrder] = await getNewProductionOrders();
+    expect(newProductionOrder).toMatchObject({
+      partId: part.id,
+      quantity: 7,
+      sellOrderLineId: null,
+      urgent: true,
+    });
+    expect(page.url()).toMatch(new RegExp(`/production-order/${newProductionOrder.id}$`));
+  });
+
+  await test.step("from a sell order line, with its part, its blueprints and its pending quantity", async () => {
+    const sellOrderLine = mockSellOrderLines.find(
+      (mockSellOrderLine) =>
+        mockSellOrderLine.deletedAt === null &&
+        mockSellOrderLine.pendingQuantity > 0 &&
+        getMockSellOrderById(mockSellOrderLine.sellOrderId)!.deletedAt === null &&
+        !mockProductionOrders.some(
+          (productionOrder) =>
+            productionOrder.sellOrderLineId === mockSellOrderLine.id && productionOrder.deletedAt === null,
+        ) &&
+        getPartBlueprints(getPartIdOfLine(mockSellOrderLine)).length > 0,
+    )!;
+    const buttonCreateProductionOrder = getTableRowByTestId(
+      page.getByTestId("table-sell-order-line"),
+      sellOrderLine.id,
+    ).getByTestId("button-create-production-order");
+    await page.goto(`/sell-order/${sellOrderLine.sellOrderId}`);
+    await buttonCreateProductionOrder.click();
+    await expect(page).toHaveURL(new RegExp(`/create-production-order[?]sellOrderLineId=${sellOrderLine.id}$`));
+    await assertFormLoaded(page);
+    await expect(inputQuantity).toHaveValue(String(sellOrderLine.pendingQuantity));
+    await assertBlueprintsShown(getPartIdOfLine(sellOrderLine));
+    await page.getByTestId("button-submit").click();
+
+    await expect(page).toHaveURL(/\/production-order\/\d+$/);
+    await expectSingleToast(page);
+    const newProductionOrders = await getNewProductionOrders();
+    expect(newProductionOrders).toHaveLength(2);
+    expect(newProductionOrders[1]).toMatchObject({
+      partId: getPartIdOfLine(sellOrderLine),
+      quantity: sellOrderLine.pendingQuantity,
+      sellOrderLineId: sellOrderLine.id,
+      urgent: false,
+    });
+
+    // The line has an Orden de producción now, so its pending quantity cannot be produced twice from it
+    await page.goto(`/sell-order/${sellOrderLine.sellOrderId}`);
+    const rowSellOrderLine = getTableRowByTestId(page.getByTestId("table-sell-order-line"), sellOrderLine.id);
+    await rowSellOrderLine.getByTestId("button-production-order").click();
+    await expect(page).toHaveURL(new RegExp(`/production-order/${newProductionOrders[1].id}$`));
+    await page.goBack();
+    await expect(rowSellOrderLine).toBeVisible();
+    await expect(buttonCreateProductionOrder).not.toBeAttached();
+  });
+
+  await test.step("by hand without a quantity, which is produced until its machines stop", async () => {
+    const part = mockParts.find((mockPart) => mockPart.deletedAt === null)!;
+    const productionOrdersBefore = await getNewProductionOrders();
+    await workflowCreateProductionOrder(page, { part, quantity: null });
+    expect((await getNewProductionOrders()).slice(productionOrdersBefore.length)).toEqual([
+      expect.objectContaining({ partId: part.id, quantity: null, sellOrderLineId: null }),
+    ]);
+  });
+
+  await test.step("the server rejects deleted parts and lines that cannot be produced", async () => {
+    // A line of an active part, so it is the line that is rejected and not its part
+    const activeLine = mockSellOrderLines.find(
+      (mockSellOrderLine) =>
+        mockSellOrderLine.deletedAt === null &&
+        isActivePart(getPartIdOfLine(mockSellOrderLine)) &&
+        getMockSellOrderById(mockSellOrderLine.sellOrderId)!.deletedAt === null,
+    )!;
+    const otherPartReference = mockPartReferences.find(
+      (partReference) => partReference.partId !== getPartIdOfLine(activeLine) && isActivePart(partReference.partId),
+    )!;
+    const otherPart = mockParts.find((part) => part.id === otherPartReference.partId)!;
+    const [customLine] = await db
+      .insert(dbTableSellOrderLine)
+      .values({
+        description: "Línea sin Artículo",
+        pendingQuantity: 1,
+        quantity: 1,
+        sellOrderId: activeLine.sellOrderId,
+      })
+      .returning();
+    const productionOrdersBefore = await getNewProductionOrders();
+    const createWhile = async (
+      { sellOrderLineId, part }: { sellOrderLineId?: number; part?: BasePart },
+      expectedErrorMessage: string,
+      meanwhile: () => Promise<void>,
+      code: TErrorCode = "BAD_REQUEST",
+    ) => {
       await holdRequestWhile({
         page,
-        procedurePath: "machineProductionOrderQueue.create",
-        send: async () =>
-          workflowAssignMachineToProductionOrder(
-            page,
-            productionOrder.id,
-            machine,
-            `su estado es "${translatedEnums.ProductionOrderStatus[status]}"`,
-          ),
-        meanwhile: async () => setDeletedAt(new Date()),
+        procedurePath: "productionOrder.create",
+        send: async () => workflowCreateProductionOrder(page, { part, sellOrderLineId }, expectedErrorMessage),
+        meanwhile,
       });
-      await setDeletedAt(null);
-    }
-  },
-);
-
-test(
-  "create production orders by hand and from a sell order line",
-  { annotation: TestAnnotations.NonEmptyErrorsLogFile },
-  async ({ page, db }) => {
-    const lastMockProductionOrderId = Math.max(...mockProductionOrders.map((productionOrder) => productionOrder.id));
-    const getNewProductionOrders = async () =>
-      db
-        .select()
-        .from(dbTableProductionOrder)
-        .where(gt(dbTableProductionOrder.id, lastMockProductionOrderId))
-        .orderBy(dbTableProductionOrder.id);
-    const getPartIdOfLine = (sellOrderLine: BaseSellOrderLine) =>
-      mockPartReferences.find((partReference) => partReference.id === sellOrderLine.partReferenceId)!.partId;
-    const isActivePart = (partId: number) => mockParts.find((part) => part.id === partId)!.deletedAt === null;
-    const getPartBlueprints = (partId: number) => mockBlueprints.filter((blueprint) => blueprint.partId === partId);
-    const deletedPart = mockParts.find((part) => part.deletedAt !== null)!;
-    const inputQuantity = getFormInputByLabel(page, QUANTITY_TO_PRODUCE_LABEL, InputElementType.Number);
-    const assertBlueprintsShown = async (partId: number) => {
-      const blueprints = getPartBlueprints(partId);
-      expect(blueprints.length, `Part ${partId} needs blueprints`).toBeGreaterThan(0);
-      // The blueprints are stacked, so only one is shown at a time
-      for (const [index, blueprint] of blueprints.entries()) {
-        if (index > 0) await page.getByTestId("button-next-file").click();
-        await expect(page.getByTestId(`card-blueprint-${blueprint.id}`)).toBeVisible();
-      }
+      expectRejectedMutation({ code, message: expectedErrorMessage, procedurePath: "productionOrder.create" });
+    };
+    const setPartDeletedAt = async (deletedAt: Date | null) => {
+      await db.update(dbTablePart).set({ deletedAt }).where(eq(dbTablePart.id, otherPart.id));
+    };
+    const setActiveLine = async (values: Partial<BaseSellOrderLine>) => {
+      await db.update(dbTableSellOrderLine).set(values).where(eq(dbTableSellOrderLine.id, activeLine.id));
+    };
+    const setSellOrderDeletedAt = async (deletedAt: Date | null) => {
+      await db.update(dbTableSellOrder).set({ deletedAt }).where(eq(dbTableSellOrder.id, activeLine.sellOrderId));
     };
 
-    await test.step("by hand, picking the part, whose blueprints are shown", async () => {
-      const part = mockParts.find(
-        (mockPart) => mockPart.deletedAt === null && getPartBlueprints(mockPart.id).length > 0,
-      )!;
-      await page.goto("/create-production-order");
-      await assertFormLoaded(page);
+    await createWhile({ part: otherPart }, `El Artículo "${otherPart.description}" está eliminado`, async () =>
+      setPartDeletedAt(new Date()),
+    );
+    await setPartDeletedAt(null);
 
-      const { dialogPickerPartContent, tablePickerPart } = await openPartPicker(
-        page,
-        getFormInputByLabel(page, PART_LABEL, InputElementType.Picker),
-      );
-      const inputFilterDescription = tablePickerPart.getByTestId("input-filter-description");
-      // A deleted part cannot be picked
-      await inputFilterDescription.fill(deletedPart.description);
-      await expect(getTableNoDataRow(tablePickerPart)).toBeVisible();
+    await createWhile(
+      { sellOrderLineId: activeLine.id },
+      `La Línea de pedido de venta ${activeLine.id} está eliminada`,
+      async () => setActiveLine({ deletedAt: new Date() }),
+    );
+    await setActiveLine({ deletedAt: null });
 
-      await inputFilterDescription.fill(part.description);
-      await getTableRowByTestId(tablePickerPart, part.id).getByTestId("button-success").click();
-      await expect(dialogPickerPartContent).not.toBeVisible();
-      await assertBlueprintsShown(part.id);
-      // Nothing is produced of a quantity of 0
-      await inputQuantity.fill("0");
-      await page.getByTestId("button-submit").click();
-      await expect(page.getByText("La cantidad debe ser un número positivo")).toBeVisible();
-      expect(await getNewProductionOrders()).toEqual([]);
+    await createWhile(
+      { sellOrderLineId: activeLine.id },
+      `La Línea de pedido de venta ${activeLine.id} es una devolución`,
+      async () => setActiveLine({ pendingQuantity: -5, quantity: -5 }),
+    );
+    await setActiveLine({ pendingQuantity: activeLine.pendingQuantity, quantity: activeLine.quantity });
 
-      await inputQuantity.fill("7");
-      await page.getByTestId("form-production-order-urgent").click();
-      await page.getByTestId("button-submit").click();
+    await createWhile(
+      { sellOrderLineId: activeLine.id },
+      `El Pedido de venta de la Línea ${activeLine.id} está eliminado`,
+      async () => setSellOrderDeletedAt(new Date()),
+    );
+    await setSellOrderDeletedAt(null);
 
-      await expect(page).toHaveURL(/\/production-order\/\d+$/);
-      await expectSingleToast(page);
-      const [newProductionOrder] = await getNewProductionOrders();
-      expect(newProductionOrder).toMatchObject({
-        partId: part.id,
-        quantity: 7,
-        sellOrderLineId: null,
-        urgent: true,
-      });
-      expect(page.url()).toMatch(new RegExp(`/production-order/${newProductionOrder.id}$`));
+    await createWhile(
+      { sellOrderLineId: activeLine.id },
+      SELL_ORDER_LINE_NOT_OF_PART_MESSAGE(activeLine.id, getPartIdOfLine(activeLine)),
+      async () => setActiveLine({ partReferenceId: otherPartReference.id }),
+    );
+    await setActiveLine({ partReferenceId: activeLine.partReferenceId });
+
+    // Opened by its URL, a line without part leaves the part to pick, but no part is the one of the line
+    const customLineMessage = SELL_ORDER_LINE_NOT_OF_PART_MESSAGE(customLine.id, otherPart.id);
+    await workflowCreateProductionOrder(page, { part: otherPart, sellOrderLineId: customLine.id }, customLineMessage);
+    expectRejectedMutation({
+      code: "BAD_REQUEST",
+      message: customLineMessage,
+      procedurePath: "productionOrder.create",
     });
 
-    await test.step("from a sell order line, with its part, its blueprints and its pending quantity", async () => {
-      const sellOrderLine = mockSellOrderLines.find(
-        (mockSellOrderLine) =>
-          mockSellOrderLine.deletedAt === null &&
-          mockSellOrderLine.pendingQuantity > 0 &&
-          getMockSellOrderById(mockSellOrderLine.sellOrderId)!.deletedAt === null &&
-          !mockProductionOrders.some(
-            (productionOrder) =>
-              productionOrder.sellOrderLineId === mockSellOrderLine.id && productionOrder.deletedAt === null,
-          ) &&
-          getPartBlueprints(getPartIdOfLine(mockSellOrderLine)).length > 0,
-      )!;
-      const buttonCreateProductionOrder = getTableRowByTestId(
-        page.getByTestId("table-sell-order-line"),
-        sellOrderLine.id,
-      ).getByTestId("button-create-production-order");
-      await page.goto(`/sell-order/${sellOrderLine.sellOrderId}`);
-      await buttonCreateProductionOrder.click();
-      await expect(page).toHaveURL(new RegExp(`/create-production-order[?]sellOrderLineId=${sellOrderLine.id}$`));
-      await assertFormLoaded(page);
-      await expect(inputQuantity).toHaveValue(String(sellOrderLine.pendingQuantity));
-      await assertBlueprintsShown(getPartIdOfLine(sellOrderLine));
-      await page.getByTestId("button-submit").click();
+    await createWhile(
+      { part: otherPart, sellOrderLineId: customLine.id },
+      `Línea de pedido de venta ${customLine.id} no encontrada`,
+      async () => {
+        await db.delete(dbTableSellOrderLine).where(eq(dbTableSellOrderLine.id, customLine.id));
+      },
+      "NOT_FOUND",
+    );
 
-      await expect(page).toHaveURL(/\/production-order\/\d+$/);
-      await expectSingleToast(page);
-      const newProductionOrders = await getNewProductionOrders();
-      expect(newProductionOrders).toHaveLength(2);
-      expect(newProductionOrders[1]).toMatchObject({
-        partId: getPartIdOfLine(sellOrderLine),
-        quantity: sellOrderLine.pendingQuantity,
-        sellOrderLineId: sellOrderLine.id,
-        urgent: false,
-      });
-
-      // The line has an Orden de producción now, so its pending quantity cannot be produced twice from it
-      await page.goto(`/sell-order/${sellOrderLine.sellOrderId}`);
-      const rowSellOrderLine = getTableRowByTestId(page.getByTestId("table-sell-order-line"), sellOrderLine.id);
-      await rowSellOrderLine.getByTestId("button-production-order").click();
-      await expect(page).toHaveURL(new RegExp(`/production-order/${newProductionOrders[1].id}$`));
-      await page.goBack();
-      await expect(rowSellOrderLine).toBeVisible();
-      await expect(buttonCreateProductionOrder).not.toBeAttached();
-    });
-
-    await test.step("by hand without a quantity, which is produced until its machines stop", async () => {
-      const part = mockParts.find((mockPart) => mockPart.deletedAt === null)!;
-      const productionOrdersBefore = await getNewProductionOrders();
-      await workflowCreateProductionOrder(page, { part, quantity: null });
-      expect((await getNewProductionOrders()).slice(productionOrdersBefore.length)).toEqual([
-        expect.objectContaining({ partId: part.id, quantity: null, sellOrderLineId: null }),
-      ]);
-    });
-
-    await test.step("the server rejects deleted parts and lines that cannot be produced", async () => {
-      // A line of an active part, so it is the line that is rejected and not its part
-      const activeLine = mockSellOrderLines.find(
-        (mockSellOrderLine) =>
-          mockSellOrderLine.deletedAt === null &&
-          isActivePart(getPartIdOfLine(mockSellOrderLine)) &&
-          getMockSellOrderById(mockSellOrderLine.sellOrderId)!.deletedAt === null,
-      )!;
-      const otherPartReference = mockPartReferences.find(
-        (partReference) => partReference.partId !== getPartIdOfLine(activeLine) && isActivePart(partReference.partId),
-      )!;
-      const otherPart = mockParts.find((part) => part.id === otherPartReference.partId)!;
-      const [customLine] = await db
-        .insert(dbTableSellOrderLine)
-        .values({
-          description: "Línea sin Artículo",
-          pendingQuantity: 1,
-          quantity: 1,
-          sellOrderId: activeLine.sellOrderId,
-        })
-        .returning();
-      const productionOrdersBefore = await getNewProductionOrders();
-      const createWhile = async (
-        { sellOrderLineId, part }: { sellOrderLineId?: number; part?: BasePart },
-        expectedErrorMessage: string,
-        meanwhile: () => Promise<void>,
-      ) =>
-        holdRequestWhile({
-          page,
-          procedurePath: "productionOrder.create",
-          send: async () => workflowCreateProductionOrder(page, { part, sellOrderLineId }, expectedErrorMessage),
-          meanwhile,
-        });
-      const setPartDeletedAt = async (deletedAt: Date | null) => {
-        await db.update(dbTablePart).set({ deletedAt }).where(eq(dbTablePart.id, otherPart.id));
-      };
-      const setActiveLine = async (values: Partial<BaseSellOrderLine>) => {
-        await db.update(dbTableSellOrderLine).set(values).where(eq(dbTableSellOrderLine.id, activeLine.id));
-      };
-      const setSellOrderDeletedAt = async (deletedAt: Date | null) => {
-        await db.update(dbTableSellOrder).set({ deletedAt }).where(eq(dbTableSellOrder.id, activeLine.sellOrderId));
-      };
-
-      await createWhile({ part: otherPart }, `El Artículo "${otherPart.description}" está eliminado`, async () =>
-        setPartDeletedAt(new Date()),
-      );
-      await setPartDeletedAt(null);
-
-      await createWhile(
-        { sellOrderLineId: activeLine.id },
-        `La Línea de pedido de venta ${activeLine.id} está eliminada`,
-        async () => setActiveLine({ deletedAt: new Date() }),
-      );
-      await setActiveLine({ deletedAt: null });
-
-      await createWhile(
-        { sellOrderLineId: activeLine.id },
-        `La Línea de pedido de venta ${activeLine.id} es una devolución`,
-        async () => setActiveLine({ pendingQuantity: -5, quantity: -5 }),
-      );
-      await setActiveLine({ pendingQuantity: activeLine.pendingQuantity, quantity: activeLine.quantity });
-
-      await createWhile(
-        { sellOrderLineId: activeLine.id },
-        `El Pedido de venta de la Línea ${activeLine.id} está eliminado`,
-        async () => setSellOrderDeletedAt(new Date()),
-      );
-      await setSellOrderDeletedAt(null);
-
-      await createWhile({ sellOrderLineId: activeLine.id }, "no es del Artículo", async () =>
-        setActiveLine({ partReferenceId: otherPartReference.id }),
-      );
-      await setActiveLine({ partReferenceId: activeLine.partReferenceId });
-
-      // Opened by its URL, a line without part leaves the part to pick, but no part is the one of the line
-      await workflowCreateProductionOrder(
-        page,
-        { part: otherPart, sellOrderLineId: customLine.id },
-        "no es del Artículo",
-      );
-
-      await createWhile(
-        { part: otherPart, sellOrderLineId: customLine.id },
-        `Línea de pedido de venta ${customLine.id} no encontrada`,
-        async () => {
-          await db.delete(dbTableSellOrderLine).where(eq(dbTableSellOrderLine.id, customLine.id));
-        },
-      );
-
-      expect(await getNewProductionOrders()).toEqual(productionOrdersBefore);
-    });
-  },
-);
+    expect(await getNewProductionOrders()).toEqual(productionOrdersBefore);
+  });
+});
 
 test("urgent production orders are tinted and their urgency can be edited", async ({ page }) => {
   const urgentProductionOrder = mockProductionOrders.find((productionOrder) => productionOrder.urgent)!;

@@ -16,7 +16,13 @@ import { getSellOrderLineById } from "@/db/functions/sell-order-line";
 import { dbTableDeliveryNote, dbTableDeliveryNoteLine, dbTableInvoice, dbTableSellOrderLine } from "@/db/schema";
 import { formatDate, formatPrice } from "@/lib/formatters";
 import { formatCents, getLineTotalInCents } from "@/lib/prices";
+import { LogMessages } from "@/logging/types";
 import { CLOSE_LABEL, STATUS_PENDING_LABEL } from "@/messages/common";
+import {
+  ACCOUNTED_DELIVERY_NOTE_MESSAGE,
+  PENDING_QUANTITY_EXCEEDED_MESSAGE,
+  SELL_ORDER_LINE_NOT_OF_CLIENT_MESSAGE,
+} from "@/messages/delivery-note";
 import { INVOICE_CREATE_TITLE } from "@/messages/invoice";
 import { SHOW_PREPARED_LINES_LABEL } from "@/messages/sell-order";
 import { SellOrderStatus } from "@/schemas/sell-order";
@@ -38,7 +44,13 @@ import {
   getTableSubrowById,
 } from "@/tests/utils/components/table";
 import { expectSingleToast } from "@/tests/utils/components/toast";
-import { TestAnnotations, inAnotherTab, setUserMode, test } from "@/tests/utils/fixtures";
+import {
+  expectRejectedMutation,
+  httpRequestFailedEvent,
+  invalidParamsEvent,
+  type TErrorCode,
+} from "@/tests/utils/errors-log";
+import { TestAnnotations, expectErrorsLog, inAnotherTab, setUserMode, test } from "@/tests/utils/fixtures";
 import {
   getMockPartByPartReferenceId,
   getMockPartReferenceById,
@@ -70,8 +82,6 @@ test.beforeEach(({ page }) => {
   tableStagedSellOrderLines = page.getByTestId("table-staged-sell-order-lines");
   buttonSubmitFormDeliveryNote = page.getByTestId("button-submit-form-delivery-note");
 });
-
-const PENDING_QUANTITY_EXCEEDED_MESSAGE = "no puede pasar de su cantidad";
 
 const activeClients = mockClients.filter((client) => client.deletedAt === null);
 const clientsWithPendingLines = mockClients.filter(
@@ -464,165 +474,169 @@ for (const client of clientsWithPendingLines) {
 
 {
   const client = clientsWithPendingLines[0];
-  test(
-    `deliver the returns of ${client.name}`,
-    { annotation: TestAnnotations.NonEmptyErrorsLogFile },
-    async ({ db, page }) => {
-      const partSellOrderLine = (await getMockPendingSellOrderLines(client.id)).find(
-        (line) => line.partReferenceId !== null,
-      )!;
-      expect(partSellOrderLine, "Wrong test set up: the client should have a pending line with part").toBeDefined();
-      const partId = getMockPartByPartReferenceId(partSellOrderLine.partReferenceId)!.id;
-      const [returnSellOrderLine, orderedSellOrderLine] = await db
-        .insert(dbTableSellOrderLine)
-        .values([
-          {
-            partPrice: "0.82",
-            partReferenceId: partSellOrderLine.partReferenceId,
-            pendingQuantity: -170,
-            quantity: -170,
-            sellOrderId: partSellOrderLine.sellOrderId,
-          },
-          {
-            partPrice: "1.5",
-            partReferenceId: partSellOrderLine.partReferenceId,
-            pendingQuantity: 40,
-            quantity: 100,
-            sellOrderId: partSellOrderLine.sellOrderId,
-          },
-        ])
-        .returning();
-      const getPendingQuantity = async (sellOrderLineId: number) =>
-        (await getSellOrderLineById(sellOrderLineId))?.pendingQuantity;
-      const getStock = async () => (await getLatestPartStockTransactionByPartId(partId))?.finalQuantity ?? 0;
-      const submitStagedQuantities = async (stagedQuantities: Array<[BaseSellOrderLine, number]>) => {
-        await workflowOpenCreateDeliveryNoteForClient(page, client);
-        for (const [sellOrderLine, quantity] of stagedQuantities) {
-          await getTableRowByTestId(tablePendingSellOrderLines, sellOrderLine.id).getByTestId("button-success").click();
-          const inputStagedQuantity = getEditableCellById(
-            getTableRowByTestId(tableStagedSellOrderLines, sellOrderLine.id),
-            "quantity",
-          );
-          await inputStagedQuantity.clear();
-          await inputStagedQuantity.pressSequentially(String(quantity));
-          await expect(inputStagedQuantity).toHaveValue(String(quantity));
-        }
-        await expect(buttonSubmitFormDeliveryNote).toBeEnabled();
-        await buttonSubmitFormDeliveryNote.click();
-      };
-      // Creates the Albarán from the staged lines with the given quantities and returns its only line
-      const createDeliveryNote = async (stagedQuantities: Array<[BaseSellOrderLine, number]>) => {
-        const previousDeliveryNoteIds = (await getDeliveryNotes()).map((deliveryNote) => deliveryNote.id);
-        await submitStagedQuantities(stagedQuantities);
-        await expectSingleToast(page);
-        const createdDeliveryNote = (await getDeliveryNotes()).find(
-          (deliveryNote) => !previousDeliveryNoteIds.includes(deliveryNote.id),
-        )!;
-        return getDeliveryNoteLinesByDeliveryNoteId(createdDeliveryNote.id);
-      };
-      const expectDeliveryNoteRejected = async (stagedQuantities: Array<[BaseSellOrderLine, number]>) => {
-        const previousDeliveryNotesCount = (await getDeliveryNotes()).length;
-        await submitStagedQuantities(stagedQuantities);
-        await expectSingleToast(page, PENDING_QUANTITY_EXCEEDED_MESSAGE);
-        expect(await getDeliveryNotes()).toHaveLength(previousDeliveryNotesCount);
-      };
-
-      await test.step("a return is pending to be delivered back, and its tags can not be printed", async () => {
-        await workflowOpenCreateDeliveryNoteForClient(page, client);
-        const pendingRow = getTableRowByTestId(tablePendingSellOrderLines, returnSellOrderLine.id);
-        await expect(pendingRow.getByTestId("pendingQuantity")).toHaveText("-170");
-
-        const stagedRow = await workflowStageSingleSellOrderLine(page, returnSellOrderLine.id);
-        await expect(getEditableCellById(stagedRow, "quantity")).toHaveValue("-170");
-        await expect(stagedRow.getByTestId("button-print-tag")).toBeDisabled();
-      });
-
-      let returnDeliveryNoteLine: BaseDeliveryNoteLine;
-      await test.step("delivering the return completes it and leaves the stock of the part as it was", async () => {
-        const previousStock = await getStock();
-        [returnDeliveryNoteLine] = await createDeliveryNote([[returnSellOrderLine, -170]]);
-        expect(returnDeliveryNoteLine).toMatchObject({ quantity: -170, sellOrderLineId: returnSellOrderLine.id });
-        expect(await getPendingQuantity(returnSellOrderLine.id)).toBe(0);
-        await expect(getTableRowByTestId(tablePendingSellOrderLines, returnSellOrderLine.id)).toHaveCount(0);
-        expect(await getStock()).toBe(previousStock);
-
-        await page.goto(`/part/${partId}?tab=history`);
-        await expect(
-          page.getByTestId("table-part-delivery-note-consumptions").getByText("Devueltos 170 artículos"),
-        ).toBeVisible();
-      });
-
-      await test.step("the return totals a negative amount, and a negative price turns it positive", async () => {
-        const dialogCreateEditDeliveryNote = await workflowOpenEditDeliveryNote(
-          page,
-          returnDeliveryNoteLine.deliveryNoteId,
+  test(`deliver the returns of ${client.name}`, async ({ db, page }) => {
+    const partSellOrderLine = (await getMockPendingSellOrderLines(client.id)).find(
+      (line) => line.partReferenceId !== null,
+    )!;
+    expect(partSellOrderLine, "Wrong test set up: the client should have a pending line with part").toBeDefined();
+    const partId = getMockPartByPartReferenceId(partSellOrderLine.partReferenceId)!.id;
+    const [returnSellOrderLine, orderedSellOrderLine] = await db
+      .insert(dbTableSellOrderLine)
+      .values([
+        {
+          partPrice: "0.82",
+          partReferenceId: partSellOrderLine.partReferenceId,
+          pendingQuantity: -170,
+          quantity: -170,
+          sellOrderId: partSellOrderLine.sellOrderId,
+        },
+        {
+          partPrice: "1.5",
+          partReferenceId: partSellOrderLine.partReferenceId,
+          pendingQuantity: 40,
+          quantity: 100,
+          sellOrderId: partSellOrderLine.sellOrderId,
+        },
+      ])
+      .returning();
+    const getPendingQuantity = async (sellOrderLineId: number) =>
+      (await getSellOrderLineById(sellOrderLineId))?.pendingQuantity;
+    const getStock = async () => (await getLatestPartStockTransactionByPartId(partId))?.finalQuantity ?? 0;
+    const submitStagedQuantities = async (stagedQuantities: Array<[BaseSellOrderLine, number]>) => {
+      await workflowOpenCreateDeliveryNoteForClient(page, client);
+      for (const [sellOrderLine, quantity] of stagedQuantities) {
+        await getTableRowByTestId(tablePendingSellOrderLines, sellOrderLine.id).getByTestId("button-success").click();
+        const inputStagedQuantity = getEditableCellById(
+          getTableRowByTestId(tableStagedSellOrderLines, sellOrderLine.id),
+          "quantity",
         );
-        const row = getTableRowByTestId(
-          dialogCreateEditDeliveryNote.getByTestId("table-delivery-note-line"),
-          returnDeliveryNoteLine.id,
-        );
-        await expect(row.getByTestId("button-print-tag")).toBeDisabled();
-        await expect(row.getByTestId("total")).toHaveText(
-          formatCents(getLineTotalInCents({ quantity: -170, unitPrice: returnSellOrderLine.partPrice })),
-        );
-
-        const inputUnitPrice = getEditableCellById(row, "unitPrice");
-        await inputUnitPrice.clear();
-        await inputUnitPrice.pressSequentially("-0.5");
-        await inputUnitPrice.blur();
-        await expectSingleToast(page);
-        expect((await getDeliveryNoteLine({ id: returnDeliveryNoteLine.id }))?.unitPrice).toBe("-0.5");
-        await expect(row.getByTestId("total")).toHaveText(formatCents(8500));
-        await expect(dialogCreateEditDeliveryNote.getByTestId("span-delivery-note-lines-total")).toContainText(
-          formatCents(8500),
-        );
-      });
-
-      await test.step("deleting the delivered return makes it pending again", async () => {
-        await workflowDeleteDeliveryNote(page, returnDeliveryNoteLine.deliveryNoteId);
-        expect(await getPendingQuantity(returnSellOrderLine.id)).toBe(-170);
-      });
-
-      await test.step("a delivery of the opposite sign can not take the pending quantity past the quantity", async () => {
-        // Nothing of the return was delivered back yet, so there is nothing to give back
-        await expectDeliveryNoteRejected([[returnSellOrderLine, 20]]);
-        expect(await getPendingQuantity(returnSellOrderLine.id)).toBe(-170);
-      });
-
-      await test.step("a return against an ordered line gives back at most what was delivered of it", async () => {
-        const previousStock = await getStock();
-        const [firstReturnLine] = await createDeliveryNote([[orderedSellOrderLine, -30]]);
-        expect(await getPendingQuantity(orderedSellOrderLine.id)).toBe(70);
-        expect(await getStock()).toBe(previousStock);
-
-        await expectDeliveryNoteRejected([[orderedSellOrderLine, -100]]);
-        expect(await getPendingQuantity(orderedSellOrderLine.id)).toBe(70);
-
-        const [secondReturnLine] = await createDeliveryNote([[orderedSellOrderLine, -30]]);
-        expect(await getPendingQuantity(orderedSellOrderLine.id)).toBe(100);
-
-        // Nothing was clamped, so deleting the Albarán takes away exactly what it gave back
-        await workflowDeleteDeliveryNote(page, secondReturnLine.deliveryNoteId);
-        expect(await getPendingQuantity(orderedSellOrderLine.id)).toBe(70);
-
-        await workflowOpenEditDeliveryNote(page, firstReturnLine.deliveryNoteId);
-        const inputQuantity = await workflowEditDeliveryNoteLineQuantity(page, firstReturnLine.id, -100);
-        await expectSingleToast(page, PENDING_QUANTITY_EXCEEDED_MESSAGE);
-        await expect(inputQuantity).toHaveValue("-30");
-        expect((await getDeliveryNoteLine({ id: firstReturnLine.id }))?.quantity).toBe(-30);
-        expect(await getPendingQuantity(orderedSellOrderLine.id)).toBe(70);
-      });
-
-      await test.step("a staged quantity of 0 is rejected", async () => {
-        await workflowOpenCreateDeliveryNoteForClient(page, client);
-        const stagedRow = await workflowStageSingleSellOrderLine(page, returnSellOrderLine.id);
-        const inputStagedQuantity = getEditableCellById(stagedRow, "quantity");
         await inputStagedQuantity.clear();
-        await inputStagedQuantity.pressSequentially("0");
-        await expect(buttonSubmitFormDeliveryNote).toBeDisabled();
+        await inputStagedQuantity.pressSequentially(String(quantity));
+        await expect(inputStagedQuantity).toHaveValue(String(quantity));
+      }
+      await expect(buttonSubmitFormDeliveryNote).toBeEnabled();
+      await buttonSubmitFormDeliveryNote.click();
+    };
+    // Creates the Albarán from the staged lines with the given quantities and returns its only line
+    const createDeliveryNote = async (stagedQuantities: Array<[BaseSellOrderLine, number]>) => {
+      const previousDeliveryNoteIds = (await getDeliveryNotes()).map((deliveryNote) => deliveryNote.id);
+      await submitStagedQuantities(stagedQuantities);
+      await expectSingleToast(page);
+      const createdDeliveryNote = (await getDeliveryNotes()).find(
+        (deliveryNote) => !previousDeliveryNoteIds.includes(deliveryNote.id),
+      )!;
+      return getDeliveryNoteLinesByDeliveryNoteId(createdDeliveryNote.id);
+    };
+    const expectDeliveryNoteRejected = async (stagedQuantities: Array<[BaseSellOrderLine, number]>) => {
+      const previousDeliveryNotesCount = (await getDeliveryNotes()).length;
+      await submitStagedQuantities(stagedQuantities);
+      const message = PENDING_QUANTITY_EXCEEDED_MESSAGE(stagedQuantities[0][0].id);
+      await expectSingleToast(page, message);
+      expectRejectedMutation({ code: "BAD_REQUEST", message, procedurePath: "deliveryNote.createWithLines" });
+      expect(await getDeliveryNotes()).toHaveLength(previousDeliveryNotesCount);
+    };
+
+    await test.step("a return is pending to be delivered back, and its tags can not be printed", async () => {
+      await workflowOpenCreateDeliveryNoteForClient(page, client);
+      const pendingRow = getTableRowByTestId(tablePendingSellOrderLines, returnSellOrderLine.id);
+      await expect(pendingRow.getByTestId("pendingQuantity")).toHaveText("-170");
+
+      const stagedRow = await workflowStageSingleSellOrderLine(page, returnSellOrderLine.id);
+      await expect(getEditableCellById(stagedRow, "quantity")).toHaveValue("-170");
+      await expect(stagedRow.getByTestId("button-print-tag")).toBeDisabled();
+    });
+
+    let returnDeliveryNoteLine: BaseDeliveryNoteLine;
+    await test.step("delivering the return completes it and leaves the stock of the part as it was", async () => {
+      const previousStock = await getStock();
+      [returnDeliveryNoteLine] = await createDeliveryNote([[returnSellOrderLine, -170]]);
+      expect(returnDeliveryNoteLine).toMatchObject({ quantity: -170, sellOrderLineId: returnSellOrderLine.id });
+      expect(await getPendingQuantity(returnSellOrderLine.id)).toBe(0);
+      await expect(getTableRowByTestId(tablePendingSellOrderLines, returnSellOrderLine.id)).toHaveCount(0);
+      expect(await getStock()).toBe(previousStock);
+
+      await page.goto(`/part/${partId}?tab=history`);
+      await expect(
+        page.getByTestId("table-part-delivery-note-consumptions").getByText("Devueltos 170 artículos"),
+      ).toBeVisible();
+    });
+
+    await test.step("the return totals a negative amount, and a negative price turns it positive", async () => {
+      const dialogCreateEditDeliveryNote = await workflowOpenEditDeliveryNote(
+        page,
+        returnDeliveryNoteLine.deliveryNoteId,
+      );
+      const row = getTableRowByTestId(
+        dialogCreateEditDeliveryNote.getByTestId("table-delivery-note-line"),
+        returnDeliveryNoteLine.id,
+      );
+      await expect(row.getByTestId("button-print-tag")).toBeDisabled();
+      await expect(row.getByTestId("total")).toHaveText(
+        formatCents(getLineTotalInCents({ quantity: -170, unitPrice: returnSellOrderLine.partPrice })),
+      );
+
+      const inputUnitPrice = getEditableCellById(row, "unitPrice");
+      await inputUnitPrice.clear();
+      await inputUnitPrice.pressSequentially("-0.5");
+      await inputUnitPrice.blur();
+      await expectSingleToast(page);
+      expect((await getDeliveryNoteLine({ id: returnDeliveryNoteLine.id }))?.unitPrice).toBe("-0.5");
+      await expect(row.getByTestId("total")).toHaveText(formatCents(8500));
+      await expect(dialogCreateEditDeliveryNote.getByTestId("span-delivery-note-lines-total")).toContainText(
+        formatCents(8500),
+      );
+    });
+
+    await test.step("deleting the delivered return makes it pending again", async () => {
+      await workflowDeleteDeliveryNote(page, returnDeliveryNoteLine.deliveryNoteId);
+      expect(await getPendingQuantity(returnSellOrderLine.id)).toBe(-170);
+    });
+
+    await test.step("a delivery of the opposite sign can not take the pending quantity past the quantity", async () => {
+      // Nothing of the return was delivered back yet, so there is nothing to give back
+      await expectDeliveryNoteRejected([[returnSellOrderLine, 20]]);
+      expect(await getPendingQuantity(returnSellOrderLine.id)).toBe(-170);
+    });
+
+    await test.step("a return against an ordered line gives back at most what was delivered of it", async () => {
+      const previousStock = await getStock();
+      const [firstReturnLine] = await createDeliveryNote([[orderedSellOrderLine, -30]]);
+      expect(await getPendingQuantity(orderedSellOrderLine.id)).toBe(70);
+      expect(await getStock()).toBe(previousStock);
+
+      await expectDeliveryNoteRejected([[orderedSellOrderLine, -100]]);
+      expect(await getPendingQuantity(orderedSellOrderLine.id)).toBe(70);
+
+      const [secondReturnLine] = await createDeliveryNote([[orderedSellOrderLine, -30]]);
+      expect(await getPendingQuantity(orderedSellOrderLine.id)).toBe(100);
+
+      // Nothing was clamped, so deleting the Albarán takes away exactly what it gave back
+      await workflowDeleteDeliveryNote(page, secondReturnLine.deliveryNoteId);
+      expect(await getPendingQuantity(orderedSellOrderLine.id)).toBe(70);
+
+      await workflowOpenEditDeliveryNote(page, firstReturnLine.deliveryNoteId);
+      const inputQuantity = await workflowEditDeliveryNoteLineQuantity(page, firstReturnLine.id, -100);
+      const exceededMessage = PENDING_QUANTITY_EXCEEDED_MESSAGE(orderedSellOrderLine.id);
+      await expectSingleToast(page, exceededMessage);
+      expectRejectedMutation({
+        code: "BAD_REQUEST",
+        message: exceededMessage,
+        procedurePath: "deliveryNoteLine.update",
       });
-    },
-  );
+      await expect(inputQuantity).toHaveValue("-30");
+      expect((await getDeliveryNoteLine({ id: firstReturnLine.id }))?.quantity).toBe(-30);
+      expect(await getPendingQuantity(orderedSellOrderLine.id)).toBe(70);
+    });
+
+    await test.step("a staged quantity of 0 is rejected", async () => {
+      await workflowOpenCreateDeliveryNoteForClient(page, client);
+      const stagedRow = await workflowStageSingleSellOrderLine(page, returnSellOrderLine.id);
+      const inputStagedQuantity = getEditableCellById(stagedRow, "quantity");
+      await inputStagedQuantity.clear();
+      await inputStagedQuantity.pressSequentially("0");
+      await expect(buttonSubmitFormDeliveryNote).toBeDisabled();
+    });
+  });
 }
 
 for (const client of clientsWithPendingLines) {
@@ -818,220 +832,238 @@ for (const client of clientsWithPendingLines) {
   });
 }
 
-test(
-  "the pending sell orders file of a wrong or missing client is not found",
-  { annotation: TestAnnotations.NonEmptyErrorsLogFile },
-  async ({ page }) => {
-    const missingClientId = Math.max(...mockClients.map((mockClient) => mockClient.id)) + 1;
-    expect((await page.goto("/api/files/pending-sell-orders/invalid"))?.status()).toBe(400);
-    expect((await page.goto(`/api/files/pending-sell-orders/${missingClientId}`))?.status()).toBe(404);
-  },
-);
+test("the pending sell orders file of a wrong or missing client is not found", async ({ page }) => {
+  const missingClientId = Math.max(...mockClients.map((mockClient) => mockClient.id)) + 1;
+  const invalidUrl = "/api/files/pending-sell-orders/invalid";
+  const missingUrl = `/api/files/pending-sell-orders/${missingClientId}`;
+  expect((await page.goto(invalidUrl))?.status()).toBe(400);
+  expect((await page.goto(missingUrl))?.status()).toBe(404);
+  expectErrorsLog(
+    invalidParamsEvent(LogMessages.invalidClientId, { clientId: "invalid" }),
+    httpRequestFailedEvent("GET", 400, invalidUrl),
+    httpRequestFailedEvent("GET", 404, missingUrl),
+  );
+});
 
 for (const client of clientsWithPendingLines) {
-  test(
-    `add the staged lines of ${client.name} to an existing delivery note`,
-    { annotation: TestAnnotations.NonEmptyErrorsLogFile },
-    async ({ db, page }) => {
-      const partLine = (await getMockPendingSellOrderLines(client.id)).find((line) => line.partReferenceId !== null)!;
-      expect(partLine, "A pending line of the Cliente with part is needed").toBeDefined();
-      const sellOrder = getMockSellOrderById(partLine.sellOrderId)!;
-      const [notInvoicedLine, notAccountedLine, accountedLine] = await db
-        .insert(dbTableSellOrderLine)
-        .values(
-          ["Portes", "Embalaje", "Montaje"].map((description) => ({
-            description,
-            partPrice: "10",
-            pendingQuantity: 2,
-            quantity: 2,
-            sellOrderId: sellOrder.id,
-          })),
-        )
-        .returning();
+  test(`add the staged lines of ${client.name} to an existing delivery note`, async ({ db, page }) => {
+    const partLine = (await getMockPendingSellOrderLines(client.id)).find((line) => line.partReferenceId !== null)!;
+    expect(partLine, "A pending line of the Cliente with part is needed").toBeDefined();
+    const sellOrder = getMockSellOrderById(partLine.sellOrderId)!;
+    const [notInvoicedLine, notAccountedLine, accountedLine] = await db
+      .insert(dbTableSellOrderLine)
+      .values(
+        ["Portes", "Embalaje", "Montaje"].map((description) => ({
+          description,
+          partPrice: "10",
+          pendingQuantity: 2,
+          quantity: 2,
+          sellOrderId: sellOrder.id,
+        })),
+      )
+      .returning();
 
-      const isInvoiceAccounted = (deliveryNote: BaseDeliveryNote) =>
-        mockInvoices.find((invoice) => invoice.id === deliveryNote.invoiceId)?.accounted === true;
-      const clientDeliveryNotes = mockDeliveryNotes
-        .filter((deliveryNote) => deliveryNote.clientId === client.id)
-        .sort((a, b) => b.id - a.id);
-      const notInvoicedDeliveryNote = clientDeliveryNotes.find((deliveryNote) => deliveryNote.invoiceId === null)!;
-      const notAccountedDeliveryNote = clientDeliveryNotes.find(
-        (deliveryNote) => deliveryNote.invoiceId !== null && !isInvoiceAccounted(deliveryNote),
-      )!;
-      const accountedDeliveryNote = clientDeliveryNotes.find(isInvoiceAccounted)!;
-      expect(
-        [notInvoicedDeliveryNote, notAccountedDeliveryNote, accountedDeliveryNote].every(Boolean),
-        "The Cliente needs an Albarán without Factura, one of a Factura not accounted and one of an accounted Factura",
-      ).toBe(true);
-      const otherClientDeliveryNote = mockDeliveryNotes.find((deliveryNote) => deliveryNote.clientId !== client.id)!;
+    const isInvoiceAccounted = (deliveryNote: BaseDeliveryNote) =>
+      mockInvoices.find((invoice) => invoice.id === deliveryNote.invoiceId)?.accounted === true;
+    const clientDeliveryNotes = mockDeliveryNotes
+      .filter((deliveryNote) => deliveryNote.clientId === client.id)
+      .sort((a, b) => b.id - a.id);
+    const notInvoicedDeliveryNote = clientDeliveryNotes.find((deliveryNote) => deliveryNote.invoiceId === null)!;
+    const notAccountedDeliveryNote = clientDeliveryNotes.find(
+      (deliveryNote) => deliveryNote.invoiceId !== null && !isInvoiceAccounted(deliveryNote),
+    )!;
+    const accountedDeliveryNote = clientDeliveryNotes.find(isInvoiceAccounted)!;
+    expect(
+      [notInvoicedDeliveryNote, notAccountedDeliveryNote, accountedDeliveryNote].every(Boolean),
+      "The Cliente needs an Albarán without Factura, one of a Factura not accounted and one of an accounted Factura",
+    ).toBe(true);
+    const otherClientDeliveryNote = mockDeliveryNotes.find((deliveryNote) => deliveryNote.clientId !== client.id)!;
 
-      const dialog = page.getByTestId("dialog-add-lines-to-existing-delivery-note-content");
-      const comboboxDeliveryNote = dialog.getByTestId("combobox-delivery-note");
-      const buttonSubmit = dialog.getByTestId("button-submit-add-lines-to-existing-delivery-note");
+    const dialog = page.getByTestId("dialog-add-lines-to-existing-delivery-note-content");
+    const comboboxDeliveryNote = dialog.getByTestId("combobox-delivery-note");
+    const buttonSubmit = dialog.getByTestId("button-submit-add-lines-to-existing-delivery-note");
 
-      const buttonAddLinesToExistingDeliveryNote = page.getByTestId("button-add-lines-to-existing-delivery-note");
+    const buttonAddLinesToExistingDeliveryNote = page.getByTestId("button-add-lines-to-existing-delivery-note");
 
-      async function stageSellOrderLines(sellOrderLines: Array<BaseSellOrderLine>) {
-        for (const sellOrderLine of sellOrderLines) {
-          await getTableRowByTestId(tablePendingSellOrderLines, sellOrderLine.id).getByTestId("button-success").click();
-        }
-        await assertTableRowCount(tableStagedSellOrderLines, sellOrderLines.length);
+    async function stageSellOrderLines(sellOrderLines: Array<BaseSellOrderLine>) {
+      for (const sellOrderLine of sellOrderLines) {
+        await getTableRowByTestId(tablePendingSellOrderLines, sellOrderLine.id).getByTestId("button-success").click();
       }
+      await assertTableRowCount(tableStagedSellOrderLines, sellOrderLines.length);
+    }
 
-      async function appendStagedLines(
-        sellOrderLines: Array<BaseSellOrderLine>,
+    async function appendStagedLines(
+      sellOrderLines: Array<BaseSellOrderLine>,
+      deliveryNoteId: number,
+      selectableDeliveryNotes: Array<BaseDeliveryNote>,
+    ) {
+      const previousLinesCount = (await getDeliveryNoteLinesByDeliveryNoteId(deliveryNoteId)).length;
+      await workflowOpenCreateDeliveryNoteForClient(page, client);
+      await stageSellOrderLines(sellOrderLines);
+
+      await buttonAddLinesToExistingDeliveryNote.click();
+      await expect(dialog).toBeVisible();
+      await expect(buttonSubmit).toBeDisabled();
+
+      await openCombobox(comboboxDeliveryNote);
+      await expect(page.getByTestId("combobox-list").getByRole("option")).toHaveText(
+        selectableDeliveryNotes.map((deliveryNote) => new RegExp(`^Albarán ${deliveryNote.id} `)),
+      );
+      await clickInComboboxOption(page, `Albarán ${deliveryNoteId} `);
+      await assertComboboxValue(comboboxDeliveryNote, String(deliveryNoteId));
+
+      await buttonSubmit.click();
+      await expectSingleToast(page);
+
+      await expect(dialog).not.toBeVisible();
+      await expect(getDivDisabledMessage(tableStagedSellOrderLines)).toBeVisible();
+
+      const deliveryNoteLines = await getDeliveryNoteLinesByDeliveryNoteId(deliveryNoteId);
+      expect(deliveryNoteLines).toHaveLength(previousLinesCount + sellOrderLines.length);
+      for (const sellOrderLine of sellOrderLines) {
+        await expect(getTableRowByTestId(tablePendingSellOrderLines, sellOrderLine.id)).toHaveCount(0);
+        const partReference = getMockPartReferenceById(sellOrderLine.partReferenceId);
+        expect(deliveryNoteLines).toContainEqual(
+          expect.objectContaining({
+            description: partReference === undefined ? sellOrderLine.description : partReference.clientDescription,
+            partReferenceId: sellOrderLine.partReferenceId,
+            quantity: sellOrderLine.pendingQuantity,
+            sellOrderLineId: sellOrderLine.id,
+          }),
+        );
+        expect((await getSellOrderLineById(sellOrderLine.id))?.pendingQuantity).toBe(0);
+      }
+    }
+
+    await test.step("cancelling the dialog leaves the delivery note to create untouched", async () => {
+      await setUserMode(page, UserMode.User);
+      await workflowOpenCreateDeliveryNoteForClient(page, client);
+      await stageSellOrderLines([notInvoicedLine]);
+
+      await buttonAddLinesToExistingDeliveryNote.click();
+      await openCombobox(comboboxDeliveryNote);
+      await clickInComboboxOption(page, `Albarán ${notInvoicedDeliveryNote.id} `);
+      await expect(buttonSubmit).toBeEnabled();
+      // Clearing the selection invalidates the form while adding to an existing Albarán, not while creating one
+      await getClearComboboxButton(comboboxDeliveryNote).click();
+      await expect(buttonSubmit).toBeDisabled();
+      await openCombobox(comboboxDeliveryNote);
+      await clickInComboboxOption(page, `Albarán ${notInvoicedDeliveryNote.id} `);
+      await dialog.getByTestId("button-close").click();
+      await expect(dialog).not.toBeVisible();
+      await expect(buttonSubmitFormDeliveryNote).toBeEnabled();
+
+      // The previous selection is not kept, so it cannot be submitted without being seen
+      await buttonAddLinesToExistingDeliveryNote.click();
+      await assertComboboxValue(comboboxDeliveryNote, null);
+      await expect(buttonSubmit).toBeDisabled();
+      await dialog.getByTestId("button-close").click();
+      await expect(buttonSubmitFormDeliveryNote).toBeEnabled();
+
+      expect(await getDeliveryNoteLinesByDeliveryNoteId(notInvoicedDeliveryNote.id)).not.toContainEqual(
+        expect.objectContaining({ sellOrderLineId: notInvoicedLine.id }),
+      );
+    });
+
+    await test.step("a user adds several lines, with and without part, to a delivery note without invoice", async () => {
+      const partId = getMockPartByPartReferenceId(partLine.partReferenceId)!.id;
+      const existingPartStocks = await getLatestPartStockTransactionsByIds([partId]);
+
+      await appendStagedLines(
+        [partLine, notInvoicedLine],
+        notInvoicedDeliveryNote.id,
+        clientDeliveryNotes.filter((deliveryNote) => !isInvoiceAccounted(deliveryNote)),
+      );
+
+      assertPartStockConsumption({
+        existingPartStocks,
+        finalPartStocks: await getLatestPartStockTransactionsByIds([partId]),
+        stagedPartQuantities: new Map([[partId, partLine.pendingQuantity]]),
+      });
+    });
+
+    await test.step("a user adds lines to a delivery note of a sent invoice, which has to be sent again", async () => {
+      const invoiceId = notAccountedDeliveryNote.invoiceId!;
+      await db.update(dbTableInvoice).set({ sent: true }).where(eq(dbTableInvoice.id, invoiceId));
+
+      await appendStagedLines(
+        [notAccountedLine],
+        notAccountedDeliveryNote.id,
+        clientDeliveryNotes.filter((deliveryNote) => !isInvoiceAccounted(deliveryNote)),
+      );
+      expect(await getInvoiceById(invoiceId)).toMatchObject({ accounted: false, sent: false });
+    });
+
+    await test.step("lines cannot be added to an accounted invoice by a user, to another client or to nothing", async () => {
+      const accountedLinesCount = (await getDeliveryNoteLinesByDeliveryNoteId(accountedDeliveryNote.id)).length;
+      const appendWhile = async (
         deliveryNoteId: number,
-        selectableDeliveryNotes: Array<BaseDeliveryNote>,
-      ) {
-        const previousLinesCount = (await getDeliveryNoteLinesByDeliveryNoteId(deliveryNoteId)).length;
+        expectedErrorMessage: string,
+        code: TErrorCode,
+        meanwhile: () => Promise<void>,
+      ) => {
         await workflowOpenCreateDeliveryNoteForClient(page, client);
-        await stageSellOrderLines(sellOrderLines);
-
-        await buttonAddLinesToExistingDeliveryNote.click();
-        await expect(dialog).toBeVisible();
-        await expect(buttonSubmit).toBeDisabled();
-
-        await openCombobox(comboboxDeliveryNote);
-        await expect(page.getByTestId("combobox-list").getByRole("option")).toHaveText(
-          selectableDeliveryNotes.map((deliveryNote) => new RegExp(`^Albarán ${deliveryNote.id} `)),
-        );
-        await clickInComboboxOption(page, `Albarán ${deliveryNoteId} `);
-        await assertComboboxValue(comboboxDeliveryNote, String(deliveryNoteId));
-
-        await buttonSubmit.click();
-        await expectSingleToast(page);
-
-        await expect(dialog).not.toBeVisible();
-        await expect(getDivDisabledMessage(tableStagedSellOrderLines)).toBeVisible();
-
-        const deliveryNoteLines = await getDeliveryNoteLinesByDeliveryNoteId(deliveryNoteId);
-        expect(deliveryNoteLines).toHaveLength(previousLinesCount + sellOrderLines.length);
-        for (const sellOrderLine of sellOrderLines) {
-          await expect(getTableRowByTestId(tablePendingSellOrderLines, sellOrderLine.id)).toHaveCount(0);
-          const partReference = getMockPartReferenceById(sellOrderLine.partReferenceId);
-          expect(deliveryNoteLines).toContainEqual(
-            expect.objectContaining({
-              description: partReference === undefined ? sellOrderLine.description : partReference.clientDescription,
-              partReferenceId: sellOrderLine.partReferenceId,
-              quantity: sellOrderLine.pendingQuantity,
-              sellOrderLineId: sellOrderLine.id,
-            }),
-          );
-          expect((await getSellOrderLineById(sellOrderLine.id))?.pendingQuantity).toBe(0);
-        }
-      }
-
-      await test.step("cancelling the dialog leaves the delivery note to create untouched", async () => {
-        await setUserMode(page, UserMode.User);
-        await workflowOpenCreateDeliveryNoteForClient(page, client);
-        await stageSellOrderLines([notInvoicedLine]);
-
-        await buttonAddLinesToExistingDeliveryNote.click();
-        await openCombobox(comboboxDeliveryNote);
-        await clickInComboboxOption(page, `Albarán ${notInvoicedDeliveryNote.id} `);
-        await expect(buttonSubmit).toBeEnabled();
-        // Clearing the selection invalidates the form while adding to an existing Albarán, not while creating one
-        await getClearComboboxButton(comboboxDeliveryNote).click();
-        await expect(buttonSubmit).toBeDisabled();
-        await openCombobox(comboboxDeliveryNote);
-        await clickInComboboxOption(page, `Albarán ${notInvoicedDeliveryNote.id} `);
-        await dialog.getByTestId("button-close").click();
-        await expect(dialog).not.toBeVisible();
-        await expect(buttonSubmitFormDeliveryNote).toBeEnabled();
-
-        // The previous selection is not kept, so it cannot be submitted without being seen
-        await buttonAddLinesToExistingDeliveryNote.click();
-        await assertComboboxValue(comboboxDeliveryNote, null);
-        await expect(buttonSubmit).toBeDisabled();
-        await dialog.getByTestId("button-close").click();
-        await expect(buttonSubmitFormDeliveryNote).toBeEnabled();
-
-        expect(await getDeliveryNoteLinesByDeliveryNoteId(notInvoicedDeliveryNote.id)).not.toContainEqual(
-          expect.objectContaining({ sellOrderLineId: notInvoicedLine.id }),
-        );
-      });
-
-      await test.step("a user adds several lines, with and without part, to a delivery note without invoice", async () => {
-        const partId = getMockPartByPartReferenceId(partLine.partReferenceId)!.id;
-        const existingPartStocks = await getLatestPartStockTransactionsByIds([partId]);
-
-        await appendStagedLines(
-          [partLine, notInvoicedLine],
-          notInvoicedDeliveryNote.id,
-          clientDeliveryNotes.filter((deliveryNote) => !isInvoiceAccounted(deliveryNote)),
-        );
-
-        assertPartStockConsumption({
-          existingPartStocks,
-          finalPartStocks: await getLatestPartStockTransactionsByIds([partId]),
-          stagedPartQuantities: new Map([[partId, partLine.pendingQuantity]]),
+        await stageSellOrderLines([accountedLine]);
+        await holdRequestWhile({
+          page,
+          procedurePath: "deliveryNote.appendLines",
+          send: async () => workflowAppendStagedLinesToDeliveryNote(page, deliveryNoteId, expectedErrorMessage),
+          meanwhile,
         });
-      });
+        // The session is the one of a user from the first rejection on
+        expectRejectedMutation({
+          code,
+          message: expectedErrorMessage,
+          procedurePath: "deliveryNote.appendLines",
+          userConfig: { userMode: UserMode.User },
+        });
+      };
+      const setDeliveryNoteClient = async (clientId: number) => {
+        await db
+          .update(dbTableDeliveryNote)
+          .set({ clientId })
+          .where(eq(dbTableDeliveryNote.id, notInvoicedDeliveryNote.id));
+      };
 
-      await test.step("a user adds lines to a delivery note of a sent invoice, which has to be sent again", async () => {
-        const invoiceId = notAccountedDeliveryNote.invoiceId!;
-        await db.update(dbTableInvoice).set({ sent: true }).where(eq(dbTableInvoice.id, invoiceId));
+      // Only the Administrador is offered the delivery notes of accounted invoices
+      await setUserMode(page, UserMode.Admin);
+      await appendWhile(
+        accountedDeliveryNote.id,
+        ACCOUNTED_DELIVERY_NOTE_MESSAGE(accountedDeliveryNote.id),
+        "FORBIDDEN",
+        async () => setUserMode(page, UserMode.User),
+      );
 
-        await appendStagedLines(
-          [notAccountedLine],
-          notAccountedDeliveryNote.id,
-          clientDeliveryNotes.filter((deliveryNote) => !isInvoiceAccounted(deliveryNote)),
-        );
-        expect(await getInvoiceById(invoiceId)).toMatchObject({ accounted: false, sent: false });
-      });
+      await appendWhile(
+        notInvoicedDeliveryNote.id,
+        SELL_ORDER_LINE_NOT_OF_CLIENT_MESSAGE(accountedLine.id),
+        "BAD_REQUEST",
+        async () => setDeliveryNoteClient(otherClientDeliveryNote.clientId),
+      );
+      await setDeliveryNoteClient(client.id);
 
-      await test.step("lines cannot be added to an accounted invoice by a user, to another client or to nothing", async () => {
-        const accountedLinesCount = (await getDeliveryNoteLinesByDeliveryNoteId(accountedDeliveryNote.id)).length;
-        const appendWhile = async (
-          deliveryNoteId: number,
-          expectedErrorMessage: string,
-          meanwhile: () => Promise<void>,
-        ) => {
-          await workflowOpenCreateDeliveryNoteForClient(page, client);
-          await stageSellOrderLines([accountedLine]);
-          await holdRequestWhile({
-            page,
-            procedurePath: "deliveryNote.appendLines",
-            send: async () => workflowAppendStagedLinesToDeliveryNote(page, deliveryNoteId, expectedErrorMessage),
-            meanwhile,
-          });
-        };
-        const setDeliveryNoteClient = async (clientId: number) => {
-          await db
-            .update(dbTableDeliveryNote)
-            .set({ clientId })
-            .where(eq(dbTableDeliveryNote.id, notInvoicedDeliveryNote.id));
-        };
-
-        // Only the Administrador is offered the delivery notes of accounted invoices
-        await setUserMode(page, UserMode.Admin);
-        await appendWhile(accountedDeliveryNote.id, "pertenece a una Factura contabilizada", async () =>
-          setUserMode(page, UserMode.User),
-        );
-
-        await appendWhile(notInvoicedDeliveryNote.id, "no es del Cliente del Albarán", async () =>
-          setDeliveryNoteClient(otherClientDeliveryNote.clientId),
-        );
-        await setDeliveryNoteClient(client.id);
-
-        const [newDeliveryNote] = await db
-          .insert(dbTableDeliveryNote)
-          .values({ clientId: client.id, createdAt: new Date() })
-          .returning();
-        await appendWhile(newDeliveryNote.id, `Albarán con ID ${newDeliveryNote.id} no encontrado`, async () => {
+      const [newDeliveryNote] = await db
+        .insert(dbTableDeliveryNote)
+        .values({ clientId: client.id, createdAt: new Date() })
+        .returning();
+      await appendWhile(
+        newDeliveryNote.id,
+        `Albarán con ID ${newDeliveryNote.id} no encontrado`,
+        "NOT_FOUND",
+        async () => {
           await db.delete(dbTableDeliveryNote).where(eq(dbTableDeliveryNote.id, newDeliveryNote.id));
-        });
+        },
+      );
 
-        expect(await getDeliveryNoteLinesByDeliveryNoteId(accountedDeliveryNote.id)).toHaveLength(accountedLinesCount);
-        expect((await getSellOrderLineById(accountedLine.id))?.pendingQuantity).toBe(accountedLine.pendingQuantity);
-        expect(await getInvoiceById(accountedDeliveryNote.invoiceId!)).toMatchObject({ accounted: true, sent: true });
-      });
+      expect(await getDeliveryNoteLinesByDeliveryNoteId(accountedDeliveryNote.id)).toHaveLength(accountedLinesCount);
+      expect((await getSellOrderLineById(accountedLine.id))?.pendingQuantity).toBe(accountedLine.pendingQuantity);
+      expect(await getInvoiceById(accountedDeliveryNote.invoiceId!)).toMatchObject({ accounted: true, sent: true });
+    });
 
-      await test.step("an admin adds lines to an accounted invoice, which has to be accounted and sent again", async () => {
-        await setUserMode(page, UserMode.Admin);
-        await appendStagedLines([accountedLine], accountedDeliveryNote.id, clientDeliveryNotes);
-        expect(await getInvoiceById(accountedDeliveryNote.invoiceId!)).toMatchObject({ accounted: false, sent: false });
-      });
-    },
-  );
+    await test.step("an admin adds lines to an accounted invoice, which has to be accounted and sent again", async () => {
+      await setUserMode(page, UserMode.Admin);
+      await appendStagedLines([accountedLine], accountedDeliveryNote.id, clientDeliveryNotes);
+      expect(await getInvoiceById(accountedDeliveryNote.invoiceId!)).toMatchObject({ accounted: false, sent: false });
+    });
+  });
 }

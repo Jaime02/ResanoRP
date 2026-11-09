@@ -1,9 +1,9 @@
 import { z } from "zod";
 
-import clientLog from "@/logging/clientLog";
-import { LoggerLevels } from "@/logging/types";
+import log from "@/logging/log";
+import { LogMessages, LoggerLevels } from "@/logging/types";
 
-// Kept apart from the app context: clientLog reads the stored state back, and the context pulls in
+// Kept apart from the app context: log reads its cookie name, and the context pulls in
 // every Electric collection, so leaving the class there made anything that logs - server side code
 // included - open the whole client data layer.
 export enum UserMode {
@@ -56,12 +56,10 @@ export class AppContextStorage {
       parseError = error;
     }
 
-    // Cache before logging: clientLog reads the storage back, so an uncached failure
-    // path would recurse into parse() indefinitely.
     this.cachedSnapshot = new AppContextStorage(parsed?.userMode, parsed?.userModeMachineId);
 
     if (parsed === undefined) {
-      void clientLog(LoggerLevels.error, "Failed to parse AppContextStorage from its cookie", {
+      void log(LoggerLevels.error, LogMessages.appContextStorageParseFailed, {
         cookieContent: raw,
         error: parseError,
       });

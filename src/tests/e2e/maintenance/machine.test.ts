@@ -33,7 +33,8 @@ import {
   getTableRows,
 } from "@/tests/utils/components/table";
 import { expectSingleToast } from "@/tests/utils/components/toast";
-import { TestAnnotations, test } from "@/tests/utils/fixtures";
+import { uniqueNameViolation } from "@/tests/utils/errors-log";
+import { test } from "@/tests/utils/fixtures";
 import {
   EditButtonVisibility,
   workflowDeletedFilterAndRestore,
@@ -66,7 +67,7 @@ test.beforeEach(({ page }) => {
   tableMachineProductionHistory = page.getByTestId("table-machine-production-history");
 });
 
-test("manage the machines", { annotation: TestAnnotations.NonEmptyErrorsLogFile }, async ({ page, db }) => {
+test("manage the machines", async ({ page, db }) => {
   const newMachineName = "ID-4 Fresadora";
   const openCreateMachine = async () => {
     await page.getByRole("button", { name: MACHINE_CREATE_TITLE }).click();
@@ -177,6 +178,7 @@ test("manage the machines", { annotation: TestAnnotations.NonEmptyErrorsLogFile 
       },
       insertDuplicate: async (name) => db.insert(dbTableMachine).values({ name }),
       constraintName: MACHINE_NAME_CONSTRAINT,
+      table: dbTableMachine,
       errorMessage: NAME_TAKEN_MESSAGE,
     });
 
@@ -188,6 +190,8 @@ test("manage the machines", { annotation: TestAnnotations.NonEmptyErrorsLogFile 
         await page.goto(`/machine/${machine.id}`);
       },
       getName: async (id) => (await getMachineById(id))?.name,
+      table: dbTableMachine,
+      constraintName: MACHINE_NAME_CONSTRAINT,
       errorMessage: NAME_TAKEN_MESSAGE,
     });
 
@@ -492,17 +496,14 @@ test("list the deleted machines only when asked for and restore them from the ta
   });
 });
 
-test(
-  "a deleted machine cannot be restored from the table while another one has its name",
-  { annotation: TestAnnotations.NonEmptyErrorsLogFile },
-  async ({ page, db }) => {
-    const machine = activeMachines[0];
-    await workflowRestoreTaken({
-      ...DELETED_MACHINE_FILTER_PARAMS,
-      page,
-      id: machine.id,
-      insertDuplicate: async () => db.insert(dbTableMachine).values({ name: machine.name }),
-      errorMessage: NAME_TAKEN_MESSAGE,
-    });
-  },
-);
+test("a deleted machine cannot be restored from the table while another one has its name", async ({ page, db }) => {
+  const machine = activeMachines[0];
+  await workflowRestoreTaken({
+    ...DELETED_MACHINE_FILTER_PARAMS,
+    page,
+    id: machine.id,
+    insertDuplicate: async () => db.insert(dbTableMachine).values({ name: machine.name }),
+    uniqueViolation: uniqueNameViolation(MACHINE_NAME_CONSTRAINT, dbTableMachine, machine.name),
+    errorMessage: NAME_TAKEN_MESSAGE,
+  });
+});

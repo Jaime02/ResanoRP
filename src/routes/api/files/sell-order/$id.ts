@@ -8,6 +8,8 @@ import { getSellOrderPath } from "@/files/sell-order";
 import { ADMIN_SESSION_COOKIE_NAME, isAdminSession } from "@/lib/admin-session";
 import { textResponse } from "@/lib/responses";
 import logger from "@/logging/logger";
+import { LogMessages } from "@/logging/types";
+import { ADMIN_ONLY_MESSAGE } from "@/messages/common";
 import { coercedIdObjectSchema } from "@/schemas";
 
 export const Route = createFileRoute("/api/files/sell-order/$id")({
@@ -15,26 +17,26 @@ export const Route = createFileRoute("/api/files/sell-order/$id")({
     handlers: {
       GET: async ({ params }: { params: { id: string } }) => {
         if (!isAdminSession(getCookie(ADMIN_SESSION_COOKIE_NAME))) {
-          return textResponse("Esta acción solo la puede hacer el Administrador", 403);
+          return textResponse(ADMIN_ONLY_MESSAGE, 403);
         }
 
         let id: number;
         try {
           ({ id } = coercedIdObjectSchema.parse(params));
         } catch {
-          logger.error("Invalid ID received", { params });
+          logger.error(LogMessages.invalidId, { params });
           return textResponse("Invalid ID received", 400);
         }
 
         const sellOrder = await getSellOrderById(id);
         if (!sellOrder) {
-          logger.error("Sell Order not found", { id });
-          return textResponse("Sell Order not found", 404);
+          logger.error(LogMessages.sellOrderNotFound, { id });
+          return textResponse(LogMessages.sellOrderNotFound, 404);
         }
         const sellOrderPath = await getSellOrderPath({ clientId: sellOrder.clientId, sellOrderId: sellOrder.id });
         if (sellOrderPath === null) {
-          logger.error("Sell Order path not found", { sellOrder });
-          return textResponse("Sell Order path not found", 500);
+          logger.error(LogMessages.sellOrderPathNotFound, { sellOrder });
+          return textResponse(LogMessages.sellOrderPathNotFound, 500);
         }
 
         try {
@@ -49,7 +51,7 @@ export const Route = createFileRoute("/api/files/sell-order/$id")({
             status: 200,
           });
         } catch (error) {
-          logger.error("Error reading file", error);
+          logger.error(LogMessages.fileReadFailed, error);
           return textResponse("Failed to read file", 500);
         }
       },

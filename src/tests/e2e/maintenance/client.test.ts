@@ -18,6 +18,8 @@ import {
   DEFAULT_PAYMENT_METHOD_LABEL,
   PHONE_LABEL,
   PRISMA_ACCOUNTING_ACCOUNT_LABEL,
+  CLIENT_INVOICE_EMAIL_DELETED_CLIENT_MESSAGE,
+  CLIENT_INVOICE_EMAIL_TAKEN_MESSAGE,
 } from "@/messages/client";
 import {
   STATUS_DELETED_LABEL,
@@ -64,6 +66,12 @@ import {
 } from "@/tests/utils/components/table";
 import { expectSingleToast } from "@/tests/utils/components/toast";
 import { expectUniqueViolation } from "@/tests/utils/db";
+import {
+  expectRejectedMutation,
+  expectUniqueViolationRejected,
+  uniqueColumnsViolation,
+  uniqueNameViolation,
+} from "@/tests/utils/errors-log";
 import { TestAnnotations, inAnotherTab, test } from "@/tests/utils/fixtures";
 import { getMockPartReferenceById, getMockSellOrderLines } from "@/tests/utils/mock-data-utils";
 import { holdRequestWhile } from "@/tests/utils/trpc";
@@ -165,282 +173,283 @@ test("set and remove the default delivery method of every client", async ({ page
   }
 });
 
-test(
-  "manage the clients",
-  { annotation: [TestAnnotations.ResetSellOrders, TestAnnotations.NonEmptyErrorsLogFile] },
-  async ({ page, db }) => {
-    const newClient = {
-      address: "Test Address",
-      city: "Test City",
-      legalName: "New Test Client - Full legal name",
-      name: "New Test Client",
-      phone: "555123456",
-      postalCode: "31000",
-      taxId: "X12345678",
-    };
+test("manage the clients", { annotation: TestAnnotations.ResetSellOrders }, async ({ page, db }) => {
+  const newClient = {
+    address: "Test Address",
+    city: "Test City",
+    legalName: "New Test Client - Full legal name",
+    name: "New Test Client",
+    phone: "555123456",
+    postalCode: "31000",
+    taxId: "X12345678",
+  };
 
-    await test.step("render the client form at /client/$id", async () => {
-      for (const client of mockClients) {
-        await page.goto(`/client/${client.id}`);
-        await workflowAssertClientFormData(formClient, client);
+  await test.step("render the client form at /client/$id", async () => {
+    for (const client of mockClients) {
+      await page.goto(`/client/${client.id}`);
+      await workflowAssertClientFormData(formClient, client);
+    }
+  });
+
+  await test.step("render the clients table at /maintenance", async () => {
+    await page.goto("/maintenance");
+
+    for (const client of activeClients) {
+      await expect(getClientRows(client.name)).toHaveCount(1);
+      for (const email of mockClientInvoiceEmails.filter((clientEmail) => clientEmail.clientId === client.id)) {
+        await expect(getClientRows(client.name).getByText(email.email, { exact: true })).toBeVisible();
       }
-    });
+    }
+  });
 
-    await test.step("render the clients table at /maintenance", async () => {
+  await test.step("filter clients by name", async () => {
+    await page.goto("/maintenance");
+    const inputFilterName = tableMaintenanceClient.getByTestId("input-filter-name");
+
+    for (const client of activeClients) {
+      await inputFilterName.fill(client.name);
+
+      for (const otherClient of activeClients) {
+        await expect(getClientRows(otherClient.name)).toHaveCount(
+          otherClient.name.toLowerCase().includes(client.name.toLowerCase()) ? 1 : 0,
+        );
+      }
+    }
+
+    await inputFilterName.fill(`${activeClients[0].name}x`);
+    await expect(getTableNoDataRow(tableMaintenanceClient)).toBeVisible();
+  });
+
+  await test.step("go back to the clients table from the client route", async () => {
+    for (const client of activeClients) {
+      await page.goto(`/client/${client.id}`);
+
+      await assertFormLoaded(formClient);
+      await formClient.getByRole("button", { name: VIEW_CLIENTS_LABEL }).click();
+
+      await expect(page).toHaveURL("/maintenance?tab=client");
+      await expect(getClientRows(client.name)).toHaveCount(1);
+    }
+  });
+
+  await test.step("change and remove the default payment method of every client", async () => {
+    const comboboxPaymentMethod = getFormInputByLabel(
+      formClient,
+      DEFAULT_PAYMENT_METHOD_LABEL,
+      InputElementType.Combobox,
+    );
+
+    for (const client of activeClients) {
+      expect((await getClientById(client.id))?.defaultPaymentMethodId).toBe(client.defaultPaymentMethodId);
       await page.goto("/maintenance");
+      await (await findTableRowByText(tableMaintenanceClient, client.name)).getByTestId("button-edit").click();
 
-      for (const client of activeClients) {
-        await expect(getClientRows(client.name)).toHaveCount(1);
-        for (const email of mockClientInvoiceEmails.filter((clientEmail) => clientEmail.clientId === client.id)) {
-          await expect(getClientRows(client.name).getByText(email.email, { exact: true })).toBeVisible();
-        }
-      }
-    });
-
-    await test.step("filter clients by name", async () => {
-      await page.goto("/maintenance");
-      const inputFilterName = tableMaintenanceClient.getByTestId("input-filter-name");
-
-      for (const client of activeClients) {
-        await inputFilterName.fill(client.name);
-
-        for (const otherClient of activeClients) {
-          await expect(getClientRows(otherClient.name)).toHaveCount(
-            otherClient.name.toLowerCase().includes(client.name.toLowerCase()) ? 1 : 0,
-          );
-        }
-      }
-
-      await inputFilterName.fill(`${activeClients[0].name}x`);
-      await expect(getTableNoDataRow(tableMaintenanceClient)).toBeVisible();
-    });
-
-    await test.step("go back to the clients table from the client route", async () => {
-      for (const client of activeClients) {
-        await page.goto(`/client/${client.id}`);
-
-        await assertFormLoaded(formClient);
-        await formClient.getByRole("button", { name: VIEW_CLIENTS_LABEL }).click();
-
-        await expect(page).toHaveURL("/maintenance?tab=client");
-        await expect(getClientRows(client.name)).toHaveCount(1);
-      }
-    });
-
-    await test.step("change and remove the default payment method of every client", async () => {
-      const comboboxPaymentMethod = getFormInputByLabel(
-        formClient,
-        DEFAULT_PAYMENT_METHOD_LABEL,
-        InputElementType.Combobox,
+      await expect(page).toHaveURL(`/client/${client.id}`);
+      await assertFormLoaded(formClient);
+      await assertComboboxValue(
+        comboboxPaymentMethod,
+        client.defaultPaymentMethodId === null ? null : String(client.defaultPaymentMethodId),
       );
 
-      for (const client of activeClients) {
-        expect((await getClientById(client.id))?.defaultPaymentMethodId).toBe(client.defaultPaymentMethodId);
-        await page.goto("/maintenance");
-        await (await findTableRowByText(tableMaintenanceClient, client.name)).getByTestId("button-edit").click();
-
-        await expect(page).toHaveURL(`/client/${client.id}`);
-        await assertFormLoaded(formClient);
-        await assertComboboxValue(
-          comboboxPaymentMethod,
-          client.defaultPaymentMethodId === null ? null : String(client.defaultPaymentMethodId),
-        );
-
-        for (const paymentMethod of activePaymentMethods) {
-          await openCombobox(comboboxPaymentMethod);
-          await assertComboboxOptionsCount(page, activePaymentMethods.length);
-          await fillComboboxFilter(page, paymentMethod.name);
-          await assertComboboxOptionsCount(page, 1);
-          await clickInComboboxOption(page, paymentMethod.name);
-          await expect(getClearComboboxButton(comboboxPaymentMethod)).toBeVisible();
-
-          await formClient.getByTestId("button-submit").click();
-
-          await expectSingleToast(page);
-          expect((await getClientById(client.id))?.defaultPaymentMethodId).toBe(paymentMethod.id);
-
-          await page.reload();
-          await assertFormLoaded(formClient);
-          await expect(comboboxPaymentMethod).toHaveText(paymentMethod.name);
-        }
-
-        // Clearing the combobox removes the default payment method
-        const buttonClearCombobox = getClearComboboxButton(comboboxPaymentMethod);
-        await buttonClearCombobox.click();
-        await expect(buttonClearCombobox).not.toBeVisible();
+      for (const paymentMethod of activePaymentMethods) {
+        await openCombobox(comboboxPaymentMethod);
+        await assertComboboxOptionsCount(page, activePaymentMethods.length);
+        await fillComboboxFilter(page, paymentMethod.name);
+        await assertComboboxOptionsCount(page, 1);
+        await clickInComboboxOption(page, paymentMethod.name);
+        await expect(getClearComboboxButton(comboboxPaymentMethod)).toBeVisible();
 
         await formClient.getByTestId("button-submit").click();
 
         await expectSingleToast(page);
+        expect((await getClientById(client.id))?.defaultPaymentMethodId).toBe(paymentMethod.id);
 
         await page.reload();
         await assertFormLoaded(formClient);
-        await assertComboboxValue(comboboxPaymentMethod, null);
-        expect((await getClientById(client.id))?.defaultPaymentMethodId).toBeNull();
+        await expect(comboboxPaymentMethod).toHaveText(paymentMethod.name);
       }
-    });
 
-    await test.step("add the same invoice email to every client, but only once to each", async () => {
-      const newEmail = "newclientemail@test.com";
-      const inputAddEmail = formClient.getByTestId("input-add-invoice-email");
-      const buttonAddEmail = formClient.getByTestId("button-add-invoice-email");
+      // Clearing the combobox removes the default payment method
+      const buttonClearCombobox = getClearComboboxButton(comboboxPaymentMethod);
+      await buttonClearCombobox.click();
+      await expect(buttonClearCombobox).not.toBeVisible();
 
-      for (const [index, client] of activeClients.entries()) {
-        await page.goto(`/client/${client.id}`);
-        await assertFormLoaded(formClient);
+      await formClient.getByTestId("button-submit").click();
 
-        // An invalid email cannot be added
-        await inputAddEmail.fill("invalid-email");
-        await expect(buttonAddEmail).toBeDisabled();
-
-        // ...and a Cliente can use an email of another one
-        await inputAddEmail.fill(newEmail);
-        await buttonAddEmail.click();
-
-        await expectSingleToast(page);
-        await expect(formClient.getByText(newEmail, { exact: true })).toBeVisible();
-        await expect(inputAddEmail).toHaveValue("");
-        expect(
-          await db.query.dbTableClientInvoiceEmail.findMany({ where: { clientId: client.id, email: newEmail } }),
-        ).toHaveLength(1);
-        expect(await db.query.dbTableClientInvoiceEmail.findMany({ where: { email: newEmail } })).toHaveLength(
-          index + 1,
-        );
-
-        // The same Cliente cannot hold the email twice
-        await inputAddEmail.fill(newEmail);
-        await buttonAddEmail.click();
-
-        await expectSingleToast(page, "El Cliente ya tiene ese correo");
-
-        await expectUniqueViolation(
-          db.insert(dbTableClientInvoiceEmail).values({ clientId: client.id, email: newEmail }),
-          CLIENT_INVOICE_EMAIL_CONSTRAINT,
-        );
-      }
-    });
-
-    await test.step("keep the unsaved changes of every client while its invoice emails change", async () => {
-      const unsavedPhone = "600000000";
-      const unsavedEmail = "unsavedemail@test.com";
-      const syncedCity = "Synced City";
-      const inputPhone = getFormInputByLabel(formClient, PHONE_LABEL);
-      const inputAddEmail = formClient.getByTestId("input-add-invoice-email");
-
-      for (const client of activeClients) {
-        const syncedEmail = `syncedemail-${client.id}@test.com`;
-
-        await page.goto(`/client/${client.id}`);
-        await assertFormLoaded(formClient);
-        await inputPhone.fill(unsavedPhone);
-        await inputAddEmail.fill(unsavedEmail);
-
-        await db.insert(dbTableClientInvoiceEmail).values({ clientId: client.id, email: syncedEmail });
-        await expect(formClient.getByText(syncedEmail, { exact: true })).toBeVisible();
-        await expect(inputPhone).toHaveValue(unsavedPhone);
-        await expect(inputAddEmail).toHaveValue(unsavedEmail);
-
-        // ...but a change of the Cliente itself reloads the form
-        await db.update(dbTableClient).set({ city: syncedCity }).where(eq(dbTableClient.id, client.id));
-        await expect(getFormInputByLabel(formClient, CITY_LABEL)).toHaveValue(syncedCity);
-        await expect(inputPhone).toHaveValue(client.phone ?? "");
-        await expect(inputAddEmail).toHaveValue(unsavedEmail);
-      }
-    });
-
-    await test.step("update the information of every client", async () => {
-      for (const [index, client] of activeClients.entries()) {
-        const currentClient = (await getClientById(client.id))!;
-        const updatedName = `${client.name} actualizado`;
-        const updatedCity = `${client.city} actualizada`;
-        const updatedAccountingAccountId = `43099${index}`;
-
-        await page.goto("/maintenance");
-        await (await findTableRowByText(tableMaintenanceClient, currentClient.name)).getByTestId("button-edit").click();
-
-        await expect(page).toHaveURL(`/client/${client.id}`);
-        await assertFormLoaded(formClient);
-
-        await getFormInputByLabel(formClient, NAME_LABEL).fill(updatedName);
-        await getFormInputByLabel(formClient, CITY_LABEL).fill(updatedCity);
-
-        // The account goes into the 430 group and the exported invoices only have room for 9 digits
-        const inputAccountingAccountId = getFormInputByLabel(formClient, PRISMA_ACCOUNTING_ACCOUNT_LABEL);
-        for (const invalidAccountingAccountId of ["7050001", "4300000001"]) {
-          await inputAccountingAccountId.fill(invalidAccountingAccountId);
-          await formClient.getByTestId("button-submit").click();
-          await expect(formClient.getByText("Debe empezar por 430 y tener como máximo 9 dígitos")).toBeVisible();
-          await expect(formClient.getByTestId("button-submit")).toBeDisabled();
-        }
-        expect(await getClientById(client.id)).toEqual(currentClient);
-
-        await inputAccountingAccountId.fill(updatedAccountingAccountId);
-        await formClient.getByTestId("button-submit").click();
-
-        await expectSingleToast(page);
-
-        expect(await getClientById(client.id)).toEqual({
-          ...currentClient,
-          city: updatedCity,
-          name: updatedName,
-          prismaAccountingAccountId: updatedAccountingAccountId,
-        });
-
-        await formClient.getByRole("button", { name: VIEW_CLIENTS_LABEL }).click();
-
-        const updatedClientRow = await findTableRowByText(tableMaintenanceClient, updatedName);
-        await expect(updatedClientRow.getByText(updatedCity, { exact: true })).toBeVisible();
-        await expect(tableMaintenanceClient.getByText(updatedAccountingAccountId)).toHaveCount(0);
-        await expect(getClientRows(client.name)).toHaveCount(0);
-      }
-    });
-
-    await test.step("create a new client", async () => {
-      await page.goto("/maintenance");
-      await assertTableRowCount(tableMaintenanceClient, activeClients.length);
-
-      await page.getByRole("button", { name: CLIENT_CREATE_TITLE }).click();
-
-      await expect(dialogCreateClient).toBeVisible();
-      await expect(page).toHaveURL("/maintenance?createClient=true");
-
-      // The accounting account is only filled in from the route of the Cliente
-      await expect(getFormInputByLabel(dialogCreateClient, PRISMA_ACCOUNTING_ACCOUNT_LABEL)).toHaveCount(0);
-
-      await getFormInputByLabel(dialogCreateClient, NAME_LABEL).fill(newClient.name);
-      await getFormInputByLabel(dialogCreateClient, LEGAL_NAME_LABEL).fill(newClient.legalName);
-      await getFormInputByLabel(dialogCreateClient, CITY_LABEL).fill(newClient.city);
-      await getFormInputByLabel(dialogCreateClient, PHONE_LABEL).fill(newClient.phone);
-
-      // The address, postal code and CIF are required to account the invoices of the Cliente
-      await dialogCreateClient.getByTestId("button-submit").click();
-      await expect(dialogCreateClient.getByTestId("button-submit")).toBeDisabled();
-      await expect(dialogCreateClient).toBeVisible();
-      expect(await getClientById(NEW_CLIENT_ID)).toBeUndefined();
-
-      await getFormInputByLabel(dialogCreateClient, ADDRESS_LABEL).fill(newClient.address);
-      await getFormInputByLabel(dialogCreateClient, POSTAL_CODE_LABEL).fill(newClient.postalCode);
-      await getFormInputByLabel(dialogCreateClient, TAX_ID_LABEL).fill(newClient.taxId);
-
-      await dialogCreateClient.getByTestId("button-submit").click();
-
-      await expect(page).toHaveURL(`/client/${NEW_CLIENT_ID}`);
       await expectSingleToast(page);
-      await assertFormLoaded(formClient);
-      await expect(getFormInputByLabel(formClient, NAME_LABEL)).toHaveValue(newClient.name);
-      await expect(formClient.getByTestId("card-table-client-invoice-email")).not.toHaveAttribute("inert");
 
-      expect(await getClientById(NEW_CLIENT_ID)).toMatchObject({ ...newClient, prismaAccountingAccountId: null });
-      await expect(getFormInputByLabel(formClient, PRISMA_ACCOUNTING_ACCOUNT_LABEL)).toHaveValue("");
+      await page.reload();
+      await assertFormLoaded(formClient);
+      await assertComboboxValue(comboboxPaymentMethod, null);
+      expect((await getClientById(client.id))?.defaultPaymentMethodId).toBeNull();
+    }
+  });
+
+  await test.step("add the same invoice email to every client, but only once to each", async () => {
+    const newEmail = "newclientemail@test.com";
+    const inputAddEmail = formClient.getByTestId("input-add-invoice-email");
+    const buttonAddEmail = formClient.getByTestId("button-add-invoice-email");
+
+    for (const [index, client] of activeClients.entries()) {
+      await page.goto(`/client/${client.id}`);
+      await assertFormLoaded(formClient);
+
+      // An invalid email cannot be added
+      await inputAddEmail.fill("invalid-email");
+      await expect(buttonAddEmail).toBeDisabled();
+
+      // ...and a Cliente can use an email of another one
+      await inputAddEmail.fill(newEmail);
+      await buttonAddEmail.click();
+
+      await expectSingleToast(page);
+      await expect(formClient.getByText(newEmail, { exact: true })).toBeVisible();
+      await expect(inputAddEmail).toHaveValue("");
+      expect(
+        await db.query.dbTableClientInvoiceEmail.findMany({ where: { clientId: client.id, email: newEmail } }),
+      ).toHaveLength(1);
+      expect(await db.query.dbTableClientInvoiceEmail.findMany({ where: { email: newEmail } })).toHaveLength(index + 1);
+
+      // The same Cliente cannot hold the email twice
+      await inputAddEmail.fill(newEmail);
+      await buttonAddEmail.click();
+
+      await expectSingleToast(page, CLIENT_INVOICE_EMAIL_TAKEN_MESSAGE);
+      expectUniqueViolationRejected(
+        uniqueColumnsViolation(CLIENT_INVOICE_EMAIL_CONSTRAINT, dbTableClientInvoiceEmail, [
+          [dbTableClientInvoiceEmail.clientId, client.id],
+          [dbTableClientInvoiceEmail.email, newEmail],
+        ]),
+        CLIENT_INVOICE_EMAIL_TAKEN_MESSAGE,
+      );
+
+      await expectUniqueViolation(
+        db.insert(dbTableClientInvoiceEmail).values({ clientId: client.id, email: newEmail }),
+        CLIENT_INVOICE_EMAIL_CONSTRAINT,
+      );
+    }
+  });
+
+  await test.step("keep the unsaved changes of every client while its invoice emails change", async () => {
+    const unsavedPhone = "600000000";
+    const unsavedEmail = "unsavedemail@test.com";
+    const syncedCity = "Synced City";
+    const inputPhone = getFormInputByLabel(formClient, PHONE_LABEL);
+    const inputAddEmail = formClient.getByTestId("input-add-invoice-email");
+
+    for (const client of activeClients) {
+      const syncedEmail = `syncedemail-${client.id}@test.com`;
+
+      await page.goto(`/client/${client.id}`);
+      await assertFormLoaded(formClient);
+      await inputPhone.fill(unsavedPhone);
+      await inputAddEmail.fill(unsavedEmail);
+
+      await db.insert(dbTableClientInvoiceEmail).values({ clientId: client.id, email: syncedEmail });
+      await expect(formClient.getByText(syncedEmail, { exact: true })).toBeVisible();
+      await expect(inputPhone).toHaveValue(unsavedPhone);
+      await expect(inputAddEmail).toHaveValue(unsavedEmail);
+
+      // ...but a change of the Cliente itself reloads the form
+      await db.update(dbTableClient).set({ city: syncedCity }).where(eq(dbTableClient.id, client.id));
+      await expect(getFormInputByLabel(formClient, CITY_LABEL)).toHaveValue(syncedCity);
+      await expect(inputPhone).toHaveValue(client.phone ?? "");
+      await expect(inputAddEmail).toHaveValue(unsavedEmail);
+    }
+  });
+
+  await test.step("update the information of every client", async () => {
+    for (const [index, client] of activeClients.entries()) {
+      const currentClient = (await getClientById(client.id))!;
+      const updatedName = `${client.name} actualizado`;
+      const updatedCity = `${client.city} actualizada`;
+      const updatedAccountingAccountId = `43099${index}`;
+
+      await page.goto("/maintenance");
+      await (await findTableRowByText(tableMaintenanceClient, currentClient.name)).getByTestId("button-edit").click();
+
+      await expect(page).toHaveURL(`/client/${client.id}`);
+      await assertFormLoaded(formClient);
+
+      await getFormInputByLabel(formClient, NAME_LABEL).fill(updatedName);
+      await getFormInputByLabel(formClient, CITY_LABEL).fill(updatedCity);
+
+      // The account goes into the 430 group and the exported invoices only have room for 9 digits
+      const inputAccountingAccountId = getFormInputByLabel(formClient, PRISMA_ACCOUNTING_ACCOUNT_LABEL);
+      for (const invalidAccountingAccountId of ["7050001", "4300000001"]) {
+        await inputAccountingAccountId.fill(invalidAccountingAccountId);
+        await formClient.getByTestId("button-submit").click();
+        await expect(formClient.getByText("Debe empezar por 430 y tener como máximo 9 dígitos")).toBeVisible();
+        await expect(formClient.getByTestId("button-submit")).toBeDisabled();
+      }
+      expect(await getClientById(client.id)).toEqual(currentClient);
+
+      await inputAccountingAccountId.fill(updatedAccountingAccountId);
+      await formClient.getByTestId("button-submit").click();
+
+      await expectSingleToast(page);
+
+      expect(await getClientById(client.id)).toEqual({
+        ...currentClient,
+        city: updatedCity,
+        name: updatedName,
+        prismaAccountingAccountId: updatedAccountingAccountId,
+      });
 
       await formClient.getByRole("button", { name: VIEW_CLIENTS_LABEL }).click();
 
-      const newClientRow = await findTableRowByText(tableMaintenanceClient, newClient.name);
-      await expect(newClientRow.getByText(newClient.city, { exact: true })).toBeVisible();
-      await expect(newClientRow.getByText(newClient.phone, { exact: true })).toBeVisible();
-    });
-  },
-);
+      const updatedClientRow = await findTableRowByText(tableMaintenanceClient, updatedName);
+      await expect(updatedClientRow.getByText(updatedCity, { exact: true })).toBeVisible();
+      await expect(tableMaintenanceClient.getByText(updatedAccountingAccountId)).toHaveCount(0);
+      await expect(getClientRows(client.name)).toHaveCount(0);
+    }
+  });
+
+  await test.step("create a new client", async () => {
+    await page.goto("/maintenance");
+    await assertTableRowCount(tableMaintenanceClient, activeClients.length);
+
+    await page.getByRole("button", { name: CLIENT_CREATE_TITLE }).click();
+
+    await expect(dialogCreateClient).toBeVisible();
+    await expect(page).toHaveURL("/maintenance?createClient=true");
+
+    // The accounting account is only filled in from the route of the Cliente
+    await expect(getFormInputByLabel(dialogCreateClient, PRISMA_ACCOUNTING_ACCOUNT_LABEL)).toHaveCount(0);
+
+    await getFormInputByLabel(dialogCreateClient, NAME_LABEL).fill(newClient.name);
+    await getFormInputByLabel(dialogCreateClient, LEGAL_NAME_LABEL).fill(newClient.legalName);
+    await getFormInputByLabel(dialogCreateClient, CITY_LABEL).fill(newClient.city);
+    await getFormInputByLabel(dialogCreateClient, PHONE_LABEL).fill(newClient.phone);
+
+    // The address, postal code and CIF are required to account the invoices of the Cliente
+    await dialogCreateClient.getByTestId("button-submit").click();
+    await expect(dialogCreateClient.getByTestId("button-submit")).toBeDisabled();
+    await expect(dialogCreateClient).toBeVisible();
+    expect(await getClientById(NEW_CLIENT_ID)).toBeUndefined();
+
+    await getFormInputByLabel(dialogCreateClient, ADDRESS_LABEL).fill(newClient.address);
+    await getFormInputByLabel(dialogCreateClient, POSTAL_CODE_LABEL).fill(newClient.postalCode);
+    await getFormInputByLabel(dialogCreateClient, TAX_ID_LABEL).fill(newClient.taxId);
+
+    await dialogCreateClient.getByTestId("button-submit").click();
+
+    await expect(page).toHaveURL(`/client/${NEW_CLIENT_ID}`);
+    await expectSingleToast(page);
+    await assertFormLoaded(formClient);
+    await expect(getFormInputByLabel(formClient, NAME_LABEL)).toHaveValue(newClient.name);
+    await expect(formClient.getByTestId("card-table-client-invoice-email")).not.toHaveAttribute("inert");
+
+    expect(await getClientById(NEW_CLIENT_ID)).toMatchObject({ ...newClient, prismaAccountingAccountId: null });
+    await expect(getFormInputByLabel(formClient, PRISMA_ACCOUNTING_ACCOUNT_LABEL)).toHaveValue("");
+
+    await formClient.getByRole("button", { name: VIEW_CLIENTS_LABEL }).click();
+
+    const newClientRow = await findTableRowByText(tableMaintenanceClient, newClient.name);
+    await expect(newClientRow.getByText(newClient.city, { exact: true })).toBeVisible();
+    await expect(newClientRow.getByText(newClient.phone, { exact: true })).toBeVisible();
+  });
+});
 
 test("remove every client invoice email", async ({ page, db }) => {
   const removedEmailIds = new Set<number>();
@@ -521,29 +530,30 @@ test("delete every client when confirmed and restore it", async ({ page, db }) =
   }
 });
 
-test(
-  "no invoice email can be added to a client deleted in another tab meanwhile",
-  { annotation: TestAnnotations.NonEmptyErrorsLogFile },
-  async ({ page, db }) => {
-    for (const client of activeClients) {
-      await page.goto(`/client/${client.id}`);
-      await assertFormLoaded(formClient);
-      await formClient.getByTestId("input-add-invoice-email").fill(`deleted-client-${client.id}@example.com`);
+test("no invoice email can be added to a client deleted in another tab meanwhile", async ({ page, db }) => {
+  for (const client of activeClients) {
+    await page.goto(`/client/${client.id}`);
+    await assertFormLoaded(formClient);
+    await formClient.getByTestId("input-add-invoice-email").fill(`deleted-client-${client.id}@example.com`);
 
-      await holdRequestWhile({
-        page,
-        procedurePath: "clientInvoiceEmail.create",
-        send: async () => formClient.getByTestId("button-add-invoice-email").click(),
-        meanwhile: async () => inAnotherTab(page, async (anotherPage) => workflowDeleteClient(anotherPage, client)),
-      });
+    await holdRequestWhile({
+      page,
+      procedurePath: "clientInvoiceEmail.create",
+      send: async () => formClient.getByTestId("button-add-invoice-email").click(),
+      meanwhile: async () => inAnotherTab(page, async (anotherPage) => workflowDeleteClient(anotherPage, client)),
+    });
 
-      await expectSingleToast(page, "No se pueden añadir correos de facturación a un Cliente eliminado");
+    await expectSingleToast(page, CLIENT_INVOICE_EMAIL_DELETED_CLIENT_MESSAGE);
+    expectRejectedMutation({
+      code: "BAD_REQUEST",
+      message: CLIENT_INVOICE_EMAIL_DELETED_CLIENT_MESSAGE,
+      procedurePath: "clientInvoiceEmail.create",
+    });
 
-      await assertInvoiceEmailsCard({ isReadOnly: true, emails: [] });
-      expect(await db.query.dbTableClientInvoiceEmail.findMany({ where: { clientId: client.id } })).toHaveLength(0);
-    }
-  },
-);
+    await assertInvoiceEmailsCard({ isReadOnly: true, emails: [] });
+    expect(await db.query.dbTableClientInvoiceEmail.findMany({ where: { clientId: client.id } })).toHaveLength(0);
+  }
+});
 
 test(
   "a user sees the invoice emails of every client read only",
@@ -584,20 +594,17 @@ test("list the deleted clients only when asked for and restore them from the tab
   });
 });
 
-test(
-  "a deleted client cannot be restored from the table while another one has its name",
-  { annotation: TestAnnotations.NonEmptyErrorsLogFile },
-  async ({ page, db }) => {
-    const client = activeClients[0];
-    await workflowRestoreTaken({
-      ...DELETED_CLIENT_FILTER_PARAMS,
-      page,
-      id: client.id,
-      insertDuplicate: async () => db.insert(dbTableClient).values(getRequiredClientFields(client)),
-      errorMessage: NAME_TAKEN_MESSAGE,
-    });
-  },
-);
+test("a deleted client cannot be restored from the table while another one has its name", async ({ page, db }) => {
+  const client = activeClients[0];
+  await workflowRestoreTaken({
+    ...DELETED_CLIENT_FILTER_PARAMS,
+    page,
+    id: client.id,
+    insertDuplicate: async () => db.insert(dbTableClient).values(getRequiredClientFields(client)),
+    uniqueViolation: uniqueNameViolation(CLIENT_NAME_CONSTRAINT, dbTableClient, client.name),
+    errorMessage: NAME_TAKEN_MESSAGE,
+  });
+});
 
 test("a deleted client keeps its history, but its references and prices are hidden", async ({ page }) => {
   expect(
@@ -729,7 +736,7 @@ test("a deleted client keeps its history, but its references and prices are hidd
 
 test(
   "keep the name of a Cliente unique while it is not deleted",
-  { annotation: [TestAnnotations.ResetSellOrders, TestAnnotations.NonEmptyErrorsLogFile] },
+  { annotation: TestAnnotations.ResetSellOrders },
   async ({ page, db }) => {
     const openCreateClient = async () => {
       await page.getByRole("button", { name: CLIENT_CREATE_TITLE }).click();
@@ -750,6 +757,7 @@ test(
       insertDuplicate: async (name) =>
         db.insert(dbTableClient).values({ ...getRequiredClientFields(activeClients[0]), name }),
       constraintName: CLIENT_NAME_CONSTRAINT,
+      table: dbTableClient,
       errorMessage: NAME_TAKEN_MESSAGE,
     });
 
@@ -761,6 +769,8 @@ test(
         await page.goto(`/client/${client.id}`);
       },
       getName: async (id) => (await getClientById(id))?.name,
+      table: dbTableClient,
+      constraintName: CLIENT_NAME_CONSTRAINT,
       errorMessage: NAME_TAKEN_MESSAGE,
     });
 

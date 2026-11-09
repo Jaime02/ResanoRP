@@ -33,7 +33,7 @@ import {
 import { getBlueprintPath } from "@/files/blueprint";
 import { formatPrice } from "@/lib/formatters";
 import { translatedEnums } from "@/lib/translations";
-import { BLUEPRINTS_TITLE, BLUEPRINT_LABEL } from "@/messages/blueprint";
+import { BLUEPRINTS_TITLE, BLUEPRINT_FILE_NAME_TAKEN_MESSAGE, BLUEPRINT_LABEL } from "@/messages/blueprint";
 import {
   ACTIONS_LABEL,
   DELETE_FILTERS_LABEL,
@@ -53,6 +53,8 @@ import {
   NO_COMPATIBLE_MATERIALS_MESSAGE,
   PART_SELECT_SHAPE_AND_SIZE_MESSAGE,
   CLIENT_REFERENCE_DESCRIPTION_LABEL,
+  PART_FEATURE_CHECKED_DELETE_ERROR_MESSAGE,
+  PART_FEATURE_CHECKED_RANGE_ERROR_MESSAGE,
   PART_COMPONENT_CYCLE_ERROR_MESSAGE,
   PART_COMPONENT_DUPLICATED_ERROR_MESSAGE,
   PART_COMPONENT_EDIT_VALIDATION_ERROR_MESSAGE,
@@ -115,6 +117,11 @@ import {
 } from "@/tests/utils/components/table";
 import { clearToasts, expectSingleToast } from "@/tests/utils/components/toast";
 import { expectCheckViolation, expectUniqueViolation } from "@/tests/utils/db";
+import {
+  expectRejectedMutation,
+  expectUniqueViolationRejected,
+  uniqueColumnsViolation,
+} from "@/tests/utils/errors-log";
 import { TestAnnotations, setUserMode, test } from "@/tests/utils/fixtures";
 import {
   getMockClientParts,
@@ -137,7 +144,6 @@ import {
 } from "@/tests/workflows/part";
 import { gotoProductionOrdersWithStatuses } from "@/tests/workflows/production";
 import { workflowOpenSellOrderLinePartPicker } from "@/tests/workflows/sell-order";
-import { ToastType } from "@/types";
 import type { BaseMaterial } from "@/types/material";
 import { COMPATIBLE_MATERIALS_PAGE_SIZE } from "@/types/material";
 import type { BasePart } from "@/types/part";
@@ -151,6 +157,15 @@ const activePartReferences = mockPartReferences.filter(
 );
 const NEW_PART_ID = Math.max(...mockParts.map((part) => part.id)) + 1;
 const REFERENCE_TAKEN_MESSAGE = "El Cliente ya tiene una Referencia con ese nombre";
+
+const expectReferenceTaken = (clientId: number, reference: string) =>
+  expectUniqueViolationRejected(
+    uniqueColumnsViolation(PART_REFERENCE_CONSTRAINT, dbTablePartReference, [
+      [dbTablePartReference.clientId, clientId],
+      [dbTablePartReference.reference, reference],
+    ]),
+    REFERENCE_TAKEN_MESSAGE,
+  );
 
 // The part form also lists the deleted Referencias, so they can be restored
 function getFormPartReferences(partId: number) {
@@ -811,134 +826,139 @@ test("add stock to every part without an existing part stock", async ({ page, db
   }
 });
 
-test(
-  "list, create, edit and delete the features of every part",
-  { annotation: TestAnnotations.NonEmptyErrorsLogFile },
-  async ({ page, db }) => {
-    const tablePartFeatures = formPart.getByTestId("table-part-features");
-    const dialogCreatePartFeature = page.getByTestId("dialog-create-part-feature");
+test("list, create, edit and delete the features of every part", async ({ page, db }) => {
+  const tablePartFeatures = formPart.getByTestId("table-part-features");
+  const dialogCreatePartFeature = page.getByTestId("dialog-create-part-feature");
 
-    for (const part of activeParts) {
-      const partFeatures = mockPartFeatures.filter((partFeature) => partFeature.partId === part.id);
-
-      await page.goto(`/part/${part.id}?tab=blueprints`);
-      await assertFormLoaded(formPart);
-
-      await assertTableRowCount(tablePartFeatures, partFeatures.length);
-      for (const partFeature of partFeatures) {
-        await expect(
-          getEditableCellById(getTableRowByTestId(tablePartFeatures, partFeature.id), "feature"),
-        ).toHaveValue(partFeature.feature);
-      }
-
-      const newFeature = `Característica nueva de ${part.id}`;
-      await formPart.getByTestId("button-create-part-feature").click();
-      await expect(dialogCreatePartFeature).toBeVisible();
-      await getFormInputByLabel(dialogCreatePartFeature, PART_FEATURE_LABEL).fill(newFeature);
-      await dialogCreatePartFeature.getByTestId("button-submit").click();
-      await expect(dialogCreatePartFeature).toBeHidden();
-      await expectSingleToast(page);
-      expect((await db.query.dbTablePartFeature.findFirst({ where: { feature: newFeature } }))?.partId).toBe(part.id);
-      await assertTableRowCount(tablePartFeatures, partFeatures.length + 1);
-
-      for (const partFeature of partFeatures) {
-        const updatedFeature = `Característica editada ${partFeature.id}`;
-        const inputFeature = getEditableCellById(getTableRowByTestId(tablePartFeatures, partFeature.id), "feature");
-        await inputFeature.fill(updatedFeature);
-        await inputFeature.blur();
-        await expectSingleToast(page);
-        expect((await db.query.dbTablePartFeature.findFirst({ where: { id: partFeature.id } }))?.feature).toBe(
-          updatedFeature,
-        );
-      }
-
-      // A feature that has quality checks keeps them, so it cannot be deleted
-      const checkedFeatures = partFeatures.filter((partFeature) =>
-        mockQualityChecks.some((check) => check.partFeatureId === partFeature.id),
-      );
-      let remainingFeatures = partFeatures.length + 1;
-      for (const partFeature of partFeatures) {
-        const isChecked = checkedFeatures.includes(partFeature);
-        await clearToasts(page);
-        await openAndConfirmAlertDialog(
-          page,
-          getTableRowByTestId(tablePartFeatures, partFeature.id).getByTestId("button-delete"),
-          "dialog-delete-model-content",
-        );
-
-        if (isChecked) {
-          await expectSingleToast(page, "La Característica tiene Controles de calidad y no se puede eliminar");
-          await expect(getTableRowByTestId(tablePartFeatures, partFeature.id)).toHaveCount(1);
-          expect(await db.query.dbTablePartFeature.findFirst({ where: { id: partFeature.id } })).toBeDefined();
-        } else {
-          remainingFeatures--;
-          await expect(getTableRowByTestId(tablePartFeatures, partFeature.id)).toHaveCount(0);
-          expect(await db.query.dbTablePartFeature.findFirst({ where: { id: partFeature.id } })).toBeUndefined();
-        }
-        await assertTableRowCount(tablePartFeatures, remainingFeatures);
-      }
-
-      expect(
-        await db.query.dbTablePartFeature.findMany({ where: { partId: part.id }, orderBy: { id: "asc" } }),
-      ).toEqual([
-        ...checkedFeatures.map((partFeature) => expect.objectContaining({ id: partFeature.id })),
-        expect.objectContaining({ feature: newFeature }),
-      ]);
-    }
-  },
-);
-
-test(
-  "a part cannot have two features with the same name, but different parts can",
-  { annotation: TestAnnotations.NonEmptyErrorsLogFile },
-  async ({ page, db }) => {
-    const tablePartFeatures = formPart.getByTestId("table-part-features");
-    const dialogCreatePartFeature = page.getByTestId("dialog-create-part-feature");
-    const duplicatedErrorMessage = "El Artículo ya tiene una Característica con ese nombre";
-    const getPartFeatures = (partId: number) => mockPartFeatures.filter((partFeature) => partFeature.partId === partId);
-    const part = activeParts.find((activePart) => getPartFeatures(activePart.id).length >= 2)!;
-    expect(part, "Wrong test set up: Some part should have at least two features").toBeDefined();
-    const otherPart = activeParts.find((activePart) => activePart.id !== part.id)!;
-    const [firstFeature, secondFeature] = getPartFeatures(part.id);
-    const createPartFeature = async (feature: string) => {
-      await formPart.getByTestId("button-create-part-feature").click();
-      await getFormInputByLabel(dialogCreatePartFeature, PART_FEATURE_LABEL).fill(feature);
-      await dialogCreatePartFeature.getByTestId("button-submit").click();
-    };
+  for (const part of activeParts) {
+    const partFeatures = mockPartFeatures.filter((partFeature) => partFeature.partId === part.id);
 
     await page.goto(`/part/${part.id}?tab=blueprints`);
     await assertFormLoaded(formPart);
-    await assertTableRowCount(tablePartFeatures, getPartFeatures(part.id).length);
 
-    await createPartFeature(firstFeature.feature);
-    await expectSingleToast(page, duplicatedErrorMessage);
+    await assertTableRowCount(tablePartFeatures, partFeatures.length);
+    for (const partFeature of partFeatures) {
+      await expect(getEditableCellById(getTableRowByTestId(tablePartFeatures, partFeature.id), "feature")).toHaveValue(
+        partFeature.feature,
+      );
+    }
+
+    const newFeature = `Característica nueva de ${part.id}`;
+    await formPart.getByTestId("button-create-part-feature").click();
     await expect(dialogCreatePartFeature).toBeVisible();
-    await dialogCreatePartFeature.getByTestId("button-close").click();
-    await expect(dialogCreatePartFeature).toBeHidden();
-    await assertTableRowCount(tablePartFeatures, getPartFeatures(part.id).length);
-
-    const inputSecondFeature = getEditableCellById(getTableRowByTestId(tablePartFeatures, secondFeature.id), "feature");
-    await inputSecondFeature.fill(firstFeature.feature);
-    await inputSecondFeature.blur();
-    await expectSingleToast(page, duplicatedErrorMessage);
-    expect((await db.query.dbTablePartFeature.findFirst({ where: { id: secondFeature.id } }))?.feature).toBe(
-      secondFeature.feature,
-    );
-
-    await expectUniqueViolation(
-      db.insert(dbTablePartFeature).values({ feature: firstFeature.feature, partId: part.id }),
-      PART_FEATURE_CONSTRAINT,
-    );
-
-    // Another part can use the same name
-    await page.goto(`/part/${otherPart.id}?tab=blueprints`);
-    await assertFormLoaded(formPart);
-    await createPartFeature(firstFeature.feature);
+    await getFormInputByLabel(dialogCreatePartFeature, PART_FEATURE_LABEL).fill(newFeature);
+    await dialogCreatePartFeature.getByTestId("button-submit").click();
     await expect(dialogCreatePartFeature).toBeHidden();
     await expectSingleToast(page);
-    expect(await db.query.dbTablePartFeature.findMany({ where: { feature: firstFeature.feature } })).toHaveLength(2);
-  },
-);
+    expect((await db.query.dbTablePartFeature.findFirst({ where: { feature: newFeature } }))?.partId).toBe(part.id);
+    await assertTableRowCount(tablePartFeatures, partFeatures.length + 1);
+
+    for (const partFeature of partFeatures) {
+      const updatedFeature = `Característica editada ${partFeature.id}`;
+      const inputFeature = getEditableCellById(getTableRowByTestId(tablePartFeatures, partFeature.id), "feature");
+      await inputFeature.fill(updatedFeature);
+      await inputFeature.blur();
+      await expectSingleToast(page);
+      expect((await db.query.dbTablePartFeature.findFirst({ where: { id: partFeature.id } }))?.feature).toBe(
+        updatedFeature,
+      );
+    }
+
+    // A feature that has quality checks keeps them, so it cannot be deleted
+    const checkedFeatures = partFeatures.filter((partFeature) =>
+      mockQualityChecks.some((check) => check.partFeatureId === partFeature.id),
+    );
+    let remainingFeatures = partFeatures.length + 1;
+    for (const partFeature of partFeatures) {
+      const isChecked = checkedFeatures.includes(partFeature);
+      await clearToasts(page);
+      await openAndConfirmAlertDialog(
+        page,
+        getTableRowByTestId(tablePartFeatures, partFeature.id).getByTestId("button-delete"),
+        "dialog-delete-model-content",
+      );
+
+      if (isChecked) {
+        await expectSingleToast(page, PART_FEATURE_CHECKED_DELETE_ERROR_MESSAGE);
+        expectRejectedMutation({
+          code: "BAD_REQUEST",
+          message: PART_FEATURE_CHECKED_DELETE_ERROR_MESSAGE,
+          procedurePath: "partFeature.delete",
+        });
+        await expect(getTableRowByTestId(tablePartFeatures, partFeature.id)).toHaveCount(1);
+        expect(await db.query.dbTablePartFeature.findFirst({ where: { id: partFeature.id } })).toBeDefined();
+      } else {
+        remainingFeatures--;
+        await expect(getTableRowByTestId(tablePartFeatures, partFeature.id)).toHaveCount(0);
+        expect(await db.query.dbTablePartFeature.findFirst({ where: { id: partFeature.id } })).toBeUndefined();
+      }
+      await assertTableRowCount(tablePartFeatures, remainingFeatures);
+    }
+
+    expect(await db.query.dbTablePartFeature.findMany({ where: { partId: part.id }, orderBy: { id: "asc" } })).toEqual([
+      ...checkedFeatures.map((partFeature) => expect.objectContaining({ id: partFeature.id })),
+      expect.objectContaining({ feature: newFeature }),
+    ]);
+  }
+});
+
+test("a part cannot have two features with the same name, but different parts can", async ({ page, db }) => {
+  const tablePartFeatures = formPart.getByTestId("table-part-features");
+  const dialogCreatePartFeature = page.getByTestId("dialog-create-part-feature");
+  const duplicatedErrorMessage = "El Artículo ya tiene una Característica con ese nombre";
+  const getPartFeatures = (partId: number) => mockPartFeatures.filter((partFeature) => partFeature.partId === partId);
+  const part = activeParts.find((activePart) => getPartFeatures(activePart.id).length >= 2)!;
+  expect(part, "Wrong test set up: Some part should have at least two features").toBeDefined();
+  const otherPart = activeParts.find((activePart) => activePart.id !== part.id)!;
+  const [firstFeature, secondFeature] = getPartFeatures(part.id);
+  const expectDuplicatedRejected = () =>
+    expectUniqueViolationRejected(
+      uniqueColumnsViolation(PART_FEATURE_CONSTRAINT, dbTablePartFeature, [
+        [dbTablePartFeature.partId, part.id],
+        [dbTablePartFeature.feature, firstFeature.feature],
+      ]),
+      duplicatedErrorMessage,
+    );
+  const createPartFeature = async (feature: string) => {
+    await formPart.getByTestId("button-create-part-feature").click();
+    await getFormInputByLabel(dialogCreatePartFeature, PART_FEATURE_LABEL).fill(feature);
+    await dialogCreatePartFeature.getByTestId("button-submit").click();
+  };
+
+  await page.goto(`/part/${part.id}?tab=blueprints`);
+  await assertFormLoaded(formPart);
+  await assertTableRowCount(tablePartFeatures, getPartFeatures(part.id).length);
+
+  await createPartFeature(firstFeature.feature);
+  await expectSingleToast(page, duplicatedErrorMessage);
+  expectDuplicatedRejected();
+  await expect(dialogCreatePartFeature).toBeVisible();
+  await dialogCreatePartFeature.getByTestId("button-close").click();
+  await expect(dialogCreatePartFeature).toBeHidden();
+  await assertTableRowCount(tablePartFeatures, getPartFeatures(part.id).length);
+
+  const inputSecondFeature = getEditableCellById(getTableRowByTestId(tablePartFeatures, secondFeature.id), "feature");
+  await inputSecondFeature.fill(firstFeature.feature);
+  await inputSecondFeature.blur();
+  await expectSingleToast(page, duplicatedErrorMessage);
+  expectDuplicatedRejected();
+  expect((await db.query.dbTablePartFeature.findFirst({ where: { id: secondFeature.id } }))?.feature).toBe(
+    secondFeature.feature,
+  );
+
+  await expectUniqueViolation(
+    db.insert(dbTablePartFeature).values({ feature: firstFeature.feature, partId: part.id }),
+    PART_FEATURE_CONSTRAINT,
+  );
+
+  // Another part can use the same name
+  await page.goto(`/part/${otherPart.id}?tab=blueprints`);
+  await assertFormLoaded(formPart);
+  await createPartFeature(firstFeature.feature);
+  await expect(dialogCreatePartFeature).toBeHidden();
+  await expectSingleToast(page);
+  expect(await db.query.dbTablePartFeature.findMany({ where: { feature: firstFeature.feature } })).toHaveLength(2);
+});
 
 test("a feature can have a range of up to 2 decimals whose minimum cannot exceed its maximum", async ({ page, db }) => {
   const tablePartFeatures = formPart.getByTestId("table-part-features");
@@ -974,71 +994,71 @@ test("a feature can have a range of up to 2 decimals whose minimum cannot exceed
   expect((await db.query.dbTablePartFeature.findFirst({ where: { id: created.id } }))?.maxValue).toBeNull();
 });
 
-test(
-  "the range of a feature that has quality checks cannot change but its name can",
-  { annotation: TestAnnotations.NonEmptyErrorsLogFile },
-  async ({ page, db }) => {
-    const checkedFeature = mockPartFeatures.find(
-      ({ id, maxValue, minValue }) =>
-        minValue !== null && maxValue !== null && mockQualityChecks.some(({ partFeatureId }) => partFeatureId === id),
-    )!;
-    expect(checkedFeature, "Wrong test set up: Some ranged Característica should have checks").toBeDefined();
-    const rangeChangedMessage = "La Característica tiene Controles de calidad y no se puede cambiar su rango";
-    const renamedFeature = `${checkedFeature.feature} renombrada`;
+test("the range of a feature that has quality checks cannot change but its name can", async ({ page, db }) => {
+  const checkedFeature = mockPartFeatures.find(
+    ({ id, maxValue, minValue }) =>
+      minValue !== null && maxValue !== null && mockQualityChecks.some(({ partFeatureId }) => partFeatureId === id),
+  )!;
+  expect(checkedFeature, "Wrong test set up: Some ranged Característica should have checks").toBeDefined();
+  const renamedFeature = `${checkedFeature.feature} renombrada`;
 
-    await page.goto(`/part/${checkedFeature.partId}?tab=blueprints`);
-    await assertFormLoaded(formPart);
-    const row = getTableRowByTestId(formPart.getByTestId("table-part-features"), checkedFeature.id);
-    const inputMin = getEditableCellById(row, "minValue");
-    const inputMax = getEditableCellById(row, "maxValue");
+  await page.goto(`/part/${checkedFeature.partId}?tab=blueprints`);
+  await assertFormLoaded(formPart);
+  const row = getTableRowByTestId(formPart.getByTestId("table-part-features"), checkedFeature.id);
+  const inputMin = getEditableCellById(row, "minValue");
+  const inputMax = getEditableCellById(row, "maxValue");
 
-    for (const [input, value] of [
-      [inputMin, "11"],
-      [inputMax, ""],
-    ] as const) {
-      await input.fill(value);
-      await input.blur();
-      await expectSingleToast(page, rangeChangedMessage);
-      await expect(inputMin).toHaveValue(checkedFeature.minValue!.replace(".", ","));
-      await expect(inputMax).toHaveValue(checkedFeature.maxValue!.replace(".", ","));
-      const unchanged = (await db.query.dbTablePartFeature.findFirst({ where: { id: checkedFeature.id } }))!;
-      expect([unchanged.minValue, unchanged.maxValue]).toEqual([checkedFeature.minValue, checkedFeature.maxValue]);
-    }
+  for (const [input, value] of [
+    [inputMin, "11"],
+    [inputMax, ""],
+  ] as const) {
+    await input.fill(value);
+    await input.blur();
+    await expectSingleToast(page, PART_FEATURE_CHECKED_RANGE_ERROR_MESSAGE);
+    expectRejectedMutation({
+      code: "BAD_REQUEST",
+      message: PART_FEATURE_CHECKED_RANGE_ERROR_MESSAGE,
+      procedurePath: "partFeature.update",
+    });
+    await expect(inputMin).toHaveValue(checkedFeature.minValue!.replace(".", ","));
+    await expect(inputMax).toHaveValue(checkedFeature.maxValue!.replace(".", ","));
+    const unchanged = (await db.query.dbTablePartFeature.findFirst({ where: { id: checkedFeature.id } }))!;
+    expect([unchanged.minValue, unchanged.maxValue]).toEqual([checkedFeature.minValue, checkedFeature.maxValue]);
+  }
 
-    const inputFeature = getEditableCellById(row, "feature");
-    await inputFeature.fill(renamedFeature);
-    await inputFeature.blur();
-    await expectSingleToast(page);
-    const renamed = (await db.query.dbTablePartFeature.findFirst({ where: { id: checkedFeature.id } }))!;
-    expect([renamed.feature, renamed.minValue, renamed.maxValue]).toEqual([
-      renamedFeature,
-      checkedFeature.minValue,
-      checkedFeature.maxValue,
-    ]);
+  const inputFeature = getEditableCellById(row, "feature");
+  await inputFeature.fill(renamedFeature);
+  await inputFeature.blur();
+  await expectSingleToast(page);
+  const renamed = (await db.query.dbTablePartFeature.findFirst({ where: { id: checkedFeature.id } }))!;
+  expect([renamed.feature, renamed.minValue, renamed.maxValue]).toEqual([
+    renamedFeature,
+    checkedFeature.minValue,
+    checkedFeature.maxValue,
+  ]);
 
-    const uncheckedFeature = mockPartFeatures.find(
-      ({ id, maxValue, minValue, partId }) =>
-        partId === checkedFeature.partId &&
-        (minValue !== null || maxValue !== null) &&
-        !mockQualityChecks.some(({ partFeatureId }) => partFeatureId === id),
-    )!;
-    expect(uncheckedFeature, "Wrong test set up: Some ranged Característica of the part has no checks").toBeDefined();
-    const inputUncheckedMax = getEditableCellById(
-      getTableRowByTestId(formPart.getByTestId("table-part-features"), uncheckedFeature.id),
-      "maxValue",
-    );
-    await inputUncheckedMax.fill("-0,25");
-    await inputUncheckedMax.blur();
-    await expectSingleToast(page);
-    const updated = (await db.query.dbTablePartFeature.findFirst({ where: { id: uncheckedFeature.id } }))!;
-    expect(Number(updated.maxValue)).toBe(-0.25);
-    expect(updated.minValue).toBe(uncheckedFeature.minValue);
-  },
-);
+  const uncheckedFeature = mockPartFeatures.find(
+    ({ id, maxValue, minValue, partId }) =>
+      partId === checkedFeature.partId &&
+      (minValue !== null || maxValue !== null) &&
+      !mockQualityChecks.some(({ partFeatureId }) => partFeatureId === id),
+  )!;
+  expect(uncheckedFeature, "Wrong test set up: Some ranged Característica of the part has no checks").toBeDefined();
+  const inputUncheckedMax = getEditableCellById(
+    getTableRowByTestId(formPart.getByTestId("table-part-features"), uncheckedFeature.id),
+    "maxValue",
+  );
+  await inputUncheckedMax.fill("-0,25");
+  await inputUncheckedMax.blur();
+  await expectSingleToast(page);
+  const updated = (await db.query.dbTablePartFeature.findFirst({ where: { id: uncheckedFeature.id } }))!;
+  expect(Number(updated.maxValue)).toBe(-0.25);
+  expect(updated.minValue).toBe(uncheckedFeature.minValue);
+});
 
 test(
   "upload, rename and delete the blueprints of every part",
-  { annotation: [TestAnnotations.ResetBlueprints, TestAnnotations.NonEmptyErrorsLogFile] },
+  { annotation: TestAnnotations.ResetBlueprints },
   async ({ page }) => {
     const newBlueprintFilePath = path.join(MOCK_DATA_PATH, "sample.pdf");
     const dialogCreateBlueprint = page.getByTestId("dialog-create-blueprint");
@@ -1105,9 +1125,15 @@ test(
         getFormInputByLabel(dialogCreateBlueprint, BLUEPRINT_LABEL, InputElementType.File),
         newBlueprintFilePath,
       );
-      await getFormInputByLabel(dialogCreateBlueprint, NAME_LABEL).fill(`Renamed-${dbBlueprints[0].id}`);
+      const takenBlueprintName = `Renamed-${dbBlueprints[0].id}`;
+      await getFormInputByLabel(dialogCreateBlueprint, NAME_LABEL).fill(takenBlueprintName);
       await dialogCreateBlueprint.getByTestId("button-submit").click();
-      await expectSingleToast(page, { type: ToastType.Error });
+      await expectSingleToast(page, BLUEPRINT_FILE_NAME_TAKEN_MESSAGE(takenBlueprintName));
+      expectRejectedMutation({
+        code: "CONFLICT",
+        message: BLUEPRINT_FILE_NAME_TAKEN_MESSAGE(takenBlueprintName),
+        procedurePath: "blueprint.create",
+      });
       await dialogCreateBlueprint.getByTestId("button-close").click();
       await expect(dialogCreateBlueprint).not.toBeVisible();
       expect(await getBlueprintsByPartId(part.id)).toHaveLength(dbBlueprints.length);
@@ -1138,7 +1164,7 @@ test(
 
 test(
   "delete every part when confirmed and restore it",
-  { annotation: [TestAnnotations.ResetBlueprints, TestAnnotations.NonEmptyErrorsLogFile] },
+  { annotation: TestAnnotations.ResetBlueprints },
   async ({ page }) => {
     expect(
       activeParts.some((part) => mockBlueprints.filter((blueprint) => blueprint.partId === part.id).length > 1),
@@ -1459,112 +1485,110 @@ test("update every part reference", async ({ page, db }) => {
   }
 });
 
-test(
-  "create a part reference for every part, unique for each client",
-  { annotation: TestAnnotations.NonEmptyErrorsLogFile },
-  async ({ page, db }) => {
-    expect(activeClients.length, "Wrong test set up: Some Clientes should be active").toBeGreaterThan(1);
-    const [newClient, ...otherClients] = activeClients;
-    const tablePartReferencesRows = getTableRows(tablePartReferences);
-    const clientCombobox = dialogCreateEditPartReference.getByTestId("combobox-client");
+test("create a part reference for every part, unique for each client", async ({ page, db }) => {
+  expect(activeClients.length, "Wrong test set up: Some Clientes should be active").toBeGreaterThan(1);
+  const [newClient, ...otherClients] = activeClients;
+  const tablePartReferencesRows = getTableRows(tablePartReferences);
+  const clientCombobox = dialogCreateEditPartReference.getByTestId("combobox-client");
 
-    const submitPartReference = async (reference: string, clientName: string, description = "Client Description") => {
-      await formPart.getByTestId("button-add-reference").click();
-      await expect(dialogCreateEditPartReference).toBeVisible();
-      await getFormInputByLabel(dialogCreateEditPartReference, REFERENCE_LABEL).fill(reference);
-      await getFormInputByLabel(dialogCreateEditPartReference, CLIENT_REFERENCE_DESCRIPTION_LABEL).fill(description);
-      await openCombobox(clientCombobox);
-      await clickInComboboxOption(page, clientName);
-      await dialogCreateEditPartReference.getByTestId("button-submit").click();
-    };
+  const submitPartReference = async (reference: string, clientName: string, description = "Client Description") => {
+    await formPart.getByTestId("button-add-reference").click();
+    await expect(dialogCreateEditPartReference).toBeVisible();
+    await getFormInputByLabel(dialogCreateEditPartReference, REFERENCE_LABEL).fill(reference);
+    await getFormInputByLabel(dialogCreateEditPartReference, CLIENT_REFERENCE_DESCRIPTION_LABEL).fill(description);
+    await openCombobox(clientCombobox);
+    await clickInComboboxOption(page, clientName);
+    await dialogCreateEditPartReference.getByTestId("button-submit").click();
+  };
 
-    for (const part of activeParts) {
-      const partReferencesCount = getFormPartReferences(part.id).length;
-      const newReference = `NEW-REF-${part.id}`;
-      const newDescription = `New Client Description ${part.id}`;
-      expect(await getPartReferencesByPartId(part.id)).toHaveLength(
-        activePartReferences.filter((partReference) => partReference.partId === part.id).length,
-      );
+  for (const part of activeParts) {
+    const partReferencesCount = getFormPartReferences(part.id).length;
+    const newReference = `NEW-REF-${part.id}`;
+    const newDescription = `New Client Description ${part.id}`;
+    expect(await getPartReferencesByPartId(part.id)).toHaveLength(
+      activePartReferences.filter((partReference) => partReference.partId === part.id).length,
+    );
 
-      await page.goto(`/part/${part.id}`);
-      await assertFormLoaded(formPart);
-      await assertTableRowCount(tablePartReferences, partReferencesCount);
+    await page.goto(`/part/${part.id}`);
+    await assertFormLoaded(formPart);
+    await assertTableRowCount(tablePartReferences, partReferencesCount);
 
-      await submitPartReference(newReference, newClient.name, newDescription);
+    await submitPartReference(newReference, newClient.name, newDescription);
 
-      await expectSingleToast(page);
+    await expectSingleToast(page);
+    await expect(dialogCreateEditPartReference).not.toBeVisible();
+    await expect(tablePartReferencesRows).toHaveCount(partReferencesCount + 1);
+    const newReferenceRow = filterByExactText(tablePartReferencesRows, newReference);
+    await expect(newReferenceRow.getByText(newDescription)).toBeVisible();
+    await expect(newReferenceRow.getByText(newClient.name)).toBeVisible();
+    expect(
+      await db.query.dbTablePartReference.findFirst({ where: { partId: part.id, reference: newReference } }),
+    ).toMatchObject({ clientDescription: newDescription, clientId: newClient.id });
+
+    // The same Cliente cannot reuse the reference
+    await submitPartReference(newReference, newClient.name);
+
+    await expectSingleToast(page, REFERENCE_TAKEN_MESSAGE);
+    expectReferenceTaken(newClient.id, newReference);
+    await expectUniqueViolation(
+      db.insert(dbTablePartReference).values({
+        clientDescription: newDescription,
+        clientId: newClient.id,
+        partId: part.id,
+        reference: newReference,
+      }),
+      PART_REFERENCE_CONSTRAINT,
+    );
+    await dialogCreateEditPartReference.getByTestId("button-close").click();
+    await expect(dialogCreateEditPartReference).not.toBeVisible();
+
+    for (const [index, otherClient] of otherClients.entries()) {
+      // ...but another Cliente can
+      await submitPartReference(newReference, otherClient.name);
       await expect(dialogCreateEditPartReference).not.toBeVisible();
-      await expect(tablePartReferencesRows).toHaveCount(partReferencesCount + 1);
-      const newReferenceRow = filterByExactText(tablePartReferencesRows, newReference);
-      await expect(newReferenceRow.getByText(newDescription)).toBeVisible();
-      await expect(newReferenceRow.getByText(newClient.name)).toBeVisible();
-      expect(
-        await db.query.dbTablePartReference.findFirst({ where: { partId: part.id, reference: newReference } }),
-      ).toMatchObject({ clientDescription: newDescription, clientId: newClient.id });
+      await expectSingleToast(page);
+      await expect(tablePartReferencesRows).toHaveCount(partReferencesCount + index * 2 + 2);
+      const otherClientReference = await db.query.dbTablePartReference.findFirst({
+        where: { clientId: otherClient.id, deletedAt: { isNull: true }, reference: newReference },
+      });
+      expect(otherClientReference).toBeDefined();
 
-      // The same Cliente cannot reuse the reference
-      await submitPartReference(newReference, newClient.name);
+      // Deleting a Referencia frees it for its Cliente
+      const rowOtherClientReference = getTableRowByTestId(tablePartReferences, otherClientReference!.id);
+      await openAndConfirmAlertDialog(
+        page,
+        rowOtherClientReference.getByTestId("button-delete"),
+        "dialog-delete-model-content",
+      );
+      await expectSingleToast(page);
+      await expect(rowOtherClientReference.getByTestId("tooltip-deleted")).toBeVisible();
+      await expect(tablePartReferencesRows).toHaveCount(partReferencesCount + index * 2 + 2);
 
-      await expectSingleToast(page, REFERENCE_TAKEN_MESSAGE);
+      await submitPartReference(newReference, otherClient.name);
+      await expect(dialogCreateEditPartReference).not.toBeVisible();
+      await expectSingleToast(page);
+      await expect(tablePartReferencesRows).toHaveCount(partReferencesCount + index * 2 + 3);
+
+      // ...so the deleted Referencia can no longer be restored
       await expectUniqueViolation(
-        db.insert(dbTablePartReference).values({
-          clientDescription: newDescription,
-          clientId: newClient.id,
-          partId: part.id,
-          reference: newReference,
-        }),
+        db
+          .update(dbTablePartReference)
+          .set({ deletedAt: null })
+          .where(eq(dbTablePartReference.id, otherClientReference!.id)),
         PART_REFERENCE_CONSTRAINT,
       );
-      await dialogCreateEditPartReference.getByTestId("button-close").click();
-      await expect(dialogCreateEditPartReference).not.toBeVisible();
-
-      for (const [index, otherClient] of otherClients.entries()) {
-        // ...but another Cliente can
-        await submitPartReference(newReference, otherClient.name);
-        await expect(dialogCreateEditPartReference).not.toBeVisible();
-        await expectSingleToast(page);
-        await expect(tablePartReferencesRows).toHaveCount(partReferencesCount + index * 2 + 2);
-        const otherClientReference = await db.query.dbTablePartReference.findFirst({
-          where: { clientId: otherClient.id, deletedAt: { isNull: true }, reference: newReference },
-        });
-        expect(otherClientReference).toBeDefined();
-
-        // Deleting a Referencia frees it for its Cliente
-        const rowOtherClientReference = getTableRowByTestId(tablePartReferences, otherClientReference!.id);
-        await openAndConfirmAlertDialog(
-          page,
-          rowOtherClientReference.getByTestId("button-delete"),
-          "dialog-delete-model-content",
-        );
-        await expectSingleToast(page);
-        await expect(rowOtherClientReference.getByTestId("tooltip-deleted")).toBeVisible();
-        await expect(tablePartReferencesRows).toHaveCount(partReferencesCount + index * 2 + 2);
-
-        await submitPartReference(newReference, otherClient.name);
-        await expect(dialogCreateEditPartReference).not.toBeVisible();
-        await expectSingleToast(page);
-        await expect(tablePartReferencesRows).toHaveCount(partReferencesCount + index * 2 + 3);
-
-        // ...so the deleted Referencia can no longer be restored
-        await expectUniqueViolation(
-          db
-            .update(dbTablePartReference)
-            .set({ deletedAt: null })
-            .where(eq(dbTablePartReference.id, otherClientReference!.id)),
-          PART_REFERENCE_CONSTRAINT,
-        );
-        await openAndConfirmAlertDialog(
-          page,
-          rowOtherClientReference.getByTestId("button-restore"),
-          "dialog-restore-model-content",
-        );
-        await expectSingleToast(page, REFERENCE_TAKEN_MESSAGE);
-        await expect(rowOtherClientReference.getByTestId("tooltip-deleted")).toBeVisible();
-        expect((await getPartReferenceById(otherClientReference!.id))?.deletedAt).toBeInstanceOf(Date);
-      }
+      await openAndConfirmAlertDialog(
+        page,
+        rowOtherClientReference.getByTestId("button-restore"),
+        "dialog-restore-model-content",
+      );
+      await expectSingleToast(page, REFERENCE_TAKEN_MESSAGE);
+      expectReferenceTaken(otherClient.id, newReference);
+      await expect(rowOtherClientReference.getByTestId("tooltip-deleted")).toBeVisible();
+      expect((await getPartReferenceById(otherClientReference!.id))?.deletedAt).toBeInstanceOf(Date);
     }
-  },
-);
+  }
+});
 
 test("list the compatible materials of a part by their numeric width", async ({ page, db }) => {
   for (const part of activeParts) {
@@ -2030,7 +2054,7 @@ test("a deleted part cannot get new prices", async ({ page }) => {
 // Real Artículos are named after their dimensions, like "Ø64,5 x Ø38", and so are their Planos
 test(
   "a part and its blueprint can have non ASCII characters in their names",
-  { annotation: [TestAnnotations.ResetBlueprints] },
+  { annotation: TestAnnotations.ResetBlueprints },
   async ({ page }) => {
     const partId = NEW_PART_ID;
     const description = "ARANDELA POM Ø64,5 x Ø38 x 2,5 mm (S/ref. 628000450)";
@@ -2102,7 +2126,7 @@ test(
   },
 );
 
-test("create a part with its blueprint", { annotation: [TestAnnotations.ResetBlueprints] }, async ({ page }) => {
+test("create a part with its blueprint", { annotation: TestAnnotations.ResetBlueprints }, async ({ page }) => {
   const partId = NEW_PART_ID;
   const blueprintFileName = "NewPartBlueprint";
 
@@ -2140,7 +2164,7 @@ test("create a part with its blueprint", { annotation: [TestAnnotations.ResetBlu
   await expect(formPart.getByTestId(`card-blueprint-${blueprint.id}`)).toContainText(blueprintFileName);
 });
 
-test("manage multi-level part sets", { annotation: TestAnnotations.NonEmptyErrorsLogFile }, async ({ page, db }) => {
+test("manage multi-level part sets", async ({ page, db }) => {
   const getMockPart = (partId: number) => mockParts.find((part) => part.id === partId)!;
   const isMockPartSet = (partId: number) => getMockPartComponentsOfPart(partId).length > 0;
   const partComponents = mockPartComponents.map((partComponent) => ({ ...partComponent }));
@@ -2357,6 +2381,17 @@ test("manage multi-level part sets", { annotation: TestAnnotations.NonEmptyError
       [{ componentPartId: setPart.id, parentPartId: deepestPartId, quantity: 1 }, PART_COMPONENT_CYCLE_ERROR_MESSAGE],
     ] as const) {
       await workflowCreatePartComponent(page, partComponent, errorMessage);
+      if (errorMessage === PART_COMPONENT_DUPLICATED_ERROR_MESSAGE) {
+        expectUniqueViolationRejected(
+          uniqueColumnsViolation(PART_COMPONENT_CONSTRAINT, dbTablePartComponent, [
+            [dbTablePartComponent.parentPartId, partComponent.parentPartId],
+            [dbTablePartComponent.componentPartId, partComponent.componentPartId],
+          ]),
+          errorMessage,
+        );
+      } else {
+        expectRejectedMutation({ code: "BAD_REQUEST", message: errorMessage, procedurePath: "partComponent.create" });
+      }
     }
 
     await page.goto(`/part/${deletedSetPart.id}?tab=components&createPartComponent=true`);

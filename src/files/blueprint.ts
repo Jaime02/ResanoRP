@@ -4,6 +4,7 @@ import path from "node:path";
 
 import { findFolderById, renameFile } from "@/files/functions";
 import logger from "@/logging/logger";
+import { LogMessages } from "@/logging/types";
 import { dateToFileName } from "@/schemas/utils";
 import type { BaseBlueprint } from "@/types/blueprint";
 
@@ -36,7 +37,7 @@ export async function getBlueprintPath({
   let partFolder = await findFolderById(blueprintDir, partId);
   if (partFolder == null && !createFoldersIfNotExist) {
     if (logErrors) {
-      logger.error("Part folder does not exist", { fileName, partId });
+      logger.error(LogMessages.partFolderNotFound, { fileName, partId });
     }
     return null;
   } else if (partFolder == null) {
@@ -51,7 +52,7 @@ export async function getBlueprintPath({
       await promises.access(blueprintPath);
     } catch {
       if (logErrors) {
-        logger.error("Blueprint file does not exist", { blueprintPath, fileName, partId });
+        logger.error(LogMessages.blueprintFileNotFound, { blueprintPath, fileName, partId });
       }
       return null;
     }

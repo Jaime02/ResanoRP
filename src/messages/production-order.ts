@@ -59,3 +59,7 @@ export const QUALITY_CHECK_MEASUREMENT_LABEL = "Medición";
 export const REGISTER_QUALITY_CHECK_LABEL = "Registrar medición";
 export const NO_PART_FEATURES_MESSAGE = "El Artículo no tiene Características";
 export const NEW_QUALITY_CHECK_TITLE = "Registrar control de calidad";
+export const SELL_ORDER_LINE_NOT_OF_PART_MESSAGE = (sellOrderLineId: number, partId: number) =>
+  `La Línea de pedido de venta ${sellOrderLineId} no es del Artículo ${partId}`;
+export const PRODUCTION_ORDER_NOT_ASSIGNABLE_MESSAGE = (productionOrderId: number, status: string) =>
+  `La Orden de producción ${productionOrderId} no se puede asignar a una Máquina, su estado es "${status}"`;

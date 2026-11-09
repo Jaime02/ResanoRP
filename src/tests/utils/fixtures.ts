@@ -31,10 +31,27 @@ export const TestAnnotations: Record<string, TestAnnotation> = {
 
   // Empty the generated tags before and after the test
   ResetTags: { type: "reset_tags" as const },
-
-  // Expect the errors log file to be non-empty after the test
-  NonEmptyErrorsLogFile: { type: "non_empty_errors_log_file" as const },
 } as const;
+
+const LOG_TIMESTAMP_PATTERN = /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/;
+
+// Each worker runs a single test at a time, so the events expected by the current test can live in the module
+let expectedErrorsLogEvents: Array<Record<string, unknown>> = [];
+
+// The events, in any order, that the current test must log in the errors log file, and nothing else
+export function expectErrorsLog(...events: Array<Record<string, unknown>>) {
+  expectedErrorsLogEvents.push(
+    ...events.map((event) => ({ timestamp: expect.stringMatching(LOG_TIMESTAMP_PATTERN), ...event })),
+  );
+}
+
+function readErrorsLog(): Array<unknown> {
+  return fs
+    .readFileSync(errorsLogFilePath, "utf-8")
+    .split("\n")
+    .filter(Boolean)
+    .map((line) => JSON.parse(line) as unknown);
+}
 
 export interface TUserConfig {
   userMode: UserMode;
@@ -81,9 +98,8 @@ export const test = base.extend<TestFixture>({
         await resetTags();
       }
 
-      if (!hasAnnotation(testInfo, TestAnnotations.NonEmptyErrorsLogFile)) {
-        const errorsLogFileContent = fs.readFileSync(errorsLogFilePath, "utf-8");
-        expect(errorsLogFileContent, `Errors log file (${errorsLogFilePath}) should be empty`).toBe("");
+      if (expectedErrorsLogEvents.length === 0) {
+        expect(readErrorsLog(), `Errors log file (${errorsLogFilePath}) should be empty`).toEqual([]);
       }
     },
     { auto: true },
@@ -108,6 +124,7 @@ export const test = base.extend<TestFixture>({
       }
 
       fs.truncateSync(errorsLogFilePath);
+      expectedErrorsLogEvents = [];
       await use();
     },
     { auto: true },
@@ -118,14 +135,13 @@ export const test = base.extend<TestFixture>({
 
     await use(page);
 
-    if (hasAnnotation(testInfo, TestAnnotations.NonEmptyErrorsLogFile)) {
+    if (expectedErrorsLogEvents.length > 0) {
       // Errors reported by the client are logged by a request sent after the UI has already reacted. Polling here,
       // while the page is still open, lets that request finish; closing the page first would abort it.
-      await expect
-        .poll(() => fs.readFileSync(errorsLogFilePath, "utf-8").length, {
-          message: `Errors log file (${errorsLogFilePath}) should not be empty`,
-        })
-        .toBeGreaterThan(0);
+      // The order is not checked, as the requests of the server and the client race
+      const message = `Errors log file (${errorsLogFilePath}) should have the expected events`;
+      await expect.poll(readErrorsLog, { message }).toEqual(expect.arrayContaining(expectedErrorsLogEvents));
+      expect(readErrorsLog(), message).toHaveLength(expectedErrorsLogEvents.length);
     }
     assertNoUnexpectedErrors();
   },
@@ -218,9 +234,10 @@ async function preparePage(page: Page) {
   return () => {
     // The browser logs every failed request on its own, and it cannot be silenced from the page, so
     // a test that expects a request to be rejected also expects those messages
-    const unexpectedConsoleMessages = hasAnnotation(test.info(), TestAnnotations.NonEmptyErrorsLogFile)
-      ? consoleMessages.filter((consoleMessage) => !consoleMessage.text.startsWith(FAILED_REQUEST_CONSOLE_MESSAGE))
-      : consoleMessages;
+    const unexpectedConsoleMessages =
+      expectedErrorsLogEvents.length > 0
+        ? consoleMessages.filter((consoleMessage) => !consoleMessage.text.startsWith(FAILED_REQUEST_CONSOLE_MESSAGE))
+        : consoleMessages;
     expect.soft(unexpectedConsoleMessages, "Console should not have warnings or errors").toEqual([]);
     expect
       .soft(

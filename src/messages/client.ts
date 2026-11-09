@@ -28,3 +28,6 @@ export const CLIENT_EDIT_TITLE = "Editar Cliente";
 export const CLIENT_CREATED_MESSAGE = "Cliente creado";
 export const CLIENT_EDITED_MESSAGE = "Cliente editado";
 export const CLIENT_INVOICE_EMAIL_CREATED_MESSAGE = "Correo electrónico del cliente creado";
+export const CLIENT_INVOICE_EMAIL_TAKEN_MESSAGE = "El Cliente ya tiene ese correo de facturación";
+export const CLIENT_INVOICE_EMAIL_DELETED_CLIENT_MESSAGE =
+  "No se pueden añadir correos de facturación a un Cliente eliminado";

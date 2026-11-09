@@ -6,6 +6,7 @@ import { getBlueprintById } from "@/db/functions/blueprint";
 import { getBlueprintPath } from "@/files/blueprint";
 import { textResponse } from "@/lib/responses";
 import logger from "@/logging/logger";
+import { LogMessages } from "@/logging/types";
 import { coercedIdObjectSchema } from "@/schemas";
 
 export const Route = createFileRoute("/api/files/blueprint/$id")({
@@ -16,19 +17,19 @@ export const Route = createFileRoute("/api/files/blueprint/$id")({
         try {
           ({ id } = coercedIdObjectSchema.parse(params));
         } catch {
-          logger.error("Invalid ID received", { params });
+          logger.error(LogMessages.invalidId, { params });
           return textResponse("Invalid ID received", 400);
         }
 
         const blueprint = await getBlueprintById(id);
         if (!blueprint) {
-          logger.error("Blueprint not found", { id });
-          return textResponse("Blueprint not found", 404);
+          logger.error(LogMessages.blueprintNotFound, { id });
+          return textResponse(LogMessages.blueprintNotFound, 404);
         }
         const blueprintPath = await getBlueprintPath({ ...blueprint, checkIfFileExists: true });
         if (blueprintPath === null) {
-          logger.error("Blueprint path not found", { blueprint });
-          return textResponse("Blueprint path not found", 500);
+          logger.error(LogMessages.blueprintPathNotFound, { blueprint });
+          return textResponse(LogMessages.blueprintPathNotFound, 500);
         }
 
         try {
@@ -43,7 +44,7 @@ export const Route = createFileRoute("/api/files/blueprint/$id")({
             status: 200,
           });
         } catch (error) {
-          logger.error("Error reading file", error);
+          logger.error(LogMessages.fileReadFailed, error);
           return textResponse("Failed to read file", 500);
         }
       },

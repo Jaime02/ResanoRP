@@ -4,6 +4,7 @@ import { eq } from "drizzle-orm";
 import { getClientById } from "@/db/functions/client";
 import { CLIENT_INVOICE_EMAIL_CONSTRAINT, dbTableClientInvoiceEmail } from "@/db/schema";
 import { handleMutationError } from "@/lib/handlers";
+import { CLIENT_INVOICE_EMAIL_DELETED_CLIENT_MESSAGE, CLIENT_INVOICE_EMAIL_TAKEN_MESSAGE } from "@/messages/client";
 import { requiredIdObjectSchema } from "@/schemas";
 import { createClientInvoiceEmailSchema } from "@/schemas/client-invoice-email";
 import { router, generateTxId } from "@/trpc";
@@ -12,7 +13,7 @@ import { adminProcedure } from "@/trpc";
 const uniqueConstraints = [
   {
     constraintName: CLIENT_INVOICE_EMAIL_CONSTRAINT,
-    errorMessage: "El Cliente ya tiene ese correo de facturación",
+    errorMessage: CLIENT_INVOICE_EMAIL_TAKEN_MESSAGE,
   },
 ];
 
@@ -31,7 +32,7 @@ export default router({
         if (client.deletedAt !== null) {
           throw new TRPCError({
             code: "BAD_REQUEST",
-            message: "No se pueden añadir correos de facturación a un Cliente eliminado",
+            message: CLIENT_INVOICE_EMAIL_DELETED_CLIENT_MESSAGE,
           });
         }
         const newEmail = (await tx.insert(dbTableClientInvoiceEmail).values(input).returning()).at(0);

@@ -25,6 +25,11 @@ import { formatCents, getDeliveryNoteLineUnitPrice, getVatBreakdown } from "@/li
 import { PRISMA_ACCOUNTING_ACCOUNT_LABEL } from "@/messages/client";
 import { CLOSE_LABEL } from "@/messages/common";
 import {
+  INVOICES_NOT_ACCOUNTED_AMOUNT_TOO_LARGE_MESSAGE,
+  INVOICES_NOT_ACCOUNTED_UNPRICED_MESSAGE,
+  INVOICES_NOT_ACCOUNTED_WITHOUT_ACCOUNT_MESSAGE,
+} from "@/messages/invoice";
+import {
   MOCK_INITIAL_DATE,
   mockClients,
   mockDeliveryNoteLines,
@@ -36,7 +41,8 @@ import {
 import { getFormInputByLabel, assertFormLoaded } from "@/tests/utils/components/form";
 import { getTableRowByTestId } from "@/tests/utils/components/table";
 import { expectSingleToast } from "@/tests/utils/components/toast";
-import { TestAnnotations, test } from "@/tests/utils/fixtures";
+import { expectRejectedMutation, type TErrorCode } from "@/tests/utils/errors-log";
+import { test } from "@/tests/utils/fixtures";
 import { getMockClientById, getMockPaymentMethodById, getMockSellOrderLineById } from "@/tests/utils/mock-data-utils";
 import { holdRequestWhile } from "@/tests/utils/trpc";
 import { workflowOpenEditDeliveryNote } from "@/tests/workflows/delivery-note";
@@ -47,6 +53,9 @@ import {
   workflowCreateInvoice,
   workflowUnaccountInvoice,
 } from "@/tests/workflows/invoice";
+
+const expectAccountRejected = (message: string, code: TErrorCode = "BAD_REQUEST") =>
+  expectRejectedMutation({ code, message, procedurePath: "invoice.account" });
 
 const MOCK_INVOICES: Array<TAccountingExportInvoice> = [
   {
@@ -204,369 +213,364 @@ async function assertTableInvoicesAccounted(tableInvoices: Locator, invoiceIds: 
   }
 }
 
-test(
-  "account the invoices into the file for Prisma",
-  { annotation: TestAnnotations.NonEmptyErrorsLogFile },
-  async ({ page, db }) => {
-    await test.step("the export format", () => {
-      // It reproduces the file exported by the old program, byte for byte
-      const csv = getAccountingExportCsv(MOCK_INVOICES);
-      expect(csv).toBe(`${MOCK_CSV}\r\n`);
-      expect(encodeAccountingExportCsv(csv).toString("latin1")).toBe(csv);
+test("account the invoices into the file for Prisma", async ({ page, db }) => {
+  await test.step("the export format", () => {
+    // It reproduces the file exported by the old program, byte for byte
+    const csv = getAccountingExportCsv(MOCK_INVOICES);
+    expect(csv).toBe(`${MOCK_CSV}\r\n`);
+    expect(encodeAccountingExportCsv(csv).toString("latin1")).toBe(csv);
 
-      // It holds the records of every VAT rate of an invoice
-      const [invoice] = MOCK_INVOICES;
-      const vatBreakdown = [
-        { taxableBaseInCents: 10000, vatInCents: 2100, vatPercentage: 21 },
-        { taxableBaseInCents: 5000, vatInCents: 500, vatPercentage: 10 },
-        { taxableBaseInCents: 3000, vatInCents: 0, vatPercentage: 0 },
-      ];
-      const records = parseRecords(getAccountingExportCsv([{ ...invoice, vatBreakdown }]));
+    // It holds the records of every VAT rate of an invoice
+    const [invoice] = MOCK_INVOICES;
+    const vatBreakdown = [
+      { taxableBaseInCents: 10000, vatInCents: 2100, vatPercentage: 21 },
+      { taxableBaseInCents: 5000, vatInCents: 500, vatPercentage: 10 },
+      { taxableBaseInCents: 3000, vatInCents: 0, vatPercentage: 0 },
+    ];
+    const records = parseRecords(getAccountingExportCsv([{ ...invoice, vatBreakdown }]));
 
-      const vatLedgerRecords = records.filter((record) => record[0] === "2");
-      expect(vatLedgerRecords.map((record) => [record[5], record[7], record[8], record[10]])).toEqual([
-        ["2100", "0000010000", "0000002100", "0000012100"],
-        ["1000", "0000005000", "0000000500", "0000005500"],
-        ["0000", "0000003000", "0000000000", "0000003000"],
+    const vatLedgerRecords = records.filter((record) => record[0] === "2");
+    expect(vatLedgerRecords.map((record) => [record[5], record[7], record[8], record[10]])).toEqual([
+      ["2100", "0000010000", "0000002100", "0000012100"],
+      ["1000", "0000005000", "0000000500", "0000005500"],
+      ["0000", "0000003000", "0000000000", "0000003000"],
+    ]);
+
+    // The output VAT is credited once for each rate that charges it, the income once for the whole taxable base,
+    // and the Cliente is debited with the total
+    const journalLines = records
+      .filter((record) => record[0] === "1")
+      .map((record) => [record[2].trim(), record[5], Number(record[6])]);
+    expect(journalLines).toEqual([
+      ["4300001", "D", 20600],
+      ["4770000", "H", 2100],
+      ["4770000", "H", 500],
+      ["7050001", "H", 18000],
+    ]);
+    expect(records.filter((record) => record[0] === "3").map((record) => Number(record[4]))).toEqual([20600]);
+
+    // It is encoded in ISO-8859-1: Prisma cannot read the characters out of it, and the quotes inside a field
+    // would end it
+    const encoded = encodeAccountingExportCsv(
+      getAccountingExportCsv([
+        { ...invoice, client: { ...invoice.client, address: 'C/ ESPAÑA, Nº 5 "€"', legalName: "PEÑA Ⅳ, S.L." } },
+      ]),
+    );
+    expect(encoded.toString("latin1")).toContain(`"C/ ESPAÑA, Nº 5 '?'`);
+    expect(encoded.toString("latin1")).toContain(`"PEÑA ?, S.L.`);
+    expect(encoded.includes(Buffer.from([0xd1]))).toBe(true);
+
+    // An amount longer than its fixed-width field is detected before the file is written
+    expect(MOCK_INVOICES.some(hasAmountTooLarge)).toBe(false);
+    const largestInvoice = {
+      ...invoice,
+      vatBreakdown: [{ taxableBaseInCents: 8_264_462_809, vatInCents: 1_735_537_190, vatPercentage: 21 }],
+    };
+    expect(hasAmountTooLarge(largestInvoice)).toBe(false);
+    expect(parseRecords(getAccountingExportCsv([largestInvoice]))[0][6]).toBe(String(MAX_AMOUNT_IN_CENTS));
+    expect(
+      hasAmountTooLarge({
+        ...invoice,
+        vatBreakdown: [{ taxableBaseInCents: 8_264_462_810, vatInCents: 1_735_537_190, vatPercentage: 21 }],
+      }),
+    ).toBe(true);
+    // The total fits, but a negative line hides a VAT rate that does not
+    expect(
+      hasAmountTooLarge({
+        ...invoice,
+        vatBreakdown: [
+          { taxableBaseInCents: -100, vatInCents: -21, vatPercentage: 21 },
+          { taxableBaseInCents: MAX_AMOUNT_IN_CENTS + 1, vatInCents: 0, vatPercentage: 0 },
+        ],
+      }),
+    ).toBe(true);
+  });
+
+  await test.step("account the pending invoices into the file for Prisma", async () => {
+    const pendingInvoices = mockInvoices.filter((invoice) => !invoice.accounted);
+    const accountedInvoices = mockInvoices.filter((invoice) => invoice.accounted);
+    expect(pendingInvoices.length).toBeGreaterThan(1);
+    expect(accountedInvoices.length).toBeGreaterThan(0);
+    // The pending Facturas cover a payment method with receipts, one without them, and several VAT rates
+    expect(
+      pendingInvoices.map((invoice) => getMockPaymentMethodById(invoice.paymentMethodId!)!.generatesReceipt),
+    ).toEqual(expect.arrayContaining([true, false]));
+    const vatRatesCounts = await Promise.all(
+      pendingInvoices.map(async (invoice) => (await getExpectedVatBreakdown(invoice.id)).length),
+    );
+    expect(vatRatesCounts.some((vatRatesCount) => vatRatesCount > 1)).toBe(true);
+
+    // Nothing is accounted while a Cliente has no Prisma accounting account
+    const clientWithoutAccount = mockClients.find((client) =>
+      pendingInvoices.some((invoice) => invoice.clientId === client.id),
+    )!;
+    await db
+      .update(dbTableClient)
+      .set({ prismaAccountingAccountId: null })
+      .where(eq(dbTableClient.id, clientWithoutAccount.id));
+
+    await page.goto("/invoicing");
+    const tableInvoices = page.getByTestId("table-invoice");
+    await assertTableInvoicesAccounted(
+      tableInvoices,
+      pendingInvoices.map((invoice) => invoice.id),
+      false,
+    );
+
+    const downloads = trackDownloads(page);
+    await confirmAccountInvoices(page);
+    const withoutAccountMessage = INVOICES_NOT_ACCOUNTED_WITHOUT_ACCOUNT_MESSAGE([clientWithoutAccount.name]);
+    await expectSingleToast(page, withoutAccountMessage);
+    expectAccountRejected(withoutAccountMessage);
+    expect(downloads).toHaveLength(0);
+    for (const invoice of await getInvoices()) {
+      expect(invoice.accounted, `Factura ${invoice.id}`).toBe(
+        mockInvoices.find(({ id }) => id === invoice.id)!.accounted,
+      );
+    }
+
+    // Once the Cliente has its account the pending Facturas are accounted
+    await page.goto(`/client/${clientWithoutAccount.id}`);
+    const formClient = page.getByTestId("form-client");
+    await assertFormLoaded(formClient);
+    await getFormInputByLabel(formClient, PRISMA_ACCOUNTING_ACCOUNT_LABEL).fill(
+      clientWithoutAccount.prismaAccountingAccountId!,
+    );
+    await formClient.getByTestId("button-submit").click();
+    await expectSingleToast(page);
+
+    // Nothing is accounted while an Albarán has a Línea without price, added by hand or from a Pedido de venta,
+    // as it would be exported at 0 €
+    const pendingDeliveryNoteIds = mockDeliveryNotes
+      .filter((deliveryNote) => pendingInvoices.some((invoice) => invoice.id === deliveryNote.invoiceId))
+      .map((deliveryNote) => deliveryNote.id);
+    const unpricedLine = mockDeliveryNoteLines.find(
+      (line) =>
+        pendingDeliveryNoteIds.includes(line.deliveryNoteId) &&
+        line.sellOrderLineId === null &&
+        line.unitPrice === null,
+    )!;
+    expect(unpricedLine, "A pending Factura should have a Línea without price").toBeDefined();
+    const linkedLine = mockDeliveryNoteLines.find(
+      (line) =>
+        pendingDeliveryNoteIds.includes(line.deliveryNoteId) &&
+        line.deliveryNoteId !== unpricedLine.deliveryNoteId &&
+        line.sellOrderLineId !== null,
+    )!;
+    expect(linkedLine, "Another Albarán of a pending Factura should have a Línea of a Pedido de venta").toBeDefined();
+    const linkedSellOrderLine = getMockSellOrderLineById(linkedLine.sellOrderLineId!)!;
+    expect(linkedSellOrderLine.partPrice).not.toBeNull();
+    await db
+      .update(dbTableSellOrderLine)
+      .set({ partPrice: null })
+      .where(eq(dbTableSellOrderLine.id, linkedSellOrderLine.id));
+
+    await page.goto("/invoicing");
+    await confirmAccountInvoices(page);
+    const unpricedMessage = INVOICES_NOT_ACCOUNTED_UNPRICED_MESSAGE(
+      [unpricedLine.deliveryNoteId, linkedLine.deliveryNoteId].sort((a, b) => a - b),
+    );
+    await expectSingleToast(page, unpricedMessage);
+    expectAccountRejected(unpricedMessage);
+    expect(downloads).toHaveLength(0);
+    for (const invoice of await getInvoices()) {
+      expect(invoice.accounted, `Factura ${invoice.id}`).toBe(
+        mockInvoices.find(({ id }) => id === invoice.id)!.accounted,
+      );
+    }
+
+    await db
+      .update(dbTableDeliveryNoteLine)
+      .set({ unitPrice: "3.5" })
+      .where(eq(dbTableDeliveryNoteLine.id, unpricedLine.id));
+    await db
+      .update(dbTableSellOrderLine)
+      .set({ partPrice: linkedSellOrderLine.partPrice })
+      .where(eq(dbTableSellOrderLine.id, linkedSellOrderLine.id));
+
+    // Nothing is accounted while an amount does not fit in its field of the file
+    const [invoiceWithAmountTooLarge] = pendingInvoices;
+    const deliveryNote = await getDeliveryNoteWithLinesForDocument(
+      (await getInvoiceById(invoiceWithAmountTooLarge.id))!.deliveryNotes[0].id,
+    );
+    const sellOrderLine = deliveryNote!.deliveryNoteLines
+      .map((deliveryNoteLine) => deliveryNoteLine.sellOrderLine)
+      .find((line) => line !== null)!;
+    await db
+      .update(dbTableSellOrderLine)
+      .set({ partPrice: String(MAX_AMOUNT_IN_CENTS) })
+      .where(eq(dbTableSellOrderLine.id, sellOrderLine.id));
+
+    await page.goto("/invoicing");
+    await confirmAccountInvoices(page);
+    const amountTooLargeMessage = INVOICES_NOT_ACCOUNTED_AMOUNT_TOO_LARGE_MESSAGE(formatCents(MAX_AMOUNT_IN_CENTS), [
+      invoiceWithAmountTooLarge.id,
+    ]);
+    await expectSingleToast(page, amountTooLargeMessage);
+    expectAccountRejected(amountTooLargeMessage);
+    expect(downloads).toHaveLength(0);
+    for (const invoice of await getInvoices()) {
+      expect(invoice.accounted, `Factura ${invoice.id}`).toBe(
+        mockInvoices.find(({ id }) => id === invoice.id)!.accounted,
+      );
+    }
+
+    await db
+      .update(dbTableSellOrderLine)
+      .set({ partPrice: sellOrderLine.partPrice })
+      .where(eq(dbTableSellOrderLine.id, sellOrderLine.id));
+
+    await page.goto("/invoicing");
+    const { content, fileName } = await workflowAccountInvoices(page);
+
+    expect(fileName).toBe(`facturas-${pendingInvoices.at(0)!.id}-${pendingInvoices.at(-1)!.id}.csv`);
+    expect(await fs.readFile(getAccountingExportPath(fileName)), "The server keeps the exported file").toEqual(content);
+    const csv = content.toString("latin1");
+    expect(csv.endsWith("\r\n")).toBe(true);
+    const records = parseRecords(csv);
+
+    // Only the Facturas that were pending are exported, in order
+    const exportedInvoiceNumbers = [
+      ...new Set(records.map((record) => (record[0] === "2" ? record[11] : record[0] === "3" ? record[5] : record[4]))),
+    ];
+    expect(exportedInvoiceNumbers.map((invoiceNumber) => invoiceNumber.trim())).toEqual(
+      pendingInvoices.map((invoice) => String(invoice.id).padStart(6, "0")),
+    );
+
+    for (const invoice of pendingInvoices) {
+      const invoiceNumber = String(invoice.id).padStart(6, "0").padEnd(15);
+      const invoiceRecords = records.filter((record) => [record[4], record[5], record[11]].includes(invoiceNumber));
+      const client = getMockClientById(invoice.clientId)!;
+      const clientAccount = client.prismaAccountingAccountId!;
+      const vatBreakdown = await getExpectedVatBreakdown(invoice.id);
+      const taxableBaseInCents = vatBreakdown.reduce((total, item) => total + item.taxableBaseInCents, 0);
+      const vatInCents = vatBreakdown.reduce((total, item) => total + item.vatInCents, 0);
+
+      const journalLines = invoiceRecords.filter((record) => record[0] === "1");
+      for (const record of journalLines) {
+        expect(record[1]).toBe(toExportDate(invoice.createdAt));
+        expect(record[3]).toBe(`N/FACTURA ${String(invoice.id).padStart(6, "0")}`.padEnd(35));
+        expect(record.slice(8)).toEqual([
+          client.taxId.padEnd(15),
+          client.address.slice(0, 35).padEnd(35),
+          client.postalCode.padEnd(5),
+          client.city.padEnd(34),
+        ]);
+      }
+      expect(journalLines.map((record) => [record[2].trim(), record[5], Number(record[6])])).toEqual([
+        [clientAccount, "D", taxableBaseInCents + vatInCents],
+        ...vatBreakdown.filter((item) => item.vatInCents !== 0).map((item) => ["4770000", "H", item.vatInCents]),
+        [`705${clientAccount.slice(3, 7)}`, "H", taxableBaseInCents],
       ]);
 
-      // The output VAT is credited once for each rate that charges it, the income once for the whole taxable base,
-      // and the Cliente is debited with the total
-      const journalLines = records
-        .filter((record) => record[0] === "1")
-        .map((record) => [record[2].trim(), record[5], Number(record[6])]);
-      expect(journalLines).toEqual([
-        ["4300001", "D", 20600],
-        ["4770000", "H", 2100],
-        ["4770000", "H", 500],
-        ["7050001", "H", 18000],
-      ]);
-      expect(records.filter((record) => record[0] === "3").map((record) => Number(record[4]))).toEqual([20600]);
-
-      // It is encoded in ISO-8859-1: Prisma cannot read the characters out of it, and the quotes inside a field
-      // would end it
-      const encoded = encodeAccountingExportCsv(
-        getAccountingExportCsv([
-          { ...invoice, client: { ...invoice.client, address: 'C/ ESPAÑA, Nº 5 "€"', legalName: "PEÑA Ⅳ, S.L." } },
+      expect(
+        invoiceRecords
+          .filter((record) => record[0] === "2")
+          .map((record) => [record[5], Number(record[7]), Number(record[8])]),
+      ).toEqual(
+        vatBreakdown.map((item) => [
+          String(item.vatPercentage * 100).padStart(4, "0"),
+          item.taxableBaseInCents,
+          item.vatInCents,
         ]),
       );
-      expect(encoded.toString("latin1")).toContain(`"C/ ESPAÑA, Nº 5 '?'`);
-      expect(encoded.toString("latin1")).toContain(`"PEÑA ?, S.L.`);
-      expect(encoded.includes(Buffer.from([0xd1]))).toBe(true);
 
-      // An amount longer than its fixed-width field is detected before the file is written
-      expect(MOCK_INVOICES.some(hasAmountTooLarge)).toBe(false);
-      const largestInvoice = {
-        ...invoice,
-        vatBreakdown: [{ taxableBaseInCents: 8_264_462_809, vatInCents: 1_735_537_190, vatPercentage: 21 }],
-      };
-      expect(hasAmountTooLarge(largestInvoice)).toBe(false);
-      expect(parseRecords(getAccountingExportCsv([largestInvoice]))[0][6]).toBe(String(MAX_AMOUNT_IN_CENTS));
-      expect(
-        hasAmountTooLarge({
-          ...invoice,
-          vatBreakdown: [{ taxableBaseInCents: 8_264_462_810, vatInCents: 1_735_537_190, vatPercentage: 21 }],
-        }),
-      ).toBe(true);
-      // The total fits, but a negative line hides a VAT rate that does not
-      expect(
-        hasAmountTooLarge({
-          ...invoice,
-          vatBreakdown: [
-            { taxableBaseInCents: -100, vatInCents: -21, vatPercentage: 21 },
-            { taxableBaseInCents: MAX_AMOUNT_IN_CENTS + 1, vatInCents: 0, vatPercentage: 0 },
-          ],
-        }),
-      ).toBe(true);
-    });
-
-    await test.step("account the pending invoices into the file for Prisma", async () => {
-      const pendingInvoices = mockInvoices.filter((invoice) => !invoice.accounted);
-      const accountedInvoices = mockInvoices.filter((invoice) => invoice.accounted);
-      expect(pendingInvoices.length).toBeGreaterThan(1);
-      expect(accountedInvoices.length).toBeGreaterThan(0);
-      // The pending Facturas cover a payment method with receipts, one without them, and several VAT rates
-      expect(
-        pendingInvoices.map((invoice) => getMockPaymentMethodById(invoice.paymentMethodId!)!.generatesReceipt),
-      ).toEqual(expect.arrayContaining([true, false]));
-      const vatRatesCounts = await Promise.all(
-        pendingInvoices.map(async (invoice) => (await getExpectedVatBreakdown(invoice.id)).length),
-      );
-      expect(vatRatesCounts.some((vatRatesCount) => vatRatesCount > 1)).toBe(true);
-
-      // Nothing is accounted while a Cliente has no Prisma accounting account
-      const clientWithoutAccount = mockClients.find((client) =>
-        pendingInvoices.some((invoice) => invoice.clientId === client.id),
-      )!;
-      await db
-        .update(dbTableClient)
-        .set({ prismaAccountingAccountId: null })
-        .where(eq(dbTableClient.id, clientWithoutAccount.id));
-
-      await page.goto("/invoicing");
-      const tableInvoices = page.getByTestId("table-invoice");
-      await assertTableInvoicesAccounted(
-        tableInvoices,
-        pendingInvoices.map((invoice) => invoice.id),
-        false,
-      );
-
-      const downloads = trackDownloads(page);
-      await confirmAccountInvoices(page);
-      await expectSingleToast(page, `estos Clientes no tienen cuenta contable de Prisma: ${clientWithoutAccount.name}`);
-      expect(downloads).toHaveLength(0);
-      for (const invoice of await getInvoices()) {
-        expect(invoice.accounted, `Factura ${invoice.id}`).toBe(
-          mockInvoices.find(({ id }) => id === invoice.id)!.accounted,
-        );
-      }
-
-      // Once the Cliente has its account the pending Facturas are accounted
-      await page.goto(`/client/${clientWithoutAccount.id}`);
-      const formClient = page.getByTestId("form-client");
-      await assertFormLoaded(formClient);
-      await getFormInputByLabel(formClient, PRISMA_ACCOUNTING_ACCOUNT_LABEL).fill(
-        clientWithoutAccount.prismaAccountingAccountId!,
-      );
-      await formClient.getByTestId("button-submit").click();
-      await expectSingleToast(page);
-
-      // Nothing is accounted while an Albarán has a Línea without price, added by hand or from a Pedido de venta,
-      // as it would be exported at 0 €
-      const pendingDeliveryNoteIds = mockDeliveryNotes
-        .filter((deliveryNote) => pendingInvoices.some((invoice) => invoice.id === deliveryNote.invoiceId))
-        .map((deliveryNote) => deliveryNote.id);
-      const unpricedLine = mockDeliveryNoteLines.find(
-        (line) =>
-          pendingDeliveryNoteIds.includes(line.deliveryNoteId) &&
-          line.sellOrderLineId === null &&
-          line.unitPrice === null,
-      )!;
-      expect(unpricedLine, "A pending Factura should have a Línea without price").toBeDefined();
-      const linkedLine = mockDeliveryNoteLines.find(
-        (line) =>
-          pendingDeliveryNoteIds.includes(line.deliveryNoteId) &&
-          line.deliveryNoteId !== unpricedLine.deliveryNoteId &&
-          line.sellOrderLineId !== null,
-      )!;
-      expect(linkedLine, "Another Albarán of a pending Factura should have a Línea of a Pedido de venta").toBeDefined();
-      const linkedSellOrderLine = getMockSellOrderLineById(linkedLine.sellOrderLineId!)!;
-      expect(linkedSellOrderLine.partPrice).not.toBeNull();
-      await db
-        .update(dbTableSellOrderLine)
-        .set({ partPrice: null })
-        .where(eq(dbTableSellOrderLine.id, linkedSellOrderLine.id));
-
-      await page.goto("/invoicing");
-      await confirmAccountInvoices(page);
-      await expectSingleToast(
-        page,
-        `estos Albaranes tienen Líneas sin precio: ${[unpricedLine.deliveryNoteId, linkedLine.deliveryNoteId].sort((a, b) => a - b).join(", ")}`,
-      );
-      expect(downloads).toHaveLength(0);
-      for (const invoice of await getInvoices()) {
-        expect(invoice.accounted, `Factura ${invoice.id}`).toBe(
-          mockInvoices.find(({ id }) => id === invoice.id)!.accounted,
-        );
-      }
-
-      await db
-        .update(dbTableDeliveryNoteLine)
-        .set({ unitPrice: "3.5" })
-        .where(eq(dbTableDeliveryNoteLine.id, unpricedLine.id));
-      await db
-        .update(dbTableSellOrderLine)
-        .set({ partPrice: linkedSellOrderLine.partPrice })
-        .where(eq(dbTableSellOrderLine.id, linkedSellOrderLine.id));
-
-      // Nothing is accounted while an amount does not fit in its field of the file
-      const [invoiceWithAmountTooLarge] = pendingInvoices;
-      const deliveryNote = await getDeliveryNoteWithLinesForDocument(
-        (await getInvoiceById(invoiceWithAmountTooLarge.id))!.deliveryNotes[0].id,
-      );
-      const sellOrderLine = deliveryNote!.deliveryNoteLines
-        .map((deliveryNoteLine) => deliveryNoteLine.sellOrderLine)
-        .find((line) => line !== null)!;
-      await db
-        .update(dbTableSellOrderLine)
-        .set({ partPrice: String(MAX_AMOUNT_IN_CENTS) })
-        .where(eq(dbTableSellOrderLine.id, sellOrderLine.id));
-
-      await page.goto("/invoicing");
-      await confirmAccountInvoices(page);
-      await expectSingleToast(page, `no caben en el fichero de Prisma: ${invoiceWithAmountTooLarge.id}`);
-      expect(downloads).toHaveLength(0);
-      for (const invoice of await getInvoices()) {
-        expect(invoice.accounted, `Factura ${invoice.id}`).toBe(
-          mockInvoices.find(({ id }) => id === invoice.id)!.accounted,
-        );
-      }
-
-      await db
-        .update(dbTableSellOrderLine)
-        .set({ partPrice: sellOrderLine.partPrice })
-        .where(eq(dbTableSellOrderLine.id, sellOrderLine.id));
-
-      await page.goto("/invoicing");
-      const { content, fileName } = await workflowAccountInvoices(page);
-
-      expect(fileName).toBe(`facturas-${pendingInvoices.at(0)!.id}-${pendingInvoices.at(-1)!.id}.csv`);
-      expect(await fs.readFile(getAccountingExportPath(fileName)), "The server keeps the exported file").toEqual(
-        content,
-      );
-      const csv = content.toString("latin1");
-      expect(csv.endsWith("\r\n")).toBe(true);
-      const records = parseRecords(csv);
-
-      // Only the Facturas that were pending are exported, in order
-      const exportedInvoiceNumbers = [
-        ...new Set(
-          records.map((record) => (record[0] === "2" ? record[11] : record[0] === "3" ? record[5] : record[4])),
-        ),
-      ];
-      expect(exportedInvoiceNumbers.map((invoiceNumber) => invoiceNumber.trim())).toEqual(
-        pendingInvoices.map((invoice) => String(invoice.id).padStart(6, "0")),
-      );
-
-      for (const invoice of pendingInvoices) {
-        const invoiceNumber = String(invoice.id).padStart(6, "0").padEnd(15);
-        const invoiceRecords = records.filter((record) => [record[4], record[5], record[11]].includes(invoiceNumber));
-        const client = getMockClientById(invoice.clientId)!;
-        const clientAccount = client.prismaAccountingAccountId!;
-        const vatBreakdown = await getExpectedVatBreakdown(invoice.id);
-        const taxableBaseInCents = vatBreakdown.reduce((total, item) => total + item.taxableBaseInCents, 0);
-        const vatInCents = vatBreakdown.reduce((total, item) => total + item.vatInCents, 0);
-
-        const journalLines = invoiceRecords.filter((record) => record[0] === "1");
-        for (const record of journalLines) {
-          expect(record[1]).toBe(toExportDate(invoice.createdAt));
-          expect(record[3]).toBe(`N/FACTURA ${String(invoice.id).padStart(6, "0")}`.padEnd(35));
-          expect(record.slice(8)).toEqual([
-            client.taxId.padEnd(15),
-            client.address.slice(0, 35).padEnd(35),
-            client.postalCode.padEnd(5),
-            client.city.padEnd(34),
-          ]);
-        }
-        expect(journalLines.map((record) => [record[2].trim(), record[5], Number(record[6])])).toEqual([
-          [clientAccount, "D", taxableBaseInCents + vatInCents],
-          ...vatBreakdown.filter((item) => item.vatInCents !== 0).map((item) => ["4770000", "H", item.vatInCents]),
-          [`705${clientAccount.slice(3, 7)}`, "H", taxableBaseInCents],
+      const receiptRecords = invoiceRecords.filter((record) => record[0] === "3");
+      if (getMockPaymentMethodById(invoice.paymentMethodId!)!.generatesReceipt) {
+        expect(receiptRecords.map((record) => [record[2], record[3].trim(), Number(record[4])])).toEqual([
+          [toExportDate(invoice.dueDate), clientAccount, taxableBaseInCents + vatInCents],
         ]);
-
-        expect(
-          invoiceRecords
-            .filter((record) => record[0] === "2")
-            .map((record) => [record[5], Number(record[7]), Number(record[8])]),
-        ).toEqual(
-          vatBreakdown.map((item) => [
-            String(item.vatPercentage * 100).padStart(4, "0"),
-            item.taxableBaseInCents,
-            item.vatInCents,
-          ]),
-        );
-
-        const receiptRecords = invoiceRecords.filter((record) => record[0] === "3");
-        if (getMockPaymentMethodById(invoice.paymentMethodId!)!.generatesReceipt) {
-          expect(receiptRecords.map((record) => [record[2], record[3].trim(), Number(record[4])])).toEqual([
-            [toExportDate(invoice.dueDate), clientAccount, taxableBaseInCents + vatInCents],
-          ]);
-        } else {
-          expect(receiptRecords).toHaveLength(0);
-        }
+      } else {
+        expect(receiptRecords).toHaveLength(0);
       }
+    }
 
-      // Every Factura is accounted now
-      for (const invoice of await getInvoices()) {
-        expect(invoice.accounted, `Factura ${invoice.id}`).toBe(true);
-      }
-      await assertTableInvoicesAccounted(
-        tableInvoices,
-        mockInvoices.map((invoice) => invoice.id),
-        true,
-      );
+    // Every Factura is accounted now
+    for (const invoice of await getInvoices()) {
+      expect(invoice.accounted, `Factura ${invoice.id}`).toBe(true);
+    }
+    await assertTableInvoicesAccounted(
+      tableInvoices,
+      mockInvoices.map((invoice) => invoice.id),
+      true,
+    );
 
-      // ...so a new export has nothing to download
-      downloads.length = 0;
-      await confirmAccountInvoices(page);
-      await expectSingleToast(page, "No hay Facturas pendientes de contabilizar");
-      expect(downloads).toHaveLength(0);
-    });
+    // ...so a new export has nothing to download
+    downloads.length = 0;
+    await confirmAccountInvoices(page);
+    await expectSingleToast(page, "No hay Facturas pendientes de contabilizar");
+    expectAccountRejected("No hay Facturas pendientes de contabilizar", "NOT_FOUND");
+    expect(downloads).toHaveLength(0);
+  });
 
-    await test.step("an accounted invoice can be marked as not accounted and is exported again", async () => {
-      for (const invoice of mockInvoices) {
-        await db.update(dbTableInvoice).set({ accounted: invoice.accounted }).where(eq(dbTableInvoice.id, invoice.id));
-      }
-      const accountedInvoices = mockInvoices.filter((invoice) => invoice.accounted);
-      const pendingInvoices = mockInvoices.filter((invoice) => !invoice.accounted);
-      expect(accountedInvoices.length).toBeGreaterThan(1);
-      const [invoiceToUnaccount, otherAccountedInvoice] = accountedInvoices;
+  await test.step("an accounted invoice can be marked as not accounted and is exported again", async () => {
+    for (const invoice of mockInvoices) {
+      await db.update(dbTableInvoice).set({ accounted: invoice.accounted }).where(eq(dbTableInvoice.id, invoice.id));
+    }
+    const accountedInvoices = mockInvoices.filter((invoice) => invoice.accounted);
+    const pendingInvoices = mockInvoices.filter((invoice) => !invoice.accounted);
+    expect(accountedInvoices.length).toBeGreaterThan(1);
+    const [invoiceToUnaccount, otherAccountedInvoice] = accountedInvoices;
 
-      await page.goto("/invoicing");
-      const tableInvoices = page.getByTestId("table-invoice");
+    await page.goto("/invoicing");
+    const tableInvoices = page.getByTestId("table-invoice");
 
-      // Only the accounted invoices have the action enabled
-      for (const invoice of mockInvoices) {
-        await expect(
-          getTableRowByTestId(tableInvoices, invoice.id).getByTestId("button-unaccount-invoice"),
-        ).toBeEnabled({
-          enabled: invoice.accounted,
-        });
-      }
-
-      // An invoice that is no longer accounted cannot be marked as not accounted
-      const setOtherAccounted = async (accounted: boolean) => {
-        await db.update(dbTableInvoice).set({ accounted }).where(eq(dbTableInvoice.id, otherAccountedInvoice.id));
-      };
-      await holdRequestWhile({
-        page,
-        procedurePath: "invoice.unaccount",
-        send: async () =>
-          workflowUnaccountInvoice(
-            page,
-            otherAccountedInvoice.id,
-            `Factura contabilizada con ID ${otherAccountedInvoice.id} no encontrada`,
-          ),
-        meanwhile: async () => setOtherAccounted(false),
+    // Only the accounted invoices have the action enabled
+    for (const invoice of mockInvoices) {
+      await expect(getTableRowByTestId(tableInvoices, invoice.id).getByTestId("button-unaccount-invoice")).toBeEnabled({
+        enabled: invoice.accounted,
       });
-      await setOtherAccounted(true);
+    }
 
-      // Cancelling the confirmation changes nothing
-      const rowInvoice = getTableRowByTestId(tableInvoices, invoiceToUnaccount.id);
-      await rowInvoice.getByTestId("button-unaccount-invoice").click();
-      const dialog = page.getByTestId("dialog-unaccount-invoice-content");
-      await expect(dialog).toBeVisible();
-      await expect(dialog).toContainText(`Factura ${invoiceToUnaccount.id}`);
-      await dialog.getByRole("button", { name: CLOSE_LABEL }).click();
-      await expect(dialog).not.toBeVisible();
-      expect((await getInvoiceById(invoiceToUnaccount.id))?.accounted).toBe(true);
-
-      await workflowUnaccountInvoice(page, invoiceToUnaccount.id);
-      await assertTableInvoicesAccounted(tableInvoices, [invoiceToUnaccount.id], false);
-      await expect(rowInvoice.getByTestId("button-unaccount-invoice")).toBeDisabled();
-      expect((await getInvoiceById(invoiceToUnaccount.id))?.accounted).toBe(false);
-
-      // The other invoices are not touched
-      await assertTableInvoicesAccounted(tableInvoices, [otherAccountedInvoice.id], true);
-      expect((await getInvoiceById(otherAccountedInvoice.id))?.accounted).toBe(true);
-
-      // The invoice is exported again along with the invoices that were pending
-      const { content, fileName } = await workflowAccountInvoices(page);
-      const exportedInvoiceIds = [...pendingInvoices, invoiceToUnaccount]
-        .map((invoice) => invoice.id)
-        .sort((a, b) => a - b);
-      // The unaccounted invoice has a lower id but is updated last, so its row is no longer in id order
-      expect(fileName).toBe(`facturas-${exportedInvoiceIds.at(0)}-${exportedInvoiceIds.at(-1)}.csv`);
-      const exportedInvoiceNumbers = new Set(
-        parseRecords(content.toString("latin1")).map((record) =>
-          (record[0] === "2" ? record[11] : record[0] === "3" ? record[5] : record[4]).trim(),
-        ),
-      );
-      expect([...exportedInvoiceNumbers]).toEqual(exportedInvoiceIds.map((id) => String(id).padStart(6, "0")));
-      await assertTableInvoicesAccounted(tableInvoices, [invoiceToUnaccount.id], true);
+    // An invoice that is no longer accounted cannot be marked as not accounted
+    const setOtherAccounted = async (accounted: boolean) => {
+      await db.update(dbTableInvoice).set({ accounted }).where(eq(dbTableInvoice.id, otherAccountedInvoice.id));
+    };
+    const notAccountedMessage = `Factura contabilizada con ID ${otherAccountedInvoice.id} no encontrada`;
+    await holdRequestWhile({
+      page,
+      procedurePath: "invoice.unaccount",
+      send: async () => workflowUnaccountInvoice(page, otherAccountedInvoice.id, notAccountedMessage),
+      meanwhile: async () => setOtherAccounted(false),
     });
-  },
-);
+    expectRejectedMutation({ code: "NOT_FOUND", message: notAccountedMessage, procedurePath: "invoice.unaccount" });
+    await setOtherAccounted(true);
+
+    // Cancelling the confirmation changes nothing
+    const rowInvoice = getTableRowByTestId(tableInvoices, invoiceToUnaccount.id);
+    await rowInvoice.getByTestId("button-unaccount-invoice").click();
+    const dialog = page.getByTestId("dialog-unaccount-invoice-content");
+    await expect(dialog).toBeVisible();
+    await expect(dialog).toContainText(`Factura ${invoiceToUnaccount.id}`);
+    await dialog.getByRole("button", { name: CLOSE_LABEL }).click();
+    await expect(dialog).not.toBeVisible();
+    expect((await getInvoiceById(invoiceToUnaccount.id))?.accounted).toBe(true);
+
+    await workflowUnaccountInvoice(page, invoiceToUnaccount.id);
+    await assertTableInvoicesAccounted(tableInvoices, [invoiceToUnaccount.id], false);
+    await expect(rowInvoice.getByTestId("button-unaccount-invoice")).toBeDisabled();
+    expect((await getInvoiceById(invoiceToUnaccount.id))?.accounted).toBe(false);
+
+    // The other invoices are not touched
+    await assertTableInvoicesAccounted(tableInvoices, [otherAccountedInvoice.id], true);
+    expect((await getInvoiceById(otherAccountedInvoice.id))?.accounted).toBe(true);
+
+    // The invoice is exported again along with the invoices that were pending
+    const { content, fileName } = await workflowAccountInvoices(page);
+    const exportedInvoiceIds = [...pendingInvoices, invoiceToUnaccount]
+      .map((invoice) => invoice.id)
+      .sort((a, b) => a - b);
+    // The unaccounted invoice has a lower id but is updated last, so its row is no longer in id order
+    expect(fileName).toBe(`facturas-${exportedInvoiceIds.at(0)}-${exportedInvoiceIds.at(-1)}.csv`);
+    const exportedInvoiceNumbers = new Set(
+      parseRecords(content.toString("latin1")).map((record) =>
+        (record[0] === "2" ? record[11] : record[0] === "3" ? record[5] : record[4]).trim(),
+      ),
+    );
+    expect([...exportedInvoiceNumbers]).toEqual(exportedInvoiceIds.map((id) => String(id).padStart(6, "0")));
+    await assertTableInvoicesAccounted(tableInvoices, [invoiceToUnaccount.id], true);
+  });
+});
 
 // The expected amounts are written by hand, as the helpers of the tests share the price logic of the app
 test("every kind of delivery note line is invoiced and accounted with its price", async ({ page, db }) => {

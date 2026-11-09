@@ -14,6 +14,7 @@ import {
 import { renameFile, saveUpload } from "@/files/functions";
 import { getSellOrderPath } from "@/files/sell-order";
 import { handleMutationError } from "@/lib/handlers";
+import { SELL_ORDER_REFERENCE_TAKEN_MESSAGE } from "@/messages/sell-order";
 import { requiredIdObjectSchema, requiredIdSchema } from "@/schemas";
 import { createSellOrderFormDataSchema, updateSellOrderFormDataSchema } from "@/schemas/sell-order";
 import { dateToFileName } from "@/schemas/utils";
@@ -23,7 +24,7 @@ import type { BaseSellOrder } from "@/types/sell-order";
 const uniqueConstraints = [
   {
     constraintName: SELL_ORDER_REFERENCE_CONSTRAINT,
-    errorMessage: "El Cliente ya tiene un Pedido de venta con esa referencia",
+    errorMessage: SELL_ORDER_REFERENCE_TAKEN_MESSAGE,
   },
 ];
 

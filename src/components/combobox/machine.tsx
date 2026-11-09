@@ -5,8 +5,8 @@ import type { ComboboxProps } from "@/components/ui/combobox";
 import { Combobox } from "@/components/ui/combobox";
 import { Label } from "@/components/ui/label";
 import FieldLayoutContainer from "@/form/components/field-layout-container";
-import clientLog from "@/logging/clientLog";
-import { LoggerLevels } from "@/logging/types";
+import log from "@/logging/log";
+import { LogMessages, LoggerLevels } from "@/logging/types";
 import { NO_MACHINES_MESSAGE, SELECT_MACHINE_PLACEHOLDER } from "@/messages/combobox";
 import { COMPATIBLE_MACHINES_LABEL } from "@/messages/machine";
 import { useQueryMachines } from "@/queries/machine";
@@ -57,7 +57,7 @@ export default function ComboboxMachine({
     activeItemId !== undefined ? (machines.find((machine) => machine.id === activeItemId) ?? null) : null;
 
   if (isLoadingError || isCrashed) {
-    void clientLog(LoggerLevels.error, "Error fetching machines for ComboboxMachine");
+    void log(LoggerLevels.error, LogMessages.comboboxFetchFailed("machines", "ComboboxMachine"));
   }
 
   return (

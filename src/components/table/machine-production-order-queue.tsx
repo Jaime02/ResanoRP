@@ -13,7 +13,7 @@ import { Button } from "@/components/ui/button";
 import { ModelActions } from "@/components/ui/model-actions";
 import { useAppContext } from "@/contexts/app-context";
 import { formatDate, formatPartDimension } from "@/lib/formatters";
-import clientLog from "@/logging/clientLog";
+import log from "@/logging/log";
 import { LoggerLevels } from "@/logging/types";
 import { BLUEPRINTS_OF_PART_TITLE } from "@/messages/blueprint";
 import {
@@ -69,7 +69,7 @@ export default function TableMachineProductionOrderQueue({
       }
 
       if (userModeMachine === undefined) {
-        await clientLog(LoggerLevels.error, ASSIGN_PRODUCTION_ORDER_NO_ACTIVE_MACHINE_MESSAGE);
+        await log(LoggerLevels.error, ASSIGN_PRODUCTION_ORDER_NO_ACTIVE_MACHINE_MESSAGE);
         return;
       }
 

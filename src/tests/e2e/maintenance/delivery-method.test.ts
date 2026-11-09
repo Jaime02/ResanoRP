@@ -16,7 +16,8 @@ import { InputElementType, assertFormLoaded, getFormInputByLabel } from "@/tests
 import { getPopoverContent } from "@/tests/utils/components/popover";
 import { filterByExactText, findTableRowByText, getTableRows } from "@/tests/utils/components/table";
 import { expectSingleToast } from "@/tests/utils/components/toast";
-import { TestAnnotations, test } from "@/tests/utils/fixtures";
+import { uniqueNameViolation } from "@/tests/utils/errors-log";
+import { test } from "@/tests/utils/fixtures";
 import {
   EditButtonVisibility,
   workflowDeletedFilterAndRestore,
@@ -33,7 +34,7 @@ import type { BaseClient } from "@/types/client";
 const MAINTENANCE_DELIVERY_METHOD_URL = "/maintenance?tab=deliveryMethod";
 const NAME_TAKEN_MESSAGE = "Existe un Transporte con el mismo nombre";
 
-test("manage the Transportes", { annotation: TestAnnotations.NonEmptyErrorsLogFile }, async ({ page, db }) => {
+test("manage the Transportes", async ({ page, db }) => {
   const activeDeliveryMethods = mockDeliveryMethods.filter((deliveryMethod) => deliveryMethod.deletedAt === null);
   const tableDeliveryMethod = page.getByTestId("table-delivery-method");
   const dialogCreateEditDeliveryMethod = page.getByTestId("dialog-create-edit-delivery-method");
@@ -58,6 +59,7 @@ test("manage the Transportes", { annotation: TestAnnotations.NonEmptyErrorsLogFi
       closeCreate: closeDialog,
       insertDuplicate: async (name) => db.insert(dbTableDeliveryMethod).values({ name }),
       constraintName: DELIVERY_METHOD_NAME_CONSTRAINT,
+      table: dbTableDeliveryMethod,
       errorMessage: NAME_TAKEN_MESSAGE,
     });
 
@@ -69,6 +71,8 @@ test("manage the Transportes", { annotation: TestAnnotations.NonEmptyErrorsLogFi
         (await findTableRowByText(tableDeliveryMethod, deliveryMethod.name)).getByTestId("button-edit").click(),
       closeEdit: closeDialog,
       getName: async (id) => (await db.query.dbTableDeliveryMethod.findFirst({ where: { id } }))?.name,
+      table: dbTableDeliveryMethod,
+      constraintName: DELIVERY_METHOD_NAME_CONSTRAINT,
       errorMessage: NAME_TAKEN_MESSAGE,
     });
 
@@ -208,18 +212,15 @@ test("list the deleted Transportes only when asked for and restore them from the
   });
 });
 
-test(
-  "a deleted Transporte cannot be restored from the table while another one has its name",
-  { annotation: TestAnnotations.NonEmptyErrorsLogFile },
-  async ({ page, db }) => {
-    const deliveryMethod = mockDeliveryMethods.find((mockDeliveryMethod) => mockDeliveryMethod.deletedAt === null)!;
-    await workflowRestoreTaken({
-      ...DELETED_DELIVERY_METHOD_FILTER_PARAMS,
-      page,
-      getDeletedAt: async (id) => (await db.query.dbTableDeliveryMethod.findFirst({ where: { id } }))?.deletedAt,
-      id: deliveryMethod.id,
-      insertDuplicate: async () => db.insert(dbTableDeliveryMethod).values({ name: deliveryMethod.name }),
-      errorMessage: NAME_TAKEN_MESSAGE,
-    });
-  },
-);
+test("a deleted Transporte cannot be restored from the table while another one has its name", async ({ page, db }) => {
+  const deliveryMethod = mockDeliveryMethods.find((mockDeliveryMethod) => mockDeliveryMethod.deletedAt === null)!;
+  await workflowRestoreTaken({
+    ...DELETED_DELIVERY_METHOD_FILTER_PARAMS,
+    page,
+    getDeletedAt: async (id) => (await db.query.dbTableDeliveryMethod.findFirst({ where: { id } }))?.deletedAt,
+    id: deliveryMethod.id,
+    insertDuplicate: async () => db.insert(dbTableDeliveryMethod).values({ name: deliveryMethod.name }),
+    uniqueViolation: uniqueNameViolation(DELIVERY_METHOD_NAME_CONSTRAINT, dbTableDeliveryMethod, deliveryMethod.name),
+    errorMessage: NAME_TAKEN_MESSAGE,
+  });
+});

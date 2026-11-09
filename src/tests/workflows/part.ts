@@ -8,6 +8,7 @@ import { assertFormLoaded, getFormInputByLabel } from "@/tests/utils/components/
 import { openPartPicker } from "@/tests/utils/components/picker";
 import { getEditableCellById, getTableRowByTestId } from "@/tests/utils/components/table";
 import { expectSingleToast } from "@/tests/utils/components/toast";
+import { expectRejectedMutation } from "@/tests/utils/errors-log";
 import { getMockActivePartSetsOfPart } from "@/tests/utils/mock-data-utils";
 
 export async function workflowDeletePart(page: Page, partId: number, expectedErrorMessage?: string) {
@@ -20,6 +21,7 @@ export async function workflowDeletePart(page: Page, partId: number, expectedErr
 
   if (expectedErrorMessage !== undefined) {
     await expectSingleToast(page, expectedErrorMessage);
+    expectRejectedMutation({ code: "BAD_REQUEST", message: expectedErrorMessage, procedurePath: "part.delete" });
     await expect(rowPart).toBeVisible();
     expect((await getPartById(partId))?.deletedAt).toBeNull();
     return;

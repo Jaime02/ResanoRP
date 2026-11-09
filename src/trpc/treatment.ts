@@ -6,6 +6,13 @@ import { dbGetProductionOrderStatus } from "@/db/functions/production-order";
 import { dbTableTreatmentReception, dbTableTreatmentShipment } from "@/db/schema";
 import { handleMutationError } from "@/lib/handlers";
 import { translatedEnums } from "@/lib/translations";
+import {
+  PART_WITHOUT_COATING_MESSAGE,
+  PRODUCTION_ORDER_NOT_SENDABLE_MESSAGE,
+  PRODUCTION_ORDER_PART_WITHOUT_COATING_MESSAGE,
+  SHIPMENT_PENDING_QUANTITY_EXCEEDED_MESSAGE,
+  SHIPMENT_WITH_RECEPTIONS_MESSAGE,
+} from "@/messages/treatment";
 import { requiredIdObjectSchema } from "@/schemas";
 import { ProductionOrderStatus } from "@/schemas/production-order";
 import { receiveTreatmentSchema, sendPartTreatmentSchema, sendTreatmentSchema } from "@/schemas/treatment";
@@ -46,14 +53,17 @@ export default router({
           if (productionOrder.part.coatingId === null) {
             throw new TRPCError({
               code: "BAD_REQUEST",
-              message: `El Artículo de la Orden de producción ${productionOrder.id} no lleva tratamiento`,
+              message: PRODUCTION_ORDER_PART_WITHOUT_COATING_MESSAGE(productionOrder.id),
             });
           }
           const status = await dbGetProductionOrderStatus(productionOrder, tx);
           if (DELETED_STATUSES.includes(status)) {
             throw new TRPCError({
               code: "BAD_REQUEST",
-              message: `La Orden de producción ${productionOrder.id} no se puede enviar al tratamiento, su estado es "${translatedEnums.ProductionOrderStatus[status]}"`,
+              message: PRODUCTION_ORDER_NOT_SENDABLE_MESSAGE(
+                productionOrder.id,
+                translatedEnums.ProductionOrderStatus[status],
+              ),
             });
           }
         }
@@ -89,7 +99,7 @@ export default router({
         if (part.coatingId === null) {
           throw new TRPCError({
             code: "BAD_REQUEST",
-            message: `El Artículo "${part.description}" no lleva tratamiento`,
+            message: PART_WITHOUT_COATING_MESSAGE(part.description),
           });
         }
         const [treatmentShipment] = await tx
@@ -131,7 +141,7 @@ export default router({
           if (item.quantity > pendingQuantity) {
             throw new TRPCError({
               code: "BAD_REQUEST",
-              message: `El envío ${treatmentShipment.id} solo tiene ${pendingQuantity} piezas pendientes de recibir`,
+              message: SHIPMENT_PENDING_QUANTITY_EXCEEDED_MESSAGE(treatmentShipment.id, pendingQuantity),
             });
           }
         }
@@ -157,7 +167,7 @@ export default router({
         if (reception) {
           throw new TRPCError({
             code: "BAD_REQUEST",
-            message: "El envío ya tiene piezas recibidas, elimina primero sus recepciones",
+            message: SHIPMENT_WITH_RECEPTIONS_MESSAGE,
           });
         }
         const deletedShipment = (

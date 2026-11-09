@@ -3,6 +3,7 @@ import { sql } from "drizzle-orm";
 import { ZodError } from "zod";
 
 import type { TDatabase } from "@/db";
+import { ADMIN_ONLY_MESSAGE } from "@/messages/common";
 import { formatZodError } from "@/schemas/utils";
 
 export type Context = {
@@ -28,7 +29,7 @@ export const adminProcedure = t.procedure.use(async ({ ctx, next }) => {
   if (!ctx.isAdmin) {
     throw new TRPCError({
       code: "FORBIDDEN",
-      message: "Esta acción solo la puede hacer el Administrador",
+      message: ADMIN_ONLY_MESSAGE,
     });
   }
   return next();

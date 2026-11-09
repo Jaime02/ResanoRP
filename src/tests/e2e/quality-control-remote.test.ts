@@ -5,11 +5,13 @@ import { getMachineById } from "@/db/functions/machine";
 import { getMachineProductionOrderQueue } from "@/db/functions/machine-production-order-queue";
 import { getProductionOrderById } from "@/db/functions/production-order";
 import { NOTES_LABEL } from "@/messages/common";
+import { PART_FEATURE_CHECKED_DELETE_ERROR_MESSAGE } from "@/messages/part";
 import { ProductionOrderStatus } from "@/schemas/production-order";
 import { InputElementType, getFormInputByLabel } from "@/tests/utils/components/form";
 import { getTableRowByTestId } from "@/tests/utils/components/table";
 import { expectSingleToast } from "@/tests/utils/components/toast";
-import { TestAnnotations, test } from "@/tests/utils/fixtures";
+import { expectRejectedMutation } from "@/tests/utils/errors-log";
+import { test } from "@/tests/utils/fixtures";
 import { workflowCreatePartFeature, workflowDeletePartFeature } from "@/tests/workflows/part";
 import {
   gotoProductionOrdersWithStatuses,
@@ -38,7 +40,6 @@ import {
 const { id: productionOrderId, partId } = qualityControlProductionOrder;
 const { features } = getMockQualityControl(productionOrderId);
 const [firstFeature] = features;
-const CHECKED_FEATURE_DELETE_MESSAGE = "La Característica tiene Controles de calidad y no se puede eliminar";
 
 test("a machine that loses its active production order to an administrator picks the next one clean", async ({
   page,
@@ -206,19 +207,23 @@ test("a machine follows the features an administrator adds and removes while it 
   );
 });
 
-test(
-  "an administrator cannot remove a feature that has checks, and the machine keeps seeing it",
-  { annotation: TestAnnotations.NonEmptyErrorsLogFile },
-  async ({ page, openPage }) => {
-    const adminPage = await openPage({ userMode: UserMode.Admin });
-    await workflowOpenProduction(page, qualityControlMachine);
+test("an administrator cannot remove a feature that has checks, and the machine keeps seeing it", async ({
+  page,
+  openPage,
+}) => {
+  const adminPage = await openPage({ userMode: UserMode.Admin });
+  await workflowOpenProduction(page, qualityControlMachine);
 
-    await workflowDeletePartFeature(adminPage, partId, firstFeature.id, CHECKED_FEATURE_DELETE_MESSAGE);
+  await workflowDeletePartFeature(adminPage, partId, firstFeature.id, PART_FEATURE_CHECKED_DELETE_ERROR_MESSAGE);
+  expectRejectedMutation({
+    code: "BAD_REQUEST",
+    message: PART_FEATURE_CHECKED_DELETE_ERROR_MESSAGE,
+    procedurePath: "partFeature.delete",
+  });
 
-    await assertQualityControlTable(page, getMockQualityControl(productionOrderId), { editable: true });
-    await workflowCreateQualityCheck(page, 5);
-  },
-);
+  await assertQualityControlTable(page, getMockQualityControl(productionOrderId), { editable: true });
+  await workflowCreateQualityCheck(page, 5);
+});
 
 test("a machine open in two places follows the production orders started from the other one", async ({
   page,

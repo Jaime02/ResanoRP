@@ -17,8 +17,8 @@ import { useAppContext } from "@/contexts/app-context";
 import { formatPrice } from "@/lib/formatters";
 import { formatCents, getDeliveryNoteLineUnitPrice, getLineTotalInCents, getLinesTotalInCents } from "@/lib/prices";
 import { serializeDeliveryNoteLine } from "@/lib/serializers";
-import clientLog from "@/logging/clientLog";
-import { LoggerLevels } from "@/logging/types";
+import log from "@/logging/log";
+import { LogMessages, LoggerLevels } from "@/logging/types";
 import {
   ACTIONS_LABEL,
   ADD_PART_LABEL,
@@ -227,7 +227,7 @@ export default function TableDeliveryNoteLine({
           const mutationValidationResult = updateDeliveryNoteLineSchema.safeParse(input);
           if (!mutationValidationResult.success) {
             toaster.error({ title: DELIVERY_NOTE_LINE_VALIDATION_ERROR_MESSAGE });
-            await clientLog(LoggerLevels.error, "Validation error when editing Delivery Note Line", {
+            await log(LoggerLevels.error, LogMessages.deliveryNoteLineValidationFailed, {
               error: mutationValidationResult.error,
             });
             return;

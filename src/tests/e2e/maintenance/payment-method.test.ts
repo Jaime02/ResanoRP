@@ -16,7 +16,8 @@ import { assertComboboxValue, fillComboboxFilter, openCombobox } from "@/tests/u
 import { InputElementType, assertFormLoaded, getFormInputByLabel } from "@/tests/utils/components/form";
 import { filterByExactText, findTableRowByText, getTableRows } from "@/tests/utils/components/table";
 import { expectSingleToast } from "@/tests/utils/components/toast";
-import { TestAnnotations, test } from "@/tests/utils/fixtures";
+import { uniqueNameViolation } from "@/tests/utils/errors-log";
+import { test } from "@/tests/utils/fixtures";
 import {
   EditButtonVisibility,
   workflowDeletedFilterAndRestore,
@@ -32,7 +33,7 @@ import type { BaseClient } from "@/types/client";
 const MAINTENANCE_PAYMENT_METHOD_URL = "/maintenance?tab=paymentMethod";
 const NAME_TAKEN_MESSAGE = "Existe una Forma de pago con el mismo nombre";
 
-test("manage the Formas de pago", { annotation: TestAnnotations.NonEmptyErrorsLogFile }, async ({ page, db }) => {
+test("manage the Formas de pago", async ({ page, db }) => {
   const activePaymentMethods = mockPaymentMethods.filter((paymentMethod) => paymentMethod.deletedAt === null);
   const tablePaymentMethod = page.getByTestId("table-payment-method");
   const dialogCreateEditPaymentMethod = page.getByTestId("dialog-create-edit-payment-method");
@@ -133,6 +134,7 @@ test("manage the Formas de pago", { annotation: TestAnnotations.NonEmptyErrorsLo
       closeCreate: closeDialog,
       insertDuplicate: async (name) => db.insert(dbTablePaymentMethod).values({ name }),
       constraintName: PAYMENT_METHOD_NAME_CONSTRAINT,
+      table: dbTablePaymentMethod,
       errorMessage: NAME_TAKEN_MESSAGE,
     });
 
@@ -144,6 +146,8 @@ test("manage the Formas de pago", { annotation: TestAnnotations.NonEmptyErrorsLo
         (await findTableRowByText(tablePaymentMethod, paymentMethod.name)).getByTestId("button-edit").click(),
       closeEdit: closeDialog,
       getName: async (id) => (await db.query.dbTablePaymentMethod.findFirst({ where: { id } }))?.name,
+      table: dbTablePaymentMethod,
+      constraintName: PAYMENT_METHOD_NAME_CONSTRAINT,
       errorMessage: NAME_TAKEN_MESSAGE,
     });
   });
@@ -279,18 +283,18 @@ test("list the deleted Formas de pago only when asked for and restore them from 
   });
 });
 
-test(
-  "a deleted Forma de pago cannot be restored from the table while another one has its name",
-  { annotation: TestAnnotations.NonEmptyErrorsLogFile },
-  async ({ page, db }) => {
-    const paymentMethod = mockPaymentMethods.find((mockPaymentMethod) => mockPaymentMethod.deletedAt === null)!;
-    await workflowRestoreTaken({
-      ...DELETED_PAYMENT_METHOD_FILTER_PARAMS,
-      page,
-      getDeletedAt: async (id) => (await db.query.dbTablePaymentMethod.findFirst({ where: { id } }))?.deletedAt,
-      id: paymentMethod.id,
-      insertDuplicate: async () => db.insert(dbTablePaymentMethod).values({ name: paymentMethod.name }),
-      errorMessage: NAME_TAKEN_MESSAGE,
-    });
-  },
-);
+test("a deleted Forma de pago cannot be restored from the table while another one has its name", async ({
+  page,
+  db,
+}) => {
+  const paymentMethod = mockPaymentMethods.find((mockPaymentMethod) => mockPaymentMethod.deletedAt === null)!;
+  await workflowRestoreTaken({
+    ...DELETED_PAYMENT_METHOD_FILTER_PARAMS,
+    page,
+    getDeletedAt: async (id) => (await db.query.dbTablePaymentMethod.findFirst({ where: { id } }))?.deletedAt,
+    id: paymentMethod.id,
+    insertDuplicate: async () => db.insert(dbTablePaymentMethod).values({ name: paymentMethod.name }),
+    uniqueViolation: uniqueNameViolation(PAYMENT_METHOD_NAME_CONSTRAINT, dbTablePaymentMethod, paymentMethod.name),
+    errorMessage: NAME_TAKEN_MESSAGE,
+  });
+});

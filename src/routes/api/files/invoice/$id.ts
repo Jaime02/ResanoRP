@@ -10,6 +10,8 @@ import { getInvoiceEmail, getInvoicePath } from "@/files/invoice";
 import { ADMIN_SESSION_COOKIE_NAME, isAdminSession } from "@/lib/admin-session";
 import { textResponse } from "@/lib/responses";
 import logger from "@/logging/logger";
+import { LogMessages } from "@/logging/types";
+import { ADMIN_ONLY_MESSAGE } from "@/messages/common";
 import { coercedIdObjectSchema } from "@/schemas";
 
 const routeSearchSchema = z.object({
@@ -21,14 +23,14 @@ export const Route = createFileRoute("/api/files/invoice/$id")({
     handlers: {
       GET: async ({ params, request }: { params: { id: string }; request: Request }) => {
         if (!isAdminSession(getCookie(ADMIN_SESSION_COOKIE_NAME))) {
-          return textResponse("Esta acción solo la puede hacer el Administrador", 403);
+          return textResponse(ADMIN_ONLY_MESSAGE, 403);
         }
 
         let id: number;
         try {
           ({ id } = coercedIdObjectSchema.parse(params));
         } catch {
-          logger.error("Invalid ID received", { params });
+          logger.error(LogMessages.invalidId, { params });
           return textResponse("Invalid ID received", 400);
         }
 
@@ -63,7 +65,7 @@ export const Route = createFileRoute("/api/files/invoice/$id")({
             status: 200,
           });
         } catch (error) {
-          logger.error("Error reading Invoice file", { error, id });
+          logger.error(LogMessages.invoiceReadFailed, { error, id });
           return textResponse("Failed to read file", 500);
         }
       },

@@ -24,7 +24,8 @@ import { InputElementType, getFormInputByLabel } from "@/tests/utils/components/
 import { assertTableRowCount, getTableNoDataRow, getTableRowByTestId } from "@/tests/utils/components/table";
 import { expectSingleToast } from "@/tests/utils/components/toast";
 import { expectUniqueViolation } from "@/tests/utils/db";
-import { TestAnnotations, test } from "@/tests/utils/fixtures";
+import { expectUniqueViolationRejected, uniqueColumnsViolation } from "@/tests/utils/errors-log";
+import { test } from "@/tests/utils/fixtures";
 import {
   EditButtonVisibility,
   workflowDeletedFilterAndRestore,
@@ -39,6 +40,13 @@ import type { TDeletedMaterials } from "@/tests/workflows/material";
 
 const MAINTENANCE_MATERIAL_URL = "/maintenance?tab=material";
 const COMBINATION_TAKEN_MESSAGE = "Existe un Material con la misma Materia Prima, Forma y ancho";
+
+const getCombinationViolation = (material: (typeof mockMaterials)[number]) =>
+  uniqueColumnsViolation(MATERIAL_COMBINATION_CONSTRAINT, dbTableMaterial, [
+    [dbTableMaterial.width, material.width],
+    [dbTableMaterial.shapeId, material.shapeId],
+    [dbTableMaterial.rawMaterialId, material.rawMaterialId],
+  ]);
 
 async function getMaterial(db: TDatabase, id: number) {
   return db.query.dbTableMaterial.findFirst({ where: { id } });
@@ -66,7 +74,7 @@ async function fillMaterialForm(page: Page, material: (typeof mockMaterials)[num
   await inputWidth.pressSequentially(material.width);
 }
 
-test("manage the Materiales", { annotation: TestAnnotations.NonEmptyErrorsLogFile }, async ({ page, db }) => {
+test("manage the Materiales", async ({ page, db }) => {
   const activeMaterials = mockMaterials.filter((material) => material.deletedAt === null);
   const tableMaterial = page.getByTestId("table-material");
 
@@ -162,6 +170,7 @@ test("manage the Materiales", { annotation: TestAnnotations.NonEmptyErrorsLogFil
       await dialogCreateMaterial.getByTestId("button-submit").click();
 
       await expectSingleToast(page, COMBINATION_TAKEN_MESSAGE);
+      expectUniqueViolationRejected(getCombinationViolation(material), COMBINATION_TAKEN_MESSAGE);
       await expect(dialogCreateMaterial).toBeVisible();
 
       await expectUniqueViolation(
@@ -262,21 +271,21 @@ test("list the deleted Materiales only when asked for and restore them from the 
   });
 });
 
-test(
-  "a deleted Material cannot be restored from the table while another one has its combination",
-  { annotation: TestAnnotations.NonEmptyErrorsLogFile },
-  async ({ page, db }) => {
-    const material = mockMaterials.find((mockMaterial) => mockMaterial.deletedAt === null)!;
-    await workflowRestoreTaken({
-      ...DELETED_MATERIAL_FILTER_PARAMS,
-      page,
-      getDeletedAt: async (id) => (await getMaterial(db, id))?.deletedAt,
-      id: material.id,
-      insertDuplicate: async () =>
-        db
-          .insert(dbTableMaterial)
-          .values({ rawMaterialId: material.rawMaterialId, shapeId: material.shapeId, width: material.width }),
-      errorMessage: COMBINATION_TAKEN_MESSAGE,
-    });
-  },
-);
+test("a deleted Material cannot be restored from the table while another one has its combination", async ({
+  page,
+  db,
+}) => {
+  const material = mockMaterials.find((mockMaterial) => mockMaterial.deletedAt === null)!;
+  await workflowRestoreTaken({
+    ...DELETED_MATERIAL_FILTER_PARAMS,
+    page,
+    getDeletedAt: async (id) => (await getMaterial(db, id))?.deletedAt,
+    id: material.id,
+    insertDuplicate: async () =>
+      db
+        .insert(dbTableMaterial)
+        .values({ rawMaterialId: material.rawMaterialId, shapeId: material.shapeId, width: material.width }),
+    uniqueViolation: getCombinationViolation(material),
+    errorMessage: COMBINATION_TAKEN_MESSAGE,
+  });
+});

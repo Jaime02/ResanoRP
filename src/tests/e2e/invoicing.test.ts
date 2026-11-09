@@ -5,6 +5,7 @@ import type { Download, Locator } from "@playwright/test";
 import { differenceInHours } from "date-fns";
 import { eq, inArray } from "drizzle-orm";
 
+import { UserMode } from "@/contexts/app-context";
 import { getDeliveryNote } from "@/db/functions/delivery-note";
 import { getDeliveryNoteLinesByDeliveryNoteId } from "@/db/functions/delivery-note-line";
 import { getInvoiceById, getInvoices } from "@/db/functions/invoice";
@@ -13,7 +14,8 @@ import { endOfAppDay, isSameAppDay, startOfAppDay } from "@/lib/dates";
 import { formatDate, formatPrice } from "@/lib/formatters";
 import { formatCents, getLineTotalInCents } from "@/lib/prices";
 import { NEXT_PAGE_LABEL, CLIENT_LABEL, DATE_LABEL, FROM_LABEL, TO_LABEL } from "@/messages/common";
-import { INVOICE_CREATE_TITLE } from "@/messages/invoice";
+import { ACCOUNTED_DELIVERY_NOTE_MESSAGE } from "@/messages/delivery-note";
+import { INVOICE_CREATE_TITLE, INVOICE_NOT_SENT_UNPRICED_MESSAGE } from "@/messages/invoice";
 import {
   MOCK_INITIAL_DATE,
   mockClientInvoiceEmails,
@@ -38,6 +40,7 @@ import {
   getTableSubrowById,
 } from "@/tests/utils/components/table";
 import { expectSingleToast } from "@/tests/utils/components/toast";
+import { expectRejectedMutation } from "@/tests/utils/errors-log";
 import { TestAnnotations, inAnotherTab, test } from "@/tests/utils/fixtures";
 import {
   getMockClientById,
@@ -617,70 +620,74 @@ test("the pending delivery notes are paged without keeping the page in the url",
   expect(new URL(page.url()).searchParams.has("table-pending-delivery-note")).toBe(false);
 });
 
-test(
-  "an invoice is not created while its delivery notes have lines without price",
-  { annotation: [TestAnnotations.NonEmptyErrorsLogFile] },
-  async ({ page, db }) => {
-    const client = mockClients[0];
-    const clientDeliveryNotes = getClientDeliveryNotes(client.id);
-    expect(clientDeliveryNotes.length).toBeGreaterThan(1);
-    const firstDeliveryNote = clientDeliveryNotes[0];
-    const lastDeliveryNote = clientDeliveryNotes.at(-1)!;
-    const unpricedSellOrderLine = mockSellOrderLines.find(
-      (sellOrderLine) =>
-        sellOrderLine.partPrice === null &&
-        sellOrderLine.partReferenceId !== null &&
-        getMockSellOrderById(sellOrderLine.sellOrderId)?.clientId === client.id,
-    );
-    expect(unpricedSellOrderLine, "A Línea de Pedido of the Cliente should have no price").toBeDefined();
+test("an invoice is not created while its delivery notes have lines without price", async ({ page, db }) => {
+  const client = mockClients[0];
+  const clientDeliveryNotes = getClientDeliveryNotes(client.id);
+  expect(clientDeliveryNotes.length).toBeGreaterThan(1);
+  const firstDeliveryNote = clientDeliveryNotes[0];
+  const lastDeliveryNote = clientDeliveryNotes.at(-1)!;
+  const unpricedSellOrderLine = mockSellOrderLines.find(
+    (sellOrderLine) =>
+      sellOrderLine.partPrice === null &&
+      sellOrderLine.partReferenceId !== null &&
+      getMockSellOrderById(sellOrderLine.sellOrderId)?.clientId === client.id,
+  );
+  expect(unpricedSellOrderLine, "A Línea de Pedido of the Cliente should have no price").toBeDefined();
 
-    // One Línea without Artículo added by hand without price and one from a Pedido de venta that has no price either
-    await db.insert(dbTableDeliveryNoteLine).values([
-      {
-        deliveryNoteId: firstDeliveryNote.id,
-        description: "Línea sin precio",
-        quantity: 1,
-        vatPercentage: 21,
-      },
-      {
-        deliveryNoteId: lastDeliveryNote.id,
-        description: "Línea de Pedido sin precio",
-        partReferenceId: unpricedSellOrderLine!.partReferenceId,
-        quantity: 1,
-        sellOrderLineId: unpricedSellOrderLine!.id,
-        vatPercentage: 21,
-      },
-    ]);
-    const unpricedDeliveryNoteIds = [firstDeliveryNote.id, lastDeliveryNote.id].sort((a, b) => a - b);
+  // One Línea without Artículo added by hand without price and one from a Pedido de venta that has no price either
+  await db.insert(dbTableDeliveryNoteLine).values([
+    {
+      deliveryNoteId: firstDeliveryNote.id,
+      description: "Línea sin precio",
+      quantity: 1,
+      vatPercentage: 21,
+    },
+    {
+      deliveryNoteId: lastDeliveryNote.id,
+      description: "Línea de Pedido sin precio",
+      partReferenceId: unpricedSellOrderLine!.partReferenceId,
+      quantity: 1,
+      sellOrderLineId: unpricedSellOrderLine!.id,
+      vatPercentage: 21,
+    },
+  ]);
+  const unpricedDeliveryNoteIds = [firstDeliveryNote.id, lastDeliveryNote.id].sort((a, b) => a - b);
 
-    await page.goto("/invoicing");
-    await page.getByRole("button", { name: INVOICE_CREATE_TITLE }).click();
-    await expect(dialogCreateInvoice).toBeVisible();
-    await workflowPickInvoiceClient(page, dialogCreateInvoice, client);
-    await dialogCreateInvoice.getByTestId("button-submit").click();
+  await page.goto("/invoicing");
+  await page.getByRole("button", { name: INVOICE_CREATE_TITLE }).click();
+  await expect(dialogCreateInvoice).toBeVisible();
+  await workflowPickInvoiceClient(page, dialogCreateInvoice, client);
+  await dialogCreateInvoice.getByTestId("button-submit").click();
 
-    await expectSingleToast(page, `Los Albaranes ${unpricedDeliveryNoteIds.join(", ")} tienen Líneas sin precio`);
-    await expect(dialogCreateInvoice).toBeVisible();
+  const unpricedMessage = `Los Albaranes ${unpricedDeliveryNoteIds.join(", ")} tienen Líneas sin precio`;
+  await expectSingleToast(page, unpricedMessage);
+  expectRejectedMutation({ code: "BAD_REQUEST", message: unpricedMessage, procedurePath: "invoice.create" });
+  await expect(dialogCreateInvoice).toBeVisible();
 
-    expect(await getInvoices()).toHaveLength(mockInvoices.length);
-    for (const deliveryNote of clientDeliveryNotes) {
-      expect((await getDeliveryNote({ id: deliveryNote.id }))?.invoiceId).toBeNull();
-    }
-  },
-);
+  expect(await getInvoices()).toHaveLength(mockInvoices.length);
+  for (const deliveryNote of clientDeliveryNotes) {
+    expect((await getDeliveryNote({ id: deliveryNote.id }))?.invoiceId).toBeNull();
+  }
+});
 
 test(
   "a user cannot change the lines of an accounted invoice",
-  { annotation: [TestAnnotations.UserModeUser, TestAnnotations.NonEmptyErrorsLogFile] },
+  { annotation: TestAnnotations.UserModeUser },
   async ({ page }) => {
     const invoice = mockInvoices.find((mockInvoice) => mockInvoice.accounted)!;
     const deliveryNote = mockDeliveryNotes.find((mockDeliveryNote) => mockDeliveryNote.invoiceId === invoice.id)!;
     const deliveryNoteLine = getMockDeliveryNoteLines(deliveryNote.id)[0];
-    const forbiddenMessage = `El Albarán ${deliveryNote.id} pertenece a una Factura contabilizada, solo el Administrador puede cambiar sus líneas`;
+    const forbiddenMessage = ACCOUNTED_DELIVERY_NOTE_MESSAGE(deliveryNote.id);
 
     await workflowOpenEditDeliveryNote(page, deliveryNote.id);
     await workflowEditDeliveryNoteLineQuantity(page, deliveryNoteLine.id, deliveryNoteLine.quantity + 1);
     await expectSingleToast(page, forbiddenMessage);
+    expectRejectedMutation({
+      code: "FORBIDDEN",
+      message: forbiddenMessage,
+      procedurePath: "deliveryNoteLine.update",
+      userConfig: { userMode: UserMode.User },
+    });
 
     const buttonSubmitLine = await workflowFillCustomDeliveryNoteLine(page, {
       description: deliveryNoteLine.description,
@@ -688,6 +695,12 @@ test(
     });
     await buttonSubmitLine.click();
     await expectSingleToast(page, forbiddenMessage);
+    expectRejectedMutation({
+      code: "FORBIDDEN",
+      message: forbiddenMessage,
+      procedurePath: "deliveryNoteLine.create",
+      userConfig: { userMode: UserMode.User },
+    });
 
     expect(await getDeliveryNoteLinesByDeliveryNoteId(deliveryNote.id)).toEqual(
       getMockDeliveryNoteLines(deliveryNote.id).map((line) =>
@@ -759,75 +772,68 @@ test("changing the price of a sell order line marks the invoices that take it to
   await assertTableInvoiceTotals(tableInvoices, invoice.id);
 });
 
-test(
-  "an invoice is not sent while its delivery notes have lines without price",
-  { annotation: TestAnnotations.NonEmptyErrorsLogFile },
-  async ({ page, db }) => {
-    const unpricedLine = mockDeliveryNoteLines.find((line) => {
-      const invoiceId = getMockDeliveryNoteById(line.deliveryNoteId)?.invoiceId;
-      const invoice = mockInvoices.find((mockInvoice) => mockInvoice.id === invoiceId);
-      return invoice?.sent === false && line.sellOrderLineId === null && line.unitPrice === null;
-    })!;
-    expect(unpricedLine, "A Factura not sent yet should have a Línea without price").toBeDefined();
-    const invoiceId = getMockDeliveryNoteById(unpricedLine.deliveryNoteId)!.invoiceId!;
-    const downloads: Array<Download> = [];
-    page.on("download", (download) => downloads.push(download));
+test("an invoice is not sent while its delivery notes have lines without price", async ({ page, db }) => {
+  const unpricedLine = mockDeliveryNoteLines.find((line) => {
+    const invoiceId = getMockDeliveryNoteById(line.deliveryNoteId)?.invoiceId;
+    const invoice = mockInvoices.find((mockInvoice) => mockInvoice.id === invoiceId);
+    return invoice?.sent === false && line.sellOrderLineId === null && line.unitPrice === null;
+  })!;
+  expect(unpricedLine, "A Factura not sent yet should have a Línea without price").toBeDefined();
+  const invoiceId = getMockDeliveryNoteById(unpricedLine.deliveryNoteId)!.invoiceId!;
+  const downloads: Array<Download> = [];
+  page.on("download", (download) => downloads.push(download));
 
-    await page.goto("/invoicing");
-    const rowInvoice = getTableRowByTestId(tableInvoices, invoiceId);
-    await rowInvoice.getByTestId("button-send-invoice").click();
-    await expectSingleToast(page, `estos Albaranes tienen Líneas sin precio: ${unpricedLine.deliveryNoteId}`);
-    // The email is not handed over either
-    expect(downloads).toHaveLength(0);
-    await expect(rowInvoice.getByTestId("checkbox-sent")).not.toBeChecked();
-    expect((await getInvoiceById(invoiceId))?.sent).toBe(false);
+  await page.goto("/invoicing");
+  const rowInvoice = getTableRowByTestId(tableInvoices, invoiceId);
+  await rowInvoice.getByTestId("button-send-invoice").click();
+  const notSentMessage = INVOICE_NOT_SENT_UNPRICED_MESSAGE([unpricedLine.deliveryNoteId]);
+  await expectSingleToast(page, notSentMessage);
+  expectRejectedMutation({ code: "BAD_REQUEST", message: notSentMessage, procedurePath: "invoice.send" });
+  // The email is not handed over either
+  expect(downloads).toHaveLength(0);
+  await expect(rowInvoice.getByTestId("checkbox-sent")).not.toBeChecked();
+  expect((await getInvoiceById(invoiceId))?.sent).toBe(false);
 
-    await db
-      .update(dbTableDeliveryNoteLine)
-      .set({ unitPrice: "3.5" })
-      .where(eq(dbTableDeliveryNoteLine.id, unpricedLine.id));
-    const downloadPromise = page.waitForEvent("download");
-    await rowInvoice.getByTestId("button-send-invoice").click();
-    expect((await downloadPromise).suggestedFilename()).toBe(`Factura ${invoiceId}.eml`);
-    await expect(rowInvoice.getByTestId("checkbox-sent")).toBeChecked();
-    expect((await getInvoiceById(invoiceId))?.sent).toBe(true);
-  },
-);
+  await db
+    .update(dbTableDeliveryNoteLine)
+    .set({ unitPrice: "3.5" })
+    .where(eq(dbTableDeliveryNoteLine.id, unpricedLine.id));
+  const downloadPromise = page.waitForEvent("download");
+  await rowInvoice.getByTestId("button-send-invoice").click();
+  expect((await downloadPromise).suggestedFilename()).toBe(`Factura ${invoiceId}.eml`);
+  await expect(rowInvoice.getByTestId("checkbox-sent")).toBeChecked();
+  expect((await getInvoiceById(invoiceId))?.sent).toBe(true);
+});
 
-test(
-  "an invoice is not created from the delivery notes another tab invoices meanwhile",
-  { annotation: TestAnnotations.NonEmptyErrorsLogFile },
-  async ({ page }) => {
-    const client = mockClients[0];
-    const clientDeliveryNotes = getClientDeliveryNotes(client.id);
-    expect(clientDeliveryNotes.length, "The Cliente should have pending Albaranes").toBeGreaterThan(0);
+test("an invoice is not created from the delivery notes another tab invoices meanwhile", async ({ page }) => {
+  const client = mockClients[0];
+  const clientDeliveryNotes = getClientDeliveryNotes(client.id);
+  expect(clientDeliveryNotes.length, "The Cliente should have pending Albaranes").toBeGreaterThan(0);
 
-    await page.goto("/invoicing");
-    await page.getByRole("button", { name: INVOICE_CREATE_TITLE }).click();
-    await expect(dialogCreateInvoice).toBeVisible();
-    await workflowPickInvoiceClient(page, dialogCreateInvoice, client);
+  await page.goto("/invoicing");
+  await page.getByRole("button", { name: INVOICE_CREATE_TITLE }).click();
+  await expect(dialogCreateInvoice).toBeVisible();
+  await workflowPickInvoiceClient(page, dialogCreateInvoice, client);
 
-    let otherTabInvoice!: Awaited<ReturnType<typeof workflowCreateInvoice>>;
-    await holdRequestWhile({
-      page,
-      procedurePath: "invoice.create",
-      send: async () => dialogCreateInvoice.getByTestId("button-submit").click(),
-      meanwhile: async () =>
-        inAnotherTab(page, async (anotherPage) => {
-          otherTabInvoice = await workflowCreateInvoice(anotherPage, { client });
-        }),
-    });
+  let otherTabInvoice!: Awaited<ReturnType<typeof workflowCreateInvoice>>;
+  await holdRequestWhile({
+    page,
+    procedurePath: "invoice.create",
+    send: async () => dialogCreateInvoice.getByTestId("button-submit").click(),
+    meanwhile: async () =>
+      inAnotherTab(page, async (anotherPage) => {
+        otherTabInvoice = await workflowCreateInvoice(anotherPage, { client });
+      }),
+  });
 
-    await expectSingleToast(
-      page,
-      `No hay Albaranes del Cliente ${client.name} pendientes de facturar entre las fechas seleccionadas`,
-    );
-    await expect(dialogCreateInvoice).toBeVisible();
+  const noPendingMessage = `No hay Albaranes del Cliente ${client.name} pendientes de facturar entre las fechas seleccionadas`;
+  await expectSingleToast(page, noPendingMessage);
+  expectRejectedMutation({ code: "NOT_FOUND", message: noPendingMessage, procedurePath: "invoice.create" });
+  await expect(dialogCreateInvoice).toBeVisible();
 
-    // Every Albarán is only in the Factura of the other tab
-    expect(await getInvoices()).toHaveLength(mockInvoices.length + 1);
-    for (const deliveryNote of clientDeliveryNotes) {
-      expect((await getDeliveryNote({ id: deliveryNote.id }))?.invoiceId).toBe(otherTabInvoice.id);
-    }
-  },
-);
+  // Every Albarán is only in the Factura of the other tab
+  expect(await getInvoices()).toHaveLength(mockInvoices.length + 1);
+  for (const deliveryNote of clientDeliveryNotes) {
+    expect((await getDeliveryNote({ id: deliveryNote.id }))?.invoiceId).toBe(otherTabInvoice.id);
+  }
+});

@@ -7,8 +7,8 @@ import invoiceCollection from "@/collections/invoice";
 import sellOrderLineCollection from "@/collections/sell-order-line";
 import { useAppContext } from "@/contexts/app-context";
 import { useAppForm } from "@/form";
-import clientLog from "@/logging/clientLog";
-import { LoggerLevels } from "@/logging/types";
+import log from "@/logging/log";
+import { LogMessages, LoggerLevels } from "@/logging/types";
 import { DELIVERY_NOTE_CREATED_MESSAGE, LINES_ADDED_TO_DELIVERY_NOTE_MESSAGE } from "@/messages/delivery-note";
 import { useQueryClientDefaultDeliveryMethod } from "@/queries/client";
 import { useQueryPendingSellOrderLines } from "@/queries/sell-order-line";
@@ -139,7 +139,7 @@ export function useStageSellOrderLinesForm({ onSubmit }: UseStageSellOrderLinesF
     async (stagedSellOrderLineId: number, stagedQuantity: number) => {
       const sellOrderLine = pendingSellOrderLines?.find((sellOrderLine) => sellOrderLine.id === stagedSellOrderLineId);
       if (!sellOrderLine) {
-        await clientLog(LoggerLevels.warning, "Logic error: Trying to stage a sell order line that is not pending");
+        await log(LoggerLevels.warning, LogMessages.stageNotPendingSellOrderLine);
         return;
       }
       const stagedSellOrderLine = { ...sellOrderLine, quantity: stagedQuantity };
@@ -163,10 +163,7 @@ export function useStageSellOrderLinesForm({ onSubmit }: UseStageSellOrderLinesF
   const unstageSellOrderLine = useCallback(
     async (sellOrderLineId: number) => {
       if (!stagedSellOrderLines) {
-        await clientLog(
-          LoggerLevels.warning,
-          "Logic error: Trying to unstage a sell order line but no staged lines exist",
-        );
+        await log(LoggerLevels.warning, LogMessages.unstageWithoutStagedLines);
         return;
       }
       const updatedLines = stagedSellOrderLines.filter((line) => line.id !== sellOrderLineId);
@@ -178,18 +175,12 @@ export function useStageSellOrderLinesForm({ onSubmit }: UseStageSellOrderLinesF
   const updateStagedSellOrderLineQuantity = useCallback(
     async (sellOrderLineId: number, quantity: number) => {
       if (!stagedSellOrderLines) {
-        await clientLog(
-          LoggerLevels.warning,
-          "Logic error: Trying to update quantity of a staged sell order line but no staged lines exist",
-        );
+        await log(LoggerLevels.warning, LogMessages.updateWithoutStagedLines);
         return;
       }
       const lineIndex = stagedSellOrderLines.findIndex((line) => line.id === sellOrderLineId);
       if (lineIndex === -1) {
-        await clientLog(
-          LoggerLevels.warning,
-          "Logic error: Trying to update quantity of a staged sell order line but the line is not staged",
-        );
+        await log(LoggerLevels.warning, LogMessages.updateNotStagedSellOrderLine);
         return;
       }
       const updatedLines = [...stagedSellOrderLines];
@@ -221,10 +212,7 @@ export function useStageSellOrderLinesForm({ onSubmit }: UseStageSellOrderLinesF
         !pendingSellOrderLines.some((sellOrderLine) => sellOrderLine.id === stagedSellOrderLine.id),
     );
     if (deletedSellOrderLines.length === 0) {
-      void clientLog(
-        LoggerLevels.warning,
-        "Logic error: No deleted sell order lines found but staged lines are invalid",
-      );
+      void log(LoggerLevels.warning, LogMessages.stagedSellOrderLinesInvalid);
       return;
     }
 

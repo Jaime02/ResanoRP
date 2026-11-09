@@ -3,7 +3,7 @@ import type { AnyTRPCProcedure, TRPCRouterRecord } from "@trpc/server";
 
 import type { AppRouter } from "@/routes/api/trpc/$";
 
-type TProcedurePath<TRecord extends TRPCRouterRecord, TPrefix extends string = ""> = {
+export type TProcedurePath<TRecord extends TRPCRouterRecord, TPrefix extends string = ""> = {
   [TKey in keyof TRecord & string]: TRecord[TKey] extends AnyTRPCProcedure
     ? `${TPrefix}${TKey}`
     : TRecord[TKey] extends TRPCRouterRecord

@@ -3,8 +3,8 @@ import type { LiveQueryOptions } from "@tanstack/react-db";
 import { createIsomorphicFn } from "@tanstack/react-start";
 
 import { formatClientError } from "@/lib/formatters";
-import clientLog from "@/logging/clientLog";
-import { LoggerLevels } from "@/logging/types";
+import log from "@/logging/log";
+import { LogMessages, LoggerLevels } from "@/logging/types";
 
 // Electric retries a shape it cannot reach forever, which would hang the whole server render
 const PRELOAD_TIMEOUT_MS = 5000;
@@ -33,7 +33,7 @@ export const preloadLiveQueries = createIsomorphicFn().server(
       dbClient.hydrate(loadingDbClient.dehydrate({ shouldDehydrateCollection: () => false }));
     } catch (error) {
       // The page still renders, and the browser loads the queries itself
-      await clientLog(LoggerLevels.error, "Failed to preload the live queries of a server render", {
+      await log(LoggerLevels.error, LogMessages.liveQueriesPreloadFailed, {
         error: formatClientError(error),
       });
     } finally {

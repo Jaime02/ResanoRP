@@ -11,8 +11,8 @@ import LoadingSpinner from "@/components/ui/loading-spinner";
 import { UserMode, useAppContext } from "@/contexts/app-context";
 import { FormContextProvider, useAppForm } from "@/form";
 import { loginAdminFn } from "@/lib/admin-session-fns";
-import clientLog from "@/logging/clientLog";
-import { LoggerLevels } from "@/logging/types";
+import log from "@/logging/log";
+import { LogMessages, LoggerLevels } from "@/logging/types";
 import { NO_MACHINES_MESSAGE } from "@/messages/combobox";
 import { BACK_LABEL } from "@/messages/common";
 import {
@@ -83,10 +83,7 @@ export default function Login({ children }: { children: ReactNode }) {
         setIsAdminLogin(false);
       } else {
         toaster.error({ title: WRONG_PASSWORD_MESSAGE });
-        await clientLog(
-          LoggerLevels.emerg,
-          "Intento de acceso con contraseña incorrecta para cambiar el modo de usuario",
-        );
+        await log(LoggerLevels.emerg, LogMessages.wrongUserModePassword);
       }
     },
   });

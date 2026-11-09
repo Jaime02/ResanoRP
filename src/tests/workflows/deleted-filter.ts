@@ -5,6 +5,7 @@ import { openAndConfirmAlertDialog } from "@/tests/utils/components/alert-dialog
 import { getPopoverContent } from "@/tests/utils/components/popover";
 import { assertTableRowCount, getTableRowByTestId } from "@/tests/utils/components/table";
 import { expectSingleToast } from "@/tests/utils/components/toast";
+import { expectUniqueViolationRejected, type TUniqueViolation } from "@/tests/utils/errors-log";
 import { ToastType } from "@/types";
 
 export enum EditButtonVisibility {
@@ -31,6 +32,7 @@ interface WorkflowDeletedFilterAndRestoreParams extends DeletedFilterTableParams
 interface WorkflowRestoreTakenParams extends DeletedFilterTableParams {
   id: number;
   insertDuplicate: () => Promise<unknown>;
+  uniqueViolation: TUniqueViolation;
   errorMessage: string;
 }
 
@@ -147,6 +149,7 @@ export async function workflowRestoreTaken({
   getDeletedAt,
   id,
   insertDuplicate,
+  uniqueViolation,
   errorMessage,
 }: WorkflowRestoreTakenParams) {
   const table = page.getByTestId(tableTestId);
@@ -162,6 +165,7 @@ export async function workflowRestoreTaken({
 
   await openAndConfirmAlertDialog(page, row.getByTestId("button-restore"), "dialog-restore-model-content");
   await expectSingleToast(page, errorMessage);
+  expectUniqueViolationRejected(uniqueViolation, errorMessage);
 
   await expect(row.getByTestId("button-restore")).toBeVisible();
   await expect(row.getByTestId("button-delete")).toHaveCount(0);

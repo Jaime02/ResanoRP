@@ -3,6 +3,7 @@ import { eq } from "drizzle-orm";
 
 import { PART_FEATURE_CONSTRAINT, dbTablePartFeature } from "@/db/schema";
 import { handleMutationError } from "@/lib/handlers";
+import { PART_FEATURE_CHECKED_DELETE_ERROR_MESSAGE, PART_FEATURE_CHECKED_RANGE_ERROR_MESSAGE } from "@/messages/part";
 import { requiredIdObjectSchema } from "@/schemas";
 import { createPartFeatureSchema, updatePartFeatureSchema } from "@/schemas/part-feature";
 import { router, generateTxId } from "@/trpc";
@@ -51,7 +52,7 @@ export default router({
           if (qualityCheck) {
             throw new TRPCError({
               code: "BAD_REQUEST",
-              message: "La Característica tiene Controles de calidad y no se puede cambiar su rango",
+              message: PART_FEATURE_CHECKED_RANGE_ERROR_MESSAGE,
             });
           }
         }
@@ -78,7 +79,7 @@ export default router({
         if (qualityCheck) {
           throw new TRPCError({
             code: "BAD_REQUEST",
-            message: "La Característica tiene Controles de calidad y no se puede eliminar",
+            message: PART_FEATURE_CHECKED_DELETE_ERROR_MESSAGE,
           });
         }
         const deletedPartFeature = (

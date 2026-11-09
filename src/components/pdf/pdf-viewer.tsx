@@ -6,8 +6,8 @@ import PDFPagePlaceholder from "@/components/pdf/pdf-page-placeholder";
 import type { PDFViewerClientProps } from "@/components/pdf/pdf-viewer-client";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import clientLog from "@/logging/clientLog";
-import { LoggerLevels } from "@/logging/types";
+import log from "@/logging/log";
+import { LogMessages, LoggerLevels } from "@/logging/types";
 
 let PDFViewerClient: ComponentType<PDFViewerClientProps>;
 
@@ -81,13 +81,13 @@ export default function PDFViewer({
         try {
           await containerRef.current?.requestFullscreen();
         } catch (err) {
-          await clientLog(LoggerLevels.error, "Enabling fullscreen failed", { error: err });
+          await log(LoggerLevels.error, LogMessages.fullscreenEnableFailed, { error: err });
         }
       } else if (!fullScreen && isCurrentlyFullscreen) {
         try {
           await document.exitFullscreen();
         } catch (err) {
-          await clientLog(LoggerLevels.error, "Exiting fullscreen failed", { error: err });
+          await log(LoggerLevels.error, LogMessages.fullscreenExitFailed, { error: err });
         }
       }
     };
@@ -102,7 +102,7 @@ export default function PDFViewer({
         await document.exitFullscreen();
       }
     } catch (err) {
-      await clientLog(LoggerLevels.error, "Enabling fullscreen failed", { error: err });
+      await log(LoggerLevels.error, LogMessages.fullscreenEnableFailed, { error: err });
     }
   }, []);
 

@@ -23,6 +23,7 @@ import { findFolderById } from "@/files/functions";
 import { getSellOrderPath, getSellOrderRootPath } from "@/files/sell-order";
 import { isSameAppDay } from "@/lib/dates";
 import { formatPrice } from "@/lib/formatters";
+import { LogMessages } from "@/logging/types";
 import {
   STATUS_COMPLETED_LABEL,
   STATUS_DELETED_LABEL,
@@ -43,6 +44,7 @@ import {
   CLIENT_REFERENCE_LABEL,
   RECEPTION_DATE_LABEL,
   SELL_ORDER_REFERENCE_EXISTS_MESSAGE,
+  SELL_ORDER_REFERENCE_TAKEN_MESSAGE,
 } from "@/messages/sell-order";
 import { ProductionOrderStatus } from "@/schemas/production-order";
 import type { TTableSellOrderState } from "@/schemas/sell-order";
@@ -95,7 +97,17 @@ import {
 } from "@/tests/utils/components/table";
 import { expectSingleToast } from "@/tests/utils/components/toast";
 import { expectCheckViolation, expectUniqueViolation } from "@/tests/utils/db";
-import { TestAnnotations, test } from "@/tests/utils/fixtures";
+import {
+  clientErrorEvent,
+  errorStack,
+  escapeRegExp,
+  expectUniqueViolationRejected,
+  httpRequestFailedEvent,
+  mutationErrorEvent,
+  schemaErrorMessage,
+  uniqueColumnsViolation,
+} from "@/tests/utils/errors-log";
+import { TestAnnotations, expectErrorsLog, test } from "@/tests/utils/fixtures";
 import {
   getMockClientById,
   getMockClientParts,
@@ -120,791 +132,795 @@ import {
 } from "@/tests/workflows/sell-order";
 import { ToastType } from "@/types";
 import type { BaseSellOrder } from "@/types/sell-order";
-
-test(
-  "manage the sell orders",
-  { annotation: [TestAnnotations.ResetSellOrders, TestAnnotations.NonEmptyErrorsLogFile] },
-  async ({ page, db, toasts }) => {
-    await test.step("create a new sell order", async () => {
-      const newSellOrderClient = mockClients[0];
-      const newSellOrder: Omit<BaseSellOrder, "fileUploadedAt"> = {
-        clientId: newSellOrderClient.id,
-        clientReference: "TestSellOrderClientReference/25",
-        deletedAt: null,
-        id: mockSellOrders.length + 1,
-        notes: "Sell order notes... important things for your interest",
-        paymentMethodId: newSellOrderClient.defaultPaymentMethodId,
-        receptionDate: MOCK_INITIAL_DATE,
-      };
-      const newSellOrderFilePath = path.join(MOCK_DATA_PATH, "sample.pdf");
-
-      await page.goto("/create-sell-order");
-      const existingDbSellOrder = await getSellOrderById(newSellOrder.id);
-      expect(existingDbSellOrder).toBeUndefined();
-
-      const comboboxClient = getFormInputByLabel(page, CLIENT_LABEL, InputElementType.Combobox);
-      await expect(comboboxClient).toBeVisible();
-      await assertComboboxValue(comboboxClient, null);
-      await openCombobox(comboboxClient);
-      await fillComboboxFilter(page, newSellOrderClient.name.substring(0, 4));
-      await clickInComboboxOption(page, newSellOrderClient.name);
-      await assertComboboxValue(comboboxClient, String(newSellOrderClient.id));
-
-      const comboboxPaymentMethod = getFormInputByLabel(page, PAYMENT_METHOD_LABEL, InputElementType.Combobox);
-      await expect(comboboxPaymentMethod).toBeVisible();
-      await assertComboboxValue(
-        comboboxPaymentMethod,
-        newSellOrderClient.defaultPaymentMethodId !== null ? String(newSellOrderClient.defaultPaymentMethodId) : null,
-      );
-
-      const inputSellOrderFile = getFormInputByLabel(page, FILE_LABEL, InputElementType.File);
-      await expect(inputSellOrderFile).toBeVisible();
-      await setInputFiles(page, inputSellOrderFile, newSellOrderFilePath);
-
-      if (newSellOrder.clientReference !== null) {
-        const inputClientReference = getFormInputByLabel(page, CLIENT_REFERENCE_LABEL);
-        await expect(inputClientReference).toBeVisible();
-        await inputClientReference.fill(newSellOrder.clientReference);
-      }
-
-      const inputNotes = getFormInputByLabel(page, NOTES_LABEL, InputElementType.Textarea);
-      await expect(inputNotes).toBeVisible();
-      await inputNotes.fill(newSellOrder.notes!);
-
-      const buttonSubmit = page.getByTestId("button-submit-form-sell-order");
-      await expect(buttonSubmit).toBeEnabled();
-
-      // Holding the request keeps the form saving long enough to check that the Cliente can not change meanwhile
-      await holdRequestWhile({
-        page,
-        procedurePath: "sellOrder.create",
-        send: async () => buttonSubmit.click(),
-        meanwhile: async () => expect(comboboxClient.getByTestId("button-trigger")).toBeDisabled(),
-      });
-
-      await expect(page).toHaveURL(`/sell-order/${newSellOrder.id}`);
-
-      await expectSingleToast(page);
-
-      const dbSellOrder = await getSellOrderById(newSellOrder.id);
-      expect(dbSellOrder).toBeDefined();
-
-      const { receptionDate: dbReceptionDate, ...dbSellOrderWithoutReceptionDate } = dbSellOrder!;
-      const { receptionDate: newSellOrderReceptionDate, ...newSellOrderWithoutReceptionDate } = newSellOrder;
-      expect(isSameAppDay(dbReceptionDate, newSellOrderReceptionDate)).toBeTruthy();
-      expect(dbSellOrderWithoutReceptionDate).toMatchObject(newSellOrderWithoutReceptionDate);
-      expect(dbSellOrder!.fileUploadedAt).toBeInstanceOf(Date);
-
-      expect(
-        await getSellOrderPath({
-          checkIfFileExists: true,
-          clientId: newSellOrder.clientId,
-          sellOrderId: newSellOrder.id,
-        }),
-      ).toBeTruthy();
-    });
-
-    await test.step("clear the optional fields of a sell order", async () => {
-      const sellOrder = (await getSellOrderById(mockSellOrders.length + 1))!;
-      expect(sellOrder.clientReference).not.toBeNull();
-      expect(sellOrder.notes).not.toBeNull();
-      expect(sellOrder.paymentMethodId).toBeNull();
-      const paymentMethod = mockPaymentMethods[0];
-
-      await page.goto(`/sell-order/${sellOrder.id}`);
-      const formSellOrder = page.getByTestId("form-sell-order");
-      await assertFormLoaded(formSellOrder);
-      const buttonSubmit = formSellOrder.getByTestId("button-submit-form-sell-order");
-      const comboboxPaymentMethod = getFormInputByLabel(formSellOrder, PAYMENT_METHOD_LABEL, InputElementType.Combobox);
-
-      await getFormInputByLabel(formSellOrder, CLIENT_REFERENCE_LABEL).clear();
-      await getFormInputByLabel(formSellOrder, NOTES_LABEL, InputElementType.Textarea).clear();
-      await selectComboboxOption(page, comboboxPaymentMethod, paymentMethod.name, String(paymentMethod.id));
-      await buttonSubmit.click();
-      await expectSingleToast(page);
-      expect(await getSellOrderById(sellOrder.id)).toMatchObject({
-        clientReference: null,
-        notes: null,
-        paymentMethodId: paymentMethod.id,
-        receptionDate: sellOrder.receptionDate,
-      });
-
-      await getClearComboboxButton(comboboxPaymentMethod).click();
-      await assertComboboxValue(comboboxPaymentMethod, null);
-      await buttonSubmit.click();
-      await expectSingleToast(page);
-      expect((await getSellOrderById(sellOrder.id))?.paymentMethodId).toBeNull();
-    });
-
-    await test.step("add sell order lines", async () => {
-      const sellOrder = mockSellOrders[0];
-      const existingSellOrderLines = getMockSellOrderLines(sellOrder.id);
-
-      const sellOrderClient = getMockClientById(sellOrder.clientId);
-      expect(sellOrderClient).toBeDefined();
-      const clientParts = getMockClientParts({ clientId: sellOrder.clientId, includePartReferenceNullClientId: true });
-      const clientPartReferences = getMockPartReferences({
-        clientId: sellOrder.clientId,
-        includeNullClientId: true,
-      });
-      const existingSellOrderLinesPartReferencesIds = existingSellOrderLines.map((line) => line.partReferenceId);
-      const pickedPartReference = clientPartReferences.find(
-        (ref) => !ref.deletedAt && !existingSellOrderLinesPartReferencesIds.includes(ref.id),
-      )!;
-      expect(pickedPartReference).toBeDefined();
-
-      const partToBeAdded = clientParts.find((part) => part.id === pickedPartReference.partId)!;
-      expect(partToBeAdded).toBeDefined();
-
-      const pickedPartPrice = mockPartPrices.find((price) => price.partId === partToBeAdded.id)!;
-      expect(pickedPartPrice).toBeDefined();
-
-      const newSellOrderLine: TCreateSellOrderLine & { id: number } = {
-        description: null,
-        id: Math.max(...mockSellOrderLines.map((line) => line.id)) + 1,
-        notes: "Entregar con certificado de material",
-        partPrice: pickedPartPrice.price,
-        partReferenceId: pickedPartReference.id,
-        quantity: 50,
-        requestedDeliveryDate: null,
-        sellOrderId: sellOrder.id,
-      };
-
-      const dialogCreateSellOrderLine = await workflowOpenCreateSellOrderLine(page, sellOrder.id);
-
-      const tablePartPrices = dialogCreateSellOrderLine.getByTestId("radio-table-part-prices");
-      await expect(tablePartPrices).toBeVisible();
-      await expect(getDivDisabledMessage(tablePartPrices)).toBeVisible();
-
-      const pickerPart = dialogCreateSellOrderLine.getByTestId("picker-part");
-      await expect(pickerPart).toBeVisible();
-      expect(await getPickerValue(pickerPart)).toBeNull();
-
-      const { dialogPickerPartContent, tablePickerPart } = await openPartPicker(page, pickerPart);
-
-      expect(await getTableRows(tablePickerPart).count()).toBe(clientParts.length);
-
-      // Assert that the part picker is displaying the client parts
-      const partRowIds = await Promise.all(
-        (await getTableRows(tablePickerPart).all()).map(async (row) => getTestId(row)),
-      );
-      expect(partRowIds.sort((a, b) => a - b)).toEqual(clientParts.map((part) => part.id).sort((a, b) => a - b));
-
-      await assertPickerPartKeepsNullClientParts(tablePickerPart, sellOrder.clientId);
-
-      const pickedReferenceRow = getTableRowByTestId(tablePickerPart, partToBeAdded.id);
-      await expect(pickedReferenceRow).toBeVisible();
-      // Find the matched subrow that contains the pickedPartReference.reference text
-      await pickedReferenceRow
-        .locator('[data-testid="div-part-reference-row"]', {
-          has: page.getByText(pickedPartReference.reference),
-        })
-        .getByTestId("button-success")
-        .click();
-
-      await expect(dialogPickerPartContent).not.toBeVisible();
-      await expect(getDivDisabledMessage(tablePartPrices)).not.toBeVisible();
-
-      expect(await getPickerValue(pickerPart)).toBe(String(partToBeAdded.id));
-      expect(await getPickerText(pickerPart)).toEqual(pickedPartReference.reference);
-
-      const inputQuantity = getFormInputByLabel(dialogCreateSellOrderLine, QUANTITY_LABEL, InputElementType.Number);
-      await expect(inputQuantity).toBeVisible();
-
-      await inputQuantity.pressSequentially(String(newSellOrderLine.quantity));
-      await inputQuantity.press("Enter");
-
-      const inputPartPrice = getFormInputByLabel(dialogCreateSellOrderLine, PRICE_LABEL, InputElementType.Number);
-      await expect(inputPartPrice).toBeVisible();
-
-      await inputPartPrice.pressSequentially(newSellOrderLine.partPrice!);
-
-      await getFormInputByLabel(dialogCreateSellOrderLine, NOTES_LABEL, InputElementType.Textarea).fill(
-        newSellOrderLine.notes!,
-      );
-
-      const buttonSubmit = dialogCreateSellOrderLine.getByTestId("button-submit");
-      await expect(buttonSubmit).toBeEnabled();
-      await buttonSubmit.click();
-
-      await expect(dialogCreateSellOrderLine).not.toBeVisible();
-
-      const dbSellOrderLines = await getSellOrderLinesBySellOrderId(sellOrder.id);
-
-      const sellOrderLines = getMockSellOrderLines(sellOrder.id);
-      expect(dbSellOrderLines.length).toBe(sellOrderLines.length + 1);
-
-      expect(dbSellOrderLines.find((line) => line.id === newSellOrderLine.id)).toMatchObject(newSellOrderLine);
-
-      await expectSingleToast(page);
-    });
-
-    await test.step("add a sell order line with a reference without client", async () => {
-      const sellOrder = mockSellOrders[0];
-      const existingDbSellOrderLines = await getSellOrderLinesBySellOrderId(sellOrder.id);
-      const usedPartReferenceIds = existingDbSellOrderLines.map((line) => line.partReferenceId);
-      const nullClientPartReference = getMockPartReferences({ includeNullClientId: true }).find(
-        (partReference) => !usedPartReferenceIds.includes(partReference.id),
-      )!;
-      expect(nullClientPartReference, "An unused reference without client is needed").toBeDefined();
-      const clientParts = getMockClientParts({ clientId: sellOrder.clientId, includePartReferenceNullClientId: true });
-      const otherClientPartReference = getMockPartReferences({}).find(
-        (partReference) =>
-          partReference.clientId !== null &&
-          partReference.clientId !== sellOrder.clientId &&
-          clientParts.some((part) => part.id === partReference.partId),
-      )!;
-      expect(otherClientPartReference, "A visible reference of another client is needed").toBeDefined();
-      const quantity = 7;
-      const partPrice = "4.5";
-
-      const dialogCreateSellOrderLine = await workflowOpenCreateSellOrderLine(page, sellOrder.id);
-      const formSellOrder = page.getByTestId("form-sell-order");
-      const tablePartPrices = dialogCreateSellOrderLine.getByTestId("radio-table-part-prices");
-      await expect(getDivDisabledMessage(tablePartPrices)).toBeVisible();
-
-      const pickerPart = dialogCreateSellOrderLine.getByTestId("picker-part");
-      const { dialogPickerPartContent, tablePickerPart } = await openPartPicker(page, pickerPart);
-      // The Cliente is fixed by the Pedido de venta, so the picker has no part filters to change
-      await expect(tablePickerPart.getByTestId("popover-part-filters")).toHaveCount(0);
-
-      // Only the references of the Cliente and the ones without Cliente can be picked
-      const getReferenceRow = (partReference: { partId: number; reference: string }) =>
-        getTableRowByTestId(tablePickerPart, partReference.partId).getByTestId("div-part-reference-row").filter({
-          hasText: partReference.reference,
-        });
-      await expect(getReferenceRow(otherClientPartReference)).toBeVisible();
-      await expect(getReferenceRow(otherClientPartReference).getByTestId("button-success")).toHaveCount(0);
-      await getReferenceRow(nullClientPartReference).getByTestId("button-success").click();
-
-      await expect(dialogPickerPartContent).not.toBeVisible();
-      expect(await getPickerValue(pickerPart)).toBe(String(nullClientPartReference.partId));
-      expect(await getPickerText(pickerPart)).toEqual(nullClientPartReference.reference);
-      await expect(getDivDisabledMessage(tablePartPrices)).not.toBeVisible();
-
-      const inputQuantity = getFormInputByLabel(dialogCreateSellOrderLine, QUANTITY_LABEL, InputElementType.Number);
-      await inputQuantity.pressSequentially(String(quantity));
-      await inputQuantity.press("Enter");
-      await getFormInputByLabel(dialogCreateSellOrderLine, PRICE_LABEL, InputElementType.Number).pressSequentially(
-        partPrice,
-      );
-      await dialogCreateSellOrderLine.getByTestId("button-submit").click();
-      await expect(dialogCreateSellOrderLine).not.toBeVisible();
-      await expectSingleToast(page);
-
-      const dbSellOrderLines = await getSellOrderLinesBySellOrderId(sellOrder.id);
-      expect(dbSellOrderLines).toHaveLength(existingDbSellOrderLines.length + 1);
-      const newDbSellOrderLine = dbSellOrderLines.find(
-        (line) => !existingDbSellOrderLines.some((existingLine) => existingLine.id === line.id),
-      )!;
-      expect(newDbSellOrderLine).toMatchObject({
-        partPrice,
-        partReferenceId: nullClientPartReference.id,
-        pendingQuantity: quantity,
-        quantity,
-      });
-
-      const rowSellOrderLine = getTableRowByTestId(
-        formSellOrder.getByTestId("table-sell-order-line"),
-        newDbSellOrderLine.id,
-      );
-      await expect(rowSellOrderLine.getByTestId("part")).toContainText(nullClientPartReference.reference);
-      await expect(rowSellOrderLine.getByTestId("description")).toHaveText(
-        mockParts.find((part) => part.id === nullClientPartReference.partId)!.description,
-      );
-    });
-
-    await test.step("delete a sell order", async () => {
-      const sellOrder = mockSellOrders[0];
-      // An Orden de producción of the Pedido de venta that is queued in a Máquina
-      const queuedProductionOrder = mockMachineProductionOrderQueues.find(
-        (queue) =>
-          getMockSellOrderLineById(
-            mockProductionOrders.find((productionOrder) => productionOrder.id === queue.productionOrderId)
-              ?.sellOrderLineId ?? 0,
-          )?.sellOrderId === sellOrder.id,
-      )!;
-      expect(queuedProductionOrder).toBeDefined();
-
-      await workflowDeleteSellOrder(page, sellOrder.id);
-
-      // Its Órdenes de producción are deleted along with it, so they are taken off the Máquinas
-      expect((await getMachineProductionOrderQueue(queuedProductionOrder.machineId)).map((po) => po.id)).not.toContain(
-        queuedProductionOrder.productionOrderId,
-      );
-      expect(
-        await dbGetProductionOrderStatus((await getProductionOrderById(queuedProductionOrder.productionOrderId))!),
-      ).toBe(ProductionOrderStatus.SellOrderDeleted);
-
-      await page.goto(`/sell-order/${sellOrder.id}`);
-
-      // Expect every form field to be disabled
-      const formSellOrder = page.getByTestId("form-sell-order");
-      await expect(formSellOrder).toBeVisible();
-      await assertFormLoaded(formSellOrder);
-
-      const inputReceptionDate = getFormInputByLabel(formSellOrder, RECEPTION_DATE_LABEL, InputElementType.Date);
-      await expect(inputReceptionDate.getByTestId("popover-trigger")).toBeDisabled();
-
-      const comboboxClient = getFormInputByLabel(formSellOrder, CLIENT_LABEL, InputElementType.Combobox);
-      await expect(comboboxClient.getByTestId("button-trigger")).toBeDisabled();
-
-      const inputClientReference = getFormInputByLabel(formSellOrder, CLIENT_REFERENCE_LABEL, InputElementType.Input);
-      await expect(inputClientReference).toHaveAttribute("readonly");
-
-      const comboboxPaymentMethod = getFormInputByLabel(formSellOrder, PAYMENT_METHOD_LABEL, InputElementType.Combobox);
-      await expect(comboboxPaymentMethod.getByTestId("button-trigger")).toBeDisabled();
-
-      const inputNotes = getFormInputByLabel(formSellOrder, NOTES_LABEL, InputElementType.Textarea);
-      await expect(inputNotes).toHaveAttribute("readonly");
-
-      const tableSellOrderLine = formSellOrder.getByTestId("table-sell-order-line");
-      // From the database, so the Líneas added by the previous steps are checked too
-      const dbSellOrderLines = (await getSellOrderLinesBySellOrderId(sellOrder.id)).filter(
-        (line) => line.deletedAt === null,
-      );
-      expect(dbSellOrderLines.length).toBeGreaterThan(getMockSellOrderLines(sellOrder.id).length);
-      for (const sellOrderLine of dbSellOrderLines) {
-        await expect(getTableRowByTestId(tableSellOrderLine, sellOrderLine.id).getByTestId("status")).toHaveText(
-          SELL_ORDER_LINE_ORDER_DELETED_LABEL,
-        );
-      }
-
-      // Its Órdenes de producción show why they are deleted, and they can still be deleted on their own
-      const productionOrderState = {
-        filters: [
-          { id: "statuses", value: [ProductionOrderStatus.Deleted, ProductionOrderStatus.SellOrderDeleted] },
-          { id: "sellOrderId", value: sellOrder.id },
-        ],
-      };
-      await page.goto(
-        `/production-order?${new URLSearchParams({ "table-production-order": JSON.stringify(productionOrderState) })}`,
-      );
-      const rowProductionOrder = getTableRowByTestId(
-        page.getByTestId("table-production-order"),
-        queuedProductionOrder.productionOrderId,
-      );
-      const actionsProductionOrder = rowProductionOrder.getByTestId("actions");
-      await expect(rowProductionOrder.getByTestId("status")).toHaveText(SELL_ORDER_LINE_ORDER_DELETED_LABEL);
-      await expect(actionsProductionOrder.getByTestId("button-edit")).toBeVisible();
-      await expect(actionsProductionOrder.getByTestId("button-restore")).not.toBeAttached();
-
-      await openAndConfirmAlertDialog(
-        page,
-        actionsProductionOrder.getByTestId("button-delete"),
-        "dialog-delete-model-content",
-      );
-      await expectSingleToast(page);
-      await expect(rowProductionOrder.getByTestId("status")).toHaveText(STATUS_DELETED_LABEL);
-      await expect(actionsProductionOrder.getByTestId("button-delete")).not.toBeAttached();
-      expect(
-        await dbGetProductionOrderStatus((await getProductionOrderById(queuedProductionOrder.productionOrderId))!),
-      ).toBe(ProductionOrderStatus.Deleted);
-
-      // Restoring it on its own leaves it deleted along with its Pedido de venta
-      await openAndConfirmAlertDialog(
-        page,
-        actionsProductionOrder.getByTestId("button-restore"),
-        "dialog-restore-model-content",
-      );
-      await expectSingleToast(page);
-      await expect(rowProductionOrder.getByTestId("status")).toHaveText(SELL_ORDER_LINE_ORDER_DELETED_LABEL);
-      await expect(actionsProductionOrder.getByTestId("button-restore")).not.toBeAttached();
-      expect(
-        await dbGetProductionOrderStatus((await getProductionOrderById(queuedProductionOrder.productionOrderId))!),
-      ).toBe(ProductionOrderStatus.SellOrderDeleted);
-
-      // In the table, a deleted Pedido de venta can only be restored, and its subrow has no actions of its own
-      const tableSellOrder = page.getByTestId("table-sell-order");
-      const tableState = { filters: [{ id: "id", value: sellOrder.id }] };
-      await page.goto(`/sell-order?${new URLSearchParams({ "table-sell-order": JSON.stringify(tableState) })}`);
-      const rowSellOrder = getTableRowByTestId(tableSellOrder, sellOrder.id);
-      const actionsSellOrder = rowSellOrder.getByTestId("actions");
-      await expect(actionsSellOrder.getByTestId("button-delete")).not.toBeAttached();
-      await expect(actionsSellOrder.getByTestId("button-restore")).toBeEnabled();
-
-      await rowSellOrder.getByTestId("button-expander").click();
-      const subrowSellOrder = getTableSubrowById(tableSellOrder, sellOrder.id);
-      await assertFormLoaded(subrowSellOrder);
-      await expect(subrowSellOrder.getByTestId("button-restore-sell-order")).not.toBeAttached();
-      await expect(subrowSellOrder.getByTestId("button-delete-sell-order")).not.toBeAttached();
-
-      // Restoring it brings it back, but its Órdenes de producción are not queued again
-      await openAndConfirmAlertDialog(
-        page,
-        actionsSellOrder.getByTestId("button-restore"),
-        "dialog-restore-model-content",
-      );
-      await expect(actionsSellOrder.getByTestId("button-delete")).toBeEnabled();
-      await expect(actionsSellOrder.getByTestId("button-restore")).not.toBeAttached();
-      expect((await getSellOrderById(sellOrder.id))?.deletedAt).toBeNull();
-      expect(
-        await dbGetProductionOrderStatus((await getProductionOrderById(queuedProductionOrder.productionOrderId))!),
-      ).toBe(ProductionOrderStatus.Pending);
-      expect((await getMachineProductionOrderQueue(queuedProductionOrder.machineId)).map((po) => po.id)).not.toContain(
-        queuedProductionOrder.productionOrderId,
-      );
-    });
-
-    await test.step("update a sell order line", async () => {
-      const sellOrder = mockSellOrders[0];
-      const sellOrderLines = getMockSellOrderLines(sellOrder.id);
-      const sellOrderLineToBeUpdated = sellOrderLines.at(0)!;
-      expect(sellOrderLineToBeUpdated).toBeDefined();
-
-      const updatedSellOrderLineData: Partial<TSellOrderLine> = {
-        pendingQuantity: 2,
-        quantity: 20,
-      };
-
-      await page.goto(`/sell-order/${sellOrder.id}`);
-
-      await assertFormLoaded(page.getByTestId("form-sell-order"));
-
-      const sellOrderLinesTable = page.getByTestId("table-sell-order-line");
-      const rowSellOrderLine = getTableRowByTestId(sellOrderLinesTable, sellOrderLineToBeUpdated.id);
-      await expect(rowSellOrderLine).toBeVisible();
-
-      const inputQuantity = getEditableCellById(rowSellOrderLine, "quantity");
-      await expect(inputQuantity).toBeVisible();
-      await inputQuantity.clear();
-      await inputQuantity.pressSequentially(String(updatedSellOrderLineData.quantity));
-      await inputQuantity.press("Enter");
-
-      await expectSingleToast(page);
-
-      let updatedSellOrderLine = await getSellOrderLineById(sellOrderLineToBeUpdated.id);
-      expect(updatedSellOrderLine).toBeDefined();
-      expect(updatedSellOrderLine!.quantity).toBe(updatedSellOrderLineData.quantity);
-
-      const inputPendingQuantity = getEditableCellById(rowSellOrderLine, "pendingQuantity");
-      await expect(inputPendingQuantity).toBeVisible();
-      await inputPendingQuantity.clear();
-      await inputPendingQuantity.pressSequentially(String(updatedSellOrderLineData.pendingQuantity));
-      await inputPendingQuantity.press("Enter");
-
-      await expectSingleToast(page);
-
-      updatedSellOrderLine = await getSellOrderLineById(sellOrderLineToBeUpdated.id);
-      expect(updatedSellOrderLine).toBeDefined();
-      expect(updatedSellOrderLine!.pendingQuantity).toBe(updatedSellOrderLineData.pendingQuantity);
-
-      const sellOrderLineWithNotes = sellOrderLines.find((sellOrderLine) => sellOrderLine.notes !== null)!;
-      expect(sellOrderLineWithNotes, "A sell order line with notes is needed").toBeDefined();
-      const inputNotes = getEditableCellById(
-        getTableRowByTestId(sellOrderLinesTable, sellOrderLineWithNotes.id),
-        "notes",
-      );
-      await expect(inputNotes).toHaveValue(sellOrderLineWithNotes.notes!);
-      const newNotes = "Cambiar el embalaje";
-      await inputNotes.fill(newNotes);
-      await inputNotes.press("Enter");
-
-      await expectSingleToast(page);
-      expect((await getSellOrderLineById(sellOrderLineWithNotes.id))?.notes).toBe(newNotes);
-
-      // Clearing the notes stores them as empty
-      await inputNotes.clear();
-      await inputNotes.press("Enter");
-
-      await expectSingleToast(page);
-      expect((await getSellOrderLineById(sellOrderLineWithNotes.id))?.notes).toBeNull();
-
-      const cellInputPartPicker = rowSellOrderLine.getByTestId("partPrice");
-      const inputPickerPartPrice = cellInputPartPicker.getByTestId("input-picker-part-price");
-      const inputPartPrice = cellInputPartPicker.getByTestId("input-part-price");
-
-      // Sell order lines store only the price, not the part price it was picked from
-      await expect(inputPickerPartPrice).toBeVisible();
-      await expect(inputPickerPartPrice).not.toHaveAttribute("data-value");
-
-      // Update the part price through the picker
-      await openPicker(inputPickerPartPrice);
-
-      const dialogPickerPartPriceContent = getPickerDialogContent(page, "input-picker-part-price");
-      await expect(dialogPickerPartPriceContent).toBeVisible();
-      const tablePickerPartPrice = dialogPickerPartPriceContent.getByTestId("table-picker-part-prices");
-
-      await expect(tablePickerPartPrice).toBeVisible();
-      await expect(getTableSkeletonRows(tablePickerPartPrice)).toHaveCount(0);
-
-      const tableRowPartPrices = getTableRows(tablePickerPartPrice);
-      const tableRowPartPricesIds = await Promise.all(
-        (await tableRowPartPrices.all()).map(async (row) => getTestId(row)),
-      );
-      expect(tableRowPartPricesIds.length).toBeGreaterThan(1);
-
-      // Find a part price that is different from the current sell order line part price, with the same part id
-      const pickedPartPrice = mockPartPrices.find(
-        (price) =>
-          price.partId === getMockPartReferenceById(sellOrderLineToBeUpdated.partReferenceId)?.partId &&
-          price.price !== sellOrderLineToBeUpdated.partPrice,
-      )!;
-      expect(pickedPartPrice).toBeDefined();
-
-      const pickedPartPriceRow = getTableRowByTestId(tablePickerPartPrice, pickedPartPrice.id);
-      await expect(pickedPartPriceRow).toBeVisible();
-      const buttonRowSelectPickedPartPrice = pickedPartPriceRow.getByTestId("button-success");
-      await expect(buttonRowSelectPickedPartPrice).toBeVisible();
-      await expect(buttonRowSelectPickedPartPrice).toBeEnabled();
-      await buttonRowSelectPickedPartPrice.click();
-      await expect(dialogPickerPartPriceContent).not.toBeVisible();
-
-      await expect(inputPartPrice).toHaveValue(formatPrice(pickedPartPrice.price, { replaceNBSP: true }));
-
-      await expectSingleToast(page);
-
-      updatedSellOrderLine = await getSellOrderLineById(sellOrderLineToBeUpdated.id);
-      expect(updatedSellOrderLine).toBeDefined();
-      expect(updatedSellOrderLine!.partPrice).not.toBe(sellOrderLineToBeUpdated.partPrice);
-
-      // Update the part price through the price input
-      const newPartPrice = "69.69";
-      expect(newPartPrice, "Wrong test dummy value, it is equal to the existing part price").not.toStrictEqual(
-        updatedSellOrderLine!.partPrice,
-      );
-      await inputPartPrice.clear();
-      await inputPartPrice.pressSequentially(newPartPrice);
-      await inputPartPrice.press("Enter");
-
-      await expectSingleToast(page);
-
-      expect((await getSellOrderLineById(sellOrderLineToBeUpdated.id))?.partPrice).toBe(newPartPrice);
-
-      const sellOrderLineWithoutPrice = sellOrderLines.find((sellOrderLine) => sellOrderLine.partPrice === null)!;
-      expect(sellOrderLineWithoutPrice).toBeDefined();
-      const cellPartPriceWithoutPrice = getTableRowByTestId(
-        sellOrderLinesTable,
-        sellOrderLineWithoutPrice.id,
-      ).getByTestId("partPrice");
-      const pickerPartPriceWithoutPrice = cellPartPriceWithoutPrice.getByTestId("input-picker-part-price");
-      const inputPartPriceWithoutPrice = cellPartPriceWithoutPrice.getByTestId("input-part-price");
-      const buttonClearPartPrice = pickerPartPriceWithoutPrice.getByTestId("button-clear");
-      await expect(buttonClearPartPrice).not.toBeAttached();
-
-      // The clear button follows prices typed in the price input
-      await inputPartPriceWithoutPrice.pressSequentially(newPartPrice);
-      await inputPartPriceWithoutPrice.press("Enter");
-
-      await expectSingleToast(page);
-      expect((await getSellOrderLineById(sellOrderLineWithoutPrice.id))?.partPrice).toBe(newPartPrice);
-      await expect(buttonClearPartPrice).toBeVisible();
-
-      await clearPicker(pickerPartPriceWithoutPrice);
-
-      await expectSingleToast(page);
-      expect((await getSellOrderLineById(sellOrderLineWithoutPrice.id))?.partPrice).toBeNull();
-      await expect(inputPartPriceWithoutPrice).toHaveValue("");
-      await expect(buttonClearPartPrice).not.toBeAttached();
-    });
-
-    await test.step("delete a sell order line", async () => {
-      const sellOrder = mockSellOrders[0];
-      const sellOrderLines = getMockSellOrderLines(sellOrder.id);
-      const sellOrderLineToBeDeleted = sellOrderLines.at(0)!;
-      expect(sellOrderLineToBeDeleted).toBeDefined();
-
-      await page.goto(`/sell-order/${sellOrder.id}`);
-
-      await assertFormLoaded(page.getByTestId("form-sell-order"));
-
-      const rowSellOrderLine = await workflowDeleteSellOrderLine(page, sellOrderLineToBeDeleted.id);
-
-      await expect(rowSellOrderLine).toBeVisible();
-      await expect(getEditableCellById(rowSellOrderLine, "quantity")).toHaveAttribute("readonly");
-      await expect(getEditableCellById(rowSellOrderLine, "pendingQuantity")).toHaveAttribute("readonly");
-      const partPriceCell = rowSellOrderLine.getByTestId("partPrice");
-      await expect(partPriceCell.getByTestId("input-picker-part-price")).not.toBeAttached();
-
-      const requestedDeliveryDateCell = rowSellOrderLine.getByTestId("requestedDeliveryDate");
-      await expect(requestedDeliveryDateCell.getByTestId("popover-trigger")).toBeDisabled();
-      await expect(requestedDeliveryDateCell.getByTestId("button-clear")).not.toBeAttached();
-
-      const actionsCell = rowSellOrderLine.getByTestId("actions");
-      await expect(actionsCell.getByTestId("button-delete")).not.toBeAttached();
-      await expect(actionsCell.getByTestId("button-restore")).toBeEnabled();
-    });
-
-    await test.step("deleting the last pending line of a sell order completes it and stops its production", async () => {
-      // A Línea whose Orden de producción is the one a Máquina is working on
-      const machine = mockMachines.find((mockMachine) => mockMachine.activeProductionOrderId !== null)!;
-      const productionOrder = mockProductionOrders.find(
-        (mockProductionOrder) => mockProductionOrder.id === machine.activeProductionOrderId,
-      )!;
-      const sellOrderLine = getMockSellOrderLineById(productionOrder.sellOrderLineId!)!;
-      const sellOrderLines = getMockSellOrderLines(sellOrderLine.sellOrderId);
-      expect(sellOrderLines.filter((line) => line.pendingQuantity > 0 && line.deletedAt === null)).toEqual([
-        sellOrderLine,
-      ]);
-
-      await page.goto(`/sell-order/${sellOrderLine.sellOrderId}`);
-      const formSellOrder = page.getByTestId("form-sell-order");
-      await assertFormLoaded(formSellOrder);
-      const badgeSellOrderStatus = formSellOrder.getByTestId("badge-sell-order-status");
-      await expect(badgeSellOrderStatus).toContainText(STATUS_PENDING_LABEL);
-
-      const rowSellOrderLine = await workflowDeleteSellOrderLine(page, sellOrderLine.id);
-
-      await expect(rowSellOrderLine.getByTestId("status")).toHaveText(STATUS_DELETED_LABEL);
-      await expect(badgeSellOrderStatus).toContainText(STATUS_COMPLETED_LABEL);
-
-      // Its Orden de producción is deleted along with it, so it is taken off the Máquinas
-      expect(await dbGetProductionOrderStatus((await getProductionOrderById(productionOrder.id))!)).toBe(
-        ProductionOrderStatus.SellOrderLineDeleted,
-      );
-      expect((await getMachineById(machine.id))?.activeProductionOrderId).toBeNull();
-      expect((await getMachineProductionOrderQueue(machine.id)).map((po) => po.id)).not.toContain(productionOrder.id);
-
-      // The deleted Línea is shown over its deleted Pedido de venta
-      await db
-        .update(dbTableSellOrder)
-        .set({ deletedAt: new Date() })
-        .where(eq(dbTableSellOrder.id, sellOrderLine.sellOrderId));
-      expect(await dbGetProductionOrderStatus((await getProductionOrderById(productionOrder.id))!)).toBe(
-        ProductionOrderStatus.SellOrderLineDeleted,
-      );
-      const tableProductionOrder = page.getByTestId("table-production-order");
-      const gotoProductionOrdersOfSellOrderWithStatus = async (status: ProductionOrderStatus) =>
-        page.goto(
-          `/production-order?${new URLSearchParams({
-            "table-production-order": JSON.stringify({
-              filters: [
-                { id: "statuses", value: [status] },
-                { id: "sellOrderId", value: sellOrderLine.sellOrderId },
-              ],
-            }),
-          })}`,
-        );
-      await gotoProductionOrdersOfSellOrderWithStatus(ProductionOrderStatus.SellOrderLineDeleted);
-      await expect(getTableRowByTestId(tableProductionOrder, productionOrder.id).getByTestId("status")).toHaveText(
-        SELL_ORDER_LINE_DELETED_MESSAGE,
-      );
-      await gotoProductionOrdersOfSellOrderWithStatus(ProductionOrderStatus.SellOrderDeleted);
-      await expect(getTableNoDataRow(tableProductionOrder)).toBeVisible();
-      await db
-        .update(dbTableSellOrder)
-        .set({ deletedAt: null })
-        .where(eq(dbTableSellOrder.id, sellOrderLine.sellOrderId));
-
-      await page.goto(`/sell-order/${sellOrderLine.sellOrderId}`);
-      await assertFormLoaded(formSellOrder);
-
-      // Restoring the Línea makes it pending again, but its Orden de producción is not queued again
-      await openAndConfirmAlertDialog(
-        page,
-        rowSellOrderLine.getByTestId("actions").getByTestId("button-restore"),
-        "dialog-restore-model-content",
-      );
-      await expectSingleToast(page);
-      await expect(badgeSellOrderStatus).toContainText(STATUS_PENDING_LABEL);
-      await expect(rowSellOrderLine.getByTestId("status")).not.toHaveText(STATUS_DELETED_LABEL);
-      expect((await getSellOrderLineById(sellOrderLine.id))?.deletedAt).toBeNull();
-      expect(await dbGetProductionOrderStatus((await getProductionOrderById(productionOrder.id))!)).toBe(
-        ProductionOrderStatus.Pending,
-      );
-      expect((await getMachineProductionOrderQueue(machine.id)).map((po) => po.id)).not.toContain(productionOrder.id);
-    });
-
-    // It leaves the Pedido de venta deleted for good, so it goes last
-    await test.step("avoid creating a sell order with a duplicate client reference for the same client", async () => {
-      const existingSellOrder = mockSellOrders[0];
-      if (existingSellOrder.clientReference === null)
-        throw new Error("Existing sell order must have a client reference for this test to be valid");
-
-      const existingSellOrderClient = getMockClientById(existingSellOrder.clientId);
-      expect(existingSellOrderClient).toBeDefined();
-      const otherClient = mockClients.find(
-        (client) => client.id !== existingSellOrder.clientId && client.deletedAt === null,
-      )!;
-      const previousSellOrderIds = (await getSellOrders()).map((sellOrder) => sellOrder.id);
-      const comboboxClient = getFormInputByLabel(page, CLIENT_LABEL, InputElementType.Combobox);
-      const buttonClearComboboxClient = getClearComboboxButton(comboboxClient);
+import type { BaseSellOrderLine } from "@/types/sell-order-line";
+
+test("manage the sell orders", { annotation: TestAnnotations.ResetSellOrders }, async ({ page, db, toasts }) => {
+  await test.step("create a new sell order", async () => {
+    const newSellOrderClient = mockClients[0];
+    const newSellOrder: Omit<BaseSellOrder, "fileUploadedAt"> = {
+      clientId: newSellOrderClient.id,
+      clientReference: "TestSellOrderClientReference/25",
+      deletedAt: null,
+      id: mockSellOrders.length + 1,
+      notes: "Sell order notes... important things for your interest",
+      paymentMethodId: newSellOrderClient.defaultPaymentMethodId,
+      receptionDate: MOCK_INITIAL_DATE,
+    };
+    const newSellOrderFilePath = path.join(MOCK_DATA_PATH, "sample.pdf");
+
+    await page.goto("/create-sell-order");
+    const existingDbSellOrder = await getSellOrderById(newSellOrder.id);
+    expect(existingDbSellOrder).toBeUndefined();
+
+    const comboboxClient = getFormInputByLabel(page, CLIENT_LABEL, InputElementType.Combobox);
+    await expect(comboboxClient).toBeVisible();
+    await assertComboboxValue(comboboxClient, null);
+    await openCombobox(comboboxClient);
+    await fillComboboxFilter(page, newSellOrderClient.name.substring(0, 4));
+    await clickInComboboxOption(page, newSellOrderClient.name);
+    await assertComboboxValue(comboboxClient, String(newSellOrderClient.id));
+
+    const comboboxPaymentMethod = getFormInputByLabel(page, PAYMENT_METHOD_LABEL, InputElementType.Combobox);
+    await expect(comboboxPaymentMethod).toBeVisible();
+    await assertComboboxValue(
+      comboboxPaymentMethod,
+      newSellOrderClient.defaultPaymentMethodId !== null ? String(newSellOrderClient.defaultPaymentMethodId) : null,
+    );
+
+    const inputSellOrderFile = getFormInputByLabel(page, FILE_LABEL, InputElementType.File);
+    await expect(inputSellOrderFile).toBeVisible();
+    await setInputFiles(page, inputSellOrderFile, newSellOrderFilePath);
+
+    if (newSellOrder.clientReference !== null) {
       const inputClientReference = getFormInputByLabel(page, CLIENT_REFERENCE_LABEL);
-      const buttonSubmit = page.getByTestId("button-submit-form-sell-order");
-
-      // Another Cliente can use the same reference
-      await page.goto("/create-sell-order");
-      await selectComboboxOption(page, comboboxClient, otherClient.name, String(otherClient.id));
-      await inputClientReference.fill(existingSellOrder.clientReference);
-      await expect(buttonSubmit).toBeEnabled();
-      await expect(toasts).toHaveCount(0);
-
-      await page.goto("/create-sell-order");
-      await expect(comboboxClient).toBeVisible();
-      await expect(buttonClearComboboxClient).not.toBeVisible();
-      await assertComboboxValue(comboboxClient, null);
-      await openCombobox(comboboxClient);
-      await fillComboboxFilter(page, existingSellOrderClient!.name.substring(0, 4));
-      await clickInComboboxOption(page, existingSellOrderClient!.name);
-      await assertComboboxValue(comboboxClient, String(existingSellOrderClient!.id));
-      await expect(buttonClearComboboxClient).toBeVisible();
-
       await expect(inputClientReference).toBeVisible();
-      await inputClientReference.fill(existingSellOrder.clientReference);
+      await inputClientReference.fill(newSellOrder.clientReference);
+    }
 
-      await expect(buttonSubmit).toBeDisabled();
-      await expectSingleToast(page, SELL_ORDER_REFERENCE_EXISTS_MESSAGE);
+    const inputNotes = getFormInputByLabel(page, NOTES_LABEL, InputElementType.Textarea);
+    await expect(inputNotes).toBeVisible();
+    await inputNotes.fill(newSellOrder.notes!);
 
-      const finalDbSellOrders = await getSellOrders();
-      expect(finalDbSellOrders.length).toEqual(previousSellOrderIds.length);
+    const buttonSubmit = page.getByTestId("button-submit-form-sell-order");
+    await expect(buttonSubmit).toBeEnabled();
 
-      // Deleting the Pedido de venta frees its reference
-      await workflowDeleteSellOrder(page, existingSellOrder.id);
+    // Holding the request keeps the form saving long enough to check that the Cliente can not change meanwhile
+    await holdRequestWhile({
+      page,
+      procedurePath: "sellOrder.create",
+      send: async () => buttonSubmit.click(),
+      meanwhile: async () => expect(comboboxClient.getByTestId("button-trigger")).toBeDisabled(),
+    });
 
-      // A previous step created a Pedido de venta, so the replacement is the one after it
-      const replacementSellOrderId = Math.max(...previousSellOrderIds) + 1;
-      await page.goto("/create-sell-order");
-      await openCombobox(comboboxClient);
-      await fillComboboxFilter(page, existingSellOrderClient!.name.substring(0, 4));
-      await clickInComboboxOption(page, existingSellOrderClient!.name);
-      await inputClientReference.fill(existingSellOrder.clientReference);
-      await setInputFiles(
-        page,
-        getFormInputByLabel(page, FILE_LABEL, InputElementType.File),
-        path.join(MOCK_DATA_PATH, "sample.pdf"),
+    await expect(page).toHaveURL(`/sell-order/${newSellOrder.id}`);
+
+    await expectSingleToast(page);
+
+    const dbSellOrder = await getSellOrderById(newSellOrder.id);
+    expect(dbSellOrder).toBeDefined();
+
+    const { receptionDate: dbReceptionDate, ...dbSellOrderWithoutReceptionDate } = dbSellOrder!;
+    const { receptionDate: newSellOrderReceptionDate, ...newSellOrderWithoutReceptionDate } = newSellOrder;
+    expect(isSameAppDay(dbReceptionDate, newSellOrderReceptionDate)).toBeTruthy();
+    expect(dbSellOrderWithoutReceptionDate).toMatchObject(newSellOrderWithoutReceptionDate);
+    expect(dbSellOrder!.fileUploadedAt).toBeInstanceOf(Date);
+
+    expect(
+      await getSellOrderPath({
+        checkIfFileExists: true,
+        clientId: newSellOrder.clientId,
+        sellOrderId: newSellOrder.id,
+      }),
+    ).toBeTruthy();
+  });
+
+  await test.step("clear the optional fields of a sell order", async () => {
+    const sellOrder = (await getSellOrderById(mockSellOrders.length + 1))!;
+    expect(sellOrder.clientReference).not.toBeNull();
+    expect(sellOrder.notes).not.toBeNull();
+    expect(sellOrder.paymentMethodId).toBeNull();
+    const paymentMethod = mockPaymentMethods[0];
+
+    await page.goto(`/sell-order/${sellOrder.id}`);
+    const formSellOrder = page.getByTestId("form-sell-order");
+    await assertFormLoaded(formSellOrder);
+    const buttonSubmit = formSellOrder.getByTestId("button-submit-form-sell-order");
+    const comboboxPaymentMethod = getFormInputByLabel(formSellOrder, PAYMENT_METHOD_LABEL, InputElementType.Combobox);
+
+    await getFormInputByLabel(formSellOrder, CLIENT_REFERENCE_LABEL).clear();
+    await getFormInputByLabel(formSellOrder, NOTES_LABEL, InputElementType.Textarea).clear();
+    await selectComboboxOption(page, comboboxPaymentMethod, paymentMethod.name, String(paymentMethod.id));
+    await buttonSubmit.click();
+    await expectSingleToast(page);
+    expect(await getSellOrderById(sellOrder.id)).toMatchObject({
+      clientReference: null,
+      notes: null,
+      paymentMethodId: paymentMethod.id,
+      receptionDate: sellOrder.receptionDate,
+    });
+
+    await getClearComboboxButton(comboboxPaymentMethod).click();
+    await assertComboboxValue(comboboxPaymentMethod, null);
+    await buttonSubmit.click();
+    await expectSingleToast(page);
+    expect((await getSellOrderById(sellOrder.id))?.paymentMethodId).toBeNull();
+  });
+
+  await test.step("add sell order lines", async () => {
+    const sellOrder = mockSellOrders[0];
+    const existingSellOrderLines = getMockSellOrderLines(sellOrder.id);
+
+    const sellOrderClient = getMockClientById(sellOrder.clientId);
+    expect(sellOrderClient).toBeDefined();
+    const clientParts = getMockClientParts({ clientId: sellOrder.clientId, includePartReferenceNullClientId: true });
+    const clientPartReferences = getMockPartReferences({
+      clientId: sellOrder.clientId,
+      includeNullClientId: true,
+    });
+    const existingSellOrderLinesPartReferencesIds = existingSellOrderLines.map((line) => line.partReferenceId);
+    const pickedPartReference = clientPartReferences.find(
+      (ref) => !ref.deletedAt && !existingSellOrderLinesPartReferencesIds.includes(ref.id),
+    )!;
+    expect(pickedPartReference).toBeDefined();
+
+    const partToBeAdded = clientParts.find((part) => part.id === pickedPartReference.partId)!;
+    expect(partToBeAdded).toBeDefined();
+
+    const pickedPartPrice = mockPartPrices.find((price) => price.partId === partToBeAdded.id)!;
+    expect(pickedPartPrice).toBeDefined();
+
+    const newSellOrderLine: TCreateSellOrderLine & { id: number } = {
+      description: null,
+      id: Math.max(...mockSellOrderLines.map((line) => line.id)) + 1,
+      notes: "Entregar con certificado de material",
+      partPrice: pickedPartPrice.price,
+      partReferenceId: pickedPartReference.id,
+      quantity: 50,
+      requestedDeliveryDate: null,
+      sellOrderId: sellOrder.id,
+    };
+
+    const dialogCreateSellOrderLine = await workflowOpenCreateSellOrderLine(page, sellOrder.id);
+
+    const tablePartPrices = dialogCreateSellOrderLine.getByTestId("radio-table-part-prices");
+    await expect(tablePartPrices).toBeVisible();
+    await expect(getDivDisabledMessage(tablePartPrices)).toBeVisible();
+
+    const pickerPart = dialogCreateSellOrderLine.getByTestId("picker-part");
+    await expect(pickerPart).toBeVisible();
+    expect(await getPickerValue(pickerPart)).toBeNull();
+
+    const { dialogPickerPartContent, tablePickerPart } = await openPartPicker(page, pickerPart);
+
+    expect(await getTableRows(tablePickerPart).count()).toBe(clientParts.length);
+
+    // Assert that the part picker is displaying the client parts
+    const partRowIds = await Promise.all(
+      (await getTableRows(tablePickerPart).all()).map(async (row) => getTestId(row)),
+    );
+    expect(partRowIds.sort((a, b) => a - b)).toEqual(clientParts.map((part) => part.id).sort((a, b) => a - b));
+
+    await assertPickerPartKeepsNullClientParts(tablePickerPart, sellOrder.clientId);
+
+    const pickedReferenceRow = getTableRowByTestId(tablePickerPart, partToBeAdded.id);
+    await expect(pickedReferenceRow).toBeVisible();
+    // Find the matched subrow that contains the pickedPartReference.reference text
+    await pickedReferenceRow
+      .locator('[data-testid="div-part-reference-row"]', {
+        has: page.getByText(pickedPartReference.reference),
+      })
+      .getByTestId("button-success")
+      .click();
+
+    await expect(dialogPickerPartContent).not.toBeVisible();
+    await expect(getDivDisabledMessage(tablePartPrices)).not.toBeVisible();
+
+    expect(await getPickerValue(pickerPart)).toBe(String(partToBeAdded.id));
+    expect(await getPickerText(pickerPart)).toEqual(pickedPartReference.reference);
+
+    const inputQuantity = getFormInputByLabel(dialogCreateSellOrderLine, QUANTITY_LABEL, InputElementType.Number);
+    await expect(inputQuantity).toBeVisible();
+
+    await inputQuantity.pressSequentially(String(newSellOrderLine.quantity));
+    await inputQuantity.press("Enter");
+
+    const inputPartPrice = getFormInputByLabel(dialogCreateSellOrderLine, PRICE_LABEL, InputElementType.Number);
+    await expect(inputPartPrice).toBeVisible();
+
+    await inputPartPrice.pressSequentially(newSellOrderLine.partPrice!);
+
+    await getFormInputByLabel(dialogCreateSellOrderLine, NOTES_LABEL, InputElementType.Textarea).fill(
+      newSellOrderLine.notes!,
+    );
+
+    const buttonSubmit = dialogCreateSellOrderLine.getByTestId("button-submit");
+    await expect(buttonSubmit).toBeEnabled();
+    await buttonSubmit.click();
+
+    await expect(dialogCreateSellOrderLine).not.toBeVisible();
+
+    const dbSellOrderLines = await getSellOrderLinesBySellOrderId(sellOrder.id);
+
+    const sellOrderLines = getMockSellOrderLines(sellOrder.id);
+    expect(dbSellOrderLines.length).toBe(sellOrderLines.length + 1);
+
+    expect(dbSellOrderLines.find((line) => line.id === newSellOrderLine.id)).toMatchObject(newSellOrderLine);
+
+    await expectSingleToast(page);
+  });
+
+  await test.step("add a sell order line with a reference without client", async () => {
+    const sellOrder = mockSellOrders[0];
+    const existingDbSellOrderLines = await getSellOrderLinesBySellOrderId(sellOrder.id);
+    const usedPartReferenceIds = existingDbSellOrderLines.map((line) => line.partReferenceId);
+    const nullClientPartReference = getMockPartReferences({ includeNullClientId: true }).find(
+      (partReference) => !usedPartReferenceIds.includes(partReference.id),
+    )!;
+    expect(nullClientPartReference, "An unused reference without client is needed").toBeDefined();
+    const clientParts = getMockClientParts({ clientId: sellOrder.clientId, includePartReferenceNullClientId: true });
+    const otherClientPartReference = getMockPartReferences({}).find(
+      (partReference) =>
+        partReference.clientId !== null &&
+        partReference.clientId !== sellOrder.clientId &&
+        clientParts.some((part) => part.id === partReference.partId),
+    )!;
+    expect(otherClientPartReference, "A visible reference of another client is needed").toBeDefined();
+    const quantity = 7;
+    const partPrice = "4.5";
+
+    const dialogCreateSellOrderLine = await workflowOpenCreateSellOrderLine(page, sellOrder.id);
+    const formSellOrder = page.getByTestId("form-sell-order");
+    const tablePartPrices = dialogCreateSellOrderLine.getByTestId("radio-table-part-prices");
+    await expect(getDivDisabledMessage(tablePartPrices)).toBeVisible();
+
+    const pickerPart = dialogCreateSellOrderLine.getByTestId("picker-part");
+    const { dialogPickerPartContent, tablePickerPart } = await openPartPicker(page, pickerPart);
+    // The Cliente is fixed by the Pedido de venta, so the picker has no part filters to change
+    await expect(tablePickerPart.getByTestId("popover-part-filters")).toHaveCount(0);
+
+    // Only the references of the Cliente and the ones without Cliente can be picked
+    const getReferenceRow = (partReference: { partId: number; reference: string }) =>
+      getTableRowByTestId(tablePickerPart, partReference.partId).getByTestId("div-part-reference-row").filter({
+        hasText: partReference.reference,
+      });
+    await expect(getReferenceRow(otherClientPartReference)).toBeVisible();
+    await expect(getReferenceRow(otherClientPartReference).getByTestId("button-success")).toHaveCount(0);
+    await getReferenceRow(nullClientPartReference).getByTestId("button-success").click();
+
+    await expect(dialogPickerPartContent).not.toBeVisible();
+    expect(await getPickerValue(pickerPart)).toBe(String(nullClientPartReference.partId));
+    expect(await getPickerText(pickerPart)).toEqual(nullClientPartReference.reference);
+    await expect(getDivDisabledMessage(tablePartPrices)).not.toBeVisible();
+
+    const inputQuantity = getFormInputByLabel(dialogCreateSellOrderLine, QUANTITY_LABEL, InputElementType.Number);
+    await inputQuantity.pressSequentially(String(quantity));
+    await inputQuantity.press("Enter");
+    await getFormInputByLabel(dialogCreateSellOrderLine, PRICE_LABEL, InputElementType.Number).pressSequentially(
+      partPrice,
+    );
+    await dialogCreateSellOrderLine.getByTestId("button-submit").click();
+    await expect(dialogCreateSellOrderLine).not.toBeVisible();
+    await expectSingleToast(page);
+
+    const dbSellOrderLines = await getSellOrderLinesBySellOrderId(sellOrder.id);
+    expect(dbSellOrderLines).toHaveLength(existingDbSellOrderLines.length + 1);
+    const newDbSellOrderLine = dbSellOrderLines.find(
+      (line) => !existingDbSellOrderLines.some((existingLine) => existingLine.id === line.id),
+    )!;
+    expect(newDbSellOrderLine).toMatchObject({
+      partPrice,
+      partReferenceId: nullClientPartReference.id,
+      pendingQuantity: quantity,
+      quantity,
+    });
+
+    const rowSellOrderLine = getTableRowByTestId(
+      formSellOrder.getByTestId("table-sell-order-line"),
+      newDbSellOrderLine.id,
+    );
+    await expect(rowSellOrderLine.getByTestId("part")).toContainText(nullClientPartReference.reference);
+    await expect(rowSellOrderLine.getByTestId("description")).toHaveText(
+      mockParts.find((part) => part.id === nullClientPartReference.partId)!.description,
+    );
+  });
+
+  await test.step("delete a sell order", async () => {
+    const sellOrder = mockSellOrders[0];
+    // An Orden de producción of the Pedido de venta that is queued in a Máquina
+    const queuedProductionOrder = mockMachineProductionOrderQueues.find(
+      (queue) =>
+        getMockSellOrderLineById(
+          mockProductionOrders.find((productionOrder) => productionOrder.id === queue.productionOrderId)
+            ?.sellOrderLineId ?? 0,
+        )?.sellOrderId === sellOrder.id,
+    )!;
+    expect(queuedProductionOrder).toBeDefined();
+
+    await workflowDeleteSellOrder(page, sellOrder.id);
+
+    // Its Órdenes de producción are deleted along with it, so they are taken off the Máquinas
+    expect((await getMachineProductionOrderQueue(queuedProductionOrder.machineId)).map((po) => po.id)).not.toContain(
+      queuedProductionOrder.productionOrderId,
+    );
+    expect(
+      await dbGetProductionOrderStatus((await getProductionOrderById(queuedProductionOrder.productionOrderId))!),
+    ).toBe(ProductionOrderStatus.SellOrderDeleted);
+
+    await page.goto(`/sell-order/${sellOrder.id}`);
+
+    // Expect every form field to be disabled
+    const formSellOrder = page.getByTestId("form-sell-order");
+    await expect(formSellOrder).toBeVisible();
+    await assertFormLoaded(formSellOrder);
+
+    const inputReceptionDate = getFormInputByLabel(formSellOrder, RECEPTION_DATE_LABEL, InputElementType.Date);
+    await expect(inputReceptionDate.getByTestId("popover-trigger")).toBeDisabled();
+
+    const comboboxClient = getFormInputByLabel(formSellOrder, CLIENT_LABEL, InputElementType.Combobox);
+    await expect(comboboxClient.getByTestId("button-trigger")).toBeDisabled();
+
+    const inputClientReference = getFormInputByLabel(formSellOrder, CLIENT_REFERENCE_LABEL, InputElementType.Input);
+    await expect(inputClientReference).toHaveAttribute("readonly");
+
+    const comboboxPaymentMethod = getFormInputByLabel(formSellOrder, PAYMENT_METHOD_LABEL, InputElementType.Combobox);
+    await expect(comboboxPaymentMethod.getByTestId("button-trigger")).toBeDisabled();
+
+    const inputNotes = getFormInputByLabel(formSellOrder, NOTES_LABEL, InputElementType.Textarea);
+    await expect(inputNotes).toHaveAttribute("readonly");
+
+    const tableSellOrderLine = formSellOrder.getByTestId("table-sell-order-line");
+    // From the database, so the Líneas added by the previous steps are checked too
+    const dbSellOrderLines = (await getSellOrderLinesBySellOrderId(sellOrder.id)).filter(
+      (line) => line.deletedAt === null,
+    );
+    expect(dbSellOrderLines.length).toBeGreaterThan(getMockSellOrderLines(sellOrder.id).length);
+    for (const sellOrderLine of dbSellOrderLines) {
+      await expect(getTableRowByTestId(tableSellOrderLine, sellOrderLine.id).getByTestId("status")).toHaveText(
+        SELL_ORDER_LINE_ORDER_DELETED_LABEL,
       );
+    }
 
-      await expect(buttonSubmit).toBeEnabled();
-      await buttonSubmit.click();
-      await expect(page).toHaveURL(`/sell-order/${replacementSellOrderId}`);
-      await expectSingleToast(page);
+    // Its Órdenes de producción show why they are deleted, and they can still be deleted on their own
+    const productionOrderState = {
+      filters: [
+        { id: "statuses", value: [ProductionOrderStatus.Deleted, ProductionOrderStatus.SellOrderDeleted] },
+        { id: "sellOrderId", value: sellOrder.id },
+      ],
+    };
+    await page.goto(
+      `/production-order?${new URLSearchParams({ "table-production-order": JSON.stringify(productionOrderState) })}`,
+    );
+    const rowProductionOrder = getTableRowByTestId(
+      page.getByTestId("table-production-order"),
+      queuedProductionOrder.productionOrderId,
+    );
+    const actionsProductionOrder = rowProductionOrder.getByTestId("actions");
+    await expect(rowProductionOrder.getByTestId("status")).toHaveText(SELL_ORDER_LINE_ORDER_DELETED_LABEL);
+    await expect(actionsProductionOrder.getByTestId("button-edit")).toBeVisible();
+    await expect(actionsProductionOrder.getByTestId("button-restore")).not.toBeAttached();
 
-      // ...so the deleted Pedido de venta can no longer be restored
-      await page.goto(`/sell-order/${existingSellOrder.id}`);
-      await openAndConfirmAlertDialog(
-        page,
-        page.getByTestId("button-restore-sell-order"),
-        "dialog-restore-model-content",
+    await openAndConfirmAlertDialog(
+      page,
+      actionsProductionOrder.getByTestId("button-delete"),
+      "dialog-delete-model-content",
+    );
+    await expectSingleToast(page);
+    await expect(rowProductionOrder.getByTestId("status")).toHaveText(STATUS_DELETED_LABEL);
+    await expect(actionsProductionOrder.getByTestId("button-delete")).not.toBeAttached();
+    expect(
+      await dbGetProductionOrderStatus((await getProductionOrderById(queuedProductionOrder.productionOrderId))!),
+    ).toBe(ProductionOrderStatus.Deleted);
+
+    // Restoring it on its own leaves it deleted along with its Pedido de venta
+    await openAndConfirmAlertDialog(
+      page,
+      actionsProductionOrder.getByTestId("button-restore"),
+      "dialog-restore-model-content",
+    );
+    await expectSingleToast(page);
+    await expect(rowProductionOrder.getByTestId("status")).toHaveText(SELL_ORDER_LINE_ORDER_DELETED_LABEL);
+    await expect(actionsProductionOrder.getByTestId("button-restore")).not.toBeAttached();
+    expect(
+      await dbGetProductionOrderStatus((await getProductionOrderById(queuedProductionOrder.productionOrderId))!),
+    ).toBe(ProductionOrderStatus.SellOrderDeleted);
+
+    // In the table, a deleted Pedido de venta can only be restored, and its subrow has no actions of its own
+    const tableSellOrder = page.getByTestId("table-sell-order");
+    const tableState = { filters: [{ id: "id", value: sellOrder.id }] };
+    await page.goto(`/sell-order?${new URLSearchParams({ "table-sell-order": JSON.stringify(tableState) })}`);
+    const rowSellOrder = getTableRowByTestId(tableSellOrder, sellOrder.id);
+    const actionsSellOrder = rowSellOrder.getByTestId("actions");
+    await expect(actionsSellOrder.getByTestId("button-delete")).not.toBeAttached();
+    await expect(actionsSellOrder.getByTestId("button-restore")).toBeEnabled();
+
+    await rowSellOrder.getByTestId("button-expander").click();
+    const subrowSellOrder = getTableSubrowById(tableSellOrder, sellOrder.id);
+    await assertFormLoaded(subrowSellOrder);
+    await expect(subrowSellOrder.getByTestId("button-restore-sell-order")).not.toBeAttached();
+    await expect(subrowSellOrder.getByTestId("button-delete-sell-order")).not.toBeAttached();
+
+    // Restoring it brings it back, but its Órdenes de producción are not queued again
+    await openAndConfirmAlertDialog(
+      page,
+      actionsSellOrder.getByTestId("button-restore"),
+      "dialog-restore-model-content",
+    );
+    await expect(actionsSellOrder.getByTestId("button-delete")).toBeEnabled();
+    await expect(actionsSellOrder.getByTestId("button-restore")).not.toBeAttached();
+    expect((await getSellOrderById(sellOrder.id))?.deletedAt).toBeNull();
+    expect(
+      await dbGetProductionOrderStatus((await getProductionOrderById(queuedProductionOrder.productionOrderId))!),
+    ).toBe(ProductionOrderStatus.Pending);
+    expect((await getMachineProductionOrderQueue(queuedProductionOrder.machineId)).map((po) => po.id)).not.toContain(
+      queuedProductionOrder.productionOrderId,
+    );
+  });
+
+  await test.step("update a sell order line", async () => {
+    const sellOrder = mockSellOrders[0];
+    const sellOrderLines = getMockSellOrderLines(sellOrder.id);
+    const sellOrderLineToBeUpdated = sellOrderLines.at(0)!;
+    expect(sellOrderLineToBeUpdated).toBeDefined();
+
+    const updatedSellOrderLineData: Partial<TSellOrderLine> = {
+      pendingQuantity: 2,
+      quantity: 20,
+    };
+
+    await page.goto(`/sell-order/${sellOrder.id}`);
+
+    await assertFormLoaded(page.getByTestId("form-sell-order"));
+
+    const sellOrderLinesTable = page.getByTestId("table-sell-order-line");
+    const rowSellOrderLine = getTableRowByTestId(sellOrderLinesTable, sellOrderLineToBeUpdated.id);
+    await expect(rowSellOrderLine).toBeVisible();
+
+    const inputQuantity = getEditableCellById(rowSellOrderLine, "quantity");
+    await expect(inputQuantity).toBeVisible();
+    await inputQuantity.clear();
+    await inputQuantity.pressSequentially(String(updatedSellOrderLineData.quantity));
+    await inputQuantity.press("Enter");
+
+    await expectSingleToast(page);
+
+    let updatedSellOrderLine = await getSellOrderLineById(sellOrderLineToBeUpdated.id);
+    expect(updatedSellOrderLine).toBeDefined();
+    expect(updatedSellOrderLine!.quantity).toBe(updatedSellOrderLineData.quantity);
+
+    const inputPendingQuantity = getEditableCellById(rowSellOrderLine, "pendingQuantity");
+    await expect(inputPendingQuantity).toBeVisible();
+    await inputPendingQuantity.clear();
+    await inputPendingQuantity.pressSequentially(String(updatedSellOrderLineData.pendingQuantity));
+    await inputPendingQuantity.press("Enter");
+
+    await expectSingleToast(page);
+
+    updatedSellOrderLine = await getSellOrderLineById(sellOrderLineToBeUpdated.id);
+    expect(updatedSellOrderLine).toBeDefined();
+    expect(updatedSellOrderLine!.pendingQuantity).toBe(updatedSellOrderLineData.pendingQuantity);
+
+    const sellOrderLineWithNotes = sellOrderLines.find((sellOrderLine) => sellOrderLine.notes !== null)!;
+    expect(sellOrderLineWithNotes, "A sell order line with notes is needed").toBeDefined();
+    const inputNotes = getEditableCellById(
+      getTableRowByTestId(sellOrderLinesTable, sellOrderLineWithNotes.id),
+      "notes",
+    );
+    await expect(inputNotes).toHaveValue(sellOrderLineWithNotes.notes!);
+    const newNotes = "Cambiar el embalaje";
+    await inputNotes.fill(newNotes);
+    await inputNotes.press("Enter");
+
+    await expectSingleToast(page);
+    expect((await getSellOrderLineById(sellOrderLineWithNotes.id))?.notes).toBe(newNotes);
+
+    // Clearing the notes stores them as empty
+    await inputNotes.clear();
+    await inputNotes.press("Enter");
+
+    await expectSingleToast(page);
+    expect((await getSellOrderLineById(sellOrderLineWithNotes.id))?.notes).toBeNull();
+
+    const cellInputPartPicker = rowSellOrderLine.getByTestId("partPrice");
+    const inputPickerPartPrice = cellInputPartPicker.getByTestId("input-picker-part-price");
+    const inputPartPrice = cellInputPartPicker.getByTestId("input-part-price");
+
+    // Sell order lines store only the price, not the part price it was picked from
+    await expect(inputPickerPartPrice).toBeVisible();
+    await expect(inputPickerPartPrice).not.toHaveAttribute("data-value");
+
+    // Update the part price through the picker
+    await openPicker(inputPickerPartPrice);
+
+    const dialogPickerPartPriceContent = getPickerDialogContent(page, "input-picker-part-price");
+    await expect(dialogPickerPartPriceContent).toBeVisible();
+    const tablePickerPartPrice = dialogPickerPartPriceContent.getByTestId("table-picker-part-prices");
+
+    await expect(tablePickerPartPrice).toBeVisible();
+    await expect(getTableSkeletonRows(tablePickerPartPrice)).toHaveCount(0);
+
+    const tableRowPartPrices = getTableRows(tablePickerPartPrice);
+    const tableRowPartPricesIds = await Promise.all(
+      (await tableRowPartPrices.all()).map(async (row) => getTestId(row)),
+    );
+    expect(tableRowPartPricesIds.length).toBeGreaterThan(1);
+
+    // Find a part price that is different from the current sell order line part price, with the same part id
+    const pickedPartPrice = mockPartPrices.find(
+      (price) =>
+        price.partId === getMockPartReferenceById(sellOrderLineToBeUpdated.partReferenceId)?.partId &&
+        price.price !== sellOrderLineToBeUpdated.partPrice,
+    )!;
+    expect(pickedPartPrice).toBeDefined();
+
+    const pickedPartPriceRow = getTableRowByTestId(tablePickerPartPrice, pickedPartPrice.id);
+    await expect(pickedPartPriceRow).toBeVisible();
+    const buttonRowSelectPickedPartPrice = pickedPartPriceRow.getByTestId("button-success");
+    await expect(buttonRowSelectPickedPartPrice).toBeVisible();
+    await expect(buttonRowSelectPickedPartPrice).toBeEnabled();
+    await buttonRowSelectPickedPartPrice.click();
+    await expect(dialogPickerPartPriceContent).not.toBeVisible();
+
+    await expect(inputPartPrice).toHaveValue(formatPrice(pickedPartPrice.price, { replaceNBSP: true }));
+
+    await expectSingleToast(page);
+
+    updatedSellOrderLine = await getSellOrderLineById(sellOrderLineToBeUpdated.id);
+    expect(updatedSellOrderLine).toBeDefined();
+    expect(updatedSellOrderLine!.partPrice).not.toBe(sellOrderLineToBeUpdated.partPrice);
+
+    // Update the part price through the price input
+    const newPartPrice = "69.69";
+    expect(newPartPrice, "Wrong test dummy value, it is equal to the existing part price").not.toStrictEqual(
+      updatedSellOrderLine!.partPrice,
+    );
+    await inputPartPrice.clear();
+    await inputPartPrice.pressSequentially(newPartPrice);
+    await inputPartPrice.press("Enter");
+
+    await expectSingleToast(page);
+
+    expect((await getSellOrderLineById(sellOrderLineToBeUpdated.id))?.partPrice).toBe(newPartPrice);
+
+    const sellOrderLineWithoutPrice = sellOrderLines.find((sellOrderLine) => sellOrderLine.partPrice === null)!;
+    expect(sellOrderLineWithoutPrice).toBeDefined();
+    const cellPartPriceWithoutPrice = getTableRowByTestId(
+      sellOrderLinesTable,
+      sellOrderLineWithoutPrice.id,
+    ).getByTestId("partPrice");
+    const pickerPartPriceWithoutPrice = cellPartPriceWithoutPrice.getByTestId("input-picker-part-price");
+    const inputPartPriceWithoutPrice = cellPartPriceWithoutPrice.getByTestId("input-part-price");
+    const buttonClearPartPrice = pickerPartPriceWithoutPrice.getByTestId("button-clear");
+    await expect(buttonClearPartPrice).not.toBeAttached();
+
+    // The clear button follows prices typed in the price input
+    await inputPartPriceWithoutPrice.pressSequentially(newPartPrice);
+    await inputPartPriceWithoutPrice.press("Enter");
+
+    await expectSingleToast(page);
+    expect((await getSellOrderLineById(sellOrderLineWithoutPrice.id))?.partPrice).toBe(newPartPrice);
+    await expect(buttonClearPartPrice).toBeVisible();
+
+    await clearPicker(pickerPartPriceWithoutPrice);
+
+    await expectSingleToast(page);
+    expect((await getSellOrderLineById(sellOrderLineWithoutPrice.id))?.partPrice).toBeNull();
+    await expect(inputPartPriceWithoutPrice).toHaveValue("");
+    await expect(buttonClearPartPrice).not.toBeAttached();
+  });
+
+  await test.step("delete a sell order line", async () => {
+    const sellOrder = mockSellOrders[0];
+    const sellOrderLines = getMockSellOrderLines(sellOrder.id);
+    const sellOrderLineToBeDeleted = sellOrderLines.at(0)!;
+    expect(sellOrderLineToBeDeleted).toBeDefined();
+
+    await page.goto(`/sell-order/${sellOrder.id}`);
+
+    await assertFormLoaded(page.getByTestId("form-sell-order"));
+
+    const rowSellOrderLine = await workflowDeleteSellOrderLine(page, sellOrderLineToBeDeleted.id);
+
+    await expect(rowSellOrderLine).toBeVisible();
+    await expect(getEditableCellById(rowSellOrderLine, "quantity")).toHaveAttribute("readonly");
+    await expect(getEditableCellById(rowSellOrderLine, "pendingQuantity")).toHaveAttribute("readonly");
+    const partPriceCell = rowSellOrderLine.getByTestId("partPrice");
+    await expect(partPriceCell.getByTestId("input-picker-part-price")).not.toBeAttached();
+
+    const requestedDeliveryDateCell = rowSellOrderLine.getByTestId("requestedDeliveryDate");
+    await expect(requestedDeliveryDateCell.getByTestId("popover-trigger")).toBeDisabled();
+    await expect(requestedDeliveryDateCell.getByTestId("button-clear")).not.toBeAttached();
+
+    const actionsCell = rowSellOrderLine.getByTestId("actions");
+    await expect(actionsCell.getByTestId("button-delete")).not.toBeAttached();
+    await expect(actionsCell.getByTestId("button-restore")).toBeEnabled();
+  });
+
+  await test.step("deleting the last pending line of a sell order completes it and stops its production", async () => {
+    // A Línea whose Orden de producción is the one a Máquina is working on
+    const machine = mockMachines.find((mockMachine) => mockMachine.activeProductionOrderId !== null)!;
+    const productionOrder = mockProductionOrders.find(
+      (mockProductionOrder) => mockProductionOrder.id === machine.activeProductionOrderId,
+    )!;
+    const sellOrderLine = getMockSellOrderLineById(productionOrder.sellOrderLineId!)!;
+    const sellOrderLines = getMockSellOrderLines(sellOrderLine.sellOrderId);
+    expect(sellOrderLines.filter((line) => line.pendingQuantity > 0 && line.deletedAt === null)).toEqual([
+      sellOrderLine,
+    ]);
+
+    await page.goto(`/sell-order/${sellOrderLine.sellOrderId}`);
+    const formSellOrder = page.getByTestId("form-sell-order");
+    await assertFormLoaded(formSellOrder);
+    const badgeSellOrderStatus = formSellOrder.getByTestId("badge-sell-order-status");
+    await expect(badgeSellOrderStatus).toContainText(STATUS_PENDING_LABEL);
+
+    const rowSellOrderLine = await workflowDeleteSellOrderLine(page, sellOrderLine.id);
+
+    await expect(rowSellOrderLine.getByTestId("status")).toHaveText(STATUS_DELETED_LABEL);
+    await expect(badgeSellOrderStatus).toContainText(STATUS_COMPLETED_LABEL);
+
+    // Its Orden de producción is deleted along with it, so it is taken off the Máquinas
+    expect(await dbGetProductionOrderStatus((await getProductionOrderById(productionOrder.id))!)).toBe(
+      ProductionOrderStatus.SellOrderLineDeleted,
+    );
+    expect((await getMachineById(machine.id))?.activeProductionOrderId).toBeNull();
+    expect((await getMachineProductionOrderQueue(machine.id)).map((po) => po.id)).not.toContain(productionOrder.id);
+
+    // The deleted Línea is shown over its deleted Pedido de venta
+    await db
+      .update(dbTableSellOrder)
+      .set({ deletedAt: new Date() })
+      .where(eq(dbTableSellOrder.id, sellOrderLine.sellOrderId));
+    expect(await dbGetProductionOrderStatus((await getProductionOrderById(productionOrder.id))!)).toBe(
+      ProductionOrderStatus.SellOrderLineDeleted,
+    );
+    const tableProductionOrder = page.getByTestId("table-production-order");
+    const gotoProductionOrdersOfSellOrderWithStatus = async (status: ProductionOrderStatus) =>
+      page.goto(
+        `/production-order?${new URLSearchParams({
+          "table-production-order": JSON.stringify({
+            filters: [
+              { id: "statuses", value: [status] },
+              { id: "sellOrderId", value: sellOrderLine.sellOrderId },
+            ],
+          }),
+        })}`,
       );
+    await gotoProductionOrdersOfSellOrderWithStatus(ProductionOrderStatus.SellOrderLineDeleted);
+    await expect(getTableRowByTestId(tableProductionOrder, productionOrder.id).getByTestId("status")).toHaveText(
+      SELL_ORDER_LINE_DELETED_MESSAGE,
+    );
+    await gotoProductionOrdersOfSellOrderWithStatus(ProductionOrderStatus.SellOrderDeleted);
+    await expect(getTableNoDataRow(tableProductionOrder)).toBeVisible();
+    await db
+      .update(dbTableSellOrder)
+      .set({ deletedAt: null })
+      .where(eq(dbTableSellOrder.id, sellOrderLine.sellOrderId));
 
-      await expectSingleToast(page, "El Cliente ya tiene un Pedido de venta con esa referencia");
-      expect((await getSellOrderById(existingSellOrder.id))?.deletedAt).toBeInstanceOf(Date);
+    await page.goto(`/sell-order/${sellOrderLine.sellOrderId}`);
+    await assertFormLoaded(formSellOrder);
 
-      // The index rejects the duplicate even when the form is bypassed
-      await expectUniqueViolation(
-        db.insert(dbTableSellOrder).values({
-          clientId: existingSellOrder.clientId,
-          clientReference: existingSellOrder.clientReference,
-          receptionDate: new Date(),
-        }),
-        SELL_ORDER_REFERENCE_CONSTRAINT,
-      );
+    // Restoring the Línea makes it pending again, but its Orden de producción is not queued again
+    await openAndConfirmAlertDialog(
+      page,
+      rowSellOrderLine.getByTestId("actions").getByTestId("button-restore"),
+      "dialog-restore-model-content",
+    );
+    await expectSingleToast(page);
+    await expect(badgeSellOrderStatus).toContainText(STATUS_PENDING_LABEL);
+    await expect(rowSellOrderLine.getByTestId("status")).not.toHaveText(STATUS_DELETED_LABEL);
+    expect((await getSellOrderLineById(sellOrderLine.id))?.deletedAt).toBeNull();
+    expect(await dbGetProductionOrderStatus((await getProductionOrderById(productionOrder.id))!)).toBe(
+      ProductionOrderStatus.Pending,
+    );
+    expect((await getMachineProductionOrderQueue(machine.id)).map((po) => po.id)).not.toContain(productionOrder.id);
+  });
 
-      // ...but not the one of another Cliente, nor Pedidos de venta without a reference
-      await db.insert(dbTableSellOrder).values({
-        clientId: otherClient.id,
+  // It leaves the Pedido de venta deleted for good, so it goes last
+  await test.step("avoid creating a sell order with a duplicate client reference for the same client", async () => {
+    const existingSellOrder = mockSellOrders[0];
+    if (existingSellOrder.clientReference === null)
+      throw new Error("Existing sell order must have a client reference for this test to be valid");
+
+    const existingSellOrderClient = getMockClientById(existingSellOrder.clientId);
+    expect(existingSellOrderClient).toBeDefined();
+    const otherClient = mockClients.find(
+      (client) => client.id !== existingSellOrder.clientId && client.deletedAt === null,
+    )!;
+    const previousSellOrderIds = (await getSellOrders()).map((sellOrder) => sellOrder.id);
+    const comboboxClient = getFormInputByLabel(page, CLIENT_LABEL, InputElementType.Combobox);
+    const buttonClearComboboxClient = getClearComboboxButton(comboboxClient);
+    const inputClientReference = getFormInputByLabel(page, CLIENT_REFERENCE_LABEL);
+    const buttonSubmit = page.getByTestId("button-submit-form-sell-order");
+
+    // Another Cliente can use the same reference
+    await page.goto("/create-sell-order");
+    await selectComboboxOption(page, comboboxClient, otherClient.name, String(otherClient.id));
+    await inputClientReference.fill(existingSellOrder.clientReference);
+    await expect(buttonSubmit).toBeEnabled();
+    await expect(toasts).toHaveCount(0);
+
+    await page.goto("/create-sell-order");
+    await expect(comboboxClient).toBeVisible();
+    await expect(buttonClearComboboxClient).not.toBeVisible();
+    await assertComboboxValue(comboboxClient, null);
+    await openCombobox(comboboxClient);
+    await fillComboboxFilter(page, existingSellOrderClient!.name.substring(0, 4));
+    await clickInComboboxOption(page, existingSellOrderClient!.name);
+    await assertComboboxValue(comboboxClient, String(existingSellOrderClient!.id));
+    await expect(buttonClearComboboxClient).toBeVisible();
+
+    await expect(inputClientReference).toBeVisible();
+    await inputClientReference.fill(existingSellOrder.clientReference);
+
+    await expect(buttonSubmit).toBeDisabled();
+    await expectSingleToast(page, SELL_ORDER_REFERENCE_EXISTS_MESSAGE);
+
+    const finalDbSellOrders = await getSellOrders();
+    expect(finalDbSellOrders.length).toEqual(previousSellOrderIds.length);
+
+    // Deleting the Pedido de venta frees its reference
+    await workflowDeleteSellOrder(page, existingSellOrder.id);
+
+    // A previous step created a Pedido de venta, so the replacement is the one after it
+    const replacementSellOrderId = Math.max(...previousSellOrderIds) + 1;
+    await page.goto("/create-sell-order");
+    await openCombobox(comboboxClient);
+    await fillComboboxFilter(page, existingSellOrderClient!.name.substring(0, 4));
+    await clickInComboboxOption(page, existingSellOrderClient!.name);
+    await inputClientReference.fill(existingSellOrder.clientReference);
+    await setInputFiles(
+      page,
+      getFormInputByLabel(page, FILE_LABEL, InputElementType.File),
+      path.join(MOCK_DATA_PATH, "sample.pdf"),
+    );
+
+    await expect(buttonSubmit).toBeEnabled();
+    await buttonSubmit.click();
+    await expect(page).toHaveURL(`/sell-order/${replacementSellOrderId}`);
+    await expectSingleToast(page);
+
+    // ...so the deleted Pedido de venta can no longer be restored
+    await page.goto(`/sell-order/${existingSellOrder.id}`);
+    await openAndConfirmAlertDialog(
+      page,
+      page.getByTestId("button-restore-sell-order"),
+      "dialog-restore-model-content",
+    );
+
+    await expectSingleToast(page, SELL_ORDER_REFERENCE_TAKEN_MESSAGE);
+    expectUniqueViolationRejected(
+      uniqueColumnsViolation(SELL_ORDER_REFERENCE_CONSTRAINT, dbTableSellOrder, [
+        [dbTableSellOrder.clientId, existingSellOrder.clientId],
+        [dbTableSellOrder.clientReference, existingSellOrder.clientReference],
+      ]),
+      SELL_ORDER_REFERENCE_TAKEN_MESSAGE,
+    );
+    expect((await getSellOrderById(existingSellOrder.id))?.deletedAt).toBeInstanceOf(Date);
+
+    // The index rejects the duplicate even when the form is bypassed
+    await expectUniqueViolation(
+      db.insert(dbTableSellOrder).values({
+        clientId: existingSellOrder.clientId,
         clientReference: existingSellOrder.clientReference,
         receptionDate: new Date(),
-      });
-      const sellOrderWithoutReference = {
-        clientId: existingSellOrder.clientId,
-        clientReference: null,
-        receptionDate: new Date(),
-      };
-      await db.insert(dbTableSellOrder).values([sellOrderWithoutReference, sellOrderWithoutReference]);
+      }),
+      SELL_ORDER_REFERENCE_CONSTRAINT,
+    );
+
+    // ...but not the one of another Cliente, nor Pedidos de venta without a reference
+    await db.insert(dbTableSellOrder).values({
+      clientId: otherClient.id,
+      clientReference: existingSellOrder.clientReference,
+      receptionDate: new Date(),
     });
-  },
-);
+    const sellOrderWithoutReference = {
+      clientId: existingSellOrder.clientId,
+      clientReference: null,
+      receptionDate: new Date(),
+    };
+    await db.insert(dbTableSellOrder).values([sellOrderWithoutReference, sellOrderWithoutReference]);
+  });
+});
 
 test(
   "create a sell order with a file for a client inserted outside the app",
@@ -1098,7 +1114,7 @@ test("manage the sell order lines without part", async ({ page, db }) => {
   });
 });
 
-test("manage the returns of a sell order", { annotation: TestAnnotations.NonEmptyErrorsLogFile }, async ({ page }) => {
+test("manage the returns of a sell order", async ({ page }) => {
   const sellOrder = mockSellOrders[0];
   const formSellOrder = page.getByTestId("form-sell-order");
   const tableSellOrderLine = formSellOrder.getByTestId("table-sell-order-line");
@@ -1109,6 +1125,17 @@ test("manage the returns of a sell order", { annotation: TestAnnotations.NonEmpt
   const buttonSubmit = dialogCreateSellOrderLine.getByTestId("button-submit");
   const returnLine = { description: "Devolución pieza", quantity: -170 };
   let returnSellOrderLineId: number;
+  // The page checks the row it would save, with the edited value, before sending it
+  const expectSellOrderLineRejected = async (values: Partial<BaseSellOrderLine>) => {
+    const { id, notes, partPrice, pendingQuantity, quantity, requestedDeliveryDate } =
+      (await getSellOrderLineById(returnSellOrderLineId))!;
+    const input = { id, notes, partPrice, pendingQuantity, quantity, requestedDeliveryDate, ...values };
+    expectErrorsLog(
+      clientErrorEvent(schemaErrorMessage(updateSellOrderLineSchema, input), {
+        message: LogMessages.sellOrderLineValidationFailed,
+      }),
+    );
+  };
 
   await test.step("a line can not have a quantity of 0", async () => {
     await workflowOpenCreateSellOrderLine(page, sellOrder.id);
@@ -1158,6 +1185,7 @@ test("manage the returns of a sell order", { annotation: TestAnnotations.NonEmpt
       await inputPendingQuantity.pressSequentially(String(pendingQuantity));
       await inputPendingQuantity.press("Enter");
       await expectSingleToast(page, "La cantidad pendiente debe estar entre 0 y la cantidad");
+      await expectSellOrderLineRejected({ pendingQuantity });
       expect((await getSellOrderLineById(returnSellOrderLineId))?.pendingQuantity).toBe(returnLine.quantity);
     }
 
@@ -1199,6 +1227,7 @@ test("manage the returns of a sell order", { annotation: TestAnnotations.NonEmpt
     await inputRowQuantity.pressSequentially("0");
     await inputRowQuantity.press("Enter");
     await expectSingleToast(page, "La cantidad no puede ser 0");
+    await expectSellOrderLineRejected({ quantity: 0 });
     expect(await getSellOrderLineById(returnSellOrderLineId)).toMatchObject({ pendingQuantity: 0, quantity: -30 });
   });
 });
@@ -1593,7 +1622,7 @@ test(
 
 test(
   "the files changed outside the app do not match the sell orders",
-  { annotation: [TestAnnotations.ResetSellOrders, TestAnnotations.NonEmptyErrorsLogFile] },
+  { annotation: TestAnnotations.ResetSellOrders },
   async ({ page }) => {
     await test.step("a file copied by hand is not shown until it is uploaded", async () => {
       fs.copyFileSync(SAMPLE_PDF_PATH, (await getSellOrderPath({ sellOrderId: sellOrderWithoutFile.id }))!);
@@ -1601,12 +1630,31 @@ test(
     });
 
     await test.step("deleting a file removed by hand fails and keeps reporting it", async () => {
-      fs.rmSync((await getSellOrderFilePath(sellOrderWithFile.id))!);
+      const filePath = (await getSellOrderFilePath(sellOrderWithFile.id))!;
+      fs.rmSync(filePath);
       const dialogFile = await workflowOpenSellOrderFile(
         page,
         getButtonFile(await workflowOpenSellOrder(page, sellOrderWithFile.id)),
       );
       await workflowDeleteSellOrderFile(page, dialogFile, { type: ToastType.Error });
+      // The server archives the file by renaming it, and it sees the file at its own path, in the container
+      const renameErrorMessage = /ENOENT: no such file or directory, rename '.+' -> '.+'/;
+      expectErrorsLog(
+        mutationErrorEvent({
+          code: "ENOENT",
+          dest: expect.any(String),
+          errno: expect.any(Number),
+          message: expect.stringMatching(new RegExp(`^${renameErrorMessage.source}$`)),
+          name: "Error",
+          path: expect.stringMatching(
+            new RegExp(`/${escapeRegExp(path.relative(process.cwd(), filePath).replaceAll(path.sep, "/"))}$`),
+          ),
+          stack: errorStack("Error", renameErrorMessage),
+          syscall: "rename",
+        }),
+        httpRequestFailedEvent("POST", 500, "/api/trpc/sellOrder.deleteFile?batch=1"),
+        clientErrorEvent(renameErrorMessage),
+      );
 
       expect(await getSellOrderById(sellOrderWithFile.id)).toEqual(sellOrderWithFile);
       expect(await getDeletedSellOrderFilePaths(sellOrderWithFile.id)).toEqual([]);

@@ -13,8 +13,8 @@ import type { TToast } from "@/components/ui/toast";
 import { AppContext, AppContextStorage, UserMode } from "@/contexts/app-context";
 import type { ShowToastOnTRPCMutationProps, TBaseMutationResult } from "@/contexts/app-context";
 import { logoutAdminFn } from "@/lib/admin-session-fns";
-import clientLog from "@/logging/clientLog";
-import { LoggerLevels } from "@/logging/types";
+import log from "@/logging/log";
+import { LogMessages, LoggerLevels } from "@/logging/types";
 import { ERROR_TITLE, UNKNOWN_ERROR_MESSAGE } from "@/messages/common";
 import { useQueryMachineById } from "@/queries/machine";
 import { ToastType } from "@/types";
@@ -202,7 +202,7 @@ export function AppContextProvider({ children }: { children: ReactNode }) {
           errorMessage = error.message;
         }
         toasterError({ title: ERROR_TITLE, description: errorMessage });
-        void clientLog(LoggerLevels.error, "Error", { error });
+        void log(LoggerLevels.error, LogMessages.clientError, { error });
         return null;
       }
     },
@@ -224,7 +224,7 @@ export function AppContextProvider({ children }: { children: ReactNode }) {
         await transaction().when("settled");
       } catch (error) {
         const message = error instanceof Error ? error.message : undefined;
-        void clientLog(LoggerLevels.error, "Error", { error });
+        void log(LoggerLevels.error, LogMessages.clientError, { error });
         toasterError({ title: ERROR_TITLE, description: message });
         return;
       }

@@ -72,3 +72,4 @@ export const CLIENT_LABEL = "Cliente";
 export const PART_LABEL = "Artículo";
 export const PARTS_LABEL = "Artículos";
 export const ADD_PART_LABEL = "Añadir Artículo";
+export const ADMIN_ONLY_MESSAGE = "Esta acción solo la puede hacer el Administrador";

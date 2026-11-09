@@ -6,8 +6,8 @@ import { LoadingOverlay } from "@/components/ui/loading-overlay";
 import { UserMode, useAppContext } from "@/contexts/app-context";
 import FormMachineProductionOrder from "@/form/forms/machine-production-order";
 import useMachineProductionOrderForm from "@/form/hooks/use-machine-production-order";
-import clientLog from "@/logging/clientLog";
-import { LoggerLevels } from "@/logging/types";
+import log from "@/logging/log";
+import { LogMessages, LoggerLevels } from "@/logging/types";
 import { ACTIVE_PRODUCTION_ORDER_NOT_FOUND_MESSAGE, PRODUCTION_PANEL_TITLE } from "@/messages/production-order";
 import { useQueryMachineProductionOrderQueue } from "@/queries/machine";
 import { useQueryActiveProductionOrder } from "@/queries/production-order";
@@ -113,10 +113,7 @@ function RouteComponent() {
 
   useEffect(() => {
     if (isActiveProductionOrderMissing) {
-      void clientLog(
-        LoggerLevels.error,
-        `Active production order not found in machine ${userModeMachine.id} production orders queue`,
-      );
+      void log(LoggerLevels.error, LogMessages.activeProductionOrderNotInQueue(userModeMachine.id));
     }
   }, [isActiveProductionOrderMissing, userModeMachine]);
 

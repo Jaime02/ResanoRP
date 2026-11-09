@@ -2,6 +2,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 
 import logger from "@/logging/logger";
+import { LogMessages } from "@/logging/types";
 
 export async function renameFile({ filePath, newFileName }: { filePath: string; newFileName: string }) {
   await fs.rename(filePath, path.join(path.dirname(filePath), newFileName));
@@ -16,7 +17,7 @@ export async function removeOnRollback<T>(run: (createdPaths: Array<string>) => 
     for (const createdPath of [...createdPaths].reverse()) {
       await fs
         .rm(createdPath, { force: true, recursive: true })
-        .catch((rmError: unknown) => logger.error("Error al eliminar el archivo", { createdPath, rmError }));
+        .catch((rmError: unknown) => logger.error(LogMessages.fileRemoveFailed, { createdPath, rmError }));
     }
     throw error;
   }
@@ -29,7 +30,7 @@ export async function saveUpload({ fileUpload, location }: { fileUpload: File; l
 
     logger.info(`Archivo guardado en ${location}`);
   } catch (error) {
-    logger.error("Error al guardar el archivo", error);
+    logger.error(LogMessages.fileSaveFailed, error);
     throw error;
   }
 }

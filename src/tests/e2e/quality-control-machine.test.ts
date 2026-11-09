@@ -9,7 +9,8 @@ import { dbTableProductionOrder } from "@/db/schema";
 import { ProductionOrderStatus } from "@/schemas/production-order";
 import { mockMachineProductionOrderQueues } from "@/tests/mock-data";
 import { expectSingleToast } from "@/tests/utils/components/toast";
-import { TestAnnotations, test } from "@/tests/utils/fixtures";
+import { expectRejectedMutation } from "@/tests/utils/errors-log";
+import { test } from "@/tests/utils/fixtures";
 import { holdRequestWhile } from "@/tests/utils/trpc";
 import { workflowCreatePartFeature, workflowDeletePartFeature } from "@/tests/workflows/part";
 import {
@@ -263,31 +264,37 @@ const rejectedCheckCases: Array<{
 ];
 
 for (const { name, message, tableStaysMounted, setUp, change } of rejectedCheckCases) {
-  test(
-    `the machine cannot save a check when its production order is ${name} meanwhile`,
-    { annotation: TestAnnotations.NonEmptyErrorsLogFile },
-    async ({ page, db, openPage }) => {
-      const adminPage = await openPage({ userMode: UserMode.Admin });
-      const { buttonConfirm, inputQuantity } = getQualityControlLocators(page);
-      await workflowOpenProduction(page, qualityControlMachine);
-      const setUpResult = await setUp?.({ adminPage });
-      const checksBefore = await getQualityChecksOfProductionOrder(productionOrderId);
-      await assertQualityControlTable(page, await getDbQualityControl(productionOrderId), { editable: true });
-      await workflowFillQualityCheck(page, 8);
+  test(`the machine cannot save a check when its production order is ${name} meanwhile`, async ({
+    page,
+    db,
+    openPage,
+  }) => {
+    const adminPage = await openPage({ userMode: UserMode.Admin });
+    const { buttonConfirm, inputQuantity } = getQualityControlLocators(page);
+    await workflowOpenProduction(page, qualityControlMachine);
+    const setUpResult = await setUp?.({ adminPage });
+    const checksBefore = await getQualityChecksOfProductionOrder(productionOrderId);
+    await assertQualityControlTable(page, await getDbQualityControl(productionOrderId), { editable: true });
+    await workflowFillQualityCheck(page, 8);
 
-      await holdRequestWhile({
-        page,
-        procedurePath: "qualityCheck.create",
-        send: async () => buttonConfirm.click(),
-        meanwhile: async () => change({ adminPage, db, setUpResult }),
-      });
+    await holdRequestWhile({
+      page,
+      procedurePath: "qualityCheck.create",
+      send: async () => buttonConfirm.click(),
+      meanwhile: async () => change({ adminPage, db, setUpResult }),
+    });
 
-      await expectSingleToast(page, message);
-      expect(await getQualityChecksOfProductionOrder(productionOrderId)).toEqual(checksBefore);
-      if (tableStaysMounted) {
-        await expect(inputQuantity).toHaveValue("");
-        await expect(buttonConfirm).toBeDisabled();
-      }
-    },
-  );
+    await expectSingleToast(page, message);
+    expectRejectedMutation({
+      code: "BAD_REQUEST",
+      message,
+      procedurePath: "qualityCheck.create",
+      userConfig: { machineId: qualityControlMachine.id, userMode: UserMode.Machine },
+    });
+    expect(await getQualityChecksOfProductionOrder(productionOrderId)).toEqual(checksBefore);
+    if (tableStaysMounted) {
+      await expect(inputQuantity).toHaveValue("");
+      await expect(buttonConfirm).toBeDisabled();
+    }
+  });
 }

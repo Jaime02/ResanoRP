@@ -3,8 +3,8 @@ import { useState } from "react";
 import { Document, Page, pdfjs } from "react-pdf";
 
 import PDFPagePlaceholder from "@/components/pdf/pdf-page-placeholder";
-import clientLog from "@/logging/clientLog";
-import { LoggerLevels } from "@/logging/types";
+import log from "@/logging/log";
+import { LogMessages, LoggerLevels } from "@/logging/types";
 import { PDF_LOAD_ERROR_MESSAGE } from "@/messages/common";
 
 import "react-pdf/dist/Page/TextLayer.css";
@@ -38,7 +38,7 @@ export function PDFViewerClient({ url, scale, rotation, landscape, setLoading, s
   }
 
   async function onDocumentLoadError(error: Error) {
-    await clientLog(LoggerLevels.error, "Failed to load PDF", { error });
+    await log(LoggerLevels.error, LogMessages.pdfLoadFailed, { error });
     setError(error.message);
     setLoading(false);
   }

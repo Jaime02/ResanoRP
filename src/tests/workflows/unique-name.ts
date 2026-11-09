@@ -1,10 +1,12 @@
 import { expect } from "@playwright/test";
 import type { Locator, Page } from "@playwright/test";
+import type { PgTable } from "drizzle-orm/pg-core";
 
 import { NAME_LABEL } from "@/messages/common";
 import { assertFormLoaded, getFormInputByLabel } from "@/tests/utils/components/form";
 import { expectSingleToast, getToasts } from "@/tests/utils/components/toast";
 import { expectUniqueViolation } from "@/tests/utils/db";
+import { expectUniqueViolationRejected, uniqueNameViolation } from "@/tests/utils/errors-log";
 
 interface TNamedItem {
   id: number;
@@ -27,6 +29,8 @@ interface WorkflowRejectRenameToTakenNameParams<T extends TNamedItem> {
   openEdit: (item: T) => Promise<void>;
   closeEdit?: () => Promise<void>;
   getName: (id: number) => Promise<string | undefined>;
+  table: PgTable;
+  constraintName: string;
   errorMessage: string;
 }
 
@@ -37,6 +41,8 @@ export async function workflowRejectRenameToTakenName<T extends TNamedItem>({
   openEdit,
   closeEdit,
   getName,
+  table,
+  constraintName,
   errorMessage,
 }: WorkflowRejectRenameToTakenNameParams<T>) {
   expect(items.length, "Wrong test set up: Some items should be active").toBeGreaterThan(1);
@@ -44,10 +50,12 @@ export async function workflowRejectRenameToTakenName<T extends TNamedItem>({
   for (const [index, item] of items.entries()) {
     await openEdit(item);
     await assertFormLoaded(form);
-    await getFormInputByLabel(form, NAME_LABEL).fill(getSameNameVariant(items[(index + 1) % items.length].name));
+    const takenName = items[(index + 1) % items.length].name;
+    await getFormInputByLabel(form, NAME_LABEL).fill(getSameNameVariant(takenName));
     await form.getByTestId("button-submit").click();
 
     await expectSingleToast(page, errorMessage);
+    expectUniqueViolationRejected(uniqueNameViolation(constraintName, table, takenName), errorMessage);
     await expect(form).toBeVisible();
     expect(await getName(item.id)).toBe(item.name);
 
@@ -63,6 +71,7 @@ interface WorkflowRejectCreateWithTakenNameParams<T extends TNamedItem> {
   closeCreate: () => Promise<void>;
   fill?: TFillCreateForm<T>;
   insertDuplicate: (name: string) => Promise<unknown>;
+  table: PgTable;
   constraintName: string;
   errorMessage: string;
 }
@@ -76,6 +85,7 @@ export async function workflowRejectCreateWithTakenName<T extends TNamedItem>({
   closeCreate,
   fill = fillName(form),
   insertDuplicate,
+  table,
   constraintName,
   errorMessage,
 }: WorkflowRejectCreateWithTakenNameParams<T>) {
@@ -96,6 +106,7 @@ export async function workflowRejectCreateWithTakenName<T extends TNamedItem>({
       await fill(item, name);
       await buttonSubmit.click();
       await expectSingleToast(page, errorMessage);
+      expectUniqueViolationRejected(uniqueNameViolation(constraintName, table, name), errorMessage);
       await expect(form).toBeVisible();
       await closeCreate();
     }

@@ -10,6 +10,7 @@ import {
 } from "@/db/schema";
 import { handleMutationError } from "@/lib/handlers";
 import { translatedEnums } from "@/lib/translations";
+import { PRODUCTION_ORDER_NOT_ASSIGNABLE_MESSAGE } from "@/messages/production-order";
 import {
   addProductionOrderToMachineQueueSchema,
   moveProductionOrderToMachineQueueStartSchema,
@@ -50,7 +51,10 @@ export default router({
         if (![ProductionOrderStatus.Pending, ProductionOrderStatus.InProduction].includes(productionOrderStatus)) {
           throw new TRPCError({
             code: "BAD_REQUEST",
-            message: `La Orden de producción ${input.productionOrderId} no se puede asignar a una Máquina, su estado es "${translatedEnums.ProductionOrderStatus[productionOrderStatus]}"`,
+            message: PRODUCTION_ORDER_NOT_ASSIGNABLE_MESSAGE(
+              input.productionOrderId,
+              translatedEnums.ProductionOrderStatus[productionOrderStatus],
+            ),
           });
         }
 

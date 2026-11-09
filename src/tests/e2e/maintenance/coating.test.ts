@@ -16,7 +16,8 @@ import {
   getTableRows,
 } from "@/tests/utils/components/table";
 import { expectSingleToast } from "@/tests/utils/components/toast";
-import { TestAnnotations, test } from "@/tests/utils/fixtures";
+import { uniqueNameViolation } from "@/tests/utils/errors-log";
+import { test } from "@/tests/utils/fixtures";
 import {
   EditButtonVisibility,
   workflowDeletedFilterAndRestore,
@@ -32,7 +33,7 @@ import type { BasePart } from "@/types/part";
 const MAINTENANCE_COATING_URL = "/maintenance?tab=coating";
 const NAME_TAKEN_MESSAGE = "Existe un Tratamiento con el mismo nombre";
 
-test("manage the Tratamientos", { annotation: TestAnnotations.NonEmptyErrorsLogFile }, async ({ page, db }) => {
+test("manage the Tratamientos", async ({ page, db }) => {
   const activeCoatings = mockCoatings.filter((coating) => coating.deletedAt === null);
   const tableCoating = page.getByTestId("table-coating");
   const dialogCreateEditCoating = page.getByTestId("dialog-create-edit-coating");
@@ -57,6 +58,7 @@ test("manage the Tratamientos", { annotation: TestAnnotations.NonEmptyErrorsLogF
       closeCreate: closeDialog,
       insertDuplicate: async (name) => db.insert(dbTableCoating).values({ name }),
       constraintName: COATING_NAME_CONSTRAINT,
+      table: dbTableCoating,
       errorMessage: NAME_TAKEN_MESSAGE,
     });
 
@@ -73,6 +75,8 @@ test("manage the Tratamientos", { annotation: TestAnnotations.NonEmptyErrorsLogF
         (await findTableRowByText(tableCoating, coating.name)).getByTestId("button-edit").click(),
       closeEdit: closeDialog,
       getName: async (id) => (await getCoatingById(id))?.name,
+      table: dbTableCoating,
+      constraintName: COATING_NAME_CONSTRAINT,
       errorMessage: NAME_TAKEN_MESSAGE,
     });
   });
@@ -167,17 +171,14 @@ test("list the deleted Tratamientos only when asked for and restore them from th
   });
 });
 
-test(
-  "a deleted Tratamiento cannot be restored from the table while another one has its name",
-  { annotation: TestAnnotations.NonEmptyErrorsLogFile },
-  async ({ page, db }) => {
-    const coating = mockCoatings.find((mockCoating) => mockCoating.deletedAt === null)!;
-    await workflowRestoreTaken({
-      ...DELETED_COATING_FILTER_PARAMS,
-      page,
-      id: coating.id,
-      insertDuplicate: async () => db.insert(dbTableCoating).values({ name: coating.name }),
-      errorMessage: NAME_TAKEN_MESSAGE,
-    });
-  },
-);
+test("a deleted Tratamiento cannot be restored from the table while another one has its name", async ({ page, db }) => {
+  const coating = mockCoatings.find((mockCoating) => mockCoating.deletedAt === null)!;
+  await workflowRestoreTaken({
+    ...DELETED_COATING_FILTER_PARAMS,
+    page,
+    id: coating.id,
+    insertDuplicate: async () => db.insert(dbTableCoating).values({ name: coating.name }),
+    uniqueViolation: uniqueNameViolation(COATING_NAME_CONSTRAINT, dbTableCoating, coating.name),
+    errorMessage: NAME_TAKEN_MESSAGE,
+  });
+});

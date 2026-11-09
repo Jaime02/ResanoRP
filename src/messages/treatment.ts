@@ -24,3 +24,12 @@ export const RECEPTION_DELETED_MESSAGE = "Recepción eliminada";
 export const DELETE_SHIPMENT_TITLE = "Eliminar envío";
 export const DELETE_SHIPMENT_MESSAGE = "¿Estás seguro que quieres eliminar el envío de estas piezas al tratamiento?";
 export const SHIPMENT_DELETED_MESSAGE = "Envío eliminado";
+export const PRODUCTION_ORDER_PART_WITHOUT_COATING_MESSAGE = (productionOrderId: number) =>
+  `El Artículo de la Orden de producción ${productionOrderId} no lleva tratamiento`;
+export const PRODUCTION_ORDER_NOT_SENDABLE_MESSAGE = (productionOrderId: number, status: string) =>
+  `La Orden de producción ${productionOrderId} no se puede enviar al tratamiento, su estado es "${status}"`;
+export const PART_WITHOUT_COATING_MESSAGE = (partDescription: string) =>
+  `El Artículo "${partDescription}" no lleva tratamiento`;
+export const SHIPMENT_PENDING_QUANTITY_EXCEEDED_MESSAGE = (treatmentShipmentId: number, pendingQuantity: number) =>
+  `El envío ${treatmentShipmentId} solo tiene ${pendingQuantity} piezas pendientes de recibir`;
+export const SHIPMENT_WITH_RECEPTIONS_MESSAGE = "El envío ya tiene piezas recibidas, elimina primero sus recepciones";

@@ -7,6 +7,7 @@ import db from "@/db";
 import { getClientById } from "@/db/functions/client";
 import { findFolderById } from "@/files/functions";
 import logger from "@/logging/logger";
+import { LogMessages } from "@/logging/types";
 import { sanitizePath } from "@/schemas/utils";
 
 export function getSellOrderRootPath() {
@@ -57,7 +58,7 @@ export async function getSellOrderPath(
 
   if (clientId === undefined) {
     if (logErrors) {
-      logger.error("Failed to retrieve clientId for sell order", { sellOrderId });
+      logger.error(LogMessages.sellOrderClientIdNotFound, { sellOrderId });
     }
     return null;
   }
@@ -72,7 +73,7 @@ export async function getSellOrderPath(
   }
   if (clientFolder === null) {
     if (logErrors) {
-      logger.error("Client folder does not exist", { clientId, sellOrderId });
+      logger.error(LogMessages.clientFolderNotFound, { clientId, sellOrderId });
     }
     return null;
   }
@@ -84,7 +85,7 @@ export async function getSellOrderPath(
       await promises.access(sellOrderPath);
     } catch {
       if (logErrors) {
-        logger.error("Sell order file does not exist", { clientId, sellOrderId, sellOrderPath });
+        logger.error(LogMessages.sellOrderFileNotFound, { clientId, sellOrderId, sellOrderPath });
       }
       return null;
     }

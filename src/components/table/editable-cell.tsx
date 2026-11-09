@@ -11,8 +11,8 @@ import NumberInput from "@/components/ui/number-input";
 import PriceInput from "@/components/ui/price-input";
 import { goToNextFocusableElement } from "@/form/utils";
 import { getTranslatedEnumValues } from "@/lib/translations";
-import clientLog from "@/logging/clientLog";
-import { LoggerLevels } from "@/logging/types";
+import log from "@/logging/log";
+import { LogMessages, LoggerLevels } from "@/logging/types";
 import type { TBaseModel } from "@/schemas";
 import { CellDataType } from "@/types";
 
@@ -64,7 +64,7 @@ export default function EditableCell<TRowType extends TBaseModel>({
   const readOnly = cell.row.original.deletedAt != null;
 
   if (!isCellEditable(cell)) {
-    void clientLog(LoggerLevels.error, `Cell in column ${cell.column.id} is not editable but EditableCell was used.`);
+    void log(LoggerLevels.error, LogMessages.cellNotEditable(cell.column.id));
     return <>{flexRender(cell.column.columnDef.cell, cell.getContext())}</>;
   }
 
@@ -176,10 +176,7 @@ export default function EditableCell<TRowType extends TBaseModel>({
     case CellDataType.Combobox: {
       const renderEditableCell = cell.column.columnDef.meta.renderEditableCell;
       if (!renderEditableCell) {
-        void clientLog(
-          LoggerLevels.error,
-          `Cell in column ${cell.column.id} is editable with Picker/Combobox but no renderEditableCell was provided.`,
-        );
+        void log(LoggerLevels.error, LogMessages.cellRenderEditableCellMissing(cell.column.id));
         return <>{flexRender(cell.column.columnDef.cell, cell.getContext())}</>;
       }
       // Called as a function rather than rendered as a component: column definitions are rebuilt whenever their
@@ -189,10 +186,7 @@ export default function EditableCell<TRowType extends TBaseModel>({
     case CellDataType.Enum: {
       // TODO editable enums
       if (!cell.column.columnDef.meta.enumName) {
-        void clientLog(
-          LoggerLevels.error,
-          `Cell in column ${cell.column.id} is editable with Enum but no enumName was provided.`,
-        );
+        void log(LoggerLevels.error, LogMessages.cellEnumNameMissing(cell.column.id));
         return <>{flexRender(cell.column.columnDef.cell, cell.getContext())}</>;
       }
       const { enumName } = cell.column.columnDef.meta;

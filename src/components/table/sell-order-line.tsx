@@ -20,8 +20,8 @@ import { formatDate, formatPrice } from "@/lib/formatters";
 import { formatCents, getLineTotalInCents, getLinesTotalInCents } from "@/lib/prices";
 import { clampPendingQuantity, computeSellOrderLineStatus } from "@/lib/sell-order-line";
 import { serializeSellOrderLine } from "@/lib/serializers";
-import clientLog from "@/logging/clientLog";
-import { LoggerLevels } from "@/logging/types";
+import log from "@/logging/log";
+import { LogMessages, LoggerLevels } from "@/logging/types";
 import {
   ACTIONS_LABEL,
   ADD_PART_LABEL,
@@ -313,7 +313,7 @@ export default function TableSellOrderLine({
                 mutationValidationResult.error.issues.map((issue) => issue.message).join(", ") || UNKNOWN_ERROR_MESSAGE,
               title: SELL_ORDER_LINE_VALIDATION_ERROR_MESSAGE,
             });
-            await clientLog(LoggerLevels.error, "Validation error when editing Sell Order Line", {
+            await log(LoggerLevels.error, LogMessages.sellOrderLineValidationFailed, {
               error: mutationValidationResult.error,
             });
             return;

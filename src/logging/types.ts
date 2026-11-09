@@ -8,3 +8,65 @@ export enum LoggerLevels {
   info = "info",
   debug = "debug",
 }
+
+// TODO avoid ignoring 409s, see https://github.com/electric-sql/electric/issues/3150
+export const UNLOGGED_HTTP_STATUS_CODE = 409;
+
+export const LogMessages = {
+  accountingExportReadFailed: "Error reading Accounting Export file",
+  activeProductionOrderNotInQueue: (machineId: number) =>
+    `Active production order not found in machine ${machineId} production orders queue`,
+  appContextStorageParseFailed: "Failed to parse AppContextStorage from its cookie",
+  blueprintFileNotFound: "Blueprint file does not exist",
+  blueprintNotFound: "Blueprint not found",
+  blueprintPathNotFound: "Blueprint path not found",
+  cellEnumNameMissing: (columnId: string) =>
+    `Cell in column ${columnId} is editable with Enum but no enumName was provided.`,
+  cellNotEditable: (columnId: string) => `Cell in column ${columnId} is not editable but EditableCell was used.`,
+  cellRenderEditableCellMissing: (columnId: string) =>
+    `Cell in column ${columnId} is editable with Picker/Combobox but no renderEditableCell was provided.`,
+  clientError: "Error",
+  clientFolderNotFound: "Client folder does not exist",
+  clipboardCopyFailed: "Failed to copy to clipboard",
+  collectionSyncFailed: (table: string) => `Error syncing the ${table} collection`,
+  columnDataTypeMissing: (columnId: string) => `Column ${columnId} is filterable but has no dataType defined`,
+  columnEnumNameMissing: (columnId: string) => `Column ${columnId} is of type Enum but has no enumName defined`,
+  columnFilterFieldNameMissing: (columnId: string) =>
+    `Column ${columnId} is of type Enum but has no filterFieldName defined`,
+  columnRenderFilterMissing: (columnId: string) =>
+    `Column ${columnId} is of type Combobox but has no renderFilter defined in column meta`,
+  comboboxFetchFailed: (items: string, component: string) => `Error fetching ${items} for ${component}`,
+  deliveryNoteLineValidationFailed: "Validation error when editing Delivery Note Line",
+  deliveryNoteReadFailed: "Error reading Delivery Note file",
+  dropzoneError: "Dropzone error",
+  fileReadFailed: "Error reading file",
+  fileRemoveFailed: "Error al eliminar el archivo",
+  fileSaveFailed: "Error al guardar el archivo",
+  fullscreenEnableFailed: "Enabling fullscreen failed",
+  fullscreenExitFailed: "Exiting fullscreen failed",
+  httpRequestFailed: "HTTP request failed",
+  invalidClientId: "Invalid Client ID received",
+  invalidDate: "Invalid date",
+  invalidFileName: "Invalid file name received",
+  invalidId: "Invalid ID received",
+  invoiceReadFailed: "Error reading Invoice file",
+  liveQueriesPreloadFailed: "Failed to preload the live queries of a server render",
+  mutationError: "Error en la mutación",
+  notFoundRendered: "NotFound component rendered. This should not happen in production.",
+  partFolderNotFound: "Part folder does not exist",
+  pdfLoadFailed: "Failed to load PDF",
+  pendingSellOrdersGenerationFailed: "Error generating Pending Sell Orders file",
+  sellOrderClientIdNotFound: "Failed to retrieve clientId for sell order",
+  sellOrderFileNotFound: "Sell order file does not exist",
+  sellOrderLineValidationFailed: "Validation error when editing Sell Order Line",
+  sellOrderNotFound: "Sell Order not found",
+  sellOrderPathNotFound: "Sell Order path not found",
+  stageNotPendingSellOrderLine: "Logic error: Trying to stage a sell order line that is not pending",
+  stagedSellOrderLinesInvalid: "Logic error: No deleted sell order lines found but staged lines are invalid",
+  unstageWithoutStagedLines: "Logic error: Trying to unstage a sell order line but no staged lines exist",
+  updateNotStagedSellOrderLine:
+    "Logic error: Trying to update quantity of a staged sell order line but the line is not staged",
+  updateWithoutStagedLines:
+    "Logic error: Trying to update quantity of a staged sell order line but no staged lines exist",
+  wrongUserModePassword: "Intento de acceso con contraseña incorrecta para cambiar el modo de usuario",
+} as const;

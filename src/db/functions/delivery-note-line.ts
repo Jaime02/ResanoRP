@@ -4,6 +4,7 @@ import { and, eq, ne, sql } from "drizzle-orm";
 import type { TDatabase } from "@/db";
 import db from "@/db";
 import { dbTableDeliveryNoteLine, dbTableSellOrderLine } from "@/db/schema";
+import { PENDING_QUANTITY_EXCEEDED_MESSAGE } from "@/messages/delivery-note";
 import type { BaseDeliveryNoteLine } from "@/types/delivery-note-line";
 
 interface TDeleteDeliveryNoteLineResult {
@@ -48,7 +49,7 @@ export function assertPendingQuantityWithinQuantity(
   ) {
     throw new TRPCError({
       code: "BAD_REQUEST",
-      message: `La cantidad pendiente de la Línea de pedido de venta ${sellOrderLine.id} no puede pasar de su cantidad`,
+      message: PENDING_QUANTITY_EXCEEDED_MESSAGE(sellOrderLine.id),
     });
   }
 }

@@ -4,8 +4,8 @@ import type { ComboboxProps } from "@/components/ui/combobox";
 import { Combobox } from "@/components/ui/combobox";
 import { useAppContext } from "@/contexts/app-context";
 import { formatDate } from "@/lib/formatters";
-import clientLog from "@/logging/clientLog";
-import { LoggerLevels } from "@/logging/types";
+import log from "@/logging/log";
+import { LogMessages, LoggerLevels } from "@/logging/types";
 import { NO_DELIVERY_NOTES_MESSAGE, SELECT_DELIVERY_NOTE_PLACEHOLDER } from "@/messages/combobox";
 import { INVOICED_DELIVERY_NOTE_SUFFIX_LABEL } from "@/messages/delivery-note";
 import { useQueryClientDeliveryNotesWithInvoiceStatus } from "@/queries/delivery-note";
@@ -57,7 +57,7 @@ export default function ComboboxDeliveryNote({
   );
 
   if (isLoadingError || isCrashed) {
-    void clientLog(LoggerLevels.error, "Error fetching delivery notes for ComboboxDeliveryNote");
+    void log(LoggerLevels.error, LogMessages.comboboxFetchFailed("delivery notes", "ComboboxDeliveryNote"));
   }
 
   return (

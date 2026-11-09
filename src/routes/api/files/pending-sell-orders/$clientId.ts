@@ -8,6 +8,7 @@ import { DateFormat, formatDate } from "@/lib/formatters";
 import { textResponse } from "@/lib/responses";
 import { sortPendingSellOrderLines } from "@/lib/sell-order-line";
 import logger from "@/logging/logger";
+import { LogMessages } from "@/logging/types";
 import { sanitizePath } from "@/schemas/utils";
 
 const routeParamsSchema = z.object({
@@ -26,7 +27,7 @@ export const Route = createFileRoute("/api/files/pending-sell-orders/$clientId")
         try {
           ({ clientId } = routeParamsSchema.parse(params));
         } catch {
-          logger.error("Invalid Client ID received", { params });
+          logger.error(LogMessages.invalidClientId, { params });
           return textResponse("Invalid Client ID received", 400);
         }
 
@@ -73,7 +74,7 @@ export const Route = createFileRoute("/api/files/pending-sell-orders/$clientId")
             status: 200,
           });
         } catch (error) {
-          logger.error("Error generating Pending Sell Orders file", { clientId, error });
+          logger.error(LogMessages.pendingSellOrdersGenerationFailed, { clientId, error });
           return textResponse("Failed to generate file", 500);
         }
       },

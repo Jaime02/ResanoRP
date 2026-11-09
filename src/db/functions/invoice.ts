@@ -5,6 +5,7 @@ import { EmptyFilter } from "drizzle-orm/relations";
 import type { TDatabase } from "@/db";
 import db from "@/db";
 import { dbTableDeliveryNote, dbTableDeliveryNoteLine, dbTableInvoice } from "@/db/schema";
+import { ACCOUNTED_DELIVERY_NOTE_MESSAGE } from "@/messages/delivery-note";
 
 // Only accounted Facturas are written: Electric emits no change for a row whose values did not change, so writing
 // one that is already not accounted would leave the client awaiting a txId that never arrives
@@ -44,7 +45,7 @@ export async function resetChangedDeliveryNoteInvoice(
   if (deliveryNote.invoice.accounted && !isAdmin) {
     throw new TRPCError({
       code: "FORBIDDEN",
-      message: `El Albarán ${deliveryNote.id} pertenece a una Factura contabilizada, solo el Administrador puede cambiar sus líneas`,
+      message: ACCOUNTED_DELIVERY_NOTE_MESSAGE(deliveryNote.id),
     });
   }
   const resetInvoice = await resetInvoiceStatus(deliveryNote.invoice.id, dbConnection);

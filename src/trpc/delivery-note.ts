@@ -15,6 +15,7 @@ import { printDeliveryNote } from "@/files/delivery-note";
 import { getSalesDocumentLine } from "@/files/sales-document";
 import { formatDate } from "@/lib/formatters";
 import { handleMutationError } from "@/lib/handlers";
+import { SELL_ORDER_LINE_NOT_OF_CLIENT_MESSAGE } from "@/messages/delivery-note";
 import { requiredIdObjectSchema } from "@/schemas";
 import {
   appendLinesToDeliveryNoteSchema,
@@ -50,7 +51,7 @@ async function insertStagedSellOrderLines(
     if (sellOrderLine.sellOrder?.clientId !== deliveryNote.clientId) {
       throw new TRPCError({
         code: "BAD_REQUEST",
-        message: `La Línea de pedido de venta ${stagedSellOrderLine.id} no es del Cliente del Albarán`,
+        message: SELL_ORDER_LINE_NOT_OF_CLIENT_MESSAGE(stagedSellOrderLine.id),
       });
     }
     assertPendingQuantityWithinQuantity(sellOrderLine, -stagedSellOrderLine.quantity);

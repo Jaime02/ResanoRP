@@ -5,8 +5,8 @@ import { BasicIndex, collectionOptions } from "@tanstack/react-db";
 import type { CollectionConfig, CollectionOptions, DbClient, NonSingleResult } from "@tanstack/react-db";
 
 import { formatClientError } from "@/lib/formatters";
-import clientLog from "@/logging/clientLog";
-import { LoggerLevels } from "@/logging/types";
+import log from "@/logging/log";
+import { LogMessages, LoggerLevels } from "@/logging/types";
 
 export type TElectricCollection = CollectionOptions<any, any, any, ElectricCollectionUtils<any>> & NonSingleResult;
 
@@ -34,7 +34,7 @@ function baseCollectionOptions(table: string) {
         if (error instanceof FetchError && error.status >= 200 && error.status < 300) {
           return {};
         }
-        void clientLog(LoggerLevels.error, `Error syncing the ${table} collection`, formatClientError(error));
+        void log(LoggerLevels.error, LogMessages.collectionSyncFailed(table), formatClientError(error));
         return undefined;
       },
     },

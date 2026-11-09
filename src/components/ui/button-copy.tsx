@@ -3,8 +3,8 @@ import { useCallback, useEffect, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { useAppContext } from "@/contexts/app-context";
-import clientLog from "@/logging/clientLog";
-import { LoggerLevels } from "@/logging/types";
+import log from "@/logging/log";
+import { LogMessages, LoggerLevels } from "@/logging/types";
 
 interface ButtonCopyProps extends React.ComponentProps<typeof Button> {
   value?: string;
@@ -43,7 +43,7 @@ export default function ButtonCopy({ value, html, copiedTitle, ...props }: Butto
       toaster.info({ timeout: 2000, title: copiedTitle ?? `Copiado "${value}"` });
       setHasCopied(true);
     } catch (err) {
-      await clientLog(LoggerLevels.error, "Failed to copy to clipboard", {
+      await log(LoggerLevels.error, LogMessages.clipboardCopyFailed, {
         error: err instanceof Error ? err.message : String(err),
       });
     }

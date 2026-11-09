@@ -11,3 +11,5 @@ export const BLUEPRINT_EDITED_MESSAGE = "Plano editado";
 export const BLUEPRINTS_OF_PART_TITLE = "Planos del Artículo";
 export const ADD_BLUEPRINT_LABEL = "Añadir Plano";
 export const BLUEPRINT_LABEL = "Plano";
+export const BLUEPRINT_FILE_NAME_TAKEN_MESSAGE = (fileName: string) =>
+  `El Artículo ya tiene un Plano llamado ${fileName}`;

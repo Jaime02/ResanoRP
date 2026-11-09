@@ -6,6 +6,7 @@ import { z } from "zod";
 import { getDeliveryNotePath } from "@/files/delivery-note";
 import { textResponse } from "@/lib/responses";
 import logger from "@/logging/logger";
+import { LogMessages } from "@/logging/types";
 import { coercedIdObjectSchema } from "@/schemas";
 
 const routeSearchSchema = z.object({
@@ -20,7 +21,7 @@ export const Route = createFileRoute("/api/files/delivery-note/$id")({
         try {
           ({ id } = coercedIdObjectSchema.parse(params));
         } catch {
-          logger.error("Invalid ID received", { params });
+          logger.error(LogMessages.invalidId, { params });
           return textResponse("Invalid ID received", 400);
         }
 
@@ -38,7 +39,7 @@ export const Route = createFileRoute("/api/files/delivery-note/$id")({
             status: 200,
           });
         } catch (error) {
-          logger.error("Error reading Delivery Note file", { error, id });
+          logger.error(LogMessages.deliveryNoteReadFailed, { error, id });
           return textResponse("Failed to read file", 500);
         }
       },
