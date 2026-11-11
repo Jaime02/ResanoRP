@@ -1,40 +1,68 @@
 config:
   edition: 3
 
+# One stream per table, named after it: each collection subscribes to its own while it is in use, so a page load only
+# downloads the tables its queries read. See powerSyncCollectionOptions in src/collections/base.ts
 streams:
-  # Every browser holds every table in its SQLite database
-  tables:
-    auto_subscribe: true
-    queries:
-      # PowerSync needs a text id. `*` comes first because the last column of a name wins
-      - SELECT *, CAST(id AS TEXT) AS id FROM blueprint
-      - SELECT *, CAST(id AS TEXT) AS id FROM client
-      - SELECT *, CAST(id AS TEXT) AS id FROM client_invoice_email
-      - SELECT *, CAST(id AS TEXT) AS id FROM coating
-      - SELECT *, CAST(id AS TEXT) AS id FROM configuration
-      - SELECT *, CAST(id AS TEXT) AS id FROM delivery_method
-      - SELECT *, CAST(id AS TEXT) AS id FROM delivery_note
-      - SELECT *, CAST(id AS TEXT) AS id FROM delivery_note_line
-      - SELECT *, CAST(id AS TEXT) AS id FROM invoice
-      - SELECT *, CAST(id AS TEXT) AS id FROM machine
-      - SELECT *, CAST(id AS TEXT) AS id FROM material
-      - SELECT *, CAST(id AS TEXT) AS id FROM part
-      - SELECT *, CAST(id AS TEXT) AS id FROM part_feature
-      - SELECT *, CAST(id AS TEXT) AS id FROM part_price
-      - SELECT *, CAST(id AS TEXT) AS id FROM part_production
-      - SELECT *, CAST(id AS TEXT) AS id FROM part_reference
-      - SELECT *, CAST(id AS TEXT) AS id FROM part_stock
-      - SELECT *, CAST(id AS TEXT) AS id FROM payment_method
-      - SELECT *, CAST(id AS TEXT) AS id FROM production_order
-      - SELECT *, CAST(id AS TEXT) AS id FROM quality_check
-      - SELECT *, CAST(id AS TEXT) AS id FROM raw_material
-      - SELECT *, CAST(id AS TEXT) AS id FROM sell_order
-      - SELECT *, CAST(id AS TEXT) AS id FROM sell_order_line
-      - SELECT *, CAST(id AS TEXT) AS id FROM shape
-      - SELECT *, CAST(id AS TEXT) AS id FROM treatment_reception
-      - SELECT *, CAST(id AS TEXT) AS id FROM treatment_shipment
-      # Tables keyed by other columns only need a unique id here: each collection derives its own key from the row
-      - SELECT *, CAST("partId" AS TEXT) AS id FROM part_price_estimator
-      - SELECT *, "machineId" || '-' || "productionOrderId" AS id FROM machine_production_order_queue
-      - SELECT *, "parentPartId" || '-' || "componentPartId" AS id FROM part_component
-      - SELECT *, "materialId" || '-' || "partId" AS id FROM part_material
+  # PowerSync needs a text id. `*` comes first because the last column of a name wins
+  blueprint:
+    query: SELECT *, CAST(id AS TEXT) AS id FROM blueprint
+  client:
+    query: SELECT *, CAST(id AS TEXT) AS id FROM client
+  client_invoice_email:
+    query: SELECT *, CAST(id AS TEXT) AS id FROM client_invoice_email
+  coating:
+    query: SELECT *, CAST(id AS TEXT) AS id FROM coating
+  configuration:
+    query: SELECT *, CAST(id AS TEXT) AS id FROM configuration
+  delivery_method:
+    query: SELECT *, CAST(id AS TEXT) AS id FROM delivery_method
+  delivery_note:
+    query: SELECT *, CAST(id AS TEXT) AS id FROM delivery_note
+  delivery_note_line:
+    query: SELECT *, CAST(id AS TEXT) AS id FROM delivery_note_line
+  invoice:
+    query: SELECT *, CAST(id AS TEXT) AS id FROM invoice
+  machine:
+    query: SELECT *, CAST(id AS TEXT) AS id FROM machine
+  material:
+    query: SELECT *, CAST(id AS TEXT) AS id FROM material
+  part:
+    query: SELECT *, CAST(id AS TEXT) AS id FROM part
+  part_feature:
+    query: SELECT *, CAST(id AS TEXT) AS id FROM part_feature
+  part_price:
+    query: SELECT *, CAST(id AS TEXT) AS id FROM part_price
+  part_production:
+    query: SELECT *, CAST(id AS TEXT) AS id FROM part_production
+  part_reference:
+    query: SELECT *, CAST(id AS TEXT) AS id FROM part_reference
+  part_stock:
+    query: SELECT *, CAST(id AS TEXT) AS id FROM part_stock
+  payment_method:
+    query: SELECT *, CAST(id AS TEXT) AS id FROM payment_method
+  production_order:
+    query: SELECT *, CAST(id AS TEXT) AS id FROM production_order
+  quality_check:
+    query: SELECT *, CAST(id AS TEXT) AS id FROM quality_check
+  raw_material:
+    query: SELECT *, CAST(id AS TEXT) AS id FROM raw_material
+  sell_order:
+    query: SELECT *, CAST(id AS TEXT) AS id FROM sell_order
+  sell_order_line:
+    query: SELECT *, CAST(id AS TEXT) AS id FROM sell_order_line
+  shape:
+    query: SELECT *, CAST(id AS TEXT) AS id FROM shape
+  treatment_reception:
+    query: SELECT *, CAST(id AS TEXT) AS id FROM treatment_reception
+  treatment_shipment:
+    query: SELECT *, CAST(id AS TEXT) AS id FROM treatment_shipment
+  # Tables keyed by other columns only need a unique id here: each collection derives its own key from the row
+  part_price_estimator:
+    query: SELECT *, CAST("partId" AS TEXT) AS id FROM part_price_estimator
+  machine_production_order_queue:
+    query: SELECT *, "machineId" || '-' || "productionOrderId" AS id FROM machine_production_order_queue
+  part_component:
+    query: SELECT *, "parentPartId" || '-' || "componentPartId" AS id FROM part_component
+  part_material:
+    query: SELECT *, "materialId" || '-' || "partId" AS id FROM part_material

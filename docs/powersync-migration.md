@@ -2,6 +2,9 @@
 
 Date: 2026-11-10 / 2026-11-11. Branch: `powersync`.
 
+> **Branch `powersync-lite`** replaces the SQLite client described in §2–§6 with the in-memory Lite client. §9 lists
+> what changed and which issues that removes or adds. Everything else (infrastructure, tRPC writes, auth, SSR) is shared.
+
 ## 1. Why
 
 Electric worked, but it took a growing pile of workarounds to keep it correct. Each one was a place where a bug could come back:
@@ -254,3 +257,41 @@ This patch backports TanStack/db#2392 into `dist/esm` (the only build Vite uses)
 1. Add it to the Drizzle schema (`src/db/schema.ts`). The column types must be ones `SQLITE_COLUMN_TYPES` supports, or `src/lib/powersync.ts` throws.
 2. Add a `SELECT` to `docker/powersync/sync-config.yaml` with a text `id` (cast or composite).
 3. Create the collection with `powerSyncCollection` + `powerSyncCollectionOptions`, and call `awaitSynced()` after each tRPC call in its handlers.
+
+## 9. The Lite variant (branch `powersync-lite`)
+
+### Why
+
+On the SQLite branch the e2e suite ran about 2.5× slower than on Electric (1011 s against 2314–2468 s). The page-load tests (`user-mode` "only open its own pages") went from about 9 s to about 27 s each, and the per-page-load checkpoint barely changed that. So the cost was opening SQLite, which runs in a worker with WebAssembly, and creating the persisted diff triggers each collection needs on every page load. Lite has no SQLite at all.
+
+### What changed
+
+- **Client**: `@powersync/tanstack-db-lite` at commit `6de2267`. It is not on npm, so its `client.ts` and `subscriptions.ts` are vendored unmodified in `src/lib/powersync-lite/`, excluded from lint and format (see its README). Its collection adapter (`index.ts`) is not used: it assumes string `id` keys, and it targets an older TanStack DB (`markError`, which is `fail` now).
+- **Dependencies**: `@powersync/web`, `@powersync/common`, `@tanstack/powersync-db-collection` and its patch are gone. `@powersync/shared-internals@1.6.0` provides the standalone sync client. This is the published version, not the commit's 1.4.0, because 1.4.0 builds request URLs with absolute paths (`/sync/stream`), which would drop Caddy's `/powersync` prefix. 1.6.0 resolves them against the endpoint, and its standalone API is otherwise the same as the one Lite calls.
+- **`src/lib/powersync.ts`**: no SQLite `Schema` any more. It only keeps the per-table converters derived from Drizzle, and one shared `PowerSyncClient` created on first use. Connection errors are logged once per distinct message from the client status.
+- **`src/collections/base.ts`**: a small adapter modelled on Lite's `index.ts`:
+  - Rows go through `toAppRow` and the app's `getKey`. A `Map` from PowerSync id to app key resolves deletes, which arrive with the PowerSync id only.
+  - Each collection leases the stream named after its table, and becomes ready once a complete checkpoint including it is applied.
+  - Only a stream the service rejects (`StreamError`) or a failed commit calls `fail`. Connection errors never fail a loading collection: the client retries them with backoff.
+  - `awaitSynced()` calls Lite's `confirmWrites()`. Lite hands the synced rows to the collections before the checkpoint waiter resolves, so the SQLite tracking-table polling and the per-page-load catch-up are gone. Failed token or checkpoint requests are retried until the 10 s deadline, as before.
+- **`docker/powersync/sync-config.yaml`**: one stream per table, named after it, without `auto_subscribe`. A page now downloads only the tables its queries read.
+- **`vite.config.ts`**: the worker and prebundling settings `@powersync/web` needed are removed.
+
+### Issues it removes
+
+- Per-page-load SQLite, WebAssembly and worker startup, plus the diff trigger creation and cleanup.
+- Stale rows on reload: nothing is cached across page loads, so the catch-up checkpoint is not needed.
+- `awaitSynced` polling and the deserialization stall (§5).
+- The `@tanstack/powersync-db-collection` patch, and `requestCheckpoint` (`@alpha`) in `@powersync/web`.
+- The "local write would stall sync" invariant: there is no local database to write to.
+
+### Issues it adds
+
+| Issue                                                                                                                                                                                                                                                                                                                                    | Status                                                      |
+| ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------- |
+| **Alpha, vendored code.** Lite says its API may change without notice, and the vendored copy gets no fixes until replaced. `@powersync/shared-internals` is "not meant to be used in other contexts", and its `standalone` API may change on any bump.                                                                                   | Pinned to 1.6.0. Replace the folder once Lite is published. |
+| **Every page load downloads its tables again**, as Electric did. A reload of a page reading a large table pays the full download each time.                                                                                                                                                                                              | Not measured against production data.                       |
+| **The stream restarts whenever the set of leased tables changes** (HTTP streams cannot change their subscriptions in place). Collections that start on the same tick coalesce, but a component that mounts later, or a collection collected after `gcTime`, restarts the stream. Each restart resumes from the buckets it already holds. | Watch for it in navigation-heavy flows.                     |
+| **Modern JavaScript required.** `@powersync/shared-internals` calls `Map.prototype.getOrInsertComputed`, so the app does not sync in browsers without it, for example an outdated Chrome. Chromium 158, which the tests use, has it.                                                                                                     | Add a polyfill if workshop PCs run old browsers.            |
+| **`awaitSynced` returns at once when no collection is syncing** (client `idle`), because Lite's `confirmWrites` throws then. A mutation from a page without any collection skips the wait.                                                                                                                                               | By design: no collection means no rows to replace.          |
+| **Never run.** Lint and type-check pass, but neither the stack nor e2e has run on this branch. The sync config change (`query:` per stream) is only validated when the service starts.                                                                                                                                                   | Verify in CI.                                               |

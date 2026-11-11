@@ -45,10 +45,8 @@
     "@base-ui/react": "1.9.0",
     "@date-fns/tz": "^1.5.0",
     "@daypicker/react": "^10.0.2",
-    "@powersync/common": "2.5.0",
-    "@powersync/web": "2.7.0",
+    "@powersync/shared-internals": "1.6.0",
     "@tailwindcss/vite": "^4.3.5",
-    "@tanstack/powersync-db-collection": "1.0.0-rc.1.4",
     "@tanstack/react-db": "1.0.0-rc.1.4",
     "@tanstack/react-form": "1.33.5",
     "@tanstack/react-router-with-db": "1.0.0-rc.1",
@@ -93,7 +91,6 @@
     "typescript": "^7.0.2"
   },
   "patchedDependencies": {
-    "@tanstack/db@1.0.0-rc.1.4": "patches/@tanstack%2Fdb@1.0.0-rc.1.4.patch",
-    "@tanstack/powersync-db-collection@1.0.0-rc.1.4": "patches/@tanstack%2Fpowersync-db-collection@1.0.0-rc.1.4.patch"
+    "@tanstack/db@1.0.0-rc.1.4": "patches/@tanstack%2Fdb@1.0.0-rc.1.4.patch"
   }
 }
