@@ -10,6 +10,8 @@ import { LogMessages, LoggerLevels } from "@/logging/types";
 
 // Caddy serves PowerSync under this path of the app origin, see docker/Caddyfile
 const POWERSYNC_PATH = "/powersync";
+// Longer than the first retries, which start at one second and double
+const SYNC_ERROR_GRACE_MS = 5_000;
 
 const keepValue = (value: unknown) => value;
 
@@ -68,14 +70,25 @@ export function getPowerSyncClient(): PowerSyncClient {
       endpoint: `${window.location.origin}${POWERSYNC_PATH}`,
       getToken: async () => getPowerSyncTokenFn(),
     });
-    // The client keeps retrying, and reports the error again on every attempt until one succeeds
+    // The client keeps retrying, and reports the error again on every attempt until one succeeds. Leaving the page
+    // breaks off the stream while it is read, so an error only counts once the client has not recovered for a while
     let lastSyncError: string | undefined;
+    let pendingSyncError: ReturnType<typeof setTimeout> | undefined;
     powerSyncClient.subscribeStatus(() => {
       const { state, error } = powerSyncClient.status;
-      if (state === "ready") lastSyncError = undefined;
-      if (error === undefined || error.message === lastSyncError) return;
-      lastSyncError = error.message;
-      void log(LoggerLevels.error, LogMessages.powerSyncSyncFailed, formatClientError(error));
+      if (state === "ready") {
+        clearTimeout(pendingSyncError);
+        pendingSyncError = undefined;
+        lastSyncError = undefined;
+      }
+      if (error === undefined || pendingSyncError !== undefined) return;
+      pendingSyncError = setTimeout(() => {
+        pendingSyncError = undefined;
+        const currentError = powerSyncClient.status.error ?? error;
+        if (currentError.message === lastSyncError) return;
+        lastSyncError = currentError.message;
+        void log(LoggerLevels.error, LogMessages.powerSyncSyncFailed, formatClientError(currentError));
+      }, SYNC_ERROR_GRACE_MS);
     });
     client = powerSyncClient;
   }
