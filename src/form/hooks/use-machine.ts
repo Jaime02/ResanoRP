@@ -1,6 +1,5 @@
 import { useSelector } from "@tanstack/react-store";
 
-import machineCollection from "@/collections/machine";
 import { useAppContext } from "@/contexts/app-context";
 import { useAppForm } from "@/form";
 import useResetForm from "@/form/hooks/use-reset-form";
@@ -59,7 +58,6 @@ export default function useMachineForm({ requestedFormMode, editMachineId, onSub
       await showToastOnTRPCMutation({
         mutation,
         onSuccess: { title: formMode === FormMode.Create ? MACHINE_CREATED_MESSAGE : MACHINE_EDITED_MESSAGE },
-        collection: machineCollection,
         onSubmit,
       });
     },

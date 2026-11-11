@@ -1,8 +1,6 @@
 import { useSelector } from "@tanstack/react-store";
 import { useCallback, useState } from "react";
 
-import deliveryNoteLineCollection from "@/collections/delivery-note-line";
-import invoiceCollection from "@/collections/invoice";
 import { useAppContext } from "@/contexts/app-context";
 import { useAppForm } from "@/form";
 import useResetForm from "@/form/hooks/use-reset-form";
@@ -50,10 +48,6 @@ export default function useCreateDeliveryNoteLineForm({ deliveryNoteId, onSubmit
       await showToastOnTRPCMutation({
         mutation: trpc.deliveryNoteLine.create.mutate(rest as TCreateDeliveryNoteLine),
         onSuccess: { title: DELIVERY_NOTE_LINE_CREATED_MESSAGE },
-        collection: (result) => [
-          deliveryNoteLineCollection,
-          ...(result.resetInvoiceIds.length > 0 ? [invoiceCollection] : []),
-        ],
         onSubmit,
       });
     },

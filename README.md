@@ -2,7 +2,7 @@
 
 ERP for a manufacturing workshop: clients, parts, sell orders, delivery notes, invoices, production orders, machines and quality control.
 
-Stack: Bun, TanStack Start / Router / DB, tRPC, Drizzle ORM, PostgreSQL + Electric SQL, Caddy, Tailwind, Playwright. Everything except the Vite dev server runs in Docker.
+Stack: Bun, TanStack Start / Router / DB, tRPC, Drizzle ORM, PostgreSQL + PowerSync, Caddy, Tailwind, Playwright. Everything except the Vite dev server runs in Docker.
 
 ## Requirements
 
@@ -29,7 +29,7 @@ The first time, run `bun run dev:fresh`: it creates the database schema and seed
 bun run dev
 ```
 
-Starts the Docker services (Postgres, Electric, Caddy), trusts the local certificate and starts Vite on the host with hot reload. Caddy serves the app over HTTPS using the host configured in `envs/.env.development`.
+Starts the Docker services (Postgres, PowerSync, Caddy), trusts the local certificate and starts Vite on the host with hot reload. Caddy serves the app over HTTPS using the host configured in `envs/.env.development`.
 
 | Script               | What it does                                                             |
 | -------------------- | ------------------------------------------------------------------------ |

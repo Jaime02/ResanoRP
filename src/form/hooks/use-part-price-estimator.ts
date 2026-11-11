@@ -2,7 +2,6 @@ import type { AnyFieldApi } from "@tanstack/react-form";
 import { useSelector } from "@tanstack/react-store";
 import { useMemo } from "react";
 
-import partPriceCollection from "@/collections/part-price";
 import { useAppContext } from "@/contexts/app-context";
 import { useAppForm } from "@/form";
 import useResetForm from "@/form/hooks/use-reset-form";
@@ -99,7 +98,6 @@ export default function usePartPriceEstimatorForm({ partId, part, isLoadingPart 
             })
           : trpc.partPrice.create.mutate({ clientId, createdAt: new Date(), partId, price, quantity }),
         onSuccess: { title: PRICE_SAVED_MESSAGE },
-        collection: partPriceCollection,
       });
     },
     validators: {

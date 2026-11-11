@@ -3,10 +3,6 @@ import type { Row } from "@tanstack/react-table";
 import { FunnelIcon, PlusIcon } from "lucide-react";
 import { useCallback, useMemo } from "react";
 
-import deliveryNoteCollection from "@/collections/delivery-note";
-import deliveryNoteLineCollection from "@/collections/delivery-note-line";
-import invoiceCollection from "@/collections/invoice";
-import sellOrderLineCollection from "@/collections/sell-order-line";
 import ComboboxClient from "@/components/combobox/client";
 import CreateEditDeliveryNoteDialog from "@/components/dialog/create-edit-delivery-note";
 import DialogPrintDeliveryNote from "@/components/dialog/print-delivery-note";
@@ -17,7 +13,6 @@ import { createTableColumnHelper } from "@/components/table/column-helper";
 import ButtonLink from "@/components/ui/button-link";
 import { ModelActions } from "@/components/ui/model-actions";
 import { TableCell, TableRow } from "@/components/ui/table";
-import type { TElectricCollection } from "@/contexts/app-context";
 import { useAppContext } from "@/contexts/app-context";
 import { FormContextProvider } from "@/form";
 import FormDeliveryNote from "@/form/forms/delivery-note";
@@ -38,24 +33,6 @@ import trpc from "@/trpc/trpc-client";
 import { CellDataType, FormMode, TableMode } from "@/types";
 
 const DEFAULT_STATE: TTableDeliveryNoteState = { sorts: [{ desc: true, id: "id" }] };
-
-function getDeleteDeliveryNoteCollections(result: {
-  deletedDeliveryNoteLineIds: Array<number>;
-  resetInvoiceIds: Array<number>;
-  updatedSellOrderLineIds: Array<number>;
-}) {
-  const collections: Array<TElectricCollection> = [deliveryNoteCollection];
-  if (result.deletedDeliveryNoteLineIds.length > 0) {
-    collections.push(deliveryNoteLineCollection);
-  }
-  if (result.updatedSellOrderLineIds.length > 0) {
-    collections.push(sellOrderLineCollection);
-  }
-  if (result.resetInvoiceIds.length > 0) {
-    collections.push(invoiceCollection);
-  }
-  return collections;
-}
 
 interface TableMaintenanceDeliveryNoteProps extends PublicBaseTableProps<TDeliveryNote, TTableDeliveryNoteState> {
   tableMode: TableMode;
@@ -150,11 +127,6 @@ export default function TableDeliveryNote({
                     onConfirm: () =>
                       void showToastOnTRPCMutation({
                         mutation: trpc.deliveryNote.delete.mutate({ id: row.original.id }),
-                        // Deleting the Albarán cascades to its Lines, and restores the pending quantity of
-                        // every Sell Order Line they are linked to. The restore is clamped, so it can end up
-                        // writing nothing: only the result knows which collections were actually written, and
-                        // awaiting any other one times out.
-                        collection: getDeleteDeliveryNoteCollections,
                         onSuccess: {
                           title: DELIVERY_NOTE_DELETED_MESSAGE,
                           description: `El albarán ${row.original.id} ha sido eliminado correctamente`,

@@ -1626,16 +1626,16 @@ test("list the compatible materials of a part by their numeric width", async ({ 
   }
 });
 
-// Electric replicates the changes made straight in the database with some lag
-const ELECTRIC_LAG = { timeout: 30_000 };
+// PowerSync replicates the changes made straight in the database with some lag
+const REPLICATION_LAG = { timeout: 30_000 };
 
 async function expectCompatibleMaterialIds(materialIds: Array<number>) {
-  await assertTableRowCount(tableCompatiblePartMaterials, materialIds.length, ELECTRIC_LAG);
+  await assertTableRowCount(tableCompatiblePartMaterials, materialIds.length, REPLICATION_LAG);
   for (const [position, materialId] of materialIds.entries()) {
     await expect(getTableRowByPosition(tableCompatiblePartMaterials, position)).toHaveAttribute(
       "data-testid",
       String(materialId),
-      ELECTRIC_LAG,
+      REPLICATION_LAG,
     );
   }
 }

@@ -1,6 +1,5 @@
 import { Toast } from "@base-ui/react/toast";
 import type { ToastManagerAddOptions } from "@base-ui/react/toast";
-import { useDbClient } from "@tanstack/react-db";
 import type { Transaction } from "@tanstack/react-db";
 import { rootRouteId, useRouteContext, useRouter } from "@tanstack/react-router";
 import { useHydrated } from "@tanstack/react-router";
@@ -8,7 +7,7 @@ import { TRPCClientError } from "@trpc/client";
 import { useCallback, useEffect, useRef, useSyncExternalStore } from "react";
 import type { ReactNode } from "react";
 
-import { allCollections } from "@/collections";
+import { awaitSynced } from "@/collections/base";
 import type { TToast } from "@/components/ui/toast";
 import { AppContext, AppContextStorage, UserMode } from "@/contexts/app-context";
 import type { ShowToastOnTRPCMutationProps, TBaseMutationResult } from "@/contexts/app-context";
@@ -30,9 +29,7 @@ const toaster = Toast.createToastManager();
 
 export function AppContextProvider({ children }: { children: ReactNode }) {
   const router = useRouter();
-  const dbClient = useDbClient();
   const activeToasts = useRef(new Set<TToast>());
-  const collectionsReady = useRef<Promise<unknown>>(Promise.resolve());
 
   // Hydration has to render the user mode the server rendered, which is the one in the cookie of its request
   const { userStateCookie } = useRouteContext({ from: rootRouteId });
@@ -47,32 +44,6 @@ export function AppContextProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     document.body.setAttribute("data-hydrated", "");
   }, []);
-
-  // Keep every Electric collection syncing for the lifetime of the app. A collection that only
-  // starts syncing when a mutation is about to await its txId can take its first snapshot while
-  // that mutation's transaction is still in flight; Electric never streams those rows, so the
-  // txId wait times out. Holding a subscription means the snapshot is always taken up front.
-  // An on-demand collection subscribed this way only follows the changes, loading no rows.
-  useEffect(() => {
-    const preloads: Array<Promise<void>> = [];
-    const subscriptions = allCollections.map((descriptor) => {
-      const collection = dbClient.collection(descriptor);
-      // A collection whose sync a hydrating query deferred only starts once preloaded. A failed sync already
-      // shows in the collection status, as it does for every other subscriber. Preloading an on-demand
-      // collection would only warn that it loads nothing, but its stream follows the changes from the moment
-      // it starts, so a mutation sent before it is ready never sees its txId
-      preloads.push(
-        collection.config.syncMode === "on-demand"
-          ? new Promise<void>((resolve) => collection.onFirstReady(resolve))
-          : collection.preload().catch(() => undefined),
-      );
-      return collection.subscribeChanges(() => {});
-    });
-    collectionsReady.current = Promise.all(preloads);
-    return () => {
-      subscriptions.forEach((subscription) => subscription.unsubscribe());
-    };
-  }, [dbClient]);
 
   useEffect(() => {
     // Close all existing toasts on route change. A navigation to the current href is not one, and closing
@@ -172,22 +143,12 @@ export function AppContextProvider({ children }: { children: ReactNode }) {
     async <TMutation extends TBaseMutationResult>({
       mutation,
       onSuccess,
-      collection,
       onSubmit,
     }: ShowToastOnTRPCMutationProps<TMutation>): Promise<TMutation | null> => {
       try {
         const mutationResult = await mutation;
         if (mutationResult !== undefined) {
-          const resolvedCollection = typeof collection === "function" ? collection(mutationResult) : collection;
-          const collections =
-            resolvedCollection === undefined
-              ? []
-              : Array.isArray(resolvedCollection)
-                ? resolvedCollection
-                : [resolvedCollection];
-          await Promise.all(
-            collections.map(async (item) => dbClient.collection(item).utils.awaitTxId(mutationResult.txid)),
-          );
+          await awaitSynced();
         }
         await onSubmit?.(mutationResult?.item);
         if (onSuccess) {
@@ -206,7 +167,7 @@ export function AppContextProvider({ children }: { children: ReactNode }) {
         return null;
       }
     },
-    [dbClient, toasterSuccess, toasterError],
+    [toasterSuccess, toasterError],
   );
 
   const showToastOnTransaction = useCallback(
@@ -218,9 +179,6 @@ export function AppContextProvider({ children }: { children: ReactNode }) {
       onSuccess?: ToastManagerAddOptions<TToast>;
     }) => {
       try {
-        // A server render hands over the rows of its queries but not those of their collections, so a row shown right
-        // after hydrating may not be in its collection yet, and mutating it would throw
-        await collectionsReady.current;
         await transaction().when("settled");
       } catch (error) {
         const message = error instanceof Error ? error.message : undefined;

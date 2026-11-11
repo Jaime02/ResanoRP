@@ -34,7 +34,7 @@ import {
 } from "@/messages/invoice";
 import { requiredIdObjectSchema } from "@/schemas";
 import { createInvoiceSchema } from "@/schemas/invoice";
-import { router, generateTxId } from "@/trpc";
+import { router } from "@/trpc";
 import { adminProcedure } from "@/trpc";
 
 export default router({
@@ -42,8 +42,6 @@ export default router({
     removeOnRollback(async (createdPaths) =>
       ctx.db.transaction(async (tx) => {
         try {
-          const txid = await generateTxId(tx);
-
           // The Facturas are marked before being read, so an export running at the same time waits for this one
           // and does not export them again
           const accountedInvoiceIds = (
@@ -120,7 +118,7 @@ export default router({
           createdPaths.push(filePath);
           await fs.writeFile(filePath, encodeAccountingExportCsv(getAccountingExportCsv(exportInvoices)));
 
-          return { fileName, invoiceIds: accountedInvoiceIds, txid };
+          return { fileName, invoiceIds: accountedInvoiceIds };
         } catch (error) {
           handleMutationError({ error });
         }
@@ -130,7 +128,6 @@ export default router({
   unaccount: adminProcedure.input(requiredIdObjectSchema).mutation(async ({ ctx, input }) =>
     ctx.db.transaction(async (tx) => {
       try {
-        const txid = await generateTxId(tx);
         const unaccountedInvoice = await unaccountInvoice(input.id, tx);
         if (!unaccountedInvoice) {
           throw new TRPCError({
@@ -138,7 +135,7 @@ export default router({
             message: `Factura contabilizada con ID ${input.id} no encontrada`,
           });
         }
-        return { item: unaccountedInvoice, txid };
+        return { item: unaccountedInvoice };
       } catch (error) {
         handleMutationError({ error });
       }
@@ -147,7 +144,6 @@ export default router({
   send: adminProcedure.input(requiredIdObjectSchema).mutation(async ({ ctx, input }) =>
     ctx.db.transaction(async (tx) => {
       try {
-        const txid = await generateTxId(tx);
         // A Línea can lose its price after its Factura was created, and the Cliente would get it at 0 €
         const invoice = await getInvoiceForDocument(input.id, tx);
         const unpricedDeliveryNoteIds = getUnpricedDeliveryNoteIds(invoice?.deliveryNotes ?? []);
@@ -164,7 +160,7 @@ export default router({
             message: `Factura no enviada con ID ${input.id} no encontrada`,
           });
         }
-        return { item: sentInvoice, txid };
+        return { item: sentInvoice };
       } catch (error) {
         handleMutationError({ error });
       }
@@ -173,8 +169,6 @@ export default router({
   create: adminProcedure.input(createInvoiceSchema).mutation(async ({ ctx, input }) =>
     ctx.db.transaction(async (tx) => {
       try {
-        const txid = await generateTxId(tx);
-
         const client = await tx.query.dbTableClient.findFirst({
           where: { id: input.clientId },
           with: { defaultPaymentMethod: true },
@@ -265,7 +259,7 @@ export default router({
           });
         }
 
-        return { item: newInvoice, txid };
+        return { item: newInvoice };
       } catch (error) {
         handleMutationError({ error });
       }
@@ -274,13 +268,10 @@ export default router({
   delete: adminProcedure.input(requiredIdObjectSchema).mutation(async ({ ctx, input }) =>
     ctx.db.transaction(async (tx) => {
       try {
-        const txid = await generateTxId(tx);
-
-        const releasedDeliveryNotes = await tx
+        await tx
           .update(dbTableDeliveryNote)
           .set({ invoiceId: null })
-          .where(eq(dbTableDeliveryNote.invoiceId, input.id))
-          .returning({ id: dbTableDeliveryNote.id });
+          .where(eq(dbTableDeliveryNote.invoiceId, input.id));
 
         // Prisma already has an accounted Factura, so its Albaranes would be invoiced and accounted twice
         const deletedInvoice = (
@@ -296,11 +287,7 @@ export default router({
           });
         }
 
-        return {
-          item: deletedInvoice,
-          releasedDeliveryNoteIds: releasedDeliveryNotes.map((deliveryNote) => deliveryNote.id),
-          txid,
-        };
+        return { item: deletedInvoice };
       } catch (error) {
         handleMutationError({ error });
       }

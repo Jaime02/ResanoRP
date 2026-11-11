@@ -1,8 +1,5 @@
-import { useDbClient } from "@tanstack/react-db";
 import { useSelector } from "@tanstack/react-store";
 
-import clientCollection from "@/collections/client";
-import clientInvoiceEmailCollection from "@/collections/client-invoice-email";
 import { useAppContext } from "@/contexts/app-context";
 import { useAppForm } from "@/form";
 import useResetForm from "@/form/hooks/use-reset-form";
@@ -46,7 +43,6 @@ interface UseClientFormProps {
 }
 
 export default function useClientForm({ requestedFormMode, editClientId, onSubmit }: UseClientFormProps) {
-  const dbClient = useDbClient();
   const { showToastOnTRPCMutation } = useAppContext();
 
   const { data: client, isLoading: isLoadingClient, isLoadingError, isCrashed } = useQueryClientById(editClientId);
@@ -93,7 +89,6 @@ export default function useClientForm({ requestedFormMode, editClientId, onSubmi
       await showToastOnTRPCMutation({
         mutation,
         onSuccess: { title: formMode === FormMode.Create ? CLIENT_CREATED_MESSAGE : CLIENT_EDITED_MESSAGE },
-        collection: clientCollection,
         onSubmit,
       });
     },
@@ -116,10 +111,8 @@ export default function useClientForm({ requestedFormMode, editClientId, onSubmi
         onSuccess: {
           title: CLIENT_INVOICE_EMAIL_CREATED_MESSAGE,
         },
-        collection: clientInvoiceEmailCollection,
       });
       if (!mutationResult) return;
-      await dbClient.collection(clientInvoiceEmailCollection).utils.awaitTxId(mutationResult.txid);
       formApi.reset();
     },
     validators: {

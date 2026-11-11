@@ -95,7 +95,6 @@ export default function TableMaintenanceDeliveryMethod({
                       void showToastOnTRPCMutation({
                         mutation: trpc.deliveryMethod.restore.mutate({ id: row.original.id }),
                         onSuccess: { title: DELIVERY_METHOD_RESTORED_MESSAGE },
-                        collection: deliveryMethodCollection,
                       }),
                   },
                 })}

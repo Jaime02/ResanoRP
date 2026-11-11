@@ -1,37 +1,28 @@
-import { electricCollectionOptions } from "@tanstack/electric-db-collection";
-
-import { electricCollection } from "@/collections/base";
-import clientInvoiceEmailCollection from "@/collections/client-invoice-email";
+import { awaitSynced, powerSyncCollection, powerSyncCollectionOptions } from "@/collections/base";
 import { clientSchema } from "@/schemas/client";
 import trpc from "@/trpc/trpc-client";
 
-const clientCollection = electricCollection("client", (baseOptions, dbClient) =>
-  electricCollectionOptions({
+const clientCollection = powerSyncCollection("client", (baseOptions) =>
+  powerSyncCollectionOptions({
     ...baseOptions,
     schema: clientSchema,
     getKey: (item) => item.id,
-    onInsert: async ({ transaction, collection }) => {
+    onInsert: async ({ transaction }) => {
       const { modified: newClient } = transaction.mutations[0];
-      const result = await trpc.client.create.mutate(newClient);
-      await collection.utils.awaitTxId(result.txid);
+      await trpc.client.create.mutate(newClient);
+      await awaitSynced();
     },
-    onUpdate: async ({ transaction, collection }) => {
+    onUpdate: async ({ transaction }) => {
       const { modified: updatedClient } = transaction.mutations[0];
-      const result = await trpc.client.update.mutate(updatedClient);
-      await collection.utils.awaitTxId(result.txid);
+      await trpc.client.update.mutate(updatedClient);
+      await awaitSynced();
     },
-    onDelete: async ({ transaction, collection }) => {
+    onDelete: async ({ transaction }) => {
       const { original: deletedClient } = transaction.mutations[0];
-      const result = await trpc.client.delete.mutate({
+      await trpc.client.delete.mutate({
         id: deletedClient.id,
       });
-      // Awaiting a collection the delete did not write times out
-      await Promise.all([
-        collection.utils.awaitTxId(result.txid),
-        ...(result.deletedClientInvoiceEmailIds.length > 0
-          ? [dbClient.collection(clientInvoiceEmailCollection).utils.awaitTxId(result.txid)]
-          : []),
-      ]);
+      await awaitSynced();
     },
   }),
 );

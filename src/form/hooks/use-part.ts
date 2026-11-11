@@ -1,8 +1,5 @@
 import { useSelector } from "@tanstack/react-store";
 
-import blueprintCollection from "@/collections/blueprint";
-import partCollection from "@/collections/part";
-import partReferenceCollection from "@/collections/part-reference";
 import { useAppContext } from "@/contexts/app-context";
 import { useAppForm } from "@/form";
 import useResetForm from "@/form/hooks/use-reset-form";
@@ -102,14 +99,9 @@ export default function usePartForm({ requestedFormMode, partId, skipQueries = f
         formMode === FormMode.Create
           ? trpc.part.createWithPartReference.mutate(objectToFormData({ ...part, ...reference }))
           : trpc.part.update.mutate(partFormData as TUpdatePart);
-      const createCollections =
-        part.blueprint !== null
-          ? [partCollection, partReferenceCollection, blueprintCollection]
-          : [partCollection, partReferenceCollection];
       await showToastOnTRPCMutation({
         mutation,
         onSuccess: { title: formMode === FormMode.Create ? PART_CREATED_MESSAGE : PART_EDITED_MESSAGE },
-        collection: formMode === FormMode.Create ? createCollections : partCollection,
         onSubmit,
       });
     },

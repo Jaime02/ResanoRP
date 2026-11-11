@@ -1,42 +1,28 @@
-import { electricCollectionOptions } from "@tanstack/electric-db-collection";
-
-import { electricCollection } from "@/collections/base";
-import machineCollection from "@/collections/machine";
-import machineProductionOrderQueueCollection from "@/collections/machine-production-order-queue";
+import { awaitSynced, powerSyncCollection, powerSyncCollectionOptions } from "@/collections/base";
 import { productionOrderSchema } from "@/schemas/production-order";
 import trpc from "@/trpc/trpc-client";
 
-const productionOrderCollection = electricCollection("production_order", (baseOptions, dbClient) =>
-  electricCollectionOptions({
+const productionOrderCollection = powerSyncCollection("production_order", (baseOptions) =>
+  powerSyncCollectionOptions({
     ...baseOptions,
-    syncMode: "on-demand",
     schema: productionOrderSchema,
     getKey: (item) => item.id,
-    onInsert: async ({ transaction, collection }) => {
+    onInsert: async ({ transaction }) => {
       const { modified: newProductionOrder } = transaction.mutations[0];
-      const result = await trpc.productionOrder.create.mutate(newProductionOrder);
-      await collection.utils.awaitTxId(result.txid);
+      await trpc.productionOrder.create.mutate(newProductionOrder);
+      await awaitSynced();
     },
-    onUpdate: async ({ transaction, collection }) => {
+    onUpdate: async ({ transaction }) => {
       const { modified: updatedProductionOrder } = transaction.mutations[0];
-      const result = await trpc.productionOrder.update.mutate(updatedProductionOrder);
-      await collection.utils.awaitTxId(result.txid);
+      await trpc.productionOrder.update.mutate(updatedProductionOrder);
+      await awaitSynced();
     },
-    onDelete: async ({ transaction, collection }) => {
+    onDelete: async ({ transaction }) => {
       const { original: deletedProductionOrder } = transaction.mutations[0];
-      const result = await trpc.productionOrder.delete.mutate({
+      await trpc.productionOrder.delete.mutate({
         id: deletedProductionOrder.id,
       });
-      // Awaiting a collection the delete did not write times out
-      await Promise.all([
-        collection.utils.awaitTxId(result.txid),
-        ...(result.removedFromQueue
-          ? [dbClient.collection(machineProductionOrderQueueCollection).utils.awaitTxId(result.txid)]
-          : []),
-        ...(result.stoppedMachineIds.length > 0
-          ? [dbClient.collection(machineCollection).utils.awaitTxId(result.txid)]
-          : []),
-      ]);
+      await awaitSynced();
     },
   }),
 );

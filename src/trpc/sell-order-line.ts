@@ -7,14 +7,12 @@ import { dbTableProductionOrder, dbTableSellOrderLine } from "@/db/schema";
 import { handleMutationError } from "@/lib/handlers";
 import { requiredIdObjectSchema } from "@/schemas";
 import { createSellOrderLineSchema, updateSellOrderLineSchema } from "@/schemas/sell-order-line";
-import { adminProcedure, generateTxId, router } from "@/trpc";
+import { adminProcedure, router } from "@/trpc";
 
 export default router({
   create: adminProcedure.input(createSellOrderLineSchema).mutation(async ({ ctx, input }) =>
     ctx.db.transaction(async (tx) => {
       try {
-        const txid = await generateTxId(tx);
-
         const newSellOrderLine = (
           await tx
             .insert(dbTableSellOrderLine)
@@ -31,7 +29,7 @@ export default router({
           });
         }
 
-        return { item: newSellOrderLine, txid };
+        return { item: newSellOrderLine };
       } catch (error) {
         handleMutationError({ error });
       }
@@ -40,7 +38,6 @@ export default router({
   update: adminProcedure.input(updateSellOrderLineSchema).mutation(async ({ ctx, input }) =>
     ctx.db.transaction(async (tx) => {
       try {
-        const txid = await generateTxId(tx);
         const previousSellOrderLine = await tx.query.dbTableSellOrderLine.findFirst({ where: { id: input.id } });
         const updatedSellOrderLine = (
           await tx.update(dbTableSellOrderLine).set(input).where(eq(dbTableSellOrderLine.id, input.id)).returning()
@@ -53,11 +50,10 @@ export default router({
         }
         // Compared as numbers, as the same price can be typed with more trailing zeros
         const toNumber = (price: string | null) => (price === null ? null : Number(price));
-        const resetInvoiceIds =
-          toNumber(previousSellOrderLine.partPrice) === toNumber(updatedSellOrderLine.partPrice)
-            ? []
-            : await resetSellOrderLineInvoices(input.id, tx);
-        return { item: updatedSellOrderLine, txid, resetInvoiceIds };
+        if (toNumber(previousSellOrderLine.partPrice) !== toNumber(updatedSellOrderLine.partPrice)) {
+          await resetSellOrderLineInvoices(input.id, tx);
+        }
+        return { item: updatedSellOrderLine };
       } catch (error) {
         handleMutationError({ error });
       }
@@ -66,7 +62,6 @@ export default router({
   restore: adminProcedure.input(requiredIdObjectSchema).mutation(async ({ ctx, input }) =>
     ctx.db.transaction(async (tx) => {
       try {
-        const txid = await generateTxId(tx);
         const restoredSellOrderLine = (
           await tx
             .update(dbTableSellOrderLine)
@@ -80,7 +75,7 @@ export default router({
             message: `Línea del Pedido de venta con ID ${input.id} no encontrada o no eliminada`,
           });
         }
-        return { item: restoredSellOrderLine, txid };
+        return { item: restoredSellOrderLine };
       } catch (error) {
         handleMutationError({ error });
       }
@@ -89,7 +84,6 @@ export default router({
   delete: adminProcedure.input(requiredIdObjectSchema).mutation(async ({ ctx, input }) =>
     ctx.db.transaction(async (tx) => {
       try {
-        const txid = await generateTxId(tx);
         const deletedSellOrderLine = (
           await tx
             .update(dbTableSellOrderLine)
@@ -107,14 +101,11 @@ export default router({
           .select({ id: dbTableProductionOrder.id })
           .from(dbTableProductionOrder)
           .where(eq(dbTableProductionOrder.sellOrderLineId, input.id));
-        return {
-          item: deletedSellOrderLine,
-          txid,
-          ...(await removeProductionOrdersFromMachines(
-            productionOrders.map((productionOrder) => productionOrder.id),
-            tx,
-          )),
-        };
+        await removeProductionOrdersFromMachines(
+          productionOrders.map((productionOrder) => productionOrder.id),
+          tx,
+        );
+        return { item: deletedSellOrderLine };
       } catch (error) {
         handleMutationError({ error });
       }

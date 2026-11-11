@@ -1,0 +1,40 @@
+config:
+  edition: 3
+
+streams:
+  # Every browser holds every table in its SQLite database
+  tables:
+    auto_subscribe: true
+    queries:
+      # PowerSync needs a text id. `*` comes first because the last column of a name wins
+      - SELECT *, CAST(id AS TEXT) AS id FROM blueprint
+      - SELECT *, CAST(id AS TEXT) AS id FROM client
+      - SELECT *, CAST(id AS TEXT) AS id FROM client_invoice_email
+      - SELECT *, CAST(id AS TEXT) AS id FROM coating
+      - SELECT *, CAST(id AS TEXT) AS id FROM configuration
+      - SELECT *, CAST(id AS TEXT) AS id FROM delivery_method
+      - SELECT *, CAST(id AS TEXT) AS id FROM delivery_note
+      - SELECT *, CAST(id AS TEXT) AS id FROM delivery_note_line
+      - SELECT *, CAST(id AS TEXT) AS id FROM invoice
+      - SELECT *, CAST(id AS TEXT) AS id FROM machine
+      - SELECT *, CAST(id AS TEXT) AS id FROM material
+      - SELECT *, CAST(id AS TEXT) AS id FROM part
+      - SELECT *, CAST(id AS TEXT) AS id FROM part_feature
+      - SELECT *, CAST(id AS TEXT) AS id FROM part_price
+      - SELECT *, CAST(id AS TEXT) AS id FROM part_production
+      - SELECT *, CAST(id AS TEXT) AS id FROM part_reference
+      - SELECT *, CAST(id AS TEXT) AS id FROM part_stock
+      - SELECT *, CAST(id AS TEXT) AS id FROM payment_method
+      - SELECT *, CAST(id AS TEXT) AS id FROM production_order
+      - SELECT *, CAST(id AS TEXT) AS id FROM quality_check
+      - SELECT *, CAST(id AS TEXT) AS id FROM raw_material
+      - SELECT *, CAST(id AS TEXT) AS id FROM sell_order
+      - SELECT *, CAST(id AS TEXT) AS id FROM sell_order_line
+      - SELECT *, CAST(id AS TEXT) AS id FROM shape
+      - SELECT *, CAST(id AS TEXT) AS id FROM treatment_reception
+      - SELECT *, CAST(id AS TEXT) AS id FROM treatment_shipment
+      # Tables keyed by other columns only need a unique id here: each collection derives its own key from the row
+      - SELECT *, CAST("partId" AS TEXT) AS id FROM part_price_estimator
+      - SELECT *, "machineId" || '-' || "productionOrderId" AS id FROM machine_production_order_queue
+      - SELECT *, "parentPartId" || '-' || "componentPartId" AS id FROM part_component
+      - SELECT *, "materialId" || '-' || "partId" AS id FROM part_material

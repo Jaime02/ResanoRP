@@ -4,8 +4,6 @@ import { PlusIcon, TagIcon } from "lucide-react";
 import { useMemo } from "react";
 
 import deliveryNoteLineCollection from "@/collections/delivery-note-line";
-import invoiceCollection from "@/collections/invoice";
-import sellOrderLineCollection from "@/collections/sell-order-line";
 import CreateDeliveryNoteLineDialog from "@/components/dialog/create-delivery-note-line";
 import DialogPartTag from "@/components/dialog/delivery-note-line-tag";
 import BaseTable from "@/components/table/base-table";
@@ -148,14 +146,6 @@ export default function TableDeliveryNoteLine({
                     onConfirm: () =>
                       void showToastOnTRPCMutation({
                         mutation: trpc.deliveryNoteLine.delete.mutate({ id: row.original.id }),
-                        // The pending quantity restored on the Sell Order Line is clamped, and the Factura is only
-                        // reset when it was accounted or sent, so the delete can end up not writing them at all. Only
-                        // await a collection when the result says it was written, otherwise the txId wait times out.
-                        collection: (result) => [
-                          deliveryNoteLineCollection,
-                          ...(result.updatedSellOrderLineIds.length > 0 ? [sellOrderLineCollection] : []),
-                          ...(result.resetInvoiceIds.length > 0 ? [invoiceCollection] : []),
-                        ],
                         onSuccess: {
                           title: DELIVERY_NOTE_LINE_DELETED_MESSAGE,
                         },
@@ -210,10 +200,6 @@ export default function TableDeliveryNoteLine({
                 id: row.original.id,
                 unitPrice: value as TUpdateDeliveryNoteLinePrice["unitPrice"],
               }),
-              collection: (result) => [
-                deliveryNoteLineCollection,
-                ...(result.resetInvoiceIds.length > 0 ? [invoiceCollection] : []),
-              ],
               onSuccess: { title: DELIVERY_NOTE_LINE_PRICE_EDITED_MESSAGE },
             });
             return;

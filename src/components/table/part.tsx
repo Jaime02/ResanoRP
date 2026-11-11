@@ -275,7 +275,6 @@ export default function TablePart({
                             void showToastOnTRPCMutation({
                               mutation: trpc.part.restore.mutate({ id: row.original.id }),
                               onSuccess: { title: PART_RESTORED_MESSAGE },
-                              collection: partCollection,
                             }),
                         },
                       }),

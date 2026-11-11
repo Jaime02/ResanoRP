@@ -25,7 +25,7 @@ import {
   updateDeliveryNoteSchema,
 } from "@/schemas/delivery-note";
 import type { TStagedSellOrderLine } from "@/schemas/delivery-note";
-import { router, generateTxId } from "@/trpc";
+import { router } from "@/trpc";
 import { adminProcedure, procedure } from "@/trpc";
 import type { BaseDeliveryNote } from "@/types/delivery-note";
 
@@ -33,9 +33,8 @@ async function insertStagedSellOrderLines(
   deliveryNote: BaseDeliveryNote,
   stagedSellOrderLines: Array<TStagedSellOrderLine>,
   tx: TDatabase,
-): Promise<Array<number>> {
+): Promise<void> {
   const vatPercentage = await getConfigurationVatPercentage(tx);
-  const updatedSellOrderLineIds: Array<number> = [];
 
   for (const stagedSellOrderLine of stagedSellOrderLines) {
     const sellOrderLine = await tx.query.dbTableSellOrderLine.findFirst({
@@ -79,14 +78,8 @@ async function insertStagedSellOrderLines(
       vatPercentage,
     });
 
-    const updatedSellOrderLineId = await addSellOrderLinePendingQuantity(
-      sellOrderLine.id,
-      -stagedSellOrderLine.quantity,
-      tx,
-    );
-    if (updatedSellOrderLineId !== undefined) updatedSellOrderLineIds.push(updatedSellOrderLineId);
+    await addSellOrderLinePendingQuantity(sellOrderLine.id, -stagedSellOrderLine.quantity, tx);
   }
-  return updatedSellOrderLineIds;
 }
 
 export default router({
@@ -94,7 +87,6 @@ export default router({
   create: procedure.input(createDeliveryNoteSchema).mutation(async ({ ctx, input }) =>
     ctx.db.transaction(async (tx) => {
       try {
-        const txid = await generateTxId(tx);
         const newDeliveryNote = (
           await tx
             .insert(dbTableDeliveryNote)
@@ -107,7 +99,7 @@ export default router({
             message: "Error al crear el Albarán",
           });
         }
-        return { item: newDeliveryNote, txid };
+        return { item: newDeliveryNote };
       } catch (error) {
         handleMutationError({ error });
       }
@@ -116,7 +108,6 @@ export default router({
   createWithLines: procedure.input(createDeliveryNoteWithLinesSchema).mutation(async ({ ctx, input }) =>
     ctx.db.transaction(async (tx) => {
       try {
-        const txid = await generateTxId(tx);
         const deliveryNote = (
           await tx
             .insert(dbTableDeliveryNote)
@@ -136,8 +127,8 @@ export default router({
           });
         }
 
-        const updatedSellOrderLineIds = await insertStagedSellOrderLines(deliveryNote, input.stagedSellOrderLines, tx);
-        return { item: deliveryNote, txid, updatedSellOrderLineIds };
+        await insertStagedSellOrderLines(deliveryNote, input.stagedSellOrderLines, tx);
+        return { item: deliveryNote };
       } catch (error) {
         handleMutationError({ error });
       }
@@ -146,7 +137,6 @@ export default router({
   appendLines: procedure.input(appendLinesToDeliveryNoteSchema).mutation(async ({ ctx, input }) =>
     ctx.db.transaction(async (tx) => {
       try {
-        const txid = await generateTxId(tx);
         const deliveryNote = await tx.query.dbTableDeliveryNote.findFirst({
           where: { id: input.deliveryNoteId },
         });
@@ -156,13 +146,10 @@ export default router({
             message: `Albarán con ID ${input.deliveryNoteId} no encontrado`,
           });
         }
-        const resetInvoiceIds = await resetChangedDeliveryNoteInvoice(
-          { deliveryNoteId: deliveryNote.id, isAdmin: ctx.isAdmin },
-          tx,
-        );
+        await resetChangedDeliveryNoteInvoice({ deliveryNoteId: deliveryNote.id, isAdmin: ctx.isAdmin }, tx);
 
-        const updatedSellOrderLineIds = await insertStagedSellOrderLines(deliveryNote, input.stagedSellOrderLines, tx);
-        return { item: deliveryNote, resetInvoiceIds, txid, updatedSellOrderLineIds };
+        await insertStagedSellOrderLines(deliveryNote, input.stagedSellOrderLines, tx);
+        return { item: deliveryNote };
       } catch (error) {
         handleMutationError({ error });
       }
@@ -171,7 +158,6 @@ export default router({
   update: adminProcedure.input(updateDeliveryNoteSchema).mutation(async ({ ctx, input }) =>
     ctx.db.transaction(async (tx) => {
       try {
-        const txid = await generateTxId(tx);
         const previousDeliveryNote = await tx.query.dbTableDeliveryNote.findFirst({ where: { id: input.id } });
         const updatedDeliveryNote = (
           await tx.update(dbTableDeliveryNote).set(input).where(eq(dbTableDeliveryNote.id, input.id)).returning()
@@ -192,7 +178,7 @@ export default router({
             .set({ sent: false })
             .where(eq(dbTableInvoice.id, updatedDeliveryNote.invoiceId));
         }
-        return { item: updatedDeliveryNote, txid };
+        return { item: updatedDeliveryNote };
       } catch (error) {
         handleMutationError({ error });
       }
@@ -201,19 +187,12 @@ export default router({
   delete: adminProcedure.input(requiredIdObjectSchema).mutation(async ({ ctx, input }) =>
     ctx.db.transaction(async (tx) => {
       try {
-        const txid = await generateTxId(tx);
-
         const deliveryNoteLines = await tx.query.dbTableDeliveryNoteLine.findMany({
           where: { deliveryNoteId: input.id },
         });
 
-        const updatedSellOrderLineIds: Array<number> = [];
-
         for (const deliveryNoteLine of deliveryNoteLines) {
-          const { updatedSellOrderLineId } = await deleteDeliveryNoteLine(deliveryNoteLine.id, tx);
-          if (updatedSellOrderLineId !== undefined) {
-            updatedSellOrderLineIds.push(updatedSellOrderLineId);
-          }
+          await deleteDeliveryNoteLine(deliveryNoteLine.id, tx);
         }
 
         const deletedDeliveryNote = (
@@ -226,17 +205,10 @@ export default router({
           });
         }
         // The Factura is computed from its Albaranes, so it has to be accounted and sent again without this one
-        const resetInvoice =
-          deletedDeliveryNote.invoiceId === null
-            ? undefined
-            : await resetInvoiceStatus(deletedDeliveryNote.invoiceId, tx);
-        return {
-          deletedDeliveryNoteLineIds: deliveryNoteLines.map((line) => line.id),
-          item: deletedDeliveryNote,
-          txid,
-          resetInvoiceIds: resetInvoice === undefined ? [] : [resetInvoice.id],
-          updatedSellOrderLineIds,
-        };
+        if (deletedDeliveryNote.invoiceId !== null) {
+          await resetInvoiceStatus(deletedDeliveryNote.invoiceId, tx);
+        }
+        return { item: deletedDeliveryNote };
       } catch (error) {
         handleMutationError({ error });
       }

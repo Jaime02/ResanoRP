@@ -1,7 +1,6 @@
 import { DownloadIcon, FileTextIcon, PrinterIcon } from "lucide-react";
 import { useState } from "react";
 
-import sellOrderCollection from "@/collections/sell-order";
 import PDFViewer from "@/components/pdf/pdf-viewer";
 import ButtonDeleteModel from "@/components/table/button-delete-model";
 import { Button } from "@/components/ui/button";
@@ -73,7 +72,6 @@ export default function DialogSellOrderFile({ sellOrder, iconOnly = false }: Dia
                 const result = await showToastOnTRPCMutation({
                   mutation: trpc.sellOrder.deleteFile.mutate(sellOrderId),
                   onSuccess: { title: SELL_ORDER_FILE_DELETED_MESSAGE },
-                  collection: sellOrderCollection,
                 });
                 if (result !== null) {
                   setPreviewUrl(undefined);

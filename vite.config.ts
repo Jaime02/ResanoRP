@@ -94,12 +94,18 @@ export default defineConfig(({ command }) => {
       allowedHosts: [".resanorp"],
     },
     optimizeDeps: {
+      // Prebundling breaks the URLs of its SQLite workers and WebAssembly
+      exclude: ["@powersync/web"],
       include: [
         "@tanstack/router-core",
         "@tanstack/router-core/ssr/client",
         "@tanstack/router-core/isServer",
         "seroval",
       ],
+    },
+    // The PowerSync workers are ES modules
+    worker: {
+      format: "es",
     },
   };
 });

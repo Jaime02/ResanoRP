@@ -49,9 +49,13 @@ export default async function resetEnv() {
   }
   logger.info("Resetting environment", { databasePath: process.env.DATABASE_URL, env: process.env.NODE_ENV });
 
-  const db = (await import("@/db")).default;
+  const { cleanDatabase, default: db } = await import("@/db");
 
-  // No cleanDatabase before this: its DELETEs reach Electric through replication after the tables are dropped, crashing its shape pipeline
+  // PowerSync does not notice a dropped table, and would keep syncing the rows it had until the new one is written to
+  await cleanDatabase(db).catch((err: unknown) => {
+    logger.crit("Failed to clean the database", err);
+    process.exit(1);
+  });
   // Dropping the schema stops drizzle-kit from asking rename-or-create questions for new columns, which --force can't answer
   await db.execute(sql.raw("DROP SCHEMA public CASCADE; CREATE SCHEMA public;")).catch((err: unknown) => {
     logger.crit("Failed to drop the public schema", err);

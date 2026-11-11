@@ -3,14 +3,13 @@ import { TRPCError } from "@trpc/server";
 import { dbTablePartStock } from "@/db/schema";
 import { handleMutationError } from "@/lib/handlers";
 import { createPartStockSchema } from "@/schemas/part-stock";
-import { router, generateTxId } from "@/trpc";
+import { router } from "@/trpc";
 import { procedure } from "@/trpc";
 
 export default router({
   create: procedure.input(createPartStockSchema).mutation(async ({ ctx, input }) =>
     ctx.db.transaction(async (tx) => {
       try {
-        const txid = await generateTxId(tx);
         const newPartStock = (
           await tx
             .insert(dbTablePartStock)
@@ -24,7 +23,7 @@ export default router({
           });
         }
 
-        return { item: newPartStock, txid };
+        return { item: newPartStock };
       } catch (error) {
         handleMutationError({ error });
       }

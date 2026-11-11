@@ -20,7 +20,7 @@ import {
   printTagPartProductionSchema,
   updateProductionOrderSchema,
 } from "@/schemas/production-order";
-import { router, generateTxId } from "@/trpc";
+import { router } from "@/trpc";
 import { adminProcedure, procedure } from "@/trpc";
 import type { BasePartReference } from "@/types/part-reference";
 
@@ -62,7 +62,6 @@ export default router({
   create: adminProcedure.input(createProductionOrderSchema).mutation(async ({ ctx, input }) =>
     ctx.db.transaction(async (tx) => {
       try {
-        const txid = await generateTxId(tx);
         const part = await getPartById(input.partId, tx);
         if (!part) {
           throw new TRPCError({ code: "NOT_FOUND", message: `Artículo con ID ${input.partId} no encontrado` });
@@ -86,7 +85,7 @@ export default router({
             message: "Error al crear la Orden de producción",
           });
         }
-        return { item: newProductionOrder, txid };
+        return { item: newProductionOrder };
       } catch (error) {
         handleMutationError({ error });
       }
@@ -95,7 +94,6 @@ export default router({
   update: adminProcedure.input(updateProductionOrderSchema).mutation(async ({ ctx, input }) =>
     ctx.db.transaction(async (tx) => {
       try {
-        const txid = await generateTxId(tx);
         const updatedProductionOrder = (
           await tx.update(dbTableProductionOrder).set(input).where(eq(dbTableProductionOrder.id, input.id)).returning()
         ).at(0);
@@ -105,7 +103,7 @@ export default router({
             message: `Orden de producción con ID ${input.id} no encontrada`,
           });
         }
-        return { item: updatedProductionOrder, txid };
+        return { item: updatedProductionOrder };
       } catch (error) {
         handleMutationError({ error });
       }
@@ -114,7 +112,6 @@ export default router({
   delete: adminProcedure.input(requiredIdObjectSchema).mutation(async ({ ctx, input }) =>
     ctx.db.transaction(async (tx) => {
       try {
-        const txid = await generateTxId(tx);
         const deletedProductionOrder = (
           await tx
             .update(dbTableProductionOrder)
@@ -128,11 +125,8 @@ export default router({
             message: `Orden de producción con ID ${input.id} no encontrada`,
           });
         }
-        return {
-          item: deletedProductionOrder,
-          txid,
-          ...(await removeProductionOrdersFromMachines([deletedProductionOrder.id], tx)),
-        };
+        await removeProductionOrdersFromMachines([deletedProductionOrder.id], tx);
+        return { item: deletedProductionOrder };
       } catch (error) {
         handleMutationError({ error });
       }
@@ -141,7 +135,6 @@ export default router({
   restore: adminProcedure.input(requiredIdObjectSchema).mutation(async ({ ctx, input }) =>
     ctx.db.transaction(async (tx) => {
       try {
-        const txid = await generateTxId(tx);
         const restoredProductionOrder = (
           await tx
             .update(dbTableProductionOrder)
@@ -155,7 +148,7 @@ export default router({
             message: `Orden de producción con ID ${input.id} no encontrada o no eliminada`,
           });
         }
-        return { item: restoredProductionOrder, txid };
+        return { item: restoredProductionOrder };
       } catch (error) {
         handleMutationError({ error });
       }

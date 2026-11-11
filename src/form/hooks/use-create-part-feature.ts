@@ -1,6 +1,5 @@
 import { useSelector } from "@tanstack/react-store";
 
-import partFeatureCollection from "@/collections/part-feature";
 import { useAppContext } from "@/contexts/app-context";
 import { useAppForm } from "@/form";
 import { PART_FEATURE_CREATED_MESSAGE } from "@/messages/part";
@@ -29,7 +28,6 @@ export default function useCreatePartFeatureForm({ partId, onSubmit }: UseCreate
       showToastOnTRPCMutation({
         mutation: trpc.partFeature.create.mutate(partFeatureFormData as TCreatePartFeature),
         onSuccess: { title: PART_FEATURE_CREATED_MESSAGE },
-        collection: partFeatureCollection,
         onSubmit,
       }),
     validators: {

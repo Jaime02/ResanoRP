@@ -2,8 +2,6 @@ import type { Row } from "@tanstack/react-table";
 import { MailIcon, PlusIcon } from "lucide-react";
 import { useMemo, useState } from "react";
 
-import deliveryNoteCollection from "@/collections/delivery-note";
-import invoiceCollection from "@/collections/invoice";
 import DialogAccountInvoices from "@/components/dialog/account-invoices";
 import CreateInvoiceDialog from "@/components/dialog/create-invoice";
 import DialogPrintInvoice from "@/components/dialog/print-invoice";
@@ -16,7 +14,6 @@ import ButtonLink from "@/components/ui/button-link";
 import { Checkbox } from "@/components/ui/checkbox";
 import { ModelActions } from "@/components/ui/model-actions";
 import { TableCell, TableRow } from "@/components/ui/table";
-import type { TElectricCollection } from "@/contexts/app-context";
 import { useAppContext } from "@/contexts/app-context";
 import { formatDate } from "@/lib/formatters";
 import { formatCents } from "@/lib/prices";
@@ -43,14 +40,6 @@ import trpc from "@/trpc/trpc-client";
 import { CellDataType } from "@/types";
 
 const DEFAULT_STATE: TTableInvoiceState = { sorts: DEFAULT_INVOICE_SORTING };
-
-function getDeleteInvoiceCollections(result: { releasedDeliveryNoteIds: Array<number> }) {
-  const collections: Array<TElectricCollection> = [invoiceCollection];
-  if (result.releasedDeliveryNoteIds.length > 0) {
-    collections.push(deliveryNoteCollection);
-  }
-  return collections;
-}
 
 interface TableInvoiceProps extends PublicBaseTableProps<TInvoiceTableRow, TTableInvoiceState> {
   createInvoice?: boolean;
@@ -146,7 +135,6 @@ export default function TableInvoice({ testId = "table-invoice", state, createIn
                     onConfirm: () =>
                       void showToastOnTRPCMutation({
                         mutation: trpc.invoice.delete.mutate({ id: row.original.id }),
-                        collection: getDeleteInvoiceCollections,
                         onSuccess: {
                           title: INVOICE_DELETED_MESSAGE,
                           description: `La factura ${row.original.id} ha sido eliminada correctamente`,
@@ -227,7 +215,6 @@ function ButtonSendInvoice({ invoice }: ButtonSendInvoiceProps) {
         // The email is only downloaded once the Factura can be sent
         await showToastOnTRPCMutation({
           mutation: trpc.invoice.send.mutate({ id: invoice.id }),
-          collection: invoiceCollection,
           onSubmit: async () => downloadEmail(),
         });
       },

@@ -272,7 +272,6 @@ export default function TableProductionOrder({
                                       machineId: machine.id,
                                       productionOrderId: row.original.id,
                                     }),
-                                    collection: machineProductionOrderQueueCollection,
                                     onSuccess: {
                                       title: MACHINE_UNASSIGNED_MESSAGE,
                                     },
@@ -346,7 +345,6 @@ export default function TableProductionOrder({
                         void showToastOnTRPCMutation({
                           mutation: trpc.productionOrder.restore.mutate({ id: row.original.id }),
                           onSuccess: { title: PRODUCTION_ORDER_RESTORED_MESSAGE },
-                          collection: productionOrderCollection,
                         }),
                     },
                   }),

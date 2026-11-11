@@ -1,10 +1,6 @@
 import { useSelector } from "@tanstack/react-store";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
-import deliveryNoteCollection from "@/collections/delivery-note";
-import deliveryNoteLineCollection from "@/collections/delivery-note-line";
-import invoiceCollection from "@/collections/invoice";
-import sellOrderLineCollection from "@/collections/sell-order-line";
 import { useAppContext } from "@/contexts/app-context";
 import { useAppForm } from "@/form";
 import log from "@/logging/log";
@@ -74,12 +70,6 @@ export function useStageSellOrderLinesForm({ onSubmit }: UseStageSellOrderLinesF
                 stagedSellOrderLines,
               } as TCreateDeliveryNoteWithLines),
               onSuccess: { title: DELIVERY_NOTE_CREATED_MESSAGE },
-              // Another change of the Línea at the same time can leave its pending quantity at its limit, unwritten
-              collection: (mutationResult) => [
-                deliveryNoteCollection,
-                deliveryNoteLineCollection,
-                ...(mutationResult.updatedSellOrderLineIds.length > 0 ? [sellOrderLineCollection] : []),
-              ],
               onSubmit,
             })
           : await showToastOnTRPCMutation({
@@ -88,12 +78,6 @@ export function useStageSellOrderLinesForm({ onSubmit }: UseStageSellOrderLinesF
                 stagedSellOrderLines,
               } as TAppendLinesToDeliveryNote),
               onSuccess: { title: LINES_ADDED_TO_DELIVERY_NOTE_MESSAGE },
-              // The Albarán itself is not written, so its collection would never receive the txId
-              collection: (mutationResult) => [
-                deliveryNoteLineCollection,
-                ...(mutationResult.updatedSellOrderLineIds.length > 0 ? [sellOrderLineCollection] : []),
-                ...(mutationResult.resetInvoiceIds.length > 0 ? [invoiceCollection] : []),
-              ],
               onSubmit,
             });
       if (result === null) {

@@ -9,5 +9,15 @@
 			lifetime 720h
 		}
 	}
-	reverse_proxy {$APP_UPSTREAM:app:5173}
+	# Same origin as the app, so the browser reaches PowerSync without CORS or another port. Must match
+	# POWERSYNC_PATH in src/lib/powersync.ts
+	handle_path /powersync/* {
+		reverse_proxy powersync:8080 {
+			# Sync is one long streamed response
+			flush_interval -1
+		}
+	}
+	handle {
+		reverse_proxy {$APP_UPSTREAM:app:5173}
+	}
 }

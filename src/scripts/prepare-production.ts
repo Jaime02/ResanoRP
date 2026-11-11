@@ -14,6 +14,7 @@ const folders = ["BLUEPRINTS", "SELL_ORDERS", "TAGS", "DELIVERY_NOTES", "INVOICE
 fs.copyFileSync("./envs/.env.production", path.join(productionPath, ".env"));
 fs.copyFileSync("./docker/Caddyfile", path.join(productionPath, "Caddyfile"));
 fs.copyFileSync("./src/scripts/trust-cert.ps1", path.join(productionPath, "trust-cert.ps1"));
+fs.cpSync("./docker/powersync", path.join(productionPath, "powersync"), { recursive: true });
 
 fs.rmSync(importPath, { force: true, recursive: true });
 // start.cmd replaces the production data with an import, so only `bun run prepare-production -- --import` stages one
@@ -23,7 +24,7 @@ if (process.argv.includes("--import")) {
   }
 
   execSync(`${prismaCompose} up -d --wait db`, { stdio: "inherit" });
-  // Electric's publication is left out so the production Electric creates its own against the restored tables
+  // PowerSync's publication is left out, powersync-init creates it again once production starts
   execSync(
     `${prismaCompose} exec -T db sh -c "pg_dump -U $POSTGRES_USER -d $POSTGRES_DB -Fc --no-publications -f /tmp/prisma.dump"`,
     { stdio: "inherit" },

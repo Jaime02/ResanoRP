@@ -1,6 +1,4 @@
-import { electricCollectionOptions } from "@tanstack/electric-db-collection";
-
-import { electricCollection } from "@/collections/base";
+import { awaitSynced, powerSyncCollection, powerSyncCollectionOptions } from "@/collections/base";
 import { machineProductionOrderSchema } from "@/schemas/machine-production-order-queue";
 import trpc from "@/trpc/trpc-client";
 
@@ -14,20 +12,20 @@ function getMachineProductionOrderKey({
   return `${productionOrderId}-${machineId}`;
 }
 
-const machineProductionOrderQueueCollection = electricCollection("machine_production_order_queue", (baseOptions) =>
-  electricCollectionOptions({
+const machineProductionOrderQueueCollection = powerSyncCollection("machine_production_order_queue", (baseOptions) =>
+  powerSyncCollectionOptions({
     ...baseOptions,
     schema: machineProductionOrderSchema,
     getKey: (item) => getMachineProductionOrderKey(item),
-    onInsert: async ({ transaction, collection }) => {
+    onInsert: async ({ transaction }) => {
       const { modified: newMachineProductionOrder } = transaction.mutations[0];
-      const result = await trpc.machineProductionOrderQueue.create.mutate(newMachineProductionOrder);
-      await collection.utils.awaitTxId(result.txid);
+      await trpc.machineProductionOrderQueue.create.mutate(newMachineProductionOrder);
+      await awaitSynced();
     },
-    onDelete: async ({ transaction, collection }) => {
+    onDelete: async ({ transaction }) => {
       const { original: deletedMachineProductionOrder } = transaction.mutations[0];
-      const result = await trpc.machineProductionOrderQueue.delete.mutate(deletedMachineProductionOrder);
-      await collection.utils.awaitTxId(result.txid);
+      await trpc.machineProductionOrderQueue.delete.mutate(deletedMachineProductionOrder);
+      await awaitSynced();
     },
   }),
 );

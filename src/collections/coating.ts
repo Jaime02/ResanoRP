@@ -1,35 +1,28 @@
-import { electricCollectionOptions } from "@tanstack/electric-db-collection";
-
-import { electricCollection } from "@/collections/base";
-import partCollection from "@/collections/part";
+import { awaitSynced, powerSyncCollection, powerSyncCollectionOptions } from "@/collections/base";
 import { coatingSchema } from "@/schemas/coating";
 import trpc from "@/trpc/trpc-client";
 
-const coatingCollection = electricCollection("coating", (baseOptions, dbClient) =>
-  electricCollectionOptions({
+const coatingCollection = powerSyncCollection("coating", (baseOptions) =>
+  powerSyncCollectionOptions({
     ...baseOptions,
     schema: coatingSchema,
     getKey: (item) => item.id,
-    onInsert: async ({ transaction, collection }) => {
+    onInsert: async ({ transaction }) => {
       const { modified: newCoating } = transaction.mutations[0];
-      const result = await trpc.coating.create.mutate(newCoating);
-      await collection.utils.awaitTxId(result.txid);
+      await trpc.coating.create.mutate(newCoating);
+      await awaitSynced();
     },
-    onUpdate: async ({ transaction, collection }) => {
+    onUpdate: async ({ transaction }) => {
       const { modified: updatedCoating } = transaction.mutations[0];
-      const result = await trpc.coating.update.mutate(updatedCoating);
-      await collection.utils.awaitTxId(result.txid);
+      await trpc.coating.update.mutate(updatedCoating);
+      await awaitSynced();
     },
-    onDelete: async ({ transaction, collection }) => {
+    onDelete: async ({ transaction }) => {
       const { original: deletedCoating } = transaction.mutations[0];
-      const result = await trpc.coating.delete.mutate({
+      await trpc.coating.delete.mutate({
         id: deletedCoating.id,
       });
-      // Awaiting a collection the delete did not write times out
-      await Promise.all([
-        collection.utils.awaitTxId(result.txid),
-        ...(result.updatedPartIds.length > 0 ? [dbClient.collection(partCollection).utils.awaitTxId(result.txid)] : []),
-      ]);
+      await awaitSynced();
     },
   }),
 );

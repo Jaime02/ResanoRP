@@ -16,7 +16,7 @@ import {
 import { requiredIdObjectSchema } from "@/schemas";
 import { ProductionOrderStatus } from "@/schemas/production-order";
 import { receiveTreatmentSchema, sendPartTreatmentSchema, sendTreatmentSchema } from "@/schemas/treatment";
-import { generateTxId, procedure, router } from "@/trpc";
+import { procedure, router } from "@/trpc";
 
 const DELETED_STATUSES = [
   ProductionOrderStatus.Deleted,
@@ -36,7 +36,6 @@ export default router({
   send: procedure.input(sendTreatmentSchema).mutation(async ({ ctx, input }) =>
     ctx.db.transaction(async (tx) => {
       try {
-        const txid = await generateTxId(tx);
         const productionOrders = await tx.query.dbTableProductionOrder.findMany({
           where: { id: { in: input.map((item) => item.productionOrderId) } },
           with: { part: true },
@@ -79,7 +78,7 @@ export default router({
             })),
           )
           .returning();
-        return { item: { treatmentShipments }, txid };
+        return { item: { treatmentShipments } };
       } catch (error) {
         handleMutationError({ error });
       }
@@ -88,7 +87,6 @@ export default router({
   sendPart: procedure.input(sendPartTreatmentSchema).mutation(async ({ ctx, input }) =>
     ctx.db.transaction(async (tx) => {
       try {
-        const txid = await generateTxId(tx);
         const part = await tx.query.dbTablePart.findFirst({ where: { id: input.partId } });
         if (!part) {
           throw new TRPCError({ code: "NOT_FOUND", message: `Artículo con ID ${input.partId} no encontrado` });
@@ -106,7 +104,7 @@ export default router({
           .insert(dbTableTreatmentShipment)
           .values({ ...input, sentAt: new Date() })
           .returning();
-        return { item: treatmentShipment, txid };
+        return { item: treatmentShipment };
       } catch (error) {
         handleMutationError({ error });
       }
@@ -115,7 +113,6 @@ export default router({
   receive: procedure.input(receiveTreatmentSchema).mutation(async ({ ctx, input }) =>
     ctx.db.transaction(async (tx) => {
       try {
-        const txid = await generateTxId(tx);
         const treatmentShipments = await tx
           .select()
           .from(dbTableTreatmentShipment)
@@ -151,7 +148,7 @@ export default router({
           .insert(dbTableTreatmentReception)
           .values(input.map((item) => ({ ...item, receivedAt })))
           .returning();
-        return { item: { treatmentReceptions }, txid };
+        return { item: { treatmentReceptions } };
       } catch (error) {
         handleMutationError({ error });
       }
@@ -160,7 +157,6 @@ export default router({
   deleteShipment: procedure.input(requiredIdObjectSchema).mutation(async ({ ctx, input }) =>
     ctx.db.transaction(async (tx) => {
       try {
-        const txid = await generateTxId(tx);
         const reception = await tx.query.dbTableTreatmentReception.findFirst({
           where: { treatmentShipmentId: input.id },
         });
@@ -179,7 +175,7 @@ export default router({
             message: `Envío al tratamiento con ID ${input.id} no encontrado`,
           });
         }
-        return { item: deletedShipment, txid };
+        return { item: deletedShipment };
       } catch (error) {
         handleMutationError({ error });
       }
@@ -188,7 +184,6 @@ export default router({
   deleteReception: procedure.input(requiredIdObjectSchema).mutation(async ({ ctx, input }) =>
     ctx.db.transaction(async (tx) => {
       try {
-        const txid = await generateTxId(tx);
         const deletedReception = (
           await tx.delete(dbTableTreatmentReception).where(eq(dbTableTreatmentReception.id, input.id)).returning()
         ).at(0);
@@ -198,7 +193,7 @@ export default router({
             message: `Recepción del tratamiento con ID ${input.id} no encontrada`,
           });
         }
-        return { item: deletedReception, txid };
+        return { item: deletedReception };
       } catch (error) {
         handleMutationError({ error });
       }

@@ -1,6 +1,5 @@
 import { useSelector } from "@tanstack/react-store";
 
-import paymentMethodCollection from "@/collections/payment-method";
 import { useAppContext } from "@/contexts/app-context";
 import { useAppForm } from "@/form";
 import useResetForm from "@/form/hooks/use-reset-form";
@@ -63,7 +62,6 @@ export default function usePaymentMethodForm({ formMode, editPaymentMethodId, on
         onSuccess: {
           title: formMode === FormMode.Create ? PAYMENT_METHOD_CREATED_MESSAGE : PAYMENT_METHOD_EDITED_MESSAGE,
         },
-        collection: paymentMethodCollection,
         onSubmit,
       });
     },

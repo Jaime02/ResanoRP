@@ -137,7 +137,6 @@ export default function TableSellOrder({ testId = "table-sell-order", state, ...
                             void showToastOnTRPCMutation({
                               mutation: trpc.sellOrder.restore.mutate(row.original.id),
                               onSuccess: { title: SELL_ORDER_RESTORED_MESSAGE },
-                              collection: sellOrderCollection,
                             }),
                         }
                       : undefined

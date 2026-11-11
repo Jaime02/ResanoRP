@@ -6,7 +6,7 @@ import { MATERIAL_COMBINATION_CONSTRAINT, dbTableMaterial } from "@/db/schema";
 import { handleMutationError } from "@/lib/handlers";
 import { requiredIdObjectSchema } from "@/schemas";
 import { compatibleMaterialsSchema, createMaterialSchema } from "@/schemas/material";
-import { router, generateTxId } from "@/trpc";
+import { router } from "@/trpc";
 import { adminProcedure, procedure } from "@/trpc";
 
 const uniqueConstraints = [
@@ -20,8 +20,6 @@ export default router({
   create: adminProcedure.input(createMaterialSchema).mutation(async ({ ctx, input }) =>
     ctx.db.transaction(async (tx) => {
       try {
-        const txid = await generateTxId(tx);
-
         // Restoring a deleted Material with the same combination avoids storing duplicates. The width is compared as a
         // number, so "10" also matches a Material stored as "10.0"
         const deletedMaterial = (
@@ -53,7 +51,7 @@ export default router({
               message: "Error al restaurar el Material",
             });
           }
-          return { item: restoredMaterial, txid };
+          return { item: restoredMaterial };
         }
 
         const newMaterial = (await tx.insert(dbTableMaterial).values(input).returning()).at(0);
@@ -64,7 +62,7 @@ export default router({
           });
         }
 
-        return { item: newMaterial, txid };
+        return { item: newMaterial };
       } catch (error) {
         handleMutationError({ error, uniqueConstraints });
       }
@@ -73,7 +71,6 @@ export default router({
   delete: adminProcedure.input(requiredIdObjectSchema).mutation(async ({ ctx, input }) =>
     ctx.db.transaction(async (tx) => {
       try {
-        const txid = await generateTxId(tx);
         const deletedMaterial = (
           await tx
             .update(dbTableMaterial)
@@ -87,7 +84,7 @@ export default router({
             message: `Material con ID ${input.id} no encontrado`,
           });
         }
-        return { item: deletedMaterial, txid };
+        return { item: deletedMaterial };
       } catch (error) {
         handleMutationError({ error });
       }
@@ -96,7 +93,6 @@ export default router({
   restore: adminProcedure.input(requiredIdObjectSchema).mutation(async ({ ctx, input }) =>
     ctx.db.transaction(async (tx) => {
       try {
-        const txid = await generateTxId(tx);
         const restoredMaterial = (
           await tx
             .update(dbTableMaterial)
@@ -110,7 +106,7 @@ export default router({
             message: `Material con ID ${input.id} no encontrado o no eliminado`,
           });
         }
-        return { item: restoredMaterial, txid };
+        return { item: restoredMaterial };
       } catch (error) {
         handleMutationError({ error, uniqueConstraints });
       }

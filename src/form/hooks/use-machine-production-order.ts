@@ -1,9 +1,5 @@
 import { useSelector } from "@tanstack/react-store";
 
-import machineCollection from "@/collections/machine";
-import machineProductionOrderQueueCollection from "@/collections/machine-production-order-queue";
-import partProductionCollection from "@/collections/part-production";
-import productionOrderCollection from "@/collections/production-order";
 import { useAppContext } from "@/contexts/app-context";
 import { useAppForm } from "@/form";
 import useResetForm from "@/form/hooks/use-reset-form";
@@ -51,7 +47,6 @@ export default function useMachineProductionOrderForm({
       await showToastOnTRPCMutation({
         mutation: trpc.machine.updateMachineProductionOrder.mutate(mutationValidationResult.data),
         onSuccess: { title: PRODUCTION_ORDER_EDITED_MESSAGE },
-        collection: productionOrderCollection,
         onSubmit: onMachineProductionOrderUpdateSubmit,
       });
     },
@@ -67,17 +62,11 @@ export default function useMachineProductionOrderForm({
       producedQuantity: null as number | null,
     },
     onSubmit: async ({ value: stopMachineProductionOrderFormData }) => {
-      const { producedQuantity } = stopMachineProductionOrderFormData;
       await showToastOnTRPCMutation({
         mutation: trpc.machine.stopProductionOrder.mutate(
           stopMachineProductionOrderFormData as TStopMachineProductionOrder,
         ),
         onSuccess: { title: PRODUCTION_ORDER_STOPPED_MESSAGE },
-        collection: ({ removedFromQueue }) => [
-          machineCollection,
-          ...(producedQuantity !== null && producedQuantity > 0 ? [partProductionCollection] : []),
-          ...(removedFromQueue ? [machineProductionOrderQueueCollection] : []),
-        ],
         onSubmit: onMachineProductionOrderStopSubmit,
       });
     },

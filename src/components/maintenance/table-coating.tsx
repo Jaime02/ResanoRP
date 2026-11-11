@@ -95,7 +95,6 @@ export default function TableMaintenanceCoating({
                       void showToastOnTRPCMutation({
                         mutation: trpc.coating.restore.mutate({ id: row.original.id }),
                         onSuccess: { title: COATING_RESTORED_MESSAGE },
-                        collection: coatingCollection,
                       }),
                   },
                 })}

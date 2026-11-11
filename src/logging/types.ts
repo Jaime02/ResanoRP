@@ -9,9 +9,6 @@ export enum LoggerLevels {
   debug = "debug",
 }
 
-// TODO avoid ignoring 409s, see https://github.com/electric-sql/electric/issues/3150
-export const UNLOGGED_HTTP_STATUS_CODE = 409;
-
 export const LogMessages = {
   accountingExportReadFailed: "Error reading Accounting Export file",
   activeProductionOrderNotInQueue: (machineId: number) =>
@@ -28,7 +25,6 @@ export const LogMessages = {
   clientError: "Error",
   clientFolderNotFound: "Client folder does not exist",
   clipboardCopyFailed: "Failed to copy to clipboard",
-  collectionSyncFailed: (table: string) => `Error syncing the ${table} collection`,
   columnDataTypeMissing: (columnId: string) => `Column ${columnId} is filterable but has no dataType defined`,
   columnEnumNameMissing: (columnId: string) => `Column ${columnId} is of type Enum but has no enumName defined`,
   columnFilterFieldNameMissing: (columnId: string) =>
@@ -50,12 +46,13 @@ export const LogMessages = {
   invalidFileName: "Invalid file name received",
   invalidId: "Invalid ID received",
   invoiceReadFailed: "Error reading Invoice file",
-  liveQueriesPreloadFailed: "Failed to preload the live queries of a server render",
   mutationError: "Error en la mutación",
   notFoundRendered: "NotFound component rendered. This should not happen in production.",
   partFolderNotFound: "Part folder does not exist",
   pdfLoadFailed: "Failed to load PDF",
   pendingSellOrdersGenerationFailed: "Error generating Pending Sell Orders file",
+  powerSyncSyncFailed: "Failed to sync with PowerSync",
+  powerSyncSyncTimedOut: "Timed out waiting for PowerSync to deliver a saved mutation",
   sellOrderClientIdNotFound: "Failed to retrieve clientId for sell order",
   sellOrderFileNotFound: "Sell order file does not exist",
   sellOrderLineValidationFailed: "Validation error when editing Sell Order Line",

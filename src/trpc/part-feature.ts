@@ -6,7 +6,7 @@ import { handleMutationError } from "@/lib/handlers";
 import { PART_FEATURE_CHECKED_DELETE_ERROR_MESSAGE, PART_FEATURE_CHECKED_RANGE_ERROR_MESSAGE } from "@/messages/part";
 import { requiredIdObjectSchema } from "@/schemas";
 import { createPartFeatureSchema, updatePartFeatureSchema } from "@/schemas/part-feature";
-import { router, generateTxId } from "@/trpc";
+import { router } from "@/trpc";
 import { adminProcedure } from "@/trpc";
 
 const uniqueConstraints = [
@@ -20,7 +20,6 @@ export default router({
   create: adminProcedure.input(createPartFeatureSchema).mutation(async ({ ctx, input }) =>
     ctx.db.transaction(async (tx) => {
       try {
-        const txid = await generateTxId(tx);
         const newPartFeature = (await tx.insert(dbTablePartFeature).values(input).returning()).at(0);
         if (!newPartFeature) {
           throw new TRPCError({
@@ -28,7 +27,7 @@ export default router({
             message: "Error al crear la característica del Artículo",
           });
         }
-        return { item: newPartFeature, txid };
+        return { item: newPartFeature };
       } catch (error) {
         handleMutationError({ error, uniqueConstraints });
       }
@@ -37,7 +36,6 @@ export default router({
   update: adminProcedure.input(updatePartFeatureSchema).mutation(async ({ ctx, input }) =>
     ctx.db.transaction(async (tx) => {
       try {
-        const txid = await generateTxId(tx);
         const currentPartFeature = await tx.query.dbTablePartFeature.findFirst({ where: { id: input.id } });
         const rangeChanged =
           currentPartFeature !== undefined &&
@@ -65,7 +63,7 @@ export default router({
             message: `Característica del Artículo con ID ${input.id} no encontrada`,
           });
         }
-        return { item: updatedPartFeature, txid };
+        return { item: updatedPartFeature };
       } catch (error) {
         handleMutationError({ error, uniqueConstraints });
       }
@@ -74,7 +72,6 @@ export default router({
   delete: adminProcedure.input(requiredIdObjectSchema).mutation(async ({ ctx, input }) =>
     ctx.db.transaction(async (tx) => {
       try {
-        const txid = await generateTxId(tx);
         const qualityCheck = await tx.query.dbTableQualityCheck.findFirst({ where: { partFeatureId: input.id } });
         if (qualityCheck) {
           throw new TRPCError({
@@ -91,7 +88,7 @@ export default router({
             message: `Característica del Artículo con ID ${input.id} no encontrada`,
           });
         }
-        return { item: deletedPartFeature, txid };
+        return { item: deletedPartFeature };
       } catch (error) {
         handleMutationError({ error });
       }

@@ -1,6 +1,5 @@
 import { useSelector } from "@tanstack/react-store";
 
-import configurationCollection from "@/collections/configuration";
 import { useAppContext } from "@/contexts/app-context";
 import { useAppForm } from "@/form";
 import useResetForm from "@/form/hooks/use-reset-form";
@@ -49,7 +48,6 @@ export default function useConfigurationForm({ formMode }: UseConfigurationFormP
       await showToastOnTRPCMutation({
         mutation: trpc.configuration.update.mutate(configurationFormData as TUpdateConfiguration),
         onSuccess: { title: CONFIGURATION_EDITED_MESSAGE },
-        collection: configurationCollection,
       });
     },
     validators: {

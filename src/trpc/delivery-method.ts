@@ -4,7 +4,7 @@ import { and, eq, isNotNull } from "drizzle-orm";
 import { DELIVERY_METHOD_NAME_CONSTRAINT, dbTableClient, dbTableDeliveryMethod } from "@/db/schema";
 import { handleMutationError } from "@/lib/handlers";
 import { createModelWithNameSchema, requiredIdObjectSchema, updateModelWithNameSchema } from "@/schemas";
-import { router, generateTxId } from "@/trpc";
+import { router } from "@/trpc";
 import { adminProcedure } from "@/trpc";
 
 const uniqueConstraints = [
@@ -18,7 +18,6 @@ export default router({
   create: adminProcedure.input(createModelWithNameSchema).mutation(async ({ ctx, input }) =>
     ctx.db.transaction(async (tx) => {
       try {
-        const txid = await generateTxId(tx);
         const newDeliveryMethod = (await tx.insert(dbTableDeliveryMethod).values(input).returning()).at(0);
         if (!newDeliveryMethod) {
           throw new TRPCError({
@@ -26,7 +25,7 @@ export default router({
             message: "Error al crear el Transporte",
           });
         }
-        return { item: newDeliveryMethod, txid };
+        return { item: newDeliveryMethod };
       } catch (error) {
         handleMutationError({ error, uniqueConstraints });
       }
@@ -35,7 +34,6 @@ export default router({
   update: adminProcedure.input(updateModelWithNameSchema).mutation(async ({ ctx, input }) =>
     ctx.db.transaction(async (tx) => {
       try {
-        const txid = await generateTxId(tx);
         const updatedDeliveryMethod = (
           await tx.update(dbTableDeliveryMethod).set(input).where(eq(dbTableDeliveryMethod.id, input.id)).returning()
         ).at(0);
@@ -45,7 +43,7 @@ export default router({
             message: `Transporte con ID ${input.id} no encontrado`,
           });
         }
-        return { item: updatedDeliveryMethod, txid };
+        return { item: updatedDeliveryMethod };
       } catch (error) {
         handleMutationError({ error, uniqueConstraints });
       }
@@ -55,7 +53,6 @@ export default router({
   delete: adminProcedure.input(requiredIdObjectSchema).mutation(async ({ ctx, input }) =>
     ctx.db.transaction(async (tx) => {
       try {
-        const txid = await generateTxId(tx);
         const deletedDeliveryMethod = (
           await tx
             .update(dbTableDeliveryMethod)
@@ -69,12 +66,11 @@ export default router({
             message: `Transporte con ID ${input.id} no encontrado`,
           });
         }
-        const updatedClients = await tx
+        await tx
           .update(dbTableClient)
           .set({ defaultDeliveryMethodId: null })
-          .where(eq(dbTableClient.defaultDeliveryMethodId, input.id))
-          .returning({ id: dbTableClient.id });
-        return { item: deletedDeliveryMethod, txid, updatedClientIds: updatedClients.map((client) => client.id) };
+          .where(eq(dbTableClient.defaultDeliveryMethodId, input.id));
+        return { item: deletedDeliveryMethod };
       } catch (error) {
         handleMutationError({ error });
       }
@@ -83,7 +79,6 @@ export default router({
   restore: adminProcedure.input(requiredIdObjectSchema).mutation(async ({ ctx, input }) =>
     ctx.db.transaction(async (tx) => {
       try {
-        const txid = await generateTxId(tx);
         const restoredDeliveryMethod = (
           await tx
             .update(dbTableDeliveryMethod)
@@ -97,7 +92,7 @@ export default router({
             message: `Transporte con ID ${input.id} no encontrado o no eliminado`,
           });
         }
-        return { item: restoredDeliveryMethod, txid };
+        return { item: restoredDeliveryMethod };
       } catch (error) {
         handleMutationError({ error, uniqueConstraints });
       }

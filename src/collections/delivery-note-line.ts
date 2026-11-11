@@ -1,42 +1,28 @@
-import { electricCollectionOptions } from "@tanstack/electric-db-collection";
-
-import { electricCollection } from "@/collections/base";
-import invoiceCollection from "@/collections/invoice";
-import sellOrderLineCollection from "@/collections/sell-order-line";
+import { awaitSynced, powerSyncCollection, powerSyncCollectionOptions } from "@/collections/base";
 import { deliveryNoteLineSchema } from "@/schemas/delivery-note-line";
 import trpc from "@/trpc/trpc-client";
 
-const deliveryNoteLineCollection = electricCollection("delivery_note_line", (baseOptions, dbClient) =>
-  electricCollectionOptions({
+const deliveryNoteLineCollection = powerSyncCollection("delivery_note_line", (baseOptions) =>
+  powerSyncCollectionOptions({
     ...baseOptions,
-    syncMode: "on-demand",
     schema: deliveryNoteLineSchema,
     getKey: (item) => item.id,
-    onInsert: async ({ transaction, collection }) => {
+    onInsert: async ({ transaction }) => {
       const { modified: newDeliveryNoteLine } = transaction.mutations[0];
-      const result = await trpc.deliveryNoteLine.create.mutate(newDeliveryNoteLine);
-      await collection.utils.awaitTxId(result.txid);
+      await trpc.deliveryNoteLine.create.mutate(newDeliveryNoteLine);
+      await awaitSynced();
     },
-    onUpdate: async ({ transaction, collection }) => {
+    onUpdate: async ({ transaction }) => {
       const { modified: updatedDeliveryNoteLine } = transaction.mutations[0];
-      const result = await trpc.deliveryNoteLine.update.mutate(updatedDeliveryNoteLine);
-      await Promise.all([
-        collection.utils.awaitTxId(result.txid),
-        // Awaiting a collection the update did not write times out
-        ...(result.resetInvoiceIds.length > 0
-          ? [dbClient.collection(invoiceCollection).utils.awaitTxId(result.txid)]
-          : []),
-        ...(result.updatedSellOrderLineIds.length > 0
-          ? [dbClient.collection(sellOrderLineCollection).utils.awaitTxId(result.txid)]
-          : []),
-      ]);
+      await trpc.deliveryNoteLine.update.mutate(updatedDeliveryNoteLine);
+      await awaitSynced();
     },
-    onDelete: async ({ transaction, collection }) => {
+    onDelete: async ({ transaction }) => {
       const { original: deletedDeliveryNoteLine } = transaction.mutations[0];
-      const result = await trpc.deliveryNoteLine.delete.mutate({
+      await trpc.deliveryNoteLine.delete.mutate({
         id: deletedDeliveryNoteLine.id,
       });
-      await collection.utils.awaitTxId(result.txid);
+      await awaitSynced();
     },
   }),
 );

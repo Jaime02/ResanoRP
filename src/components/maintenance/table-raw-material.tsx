@@ -110,7 +110,6 @@ export default function TableMaintenanceRawMaterial({
                       void showToastOnTRPCMutation({
                         mutation: trpc.rawMaterial.restore.mutate({ id: row.original.id }),
                         onSuccess: { title: RAW_MATERIAL_RESTORED_MESSAGE },
-                        collection: rawMaterialCollection,
                       }),
                   },
                 })}

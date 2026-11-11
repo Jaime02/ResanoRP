@@ -1,12 +1,9 @@
-import { electricCollectionOptions } from "@tanstack/electric-db-collection";
-
-import { electricCollection } from "@/collections/base";
+import { powerSyncCollection, powerSyncCollectionOptions } from "@/collections/base";
 import { partProductionSchema } from "@/schemas/part-production";
 
-const partProductionCollection = electricCollection("part_production", (baseOptions) =>
-  electricCollectionOptions({
+const partProductionCollection = powerSyncCollection("part_production", (baseOptions) =>
+  powerSyncCollectionOptions({
     ...baseOptions,
-    syncMode: "on-demand",
     schema: partProductionSchema,
     getKey: (item) => item.id,
   }),

@@ -17,7 +17,7 @@ import {
   removeProductionOrderFromMachineQueueSchema,
 } from "@/schemas/machine-production-order-queue";
 import { ProductionOrderStatus } from "@/schemas/production-order";
-import { router, generateTxId } from "@/trpc";
+import { router } from "@/trpc";
 import { procedure } from "@/trpc";
 
 const uniqueConstraints = [
@@ -31,7 +31,6 @@ export default router({
   create: procedure.input(addProductionOrderToMachineQueueSchema).mutation(async ({ ctx, input }) =>
     ctx.db.transaction(async (tx) => {
       try {
-        const txid = await generateTxId(tx);
         const machine = await getMachineById(input.machineId, tx);
         if (!machine) {
           throw new TRPCError({
@@ -74,7 +73,7 @@ export default router({
             message: "Error al añadir la Orden de producción a la cola de la Máquina",
           });
         }
-        return { item: productionOrderQueueEntry, txid };
+        return { item: productionOrderQueueEntry };
       } catch (error) {
         handleMutationError({ error, uniqueConstraints });
       }
@@ -85,7 +84,6 @@ export default router({
     .mutation(async ({ ctx, input }) =>
       ctx.db.transaction(async (tx) => {
         try {
-          const txid = await generateTxId(tx);
           const machine = await getMachineById(input.machineId, tx);
           if (!machine) {
             throw new TRPCError({
@@ -114,7 +112,7 @@ export default router({
               message: "La Orden de producción no existe en la cola de la Máquina",
             });
           }
-          return { item: updatedMachineProductionOrder, txid };
+          return { item: updatedMachineProductionOrder };
         } catch (error) {
           handleMutationError({ error });
         }
@@ -123,7 +121,6 @@ export default router({
   delete: procedure.input(removeProductionOrderFromMachineQueueSchema).mutation(async ({ ctx, input }) =>
     ctx.db.transaction(async (tx) => {
       try {
-        const txid = await generateTxId(tx);
         const machine = await getMachineById(input.machineId, tx);
         if (machine === undefined) {
           throw new TRPCError({
@@ -157,7 +154,7 @@ export default router({
             .where(eq(dbTableMachine.id, input.machineId));
         }
 
-        return { item: deletedMachineProductionOrder, txid };
+        return { item: deletedMachineProductionOrder };
       } catch (error) {
         handleMutationError({ error });
       }

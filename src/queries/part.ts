@@ -316,33 +316,24 @@ export type TPartFormBlueprint = TPartForm["blueprints"][number];
 export type TPartFormPartFeature = TPartForm["features"][number];
 export type TPartFormPartComponent = TPartForm["components"][number];
 
-// Shared with the loaders that preload the table on the server, which only match queries built the same way
-export function partTableQueries({
+export function useQueryPartTable({
   filters,
   pagination = DEFAULT_PAGINATION,
   sorts = DEFAULT_PART_SORTING,
 }: TTablePartState = {}) {
-  return {
-    count: {
-      queryKey: ["partTableCount", filters],
-      query: (q: InitialQueryBuilder) => {
-        const filtered = buildFilteredParts(q, filters)
-          .select(({ part }) => ({ id: part.id }))
-          .distinct();
-        return q.from({ filteredPart: filtered }).select(({ filteredPart }) => ({ count: count(filteredPart.id) }));
-      },
+  const { data: countData, isReady: isCountReady } = useLiveQuery({
+    queryKey: ["partTableCount", filters],
+    query: (q) => {
+      const filtered = buildFilteredParts(q, filters)
+        .select(({ part }) => ({ id: part.id }))
+        .distinct();
+      return q.from({ filteredPart: filtered }).select(({ filteredPart }) => ({ count: count(filteredPart.id) }));
     },
-    parts: {
-      queryKey: ["partTable", filters, pagination, sorts],
-      query: (query: InitialQueryBuilder) => partSelectProjection({ query, filters, pagination, sorts }),
-    },
-  };
-}
-
-export function useQueryPartTable(state: TTablePartState = {}) {
-  const queries = partTableQueries(state);
-  const { data: countData, isReady: isCountReady } = useLiveQuery(queries.count);
-  const { data: partsData, ...rest } = useLiveQuery(queries.parts);
+  });
+  const { data: partsData, ...rest } = useLiveQuery({
+    queryKey: ["partTable", filters, pagination, sorts],
+    query: (query) => partSelectProjection({ query, filters, pagination, sorts }),
+  });
 
   // Replace each row's raw transaction streams with the computed running-balance ledger.
   const data = useMemo(

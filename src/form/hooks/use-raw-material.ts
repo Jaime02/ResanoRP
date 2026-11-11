@@ -1,6 +1,5 @@
 import { useSelector } from "@tanstack/react-store";
 
-import rawMaterialCollection from "@/collections/raw-material";
 import { useAppContext } from "@/contexts/app-context";
 import { useAppForm } from "@/form";
 import useResetForm from "@/form/hooks/use-reset-form";
@@ -68,7 +67,6 @@ export default function useRawMaterialForm({
       await showToastOnTRPCMutation({
         mutation,
         onSuccess: { title: formMode === FormMode.Create ? RAW_MATERIAL_CREATED_MESSAGE : RAW_MATERIAL_EDITED_MESSAGE },
-        collection: rawMaterialCollection,
         onSubmit,
       });
     },

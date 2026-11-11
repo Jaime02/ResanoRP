@@ -2,7 +2,6 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { TriangleAlertIcon } from "lucide-react";
 import { z } from "zod";
 
-import machineCollection from "@/collections/machine";
 import DialogQueryError from "@/components/dialog/query-error";
 import ButtonRestoreModel from "@/components/table/button-restore-model";
 import TableMachineProductionHistory from "@/components/table/machine-production-history";
@@ -89,7 +88,6 @@ function RouteComponent() {
               void showToastOnTRPCMutation({
                 mutation: trpc.machine.restore.mutate({ id: machine.id }),
                 onSuccess: { title: MACHINE_RESTORED_MESSAGE },
-                collection: machineCollection,
               })
             }
           />

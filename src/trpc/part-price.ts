@@ -5,14 +5,13 @@ import { dbTablePartPrice } from "@/db/schema";
 import { handleMutationError } from "@/lib/handlers";
 import { requiredIdObjectSchema } from "@/schemas";
 import { createPartPriceSchema, updatePartPriceSchema } from "@/schemas/part-price";
-import { router, generateTxId } from "@/trpc";
+import { router } from "@/trpc";
 import { adminProcedure } from "@/trpc";
 
 export default router({
   create: adminProcedure.input(createPartPriceSchema).mutation(async ({ ctx, input }) =>
     ctx.db.transaction(async (tx) => {
       try {
-        const txid = await generateTxId(tx);
         const newPartPrice = (await tx.insert(dbTablePartPrice).values(input).returning()).at(0);
         if (!newPartPrice) {
           throw new TRPCError({
@@ -20,7 +19,7 @@ export default router({
             message: "Error al crear el Precio",
           });
         }
-        return { item: newPartPrice, txid };
+        return { item: newPartPrice };
       } catch (error) {
         handleMutationError({ error });
       }
@@ -29,7 +28,6 @@ export default router({
   update: adminProcedure.input(updatePartPriceSchema).mutation(async ({ ctx, input }) =>
     ctx.db.transaction(async (tx) => {
       try {
-        const txid = await generateTxId(tx);
         const updatedPartPrice = (
           await tx.update(dbTablePartPrice).set(input).where(eq(dbTablePartPrice.id, input.id)).returning()
         ).at(0);
@@ -39,7 +37,7 @@ export default router({
             message: `Precio con ID ${input.id} no encontrado`,
           });
         }
-        return { item: updatedPartPrice, txid };
+        return { item: updatedPartPrice };
       } catch (error) {
         handleMutationError({ error });
       }
@@ -48,7 +46,6 @@ export default router({
   delete: adminProcedure.input(requiredIdObjectSchema).mutation(async ({ ctx, input }) =>
     ctx.db.transaction(async (tx) => {
       try {
-        const txid = await generateTxId(tx);
         const deletedPrice = (
           await tx.delete(dbTablePartPrice).where(eq(dbTablePartPrice.id, input.id)).returning()
         ).at(0);
@@ -58,7 +55,7 @@ export default router({
             message: `Precio con ID ${input.id} no encontrado`,
           });
         }
-        return { item: deletedPrice, txid };
+        return { item: deletedPrice };
       } catch (error) {
         handleMutationError({ error });
       }

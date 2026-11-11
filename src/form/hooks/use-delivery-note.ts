@@ -1,7 +1,6 @@
 import { useSelector } from "@tanstack/react-store";
 import { useEffect } from "react";
 
-import deliveryNoteCollection from "@/collections/delivery-note";
 import { useAppContext } from "@/contexts/app-context";
 import { useAppForm } from "@/form";
 import useResetForm from "@/form/hooks/use-reset-form";
@@ -92,7 +91,6 @@ export default function useDeliveryNoteForm({
         onSuccess: {
           title: formMode === FormMode.Create ? DELIVERY_NOTE_CREATED_MESSAGE : DELIVERY_NOTE_EDITED_MESSAGE,
         },
-        collection: deliveryNoteCollection,
         onSubmit,
       });
     },

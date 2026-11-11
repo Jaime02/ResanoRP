@@ -27,19 +27,43 @@ services:
       timeout: 3s
       retries: 4
     command: postgres -c wal_level=logical -c listen_addresses='*'
-  electric:
+  # See docker-compose.base.yml
+  powersync-init:
     logging: *logging
-    image: electricsql/electric:1.6.0
-    restart: unless-stopped
+    image: postgres:16
     environment:
-      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}?sslmode=disable
-      ELECTRIC_INSECURE: true
-      ELECTRIC_USAGE_REPORTING: false
-    ports:
-      - "${VITE_ELECTRIC_PORT}:3000"
+      - PGPASSWORD=${POSTGRES_PASSWORD}
+    volumes:
+      - ./powersync/init.sql:/init.sql:ro
+    command: psql -h db -U ${POSTGRES_USER} -d ${POSTGRES_DB} -v ON_ERROR_STOP=1 -f /init.sql
     depends_on:
       db:
         condition: service_healthy
+  powersync:
+    logging: *logging
+    image: journeyapps/powersync-service:1.28.1
+    restart: unless-stopped
+    command: ["start", "-r", "unified"]
+    environment:
+      POWERSYNC_CONFIG_PATH: /config/service.yaml
+      PS_DATA_SOURCE_URI: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
+      PS_STORAGE_SOURCE_URI: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/powersync_storage
+      PS_JWT_SECRET: ${POWERSYNC_JWT_SECRET}
+    volumes:
+      - ./powersync:/config:ro
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - "fetch('http://localhost:8080/probes/liveness', {signal:AbortSignal.timeout(2500)}).then((r) => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))"
+      interval: 5s
+      timeout: 5s
+      start_period: 30s
+      retries: 15
+    depends_on:
+      powersync-init:
+        condition: service_completed_successfully
   caddy:
     logging: *logging
     image: caddy:2
@@ -59,6 +83,8 @@ services:
     depends_on:
       app:
         condition: service_healthy
+      powersync:
+        condition: service_healthy
   app:
     logging: *logging
     image: resanorp-app:production
@@ -68,7 +94,6 @@ services:
     env_file: .env
     environment:
       - DATABASE_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}?sslmode=disable
-      - ELECTRIC_URL=http://electric:3000
       - PORT=5173
     volumes:
       - vite_cache:/app/node_modules/.vite

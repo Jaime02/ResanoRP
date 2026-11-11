@@ -239,7 +239,6 @@ export default function FormProductionOrder({
                     void showToastOnTRPCMutation({
                       mutation: trpc.productionOrder.restore.mutate({ id: productionOrder.id }),
                       onSuccess: { title: PRODUCTION_ORDER_RESTORED_MESSAGE },
-                      collection: productionOrderCollection,
                     })
                   }
                 />

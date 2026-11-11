@@ -2,30 +2,21 @@ import type { ToastManagerAddOptions } from "@base-ui/react/toast";
 import type { Transaction } from "@tanstack/react-db";
 import { createContext, use } from "react";
 
-import type { TElectricCollection } from "@/collections/base";
 import type { TToast, ToastFunction } from "@/components/ui/toast";
 import { AppContextStorage, UserMode } from "@/contexts/app-context-storage";
 import type { BaseMachine } from "@/types/machine";
 
 export { AppContextStorage, UserMode };
-export type { TElectricCollection };
 
+// The index signature lets results without an item, like { fileName }, match the optional item
 export type TBaseMutationResult<TItem = Record<string, unknown> | undefined> = TItem extends undefined
-  ? { txid: number; item?: TItem }
-  : { txid: number; item: TItem };
+  ? { item?: TItem; [key: string]: unknown }
+  : { item: TItem };
 
 export interface ShowToastOnTRPCMutationProps<TMutation extends TBaseMutationResult> {
   // A mutation that writes nothing to the database, like printing a tag, resolves to undefined
   mutation: Promise<TMutation | void>;
   onSuccess?: ToastManagerAddOptions<TToast>;
-  /**
-   * Collections whose txId is awaited before the success toast. Awaiting a collection the mutation did not actually
-   * write to always times out, so pass a function when only the mutation result can tell which tables were written.
-   */
-  collection?:
-    | TElectricCollection
-    | Array<TElectricCollection>
-    | ((result: TMutation) => TElectricCollection | Array<TElectricCollection>);
   onSubmit?: (item: TMutation["item"]) => Promise<void>;
 }
 

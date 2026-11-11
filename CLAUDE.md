@@ -29,7 +29,7 @@ Do not use Python scripts or similar to do simple edits.
 ## Gotchas
 
 - E2E tests run against a Docker image that bakes in `src/`. After changing anything under `src/` except `src/tests/`, run `bun run test:restart` before Playwright, otherwise the old build is tested. Test-only edits don't need it.
-- `@tanstack/db` and `@electric-sql/client` are patched (`patches/`, `patchedDependencies`). Bumping either version silently drops the patch from `bun.lock`. Recreate it with `bun patch`, delete the old patch file and its stale `patchedDependencies` entry.
+- `@tanstack/db` and `@tanstack/powersync-db-collection` are patched (`patches/`, `patchedDependencies`). Bumping either version silently drops the patch from `bun.lock`. Recreate it with `bun patch`, delete the old patch file and its stale `patchedDependencies` entry.
   - `@tanstack/db`: `getServerSnapshot` in `live-query-observer-client.*` needs `&& this.collection`. Without it every e2e test fails with React error #423.
-  - `@electric-sql/client`: `requestSnapshot` must only advance the stream offset on cold start. Otherwise rows revert in the UI after a successful mutation.
+  - `@tanstack/powersync-db-collection`: numeric collection keys (https://github.com/TanStack/db/pull/2392), only in `dist/esm`. Without it every collection keyed by an integer `id` fails to sync with `Record must have a string id field`. Drop the patch once a release includes the PR.
 - `oxc-transform-react` looks unused but is loaded dynamically by the React Compiler (`viteReact({ compiler: true })`). Do not remove it or flag it as unused.

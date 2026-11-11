@@ -25,21 +25,50 @@ services:
       timeout: 3s
       retries: 4
     command: postgres -c wal_level=logical -c listen_addresses='*'
-  electric:
+  # Creates PowerSync's storage database and publication. A one-off, so it also covers a database volume created
+  # before PowerSync or restored from a dump
+  powersync-init:
     logging: *logging
-    image: electricsql/electric:1.6.0
-    restart: unless-stopped
+    image: postgres:16
     environment:
-      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}?sslmode=disable
-      ELECTRIC_INSECURE: true
-      ELECTRIC_USAGE_REPORTING: false
+      - PGPASSWORD=${POSTGRES_PASSWORD}
+    volumes:
+      - ./docker/powersync/init.sql:/init.sql:ro
     networks:
       - frontend
-    ports:
-      - "${VITE_ELECTRIC_PORT}:3000"
+    command: psql -h db -U ${POSTGRES_USER} -d ${POSTGRES_DB} -v ON_ERROR_STOP=1 -f /init.sql
     depends_on:
       db:
         condition: service_healthy
+  powersync:
+    logging: *logging
+    image: journeyapps/powersync-service:1.28.1
+    restart: unless-stopped
+    command: ["start", "-r", "unified"]
+    environment:
+      POWERSYNC_CONFIG_PATH: /config/service.yaml
+      PS_DATA_SOURCE_URI: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
+      PS_STORAGE_SOURCE_URI: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/powersync_storage
+      PS_JWT_SECRET: ${POWERSYNC_JWT_SECRET}
+    volumes:
+      - ./docker/powersync:/config:ro
+    networks:
+      - frontend
+    healthcheck:
+      # See the app healthcheck: the fetch needs its own deadline
+      test:
+        - CMD
+        - node
+        - -e
+        - "fetch('http://localhost:8080/probes/liveness', {signal:AbortSignal.timeout(2500)}).then((r) => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))"
+      interval: 5s
+      timeout: 5s
+      start_period: 30s
+      start_interval: 2s
+      retries: 15
+    depends_on:
+      powersync-init:
+        condition: service_completed_successfully
   caddy:
     logging: *logging
     image: caddy:2
@@ -58,6 +87,10 @@ services:
       - caddy_config:/config
     networks:
       - frontend
+    # The app is useless until the browser can sync
+    depends_on:
+      powersync:
+        condition: service_healthy
   app:
     logging: *logging
     build:
@@ -76,7 +109,6 @@ services:
       - frontend
     environment:
       - DATABASE_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}?sslmode=disable
-      - ELECTRIC_URL=http://electric:3000
     working_dir: /app
     volumes:
       # No bind mount for /app on purpose: source and node_modules are baked into

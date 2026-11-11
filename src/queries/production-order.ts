@@ -16,7 +16,7 @@ import {
   inArray,
   coalesce,
 } from "@tanstack/react-db";
-import type { InitialQueryBuilder, Ref } from "@tanstack/react-db";
+import type { IR, InitialQueryBuilder, Ref } from "@tanstack/react-db";
 import { useMemo } from "react";
 
 import blueprintCollection from "@/collections/blueprint";
@@ -398,7 +398,7 @@ const isPendingProductionOrder = (refs: TProductionOrderStatusRefs) =>
 
 const productionOrderStatusPredicates: Record<
   ProductionOrderStatus,
-  (refs: TProductionOrderStatusRefs) => ReturnType<typeof or>
+  (refs: TProductionOrderStatusRefs) => IR.BasicExpression<boolean>
 > = {
   [ProductionOrderStatus.Completed]: isCompletedProductionOrder,
   [ProductionOrderStatus.Deleted]: isDeletedProductionOrder,
@@ -508,8 +508,7 @@ function buildFilteredProductionOrders(q: InitialQueryBuilder, filters?: TProduc
     if (partShapeId != null) {
       partQuery = partQuery.where(({ filterPart }) => eq(filterPart.shapeId, partShapeId));
     }
-    // The width is free text, so "10" and "10.0" are compared as numbers. Functional filters, because the on-demand
-    // part collection would push them down to Electric, which can't compare a text column as a number
+    // The width is free text, so "10" and "10.0" are compared as numbers, which only a functional filter can do
     const getNumericWidth = (width: string | null) => (width === null ? Number.NaN : Number(width));
     if (partWidth != null) {
       partQuery = partQuery.fn.where(({ filterPart }) => getNumericWidth(filterPart.width) === Number(partWidth));

@@ -1,6 +1,5 @@
 import { useSelector } from "@tanstack/react-store";
 
-import qualityCheckCollection from "@/collections/quality-check";
 import { useAppContext } from "@/contexts/app-context";
 import { useAppForm } from "@/form";
 import useResetForm from "@/form/hooks/use-reset-form";
@@ -39,7 +38,6 @@ export default function useCreateQualityCheckForm({
       showToastOnTRPCMutation({
         mutation: trpc.qualityCheck.create.mutate(qualityCheckFormData as TCreateQualityCheck),
         onSuccess: { title: QUALITY_CHECK_SAVED_MESSAGE },
-        collection: qualityCheckCollection,
         onSubmit,
       }),
     validators: {

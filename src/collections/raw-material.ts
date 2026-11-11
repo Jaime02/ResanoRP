@@ -1,30 +1,28 @@
-import { electricCollectionOptions } from "@tanstack/electric-db-collection";
-
-import { electricCollection } from "@/collections/base";
+import { awaitSynced, powerSyncCollection, powerSyncCollectionOptions } from "@/collections/base";
 import { rawMaterialSchema } from "@/schemas/raw-material";
 import trpc from "@/trpc/trpc-client";
 
-const rawMaterialCollection = electricCollection("raw_material", (baseOptions) =>
-  electricCollectionOptions({
+const rawMaterialCollection = powerSyncCollection("raw_material", (baseOptions) =>
+  powerSyncCollectionOptions({
     ...baseOptions,
     schema: rawMaterialSchema,
     getKey: (item) => item.id,
-    onInsert: async ({ transaction, collection }) => {
+    onInsert: async ({ transaction }) => {
       const { modified: newRawMaterial } = transaction.mutations[0];
-      const result = await trpc.rawMaterial.create.mutate(newRawMaterial);
-      await collection.utils.awaitTxId(result.txid);
+      await trpc.rawMaterial.create.mutate(newRawMaterial);
+      await awaitSynced();
     },
-    onUpdate: async ({ transaction, collection }) => {
+    onUpdate: async ({ transaction }) => {
       const { modified: updatedRawMaterial } = transaction.mutations[0];
-      const result = await trpc.rawMaterial.update.mutate(updatedRawMaterial);
-      await collection.utils.awaitTxId(result.txid);
+      await trpc.rawMaterial.update.mutate(updatedRawMaterial);
+      await awaitSynced();
     },
-    onDelete: async ({ transaction, collection }) => {
+    onDelete: async ({ transaction }) => {
       const { original: deletedRawMaterial } = transaction.mutations[0];
-      const result = await trpc.rawMaterial.delete.mutate({
+      await trpc.rawMaterial.delete.mutate({
         id: deletedRawMaterial.id,
       });
-      await collection.utils.awaitTxId(result.txid);
+      await awaitSynced();
     },
   }),
 );

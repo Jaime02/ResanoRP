@@ -21,7 +21,7 @@ import { requiredIdObjectSchema } from "@/schemas";
 import { printTagPartSchema } from "@/schemas/delivery-note-line";
 import { createPartFormDataSchema, updatePartSchema } from "@/schemas/part";
 import { sanitizePath } from "@/schemas/utils";
-import { router, generateTxId } from "@/trpc";
+import { router } from "@/trpc";
 import { adminProcedure, procedure } from "@/trpc";
 import { createBlueprint } from "@/trpc/blueprint";
 import type { BaseCoating } from "@/types/coating";
@@ -41,7 +41,6 @@ export default router({
     removeOnRollback(async (createdPaths) =>
       ctx.db.transaction(async (tx) => {
         try {
-          const txid = await generateTxId(tx);
           const { blueprint, fileName, clientDescription, clientId, reference, ...partData } = input;
           const newPart = (await tx.insert(dbTablePart).values(partData).returning()).at(0);
           if (!newPart) {
@@ -63,7 +62,7 @@ export default router({
           if (blueprint != null && fileName !== undefined) {
             await createBlueprint(tx, { blueprint, fileName, partId: newPart.id }, createdPaths);
           }
-          return { item: newPart, txid };
+          return { item: newPart };
         } catch (error) {
           handleMutationError({ error });
         }
@@ -73,14 +72,13 @@ export default router({
   update: adminProcedure.input(updatePartSchema).mutation(async ({ ctx, input }) =>
     ctx.db.transaction(async (tx) => {
       try {
-        const txid = await generateTxId(tx);
         const updatedPart = (
           await tx.update(dbTablePart).set(input).where(eq(dbTablePart.id, input.id)).returning()
         ).at(0);
         if (!updatedPart) {
           throw new TRPCError({ code: "NOT_FOUND", message: `Artículo con ID ${input.id} no encontrado` });
         }
-        return { item: updatedPart, txid };
+        return { item: updatedPart };
       } catch (error) {
         handleMutationError({ error });
       }
@@ -89,7 +87,6 @@ export default router({
   delete: adminProcedure.input(requiredIdObjectSchema).mutation(async ({ ctx, input }) =>
     ctx.db.transaction(async (tx) => {
       try {
-        const txid = await generateTxId(tx);
         const partSetsUsingPart = await getActivePartSetsUsingPart(input.id, tx);
         if (partSetsUsingPart.length > 0) {
           throw new TRPCError({
@@ -114,11 +111,7 @@ export default router({
             message: `No se encontró la ruta del archivo para el Plano con ID ${blueprintWithoutFile.id}`,
           });
         }
-        return {
-          item: deletedPart,
-          txid,
-          deletedBlueprintIds: deletedBlueprints.map((blueprint) => blueprint.id),
-        };
+        return { item: deletedPart };
       } catch (error) {
         handleMutationError({ error });
       }
@@ -127,7 +120,6 @@ export default router({
   restore: adminProcedure.input(requiredIdObjectSchema).mutation(async ({ ctx, input }) =>
     ctx.db.transaction(async (tx) => {
       try {
-        const txid = await generateTxId(tx);
         const restoredPart = (
           await tx
             .update(dbTablePart)
@@ -141,7 +133,7 @@ export default router({
             message: `Artículo con ID ${input.id} no encontrado o no eliminado`,
           });
         }
-        return { item: restoredPart, txid };
+        return { item: restoredPart };
       } catch (error) {
         handleMutationError({ error });
       }

@@ -17,7 +17,7 @@ import { createMachineSchema, updateMachineSchema } from "@/schemas/machine";
 import { updateMachineProductionOrderSchema } from "@/schemas/machine-production-order";
 import { stopMachineProductionOrderSchema } from "@/schemas/machine-production-order";
 import { updateMachineActiveProductionOrderSchema } from "@/schemas/production-order";
-import { router, generateTxId } from "@/trpc";
+import { router } from "@/trpc";
 import { adminProcedure, procedure } from "@/trpc";
 
 const uniqueConstraints = [
@@ -31,7 +31,6 @@ export default router({
   create: adminProcedure.input(createMachineSchema).mutation(async ({ ctx, input }) =>
     ctx.db.transaction(async (tx) => {
       try {
-        const txid = await generateTxId(tx);
         const newMachine = (await tx.insert(dbTableMachine).values(input).returning()).at(0);
         if (!newMachine) {
           throw new TRPCError({
@@ -39,7 +38,7 @@ export default router({
             message: "Error al crear la Máquina",
           });
         }
-        return { item: newMachine, txid };
+        return { item: newMachine };
       } catch (error) {
         handleMutationError({ error, uniqueConstraints });
       }
@@ -48,7 +47,6 @@ export default router({
   update: adminProcedure.input(updateMachineSchema).mutation(async ({ ctx, input }) =>
     ctx.db.transaction(async (tx) => {
       try {
-        const txid = await generateTxId(tx);
         const updatedMachine = (
           await tx.update(dbTableMachine).set(input).where(eq(dbTableMachine.id, input.id)).returning()
         ).at(0);
@@ -58,7 +56,7 @@ export default router({
             message: `Máquina con ID ${input.id} no encontrada`,
           });
         }
-        return { item: updatedMachine, txid };
+        return { item: updatedMachine };
       } catch (error) {
         handleMutationError({ error, uniqueConstraints });
       }
@@ -67,7 +65,6 @@ export default router({
   delete: adminProcedure.input(requiredIdObjectSchema).mutation(async ({ ctx, input }) =>
     ctx.db.transaction(async (tx) => {
       try {
-        const txid = await generateTxId(tx);
         // The active Production Order always belongs to the queue, so it is cleared along with the queue
         const deletedMachine = (
           await tx
@@ -82,11 +79,10 @@ export default router({
             message: `Máquina con ID ${input.id} no encontrada`,
           });
         }
-        const removedQueueRows = await tx
+        await tx
           .delete(dbTableMachineProductionOrderQueue)
-          .where(eq(dbTableMachineProductionOrderQueue.machineId, input.id))
-          .returning();
-        return { item: deletedMachine, txid, removedFromQueue: removedQueueRows.length > 0 };
+          .where(eq(dbTableMachineProductionOrderQueue.machineId, input.id));
+        return { item: deletedMachine };
       } catch (error) {
         handleMutationError({ error });
       }
@@ -95,7 +91,6 @@ export default router({
   restore: adminProcedure.input(requiredIdObjectSchema).mutation(async ({ ctx, input }) =>
     ctx.db.transaction(async (tx) => {
       try {
-        const txid = await generateTxId(tx);
         const restoredMachine = (
           await tx
             .update(dbTableMachine)
@@ -109,7 +104,7 @@ export default router({
             message: `Máquina con ID ${input.id} no encontrada o no eliminada`,
           });
         }
-        return { item: restoredMachine, txid };
+        return { item: restoredMachine };
       } catch (error) {
         handleMutationError({ error, uniqueConstraints });
       }
@@ -118,7 +113,6 @@ export default router({
   stopProductionOrder: procedure.input(stopMachineProductionOrderSchema).mutation(async ({ ctx, input }) =>
     ctx.db.transaction(async (tx) => {
       try {
-        const txid = await generateTxId(tx);
         // Locked, so a second stop at the same time waits and then finds the Máquina already stopped
         const machine = (
           await tx.select().from(dbTableMachine).where(eq(dbTableMachine.id, input.machineId)).for("update")
@@ -172,29 +166,26 @@ export default router({
           .where(eq(dbTableMachine.id, input.machineId));
 
         // Machines still running a produced order keep it queued so their production can still be reported
-        const removedQueueRows = isProductionFinished(await dbGetProductionOrderStatus(activeProductionOrder, tx))
-          ? await tx
-              .delete(dbTableMachineProductionOrderQueue)
-              .where(
-                and(
-                  eq(dbTableMachineProductionOrderQueue.productionOrderId, activeProductionOrderId),
-                  notExists(
-                    tx
-                      .select()
-                      .from(dbTableMachine)
-                      .where(
-                        and(
-                          eq(dbTableMachine.id, dbTableMachineProductionOrderQueue.machineId),
-                          eq(dbTableMachine.activeProductionOrderId, activeProductionOrderId),
-                        ),
-                      ),
+        if (isProductionFinished(await dbGetProductionOrderStatus(activeProductionOrder, tx))) {
+          await tx.delete(dbTableMachineProductionOrderQueue).where(
+            and(
+              eq(dbTableMachineProductionOrderQueue.productionOrderId, activeProductionOrderId),
+              notExists(
+                tx
+                  .select()
+                  .from(dbTableMachine)
+                  .where(
+                    and(
+                      eq(dbTableMachine.id, dbTableMachineProductionOrderQueue.machineId),
+                      eq(dbTableMachine.activeProductionOrderId, activeProductionOrderId),
+                    ),
                   ),
-                ),
-              )
-              .returning()
-          : [];
+              ),
+            ),
+          );
+        }
 
-        return { txid, removedFromQueue: removedQueueRows.length > 0 };
+        return {};
       } catch (error) {
         handleMutationError({ error });
       }
@@ -205,8 +196,6 @@ export default router({
     .mutation(async ({ ctx, input }) =>
       ctx.db.transaction(async (tx) => {
         try {
-          const txid = await generateTxId(tx);
-
           if (input.productionOrderId !== null) {
             if (!(await getProductionOrderById(input.productionOrderId, tx))) {
               throw new TRPCError({
@@ -252,7 +241,7 @@ export default router({
               activeProductionOrderId: input.productionOrderId,
             })
             .where(eq(dbTableMachine.id, input.machineId));
-          return { txid };
+          return {};
         } catch (error) {
           handleMutationError({ error });
         }
@@ -261,8 +250,6 @@ export default router({
   updateMachineProductionOrder: procedure.input(updateMachineProductionOrderSchema).mutation(async ({ ctx, input }) =>
     ctx.db.transaction(async (tx) => {
       try {
-        const txid = await generateTxId(tx);
-
         const updatedProductionOrder = (
           await tx
             .update(dbTableProductionOrder)
@@ -278,7 +265,7 @@ export default router({
           });
         }
 
-        return { item: updatedProductionOrder, txid };
+        return { item: updatedProductionOrder };
       } catch (error) {
         handleMutationError({ error });
       }
