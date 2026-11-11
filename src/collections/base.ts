@@ -14,6 +14,7 @@ export type TPowerSyncCollection = CollectionOptions<any, any, any, PowerSyncCol
 
 const SYNC_TIMEOUT_MS = 10_000;
 const SYNC_POLL_MS = 20;
+const SYNC_RETRY_MS = 100;
 
 // The tables where the diff triggers of this tab's collections queue the synced changes they have not applied yet
 const trackedTableNames = new Set<string>();
@@ -52,15 +53,15 @@ export function powerSyncCollectionOptions<TSchema extends z.ZodType<object>, TK
 } {
   const { table: powerSyncTable, toAppRow } = getPowerSyncTable(table);
   const database = getPowerSyncDatabase();
-  // A collection is ready once it has read SQLite, which a new browser has not filled yet, so its queries would show
-  // no rows instead of loading. Later page loads read the rows the previous one synced and catch up from there
+  // A collection is ready once it has read SQLite, which a new browser has not filled yet and a later page load filled
+  // with the rows of the previous one, so its queries would show no rows or stale ones instead of loading
   // Typed as a plain SQLite collection: its types want an `id` in the app schema, which the tables keyed by other
   // columns do not have
   const { startSync, sync, utils } = powerSyncSyncOptions({
     database,
     table: powerSyncTable,
     onLoad: async () => {
-      await database.waitForFirstSync();
+      await catchUp(database);
     },
     // PowerSync keys the collection by the row id, so a table keyed by other columns takes its id from getKey
     deserializationSchema: {
@@ -85,6 +86,41 @@ export function powerSyncCollection<TConfig extends CollectionConfig<any, any, a
   createConfig: (baseOptions: ReturnType<typeof baseCollectionOptions>, dbClient: DbClient) => TConfig,
 ) {
   return collectionOptions(`"${table}"`, (dbClient) => createConfig(baseCollectionOptions(table), dbClient));
+}
+
+/**
+ * Waits until the PowerSync database holds every row the server had committed when it was called, until the signal
+ * aborts
+ */
+async function syncCheckpoint(database: PowerSyncDatabase, signal: AbortSignal) {
+  const aborted = new Promise<never>((_, reject) => {
+    signal.addEventListener("abort", () => reject(signal.reason), { once: true });
+  });
+  for (;;) {
+    try {
+      // requestCheckpoint takes no signal, and waits for as long as the sync stream cannot connect
+      const checkpoint = await Promise.race([database.requestCheckpoint(), aborted]);
+      await checkpoint.waitForSync({ signal });
+      return;
+    } catch {
+      // Both reject while the client is still connecting after a page load, and while it waits to reconnect after an
+      // error, which the status listener of the database already logs
+      signal.throwIfAborted();
+      await new Promise((resolve) => setTimeout(resolve, SYNC_RETRY_MS));
+    }
+  }
+}
+
+let caughtUp: Promise<void> | undefined;
+
+// Once per page load: later collections read the rows the sync stream keeps up to date from then on
+async function catchUp(database: PowerSyncDatabase) {
+  caughtUp ??= (async () => {
+    await database.waitForFirstSync();
+    // Without the server, the rows of the previous page load are better than none
+    await syncCheckpoint(database, AbortSignal.timeout(SYNC_TIMEOUT_MS)).catch(() => undefined);
+  })();
+  return caughtUp;
 }
 
 async function hasUnappliedChanges(database: PowerSyncDatabase): Promise<boolean> {
@@ -114,14 +150,7 @@ export async function awaitSynced() {
   const database = getPowerSyncDatabase();
   const signal = AbortSignal.timeout(SYNC_TIMEOUT_MS);
   try {
-    // requestCheckpoint takes no signal, and waits for as long as the sync stream cannot connect
-    const checkpoint = await Promise.race([
-      database.requestCheckpoint(),
-      new Promise<never>((_, reject) => {
-        signal.addEventListener("abort", () => reject(signal.reason), { once: true });
-      }),
-    ]);
-    await checkpoint.waitForSync({ signal });
+    await syncCheckpoint(database, signal);
     // The synced rows are already in SQLite, but its diff triggers only hand them to the collections on a throttled
     // change notification. Polled, because emptying a tracking table is a `DELETE` without `WHERE`, which SQLite
     // truncates without notifying any change

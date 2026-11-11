@@ -9,6 +9,9 @@ export enum LoggerLevels {
   debug = "debug",
 }
 
+// A conflict is a rejection the procedure already logs as a mutation error
+export const UNLOGGED_HTTP_STATUS_CODE = 409;
+
 export const LogMessages = {
   accountingExportReadFailed: "Error reading Accounting Export file",
   activeProductionOrderNotInQueue: (machineId: number) =>

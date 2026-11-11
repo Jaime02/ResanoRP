@@ -7,7 +7,7 @@ import type { z } from "zod";
 
 import { AppContextStorage, UserMode } from "@/contexts/app-context";
 import { PG_UNIQUE_VIOLATION } from "@/lib/handlers";
-import { LoggerLevels, LogMessages } from "@/logging/types";
+import { LoggerLevels, LogMessages, UNLOGGED_HTTP_STATUS_CODE } from "@/logging/types";
 import type { AppRouter } from "@/routes/api/trpc/$";
 import { expectErrorsLog, type TUserConfig } from "@/tests/utils/fixtures";
 import type { TProcedurePath } from "@/tests/utils/trpc";
@@ -186,7 +186,9 @@ export function rejectedMutationEvents({
   const statusCode = getHTTPStatusCodeFromError(new TRPCError({ code }));
   return [
     ...(serverError === null ? [] : [mutationErrorEvent(serverError)]),
-    httpRequestFailedEvent("POST", statusCode, `/api/trpc/${procedurePath}?batch=1`),
+    ...(statusCode === UNLOGGED_HTTP_STATUS_CODE
+      ? []
+      : [httpRequestFailedEvent("POST", statusCode, `/api/trpc/${procedurePath}?batch=1`)]),
     clientErrorEvent(message, { userConfig }),
   ];
 }
