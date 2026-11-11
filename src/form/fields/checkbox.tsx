@@ -19,14 +19,15 @@ export default function FieldCheckbox({
   layoutClassName,
   showUncheckedIcon,
 }: FieldCheckboxProps) {
-  const field = useFieldContext<boolean>();
+  // A row synced into a field array renders once before useResetForm fills its value
+  const field = useFieldContext<boolean | undefined>();
   const { formMode, isLoading } = useFormContext();
   return (
     <FieldLayout labelFor={id} label={label} labelPosition={labelPosition} className={cn("flex-row", layoutClassName)}>
       <Checkbox
         id={id}
         testId={id}
-        checked={field.state.value}
+        checked={field.state.value ?? false}
         onCheckedChange={(checked) => {
           field.handleChange(checked);
         }}
