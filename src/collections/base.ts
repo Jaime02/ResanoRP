@@ -8,7 +8,8 @@ import type {
 import type { z } from "zod";
 
 import { formatClientError } from "@/lib/formatters";
-import { getPowerSyncClient, getToAppRow } from "@/lib/powersync";
+import { forgetPowerSyncToken, getPowerSyncClient, getToAppRow } from "@/lib/powersync";
+import type { TPowerSyncRow } from "@/lib/powersync";
 import type { TableChanges } from "@/lib/powersync-lite/client";
 import log from "@/logging/log";
 import { LogMessages, LoggerLevels } from "@/logging/types";
@@ -70,6 +71,18 @@ export function powerSyncCollectionOptions<TSchema extends z.ZodType<object>, TK
           unlisten();
         };
 
+        // A row that fails to convert keeps its last synced value, instead of dropping every other row it came with
+        const toKeyedRow = (id: string, row: TPowerSyncRow): TRow | undefined => {
+          try {
+            const value = toAppRow({ ...row, id }) as TRow;
+            keys.set(id, config.getKey(value));
+            return value;
+          } catch (error) {
+            logSyncError(error);
+            return undefined;
+          }
+        };
+
         const onChanges = (changes: TableChanges) => {
           if (!active) return;
           const writes = [...changes].flatMap(([id, row]): Array<ChangeMessageOrDeleteKeyMessage<TRow, TKey>> => {
@@ -78,9 +91,8 @@ export function powerSyncCollectionOptions<TSchema extends z.ZodType<object>, TK
               keys.delete(id);
               return key === undefined ? [] : [{ type: "delete", key }];
             }
-            const value = toAppRow({ ...row, id }) as TRow;
-            keys.set(id, config.getKey(value));
-            return [{ type: "update", value }];
+            const value = toKeyedRow(id, row);
+            return value === undefined ? [] : [{ type: "update", value }];
           });
           if (!first && writes.length === 0) return;
           begin();
@@ -107,7 +119,9 @@ export function powerSyncCollectionOptions<TSchema extends z.ZodType<object>, TK
             try {
               onChanges(changes);
             } catch (error) {
+              // TanStack rejected the rows, so the collection no longer matches the server
               logSyncError(error);
+              fail(error);
             }
           },
           // Connection errors, which the client retries and logs once from its status
@@ -115,8 +129,11 @@ export function powerSyncCollectionOptions<TSchema extends z.ZodType<object>, TK
         });
         // One stream per table, see docker/powersync/sync-config.yaml
         const lease = client.acquireStreams([{ name: table }], {
-          // The service rejected the stream, which no retry fixes
+          // The service rejected the stream, which no retry fixes. Releasing it keeps every reconnect from failing and
+          // logging it again
           onError: (error) => {
+            if (!active) return;
+            cleanup();
             logSyncError(error);
             fail(error);
           },
@@ -170,6 +187,7 @@ export async function awaitSynced() {
         return;
       }
       // The token or checkpoint request failed while the service is unreachable, which the client retries and logs
+      forgetPowerSyncToken();
       await new Promise((resolve) => setTimeout(resolve, SYNC_RETRY_MS));
     }
   }

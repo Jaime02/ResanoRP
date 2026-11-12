@@ -10,8 +10,10 @@
 		}
 	}
 	# Same origin as the app, so the browser reaches PowerSync without CORS or another port. Must match
-	# POWERSYNC_PATH in src/lib/powersync.ts
-	handle_path /powersync/* {
+	# POWERSYNC_PATH in src/lib/powersync.ts. Only the sync routes the client calls (sync/stream and
+	# sync/checkpoint-request), the rest of the service's API stays internal
+	handle /powersync/sync/* {
+		uri strip_prefix /powersync
 		reverse_proxy powersync:8080 {
 			# Sync is one long streamed response
 			flush_interval -1

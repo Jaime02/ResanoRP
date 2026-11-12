@@ -24,7 +24,8 @@ services:
       interval: 2s
       timeout: 3s
       retries: 4
-    command: postgres -c wal_level=logical -c listen_addresses='*'
+    # A stopped PowerSync would otherwise keep WAL until the disk fills. Past the cap, it replicates again from scratch
+    command: postgres -c wal_level=logical -c listen_addresses='*' -c max_slot_wal_keep_size=10GB
   # Creates PowerSync's storage database and publication. A one-off, so it also covers a database volume created
   # before PowerSync or restored from a dump
   powersync-init:
@@ -47,7 +48,7 @@ services:
     command: ["start", "-r", "unified"]
     environment:
       POWERSYNC_CONFIG_PATH: /config/service.yaml
-      PS_DATA_SOURCE_URI: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
+      PS_DATA_SOURCE_URI: postgresql://powersync_role:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
       PS_STORAGE_SOURCE_URI: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/powersync_storage
       PS_JWT_SECRET: ${POWERSYNC_JWT_SECRET}
     volumes:
@@ -73,6 +74,14 @@ services:
     logging: *logging
     image: caddy:2
     restart: unless-stopped
+    # An intermediate that expired while Caddy was stopped still signs the site certificate on the next startup
+    # (net::ERR_CERT_DATE_INVALID). A missing one is created before anything is signed. Browsers only trust the root
+    command:
+      [
+        "sh",
+        "-c",
+        "rm -f /data/caddy/pki/authorities/local/intermediate.* && exec caddy run --config /etc/caddy/Caddyfile --adapter caddyfile",
+      ]
     environment:
       - VITE_HOST=${VITE_HOST}
       - VITE_CADDY_HTTP_PORT=${VITE_CADDY_HTTP_PORT}

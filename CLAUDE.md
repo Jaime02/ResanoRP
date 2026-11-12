@@ -30,6 +30,8 @@ Do not use Python scripts or similar to do simple edits.
 
 - E2E tests run against a Docker image that bakes in `src/`. After changing anything under `src/` except `src/tests/`, run `bun run test:restart` before Playwright, otherwise the old build is tested. Test-only edits don't need it.
 - `@tanstack/db` is patched (`patches/`, `patchedDependencies`). Bumping its version silently drops the patch from `bun.lock`. Recreate it with `bun patch`, delete the old patch file and its stale `patchedDependencies` entry.
-  - `@tanstack/db`: `getServerSnapshot` in `live-query-observer-client.*` needs `&& this.collection`. Without it every e2e test fails with React error #423.
+  - `@tanstack/db`: `getServerSnapshot` in `live-query-observer-client.*` needs `&& this.collection`. Without it every e2e test failed with React error #423 under full SSR. With `defaultSsr: "data-only"` that path is no longer reached; drop the patch only after an e2e run without it passes.
 - The PowerSync client in `src/lib/powersync-lite/` is vendored, unmodified and excluded from lint and format (see its README). `@powersync/shared-internals` is pinned to the version it was checked against: its `standalone` API is internal and may change on a bump.
+- Sync is PowerSync, see `docs/powersync-migration.md` (load the `powersync` skill for sync work). A new table needs a stream named after it in `docker/powersync/sync-config.yaml`, or its collection fails with `Stream "<table>" was not resolved`. Writes go through tRPC and must call `awaitSynced()`.
+- A new file the production compose mounts or `start.cmd` reads must also be listed in `entries` of `src/scripts/bundle-production.ts`, or it is missing from `production.zip`.
 - `oxc-transform-react` looks unused but is loaded dynamically by the React Compiler (`viteReact({ compiler: true })`). Do not remove it or flag it as unused.

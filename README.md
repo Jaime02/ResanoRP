@@ -17,7 +17,7 @@ Stack: Bun, TanStack Start / Router / DB, tRPC, Drizzle ORM, PostgreSQL + PowerS
 bun install
 ```
 
-The environment files live in `envs/` (`.env.development`, `.env.test`, `.env.prisma`, `.env.production`, `.env.blank`). Only `.env.test` and `.env.development` are committed.
+The environment files live in `envs/` (`.env.development`, `.env.test`, `.env.prisma`, `.env.production`, `.env.blank`). Only `.env.test` and `.env.development` are committed. Each one needs `POWERSYNC_JWT_SECRET`, 32 random bytes as base64url: `bun -e "console.log(crypto.getRandomValues(Buffer.alloc(32)).toString('base64url'))"`.
 
 Once per machine, map the dev host to localhost by adding `127.0.0.1 dev.resanorp` to `C:\Windows\System32\drivers\etc\hosts` (`/etc/hosts` on macOS and Linux). It needs administrator rights.
 
@@ -29,7 +29,7 @@ The first time, run `bun run dev:fresh`: it creates the database schema and seed
 bun run dev
 ```
 
-Starts the Docker services (Postgres, PowerSync, Caddy), trusts the local certificate and starts Vite on the host with hot reload. Caddy serves the app over HTTPS using the host configured in `envs/.env.development`.
+Starts the Docker services (Postgres, PowerSync, Caddy), trusts the local certificate and starts Vite on the host with hot reload. Caddy serves the app over HTTPS using the host configured in `envs/.env.development`, and PowerSync under `/powersync/sync/` of the same origin. PowerSync's logs: `docker logs resanorp-development-powersync-1`. How sync works: [docs/powersync-migration.md](docs/powersync-migration.md).
 
 | Script               | What it does                                                             |
 | -------------------- | ------------------------------------------------------------------------ |
@@ -124,5 +124,7 @@ src/collections  TanStack DB collections
 src/scripts      Maintenance and build scripts
 src/tests        Playwright tests, workflows and mock data
 docker           Dockerfile and compose files per environment
+docker/powersync PowerSync service config, sync streams and database init
+docs             Design notes (PowerSync migration)
 envs             Environment files and runtime data
 ```

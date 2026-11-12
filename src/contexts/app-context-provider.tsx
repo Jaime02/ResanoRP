@@ -31,7 +31,8 @@ export function AppContextProvider({ children }: { children: ReactNode }) {
   const router = useRouter();
   const activeToasts = useRef(new Set<TToast>());
 
-  // Hydration has to render the user mode the server rendered, which is the one in the cookie of its request
+  // Data-only SSR renders this only in the browser, after hydration. The server snapshot, the cookie of the request,
+  // only matters if the root route is ever rendered on the server again
   const { userStateCookie } = useRouteContext({ from: rootRouteId });
   const persistedStateCookie = useSyncExternalStore(subscribeToStorage, getStorageSnapshot, () => userStateCookie);
   const persistedState = AppContextStorage.parse(persistedStateCookie);

@@ -1,5 +1,8 @@
 import { createServerFn } from "@tanstack/react-start";
 
-import { createPowerSyncToken } from "@/lib/powersync-token";
+import { createPowerSyncToken, POWERSYNC_TOKEN_LIFETIME_SECONDS } from "@/lib/powersync-token";
 
-export const getPowerSyncTokenFn = createServerFn().handler(() => createPowerSyncToken());
+export const getPowerSyncTokenFn = createServerFn().handler(() => ({
+  expiresInSeconds: POWERSYNC_TOKEN_LIFETIME_SECONDS,
+  token: createPowerSyncToken(),
+}));

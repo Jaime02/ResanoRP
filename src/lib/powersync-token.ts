@@ -3,8 +3,9 @@ import { createHmac } from "node:crypto";
 // Both match client_auth in docker/powersync/service.yaml
 const POWERSYNC_JWT_KEY_ID = "resanorp";
 const POWERSYNC_JWT_AUDIENCE = "powersync";
-// PowerSync rejects tokens that live longer, and asks for a new one before this one expires
-const POWERSYNC_TOKEN_LIFETIME_SECONDS = 60 * 60;
+// PowerSync accepts up to 24 hours. The browser reuses a token until shortly before it expires, and the sync stream
+// reconnects with a new one 30 seconds before
+export const POWERSYNC_TOKEN_LIFETIME_SECONDS = 60 * 60;
 // Every browser syncs the same rows, so they all share one PowerSync user
 const POWERSYNC_USER_ID = "resanorp";
 

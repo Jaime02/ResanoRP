@@ -12,6 +12,10 @@ import { LogMessages, LoggerLevels } from "@/logging/types";
 const POWERSYNC_PATH = "/powersync";
 // Longer than the first retries, which start at one second and double
 const SYNC_ERROR_GRACE_MS = 5_000;
+// More than the 30 seconds before expiry at which the sync stream reconnects, so that reconnect gets a new token
+const TOKEN_RENEW_MARGIN_MS = 60_000;
+// The checkpoint arrives once the reconnect after a storage reset has downloaded every table again
+const RECONNECT_CHECKPOINT_TIMEOUT_MS = 60_000;
 
 const keepValue = (value: unknown) => value;
 
@@ -22,7 +26,13 @@ const FROM_POWERSYNC: Partial<Record<string, (value: unknown) => unknown>> = {
   PgInteger: Number,
   PgNumeric: keepValue,
   PgText: keepValue,
-  PgTimestamp: (value) => new Date(String(value).replace(" ", "T")),
+  PgTimestamp: (value) => {
+    const date = new Date(String(value).replace(" ", "T"));
+    if (Number.isNaN(date.getTime())) {
+      throw new Error(`Invalid timestamp ${String(value)}`);
+    }
+    return date;
+  },
 };
 
 export type TPowerSyncRow = Record<string, unknown>;
@@ -61,6 +71,23 @@ export function getToAppRow(table: string) {
   return toAppRow;
 }
 
+let cachedToken: { token: string; renewAt: number } | undefined;
+
+// One token per lifetime instead of a server call on every mutation and reconnect. Timed with the browser's clock,
+// so a skewed clock cannot keep an expired token
+async function getToken(): Promise<string> {
+  if (cachedToken === undefined || Date.now() >= cachedToken.renewAt) {
+    const { expiresInSeconds, token } = await getPowerSyncTokenFn();
+    cachedToken = { renewAt: Date.now() + expiresInSeconds * 1000 - TOKEN_RENEW_MARGIN_MS, token };
+  }
+  return cachedToken.token;
+}
+
+// A failed request may have been a rejected token, so the next one gets a new token
+export function forgetPowerSyncToken() {
+  cachedToken = undefined;
+}
+
 let client: PowerSyncClient | undefined;
 
 // Created on first use, so a server render never connects
@@ -68,23 +95,37 @@ export function getPowerSyncClient(): PowerSyncClient {
   if (client === undefined) {
     const powerSyncClient = new PowerSyncClient({
       endpoint: `${window.location.origin}${POWERSYNC_PATH}`,
-      getToken: async () => getPowerSyncTokenFn(),
+      getToken,
     });
     // The client keeps retrying, and reports the error again on every attempt until one succeeds. Leaving the page
     // breaks off the stream while it is read, so an error only counts once the client has not recovered for a while
     let lastSyncError: string | undefined;
     let pendingSyncError: ReturnType<typeof setTimeout> | undefined;
+    let reconnecting = false;
     powerSyncClient.subscribeStatus(() => {
       const { state, error } = powerSyncClient.status;
-      if (state === "ready") {
+      if (state === "ready") lastSyncError = undefined;
+      if (state === "ready" || state === "idle") {
         clearTimeout(pendingSyncError);
         pendingSyncError = undefined;
-        lastSyncError = undefined;
       }
-      if (error === undefined || pendingSyncError !== undefined) return;
+      // The service may have restarted with its storage reset (start.cmd import), losing the checkpoint this tab still
+      // waits for since its last save, and then it would never apply another change. A new checkpoint replaces it
+      if (state === "syncing" && reconnecting) {
+        reconnecting = false;
+        void powerSyncClient
+          .confirmWrites({ signal: AbortSignal.timeout(RECONNECT_CHECKPOINT_TIMEOUT_MS) })
+          .catch(() => undefined);
+      }
+      if (error === undefined) return;
+      reconnecting = true;
+      forgetPowerSyncToken();
+      if (pendingSyncError !== undefined) return;
       pendingSyncError = setTimeout(() => {
         pendingSyncError = undefined;
-        const currentError = powerSyncClient.status.error ?? error;
+        const { state: currentState, error: currentError = error } = powerSyncClient.status;
+        // Connected again, it is only still downloading
+        if (currentState === "syncing" || currentState === "ready" || currentState === "idle") return;
         if (currentError.message === lastSyncError) return;
         lastSyncError = currentError.message;
         void log(LoggerLevels.error, LogMessages.powerSyncSyncFailed, formatClientError(currentError));

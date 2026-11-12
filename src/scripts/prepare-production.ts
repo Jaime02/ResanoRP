@@ -24,9 +24,10 @@ if (process.argv.includes("--import")) {
   }
 
   execSync(`${prismaCompose} up -d --wait db`, { stdio: "inherit" });
-  // PowerSync's publication is left out, powersync-init creates it again once production starts
+  // PowerSync's publication and the grants to its role are left out: start.cmd restores before powersync-init has
+  // created the role, and powersync-init creates both again once production starts
   execSync(
-    `${prismaCompose} exec -T db sh -c "pg_dump -U $POSTGRES_USER -d $POSTGRES_DB -Fc --no-publications -f /tmp/prisma.dump"`,
+    `${prismaCompose} exec -T db sh -c "pg_dump -U $POSTGRES_USER -d $POSTGRES_DB -Fc --no-publications --no-privileges -f /tmp/prisma.dump"`,
     { stdio: "inherit" },
   );
   execSync(`${prismaCompose} cp db:/tmp/prisma.dump ${importPath}/prisma.dump`, { stdio: "inherit" });
