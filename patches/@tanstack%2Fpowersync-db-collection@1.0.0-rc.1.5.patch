@@ -1,0 +1,133 @@
+diff --git a/dist/esm/PowerSyncTransactor.js b/dist/esm/PowerSyncTransactor.js
+index 95f14d5b1566879d4cf72bcaf01830ac1b8d4ea9..175bb278f482218273660a6abb796548c13b63ee 100644
+--- a/dist/esm/PowerSyncTransactor.js	
++++ b/dist/esm/PowerSyncTransactor.js	
+@@ -1,5 +1,5 @@
+ import { PendingOperationStore } from "./PendingOperationStore.js";
+-import { asPowerSyncRecord, mapOperationToPowerSync } from "./helpers.js";
++import { mapOperationToPowerSync } from "./helpers.js";
+ import { LogLevels, sanitizeSQL } from "@powersync/common";
+ import { LoadSubsetOperationAbortedError, isFailedStatus } from "@tanstack/db";
+ import DebugModule from "debug";
+@@ -142,7 +142,7 @@ var PowerSyncTransactor = class {
+         UPDATE ${tableName}
+         SET ${keys.map((key) => `${key} = ?`).join(`, `)}
+         WHERE id = ?
+-        `, [...queryParameters, asPowerSyncRecord(mutation.original).id]);
++        `, [...queryParameters, String(mutation.key)]);
+ 		});
+ 	}
+ 	async handleDelete(mutation, context, waitForCompletion = false) {
+@@ -156,10 +156,10 @@ var PowerSyncTransactor = class {
+ 			*/
+ 			await context.execute(`
+             UPDATE ${tableName} SET _deleted = TRUE, _metadata = ? WHERE id = ?
+-            `, [metadataValue, asPowerSyncRecord(mutation.original).id]);
++            `, [metadataValue, String(mutation.key)]);
+ 			else await context.execute(`
+             DELETE FROM ${tableName} WHERE id = ?
+-            `, [asPowerSyncRecord(mutation.original).id]);
++            `, [String(mutation.key)]);
+ 		});
+ 	}
+ 	/**
+diff --git a/dist/esm/powersync.js b/dist/esm/powersync.js
+index 7f7d3880bee1b9c8ad92f54ee89112684cc394b6..3d6d4725d7a09fe7abaeb88cc54ab7e36ef09aa0 100644
+--- a/dist/esm/powersync.js	
++++ b/dist/esm/powersync.js	
+@@ -2,7 +2,7 @@ import { compileSQLite } from "./sqlite-compiler.js";
+ import { PendingOperationStore } from "./PendingOperationStore.js";
+ import { PowerSyncTransactor } from "./PowerSyncTransactor.js";
+ import { DEFAULT_BATCH_SIZE } from "./definitions.js";
+-import { asPowerSyncRecord, mapOperation } from "./helpers.js";
++import { mapOperation } from "./helpers.js";
+ import { convertTableToSchema } from "./schema.js";
+ import { serializeForSQLite } from "./serialization.js";
+ import { DiffTriggerOperation, LogLevels, sanitizeSQL } from "@powersync/common";
+@@ -137,10 +137,13 @@ function createPowerSyncCollectionConfig(config) {
+ 					hooks: { beforeCreate: async (context) => {
+ 						const batches = [];
+ 						const apply = () => {
+-							begin({ snapshot });
+-							for (const row of batches.splice(0).flat()) {
+-								const type = writeType(row.id);
++							const entries = batches.splice(0).flat().map((row) => {
+ 								const value = deserializeSyncRow(row);
++								return [getKey(value), value];
++							});
++							begin({ snapshot });
++							for (const [key, value] of entries) {
++								const type = writeType(key);
+ 								onInitialRow?.(value);
+ 								write({
+ 									type,
+@@ -275,9 +278,9 @@ function createPowerSyncCollectionConfig(config) {
+ 							[DiffTriggerOperation.DELETE]: `TRUE`
+ 						},
+ 						onInitialRow: listed ? (value) => {
+-							listed.add(asPowerSyncRecord(value).id);
++							listed.add(getKey(value));
+ 						} : void 0,
+-						writeType: (_rowId) => `insert`,
++						writeType: () => `insert`,
+ 						batchQuery: (lockContext, batchSize, cursor) => lockContext.getAll(sanitizeSQL`SELECT * FROM ${viewName} LIMIT ? OFFSET ?`, [batchSize, cursor])
+ 					}, appliedReceipts);
+ 					await Promise.all(appliedReceipts.map(whenSyncAccepted));
+@@ -376,11 +379,11 @@ function createPowerSyncCollectionConfig(config) {
+ 										[DiffTriggerOperation.UPDATE]: `(${newDataWhenClause}) OR (${oldDataWhenClause})`,
+ 										[DiffTriggerOperation.DELETE]: oldDataWhenClause
+ 									},
+-									writeType: (rowId) => collection.has(rowId) ? `update` : `insert`,
+-									batchQuery: (lockContext, batchSize, cursor) => lockContext.getAll(`SELECT * FROM ${viewName} WHERE ${viewWhereClause} LIMIT ? OFFSET ?`, [batchSize, cursor]).then((rows) => {
+-										for (const row of rows) missing?.delete(row.id);
+-										return rows;
+-									})
++									writeType: (key) => {
++										missing?.delete(key);
++										return collection.has(key) ? `update` : `insert`;
++									},
++									batchQuery: (lockContext, batchSize, cursor) => lockContext.getAll(`SELECT * FROM ${viewName} WHERE ${viewWhereClause} LIMIT ? OFFSET ?`, [batchSize, cursor])
+ 								}, appliedReceipts);
+ 							}
+ 							if (!isCurrent()) await safelyDisposeTracking(ctx);
+@@ -507,22 +510,23 @@ function createPowerSyncCollectionConfig(config) {
+ 						const revision = trackingRevision;
+ 						const active = activeWhereExpressions();
+ 						let evictionSQL;
+-						if (active.length === 0) evictionSQL = `SELECT id FROM ${viewName} WHERE ${departingWhereSQL}`;
++						if (active.length === 0) evictionSQL = `SELECT * FROM ${viewName} WHERE ${departingWhereSQL}`;
+ 						else {
+ 							const combinedRemaining = active.length === 1 ? active[0] : or(active[0], active[1], ...active.slice(2));
+ 							const compiledRemaining = compileSQLite({ where: combinedRemaining });
+ 							const remainingWhereSQL = toInlinedWhereClause(compiledRemaining);
+-							evictionSQL = `SELECT id FROM ${viewName} WHERE (${departingWhereSQL}) AND NOT (${remainingWhereSQL})`;
++							evictionSQL = `SELECT * FROM ${viewName} WHERE (${departingWhereSQL}) AND NOT (${remainingWhereSQL})`;
+ 						}
+ 						rowsToEvict = await database.getAll(evictionSQL);
+ 						if (stopped) return;
+ 						if (trackingRevision === revision) break;
+ 					}
+ 					if (rowsToEvict.length > 0) {
++						const keys = rowsToEvict.map((row) => getKey(deserializeSyncRow(row)));
+ 						begin();
+-						for (const { id } of rowsToEvict) write({
++						for (const key of keys) write({
+ 							type: `delete`,
+-							key: id
++							key
+ 						});
+ 						commit();
+ 					}
+@@ -633,7 +637,11 @@ function createPowerSyncCollectionConfig(config) {
+ 		},
+ 		getSyncMetadata: void 0
+ 	};
+-	const getKey = (record) => asPowerSyncRecord(record).id;
++	const getKey = (record) => {
++		const { id } = record;
++		if (typeof id !== `string` && typeof id !== `number`) throw new Error(`Record must have a string or number id field`);
++		return id;
++	};
+ 	const { onLoad: _onLoad, onLoadSubset: _onLoadSubset, deserializationSchema: _deserializationSchema, serializer: _serializer, onDeserializationError: _onDeserializationError, ...collectionConfig } = {
+ 		deserializationSchema,
+ 		serializer,

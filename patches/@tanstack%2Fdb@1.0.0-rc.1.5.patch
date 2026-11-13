@@ -1,0 +1,26 @@
+diff --git a/dist/cjs/live-query-observer-client.cjs b/dist/cjs/live-query-observer-client.cjs
+index 1d1efebaff81d996ffed62d964054fab9de1d4ee..ca938edfcb0bd9a3b28f6eb67c7155003fef38fa 100644
+--- a/dist/cjs/live-query-observer-client.cjs	
++++ b/dist/cjs/live-query-observer-client.cjs
+@@ -47,7 +47,7 @@ var LiveQueryObserverClient = class {
+ 	}
+ 	getServerSnapshot(preloadRequested) {
+ 		preloadRequested &&= this.client._isSsrStreamingEnabled();
+-		if (typeof window !== `undefined` && !this.authoritative && this.queryHash) {
++		if (typeof window !== `undefined` && !this.authoritative && this.queryHash && this.collection) {
+ 			const waiting = this.client._waitForSsrLiveQuery(this.queryHash, true);
+ 			if (waiting) throw waiting;
+ 			const query = this.client._getLiveQuery(this.queryHash, true);
+diff --git a/dist/esm/live-query-observer-client.js b/dist/esm/live-query-observer-client.js
+index 9b940756f6c74de5553bfe78eb2e4242aeca874f..2af3cc06dbc459ae88bddac9fb1ccbfb868d3b06 100644
+--- a/dist/esm/live-query-observer-client.js	
++++ b/dist/esm/live-query-observer-client.js
+@@ -47,7 +47,7 @@ var LiveQueryObserverClient = class {
+ 	}
+ 	getServerSnapshot(preloadRequested) {
+ 		preloadRequested &&= this.client._isSsrStreamingEnabled();
+-		if (typeof window !== `undefined` && !this.authoritative && this.queryHash) {
++		if (typeof window !== `undefined` && !this.authoritative && this.queryHash && this.collection) {
+ 			const waiting = this.client._waitForSsrLiveQuery(this.queryHash, true);
+ 			if (waiting) throw waiting;
+ 			const query = this.client._getLiveQuery(this.queryHash, true);
