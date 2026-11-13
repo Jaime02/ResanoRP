@@ -8,7 +8,7 @@ import CreateSellOrderLineDialog from "@/components/dialog/create-sell-order-lin
 import PickerPartPrice from "@/components/picker/picker-part-price";
 import BaseTable from "@/components/table/base-table";
 import { DEFAULT_DESCRIPTION_COLUMN_SIZE, createTableColumnHelper } from "@/components/table/column-helper";
-import { TableCellSellOrderLineStatus } from "@/components/table/table-cell-sell-order-line-status";
+import TooltipSellOrderLineStatus from "@/components/tooltip/sell-order-line-status";
 import { ButtonCopyLayout } from "@/components/ui/button-copy";
 import ButtonLink from "@/components/ui/button-link";
 import { ModelActions } from "@/components/ui/model-actions";
@@ -65,11 +65,19 @@ interface TableSellOrderLineProps {
 
 const columnHelper = createTableColumnHelper<TSellOrderLineForm>();
 
+type TLineProductionOrders = ReturnType<typeof useQueryProductionOrderStatusesBySellOrderLineIds>["data"];
+
+function getLineProductionOrders(productionOrders: TLineProductionOrders, sellOrderLineId: number) {
+  return productionOrders.filter((productionOrder) => productionOrder.sellOrderLineId === sellOrderLineId);
+}
+
 // Only Pending lines have no Orden de producción yet, otherwise its pending quantity would be produced twice. A return
 // is pending too, but it is delivered back without being produced
-function ButtonProductionOrder({ sellOrderLine, sellOrder }: TUseSellOrderStatusProps) {
-  const sellOrderLineIds = useMemo(() => [sellOrderLine.id], [sellOrderLine.id]);
-  const { data: productionOrders } = useQueryProductionOrderStatusesBySellOrderLineIds(sellOrderLineIds);
+function ButtonProductionOrder({
+  sellOrderLine,
+  sellOrder,
+  productionOrders,
+}: TUseSellOrderStatusProps & { productionOrders: TLineProductionOrders }) {
   const productionOrder = productionOrders.find(({ status }) => status !== ProductionOrderStatus.Deleted);
   if (productionOrder) {
     return (
@@ -115,13 +123,28 @@ export default function TableSellOrderLine({
 }: TableSellOrderLineProps) {
   const dbClient = useDbClient();
   const { isAdmin, toaster, showToastOnTransaction } = useAppContext();
+  const sellOrderLineIds = useMemo(() => sellOrderLines?.map(({ id }) => id) ?? [], [sellOrderLines]);
+  // Until they sync, no production orders would read as none, showing a line as pending and offering to create one
+  const { data: productionOrders, isReady: isProductionOrdersReady } =
+    useQueryProductionOrderStatusesBySellOrderLineIds(sellOrderLineIds);
 
   const columns = useMemo(
     () => [
       columnHelper.display({
         id: "status",
         header: STATUS_LABEL,
-        cell: ({ row }) => <TableCellSellOrderLineStatus sellOrderLine={row.original} sellOrder={sellOrder!} />,
+        cell: ({ row }) =>
+          isProductionOrdersReady && (
+            <TooltipSellOrderLineStatus
+              status={computeSellOrderLineStatus({
+                productionOrderStatuses: getLineProductionOrders(productionOrders, row.original.id).map(
+                  ({ status }) => status,
+                ),
+                sellOrder: sellOrder!,
+                sellOrderLine: row.original,
+              })}
+            />
+          ),
       }),
       columnHelper.display({
         cell: ({ row }) =>
@@ -231,9 +254,16 @@ export default function TableSellOrderLine({
                   title={`Planos del Artículo ${row.original.partReference?.reference}`}
                   blueprints={row.original.partReference?.part?.blueprints}
                 />
-                {isAdmin && row.original.partReference != null && sellOrder !== undefined && (
-                  <ButtonProductionOrder sellOrderLine={row.original} sellOrder={sellOrder} />
-                )}
+                {isAdmin &&
+                  isProductionOrdersReady &&
+                  row.original.partReference != null &&
+                  sellOrder !== undefined && (
+                    <ButtonProductionOrder
+                      sellOrderLine={row.original}
+                      sellOrder={sellOrder}
+                      productionOrders={getLineProductionOrders(productionOrders, row.original.id)}
+                    />
+                  )}
               </>
             }
             deleteButton={
@@ -273,7 +303,16 @@ export default function TableSellOrderLine({
         id: "actions",
       }),
     ],
-    [currentClientId, tableMode, isAdmin, sellOrder, dbClient, showToastOnTransaction],
+    [
+      currentClientId,
+      tableMode,
+      isAdmin,
+      sellOrder,
+      productionOrders,
+      isProductionOrdersReady,
+      dbClient,
+      showToastOnTransaction,
+    ],
   );
 
   const totalInCents = getLinesTotalInCents(
