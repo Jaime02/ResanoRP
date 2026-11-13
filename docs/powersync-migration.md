@@ -27,7 +27,7 @@ The original brief (`ignore/message.txt`, `ignore/prompt.md`) asked for the **in
 
 Decisions taken:
 
-1. **SQLite collection** (`@powersync/web` 2.7.0 + `@tanstack/powersync-db-collection` 1.0.0-rc.1.4). Each browser holds a local SQLite database in OPFS (`OPFSCoopSyncVFS`, the VFS recommended for several tabs).
+1. **SQLite collection** (`@powersync/web` 2.7.0 + `@tanstack/powersync-db-collection` 1.0.0-rc.1.5). Each browser holds a local SQLite database in OPFS (`OPFSCoopSyncVFS`, the VFS recommended for several tabs).
 2. **Integer ids kept.** Numeric collection keys come from TanStack/db#2392, applied as a `bun patch` (`dist/esm` only).
 3. **Writes stay in tRPC.** PowerSync's upload queue is unused (`uploadData` is a no-op). The server still validates, authorizes, writes files and can reject a mutation, exactly as before.
 4. **SSR is data-only** (`defaultSsr: "data-only"`). Collections can't load on the server, because there is no browser SQLite there.
@@ -215,11 +215,11 @@ PowerSync accepts only JWTs. The app has no user accounts (just an admin cookie 
 
 `handle_path /powersync/*` strips the prefix and proxies to `powersync:8080`. `flush_interval -1` disables response buffering, which the long-lived sync stream needs. Everything else falls through to the app in a separate `handle` block, so the two routes never overlap. Because the path is on the app's own origin and certificate, the browser needs no CORS setup or extra port. That replaces the Electric port (`VITE_ELECTRIC_PORT`) that was published before.
 
-### `patches/@tanstack%2Fpowersync-db-collection@1.0.0-rc.1.4.patch`
+### `patches/@tanstack%2Fpowersync-db-collection@1.0.0-rc.1.5.patch`
 
 This patch backports TanStack/db#2392 into `dist/esm` (the only build Vite uses). Upstream assumes the collection key **is** the row's string `id`:
 
-- In `powersync.js`, initial snapshot rows are written with `getKey(value)` as their key instead of `row.id`. Without it, integer-keyed collections reject every row with `Record must have a string id field`.
+- In `powersync.js`, initial snapshot rows are written with `getKey(value)` as their key instead of `row.id`, and so are evicted rows and the rows `onInitialRow` lists, which are compared with the collection's keys (new in rc.1.5). Without it, integer-keyed collections reject every row with `Record must have a string id field`.
 - In `PowerSyncTransactor.js`, local `UPDATE`/`DELETE` statements use `String(mutation.key)` instead of `asPowerSyncRecord(original).id`. The app never runs the transactor (writes go through tRPC), so this half is inert here but kept to stay identical to the PR.
 
 ## 6. New issues and trade-offs
