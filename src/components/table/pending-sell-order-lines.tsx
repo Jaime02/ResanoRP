@@ -63,7 +63,7 @@ function hasLineNotes(lines?: Array<TPendingSellOrderLine>) {
 
 function ButtonCopyPendingSellOrderLines({ lines }: { lines?: Array<TPendingSellOrderLine> }) {
   const lineIds = useMemo(() => lines?.map((line) => line.id) ?? [], [lines]);
-  const { data: productionOrders } = useQueryProductionOrderStatusesBySellOrderLineIds(lineIds);
+  const { data: productionOrders, isReady } = useQueryProductionOrderStatusesBySellOrderLineIds(lineIds);
 
   const { value, html } = useMemo(() => {
     const hasNotes = hasLineNotes(lines);
@@ -105,7 +105,7 @@ function ButtonCopyPendingSellOrderLines({ lines }: { lines?: Array<TPendingSell
     <ButtonCopy
       testId="button-copy-pending-sell-orders"
       size="icon"
-      disabled={lines === undefined || lines.length === 0}
+      disabled={lines === undefined || lines.length === 0 || !isReady}
       value={value}
       html={html}
       copiedTitle={PENDING_SELL_ORDERS_COPIED_MESSAGE}
