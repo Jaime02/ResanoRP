@@ -1,5 +1,6 @@
-import { DiameterIcon, HexagonIcon, ScrewIcon, SquareIcon, VectorPolygonIcon } from "lucide-react";
+import { DiameterIcon, HexagonIcon, SquareIcon, VectorPolygonIcon } from "lucide-react";
 
+import ThreadedIcon from "@/components/icons/threaded";
 import TubeIcon from "@/components/icons/tube";
 import { cn } from "@/lib/utils";
 
@@ -22,7 +23,7 @@ export default function ShapeIcon({ shapeName, className }: { shapeName?: string
     return <TubeIcon {...props} />;
   }
   if (name.includes("roscada")) {
-    return <ScrewIcon {...props} />;
+    return <ThreadedIcon {...props} />;
   }
   return <VectorPolygonIcon {...props} />;
 }

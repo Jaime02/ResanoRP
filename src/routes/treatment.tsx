@@ -7,6 +7,7 @@ import TableTreatmentBatch from "@/components/table/treatment-batch";
 import TableTreatmentPending from "@/components/table/treatment-pending";
 import DateInput from "@/components/ui/date-input";
 import Header from "@/components/ui/header";
+import LoadingSpinner from "@/components/ui/loading-spinner";
 import { Separator } from "@/components/ui/separator";
 import { startOfAppDay } from "@/lib/dates";
 import { useNow } from "@/lib/use-now";
@@ -44,8 +45,8 @@ function RouteComponent() {
   const [pickedHistoryDate, setHistoryDate] = useState<Date | null>();
   const historyDate = pickedHistoryDate !== undefined ? pickedHistoryDate : now && startOfAppDay(now);
   const isHistoryFiltered = historyPartId != null || historyDate != null;
-  const { data: batches } = useQueryTreatmentBatches();
-  const { data: historyBatches } = useQueryTreatmentBatches({
+  const { data: batches, isLoading } = useQueryTreatmentBatches();
+  const { data: historyBatches, isLoading: isLoadingHistory } = useQueryTreatmentBatches({
     partId: historyPartId,
     date: historyDate,
     enabled: isHistoryFiltered,
@@ -57,7 +58,7 @@ function RouteComponent() {
       <section data-testid="section-treatment-out" className="flex flex-col gap-3">
         <Separator />
         <Header>{IN_TREATMENT_TITLE}</Header>
-        <TreatmentBatches batches={batches.filter((batch) => !batch.isReceived)} />
+        <TreatmentBatches batches={batches.filter((batch) => !batch.isReceived)} isLoading={isLoading} />
       </section>
       <section data-testid="section-treatment-history" className="flex flex-col gap-3">
         <Separator />
@@ -72,7 +73,7 @@ function RouteComponent() {
           />
         </div>
         {isHistoryFiltered ? (
-          <TreatmentBatches batches={historyBatches.filter((batch) => batch.isReceived)} />
+          <TreatmentBatches batches={historyBatches.filter((batch) => batch.isReceived)} isLoading={isLoadingHistory} />
         ) : (
           <p className="text-center">{TREATMENT_HISTORY_EMPTY_MESSAGE}</p>
         )}
@@ -81,7 +82,9 @@ function RouteComponent() {
   );
 }
 
-function TreatmentBatches({ batches }: { batches: Array<TTreatmentBatch> }) {
+// Until the shipments sync there are none, which would read as nothing being in treatment
+function TreatmentBatches({ batches, isLoading }: { batches: Array<TTreatmentBatch>; isLoading: boolean }) {
+  if (isLoading) return <LoadingSpinner className="mx-auto" />;
   if (batches.length === 0) return <p className="text-center">{NO_PARTS_IN_TREATMENT_MESSAGE}</p>;
   return batches.map((batch) => <TableTreatmentBatch key={batch.sentAt.getTime()} batch={batch} />);
 }
