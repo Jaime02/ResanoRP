@@ -259,9 +259,13 @@ export interface TUseSellOrderStatusProps {
   sellOrder: BaseSellOrder;
 }
 
-export function useSellOrderLineStatus({ sellOrderLine, sellOrder }: TUseSellOrderStatusProps): SellOrderLineStatus {
+export function useSellOrderLineStatus({
+  sellOrderLine,
+  sellOrder,
+}: TUseSellOrderStatusProps): SellOrderLineStatus | undefined {
   const sellOrderLineIds = useMemo(() => [sellOrderLine.id], [sellOrderLine.id]);
-  const { data: productionOrders } = useQueryProductionOrderStatusesBySellOrderLineIds(sellOrderLineIds);
+  const { data: productionOrders, isReady } = useQueryProductionOrderStatusesBySellOrderLineIds(sellOrderLineIds);
+  if (!isReady) return undefined;
 
   return computeSellOrderLineStatus({
     productionOrderStatuses: productionOrders.map((productionOrder) => productionOrder.status),

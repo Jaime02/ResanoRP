@@ -4,5 +4,5 @@ import { useSellOrderLineStatus } from "@/form/hooks/use-sell-order";
 
 export function TableCellSellOrderLineStatus(props: TUseSellOrderStatusProps) {
   const status = useSellOrderLineStatus(props);
-  return <TooltipSellOrderLineStatus status={status} />;
+  return status !== undefined && <TooltipSellOrderLineStatus status={status} />;
 }
