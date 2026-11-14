@@ -33,30 +33,17 @@ import { DEFAULT_PAGINATION, type TBaseQueryProps } from "@/types";
 
 const DEFAULT_SORTING: Array<TSort> = [{ id: "id", desc: false }];
 
-function buildFilteredSellOrders(q: InitialQueryBuilder, filters?: TSellOrderFilters) {
-  const pendingLineCounts = q
-    .from({ pendingLine: sellOrderLineCollection })
-    .where(({ pendingLine }) => and(isNull(pendingLine.deletedAt), not(eq(pendingLine.pendingQuantity, 0))))
-    .groupBy(({ pendingLine }) => pendingLine.sellOrderId)
-    .select(({ pendingLine }) => ({ sellOrderId: pendingLine.sellOrderId, pendingLineCount: count(pendingLine.id) }));
+const getStatuses = (filters?: TSellOrderFilters) => getFilterValue(filters, "statuses") ?? [];
 
-  // Named apart from the `client` include of the projection below, since an alias shared with an include leaks into it
-  let query = q
-    .from({ sellOrder: sellOrderCollection })
-    .leftJoin({ pendingLines: pendingLineCounts }, ({ sellOrder, pendingLines }) =>
-      eq(sellOrder.id, pendingLines.sellOrderId),
-    )
-    .leftJoin({ statusClient: clientCollection }, ({ sellOrder, statusClient }) =>
-      eq(sellOrder.clientId, statusClient.id),
-    );
+const readsJoinedTables = (filters?: TSellOrderFilters) =>
+  getStatuses(filters).length > 0 || getFilterValue(filters, "clientName") != null;
+
+function buildFilteredSellOrders(q: InitialQueryBuilder, filters?: TSellOrderFilters) {
+  let query = q.from({ sellOrder: sellOrderCollection });
 
   const id = getFilterValue(filters, "id");
   if (id != null) {
     query = query.where(({ sellOrder }) => eq(sellOrder.id, id));
-  }
-  const clientName = getFilterValue(filters, "clientName");
-  if (clientName != null) {
-    query = query.fn.where(({ statusClient }) => includesIgnoringAccents(statusClient?.name ?? null, clientName));
   }
   const receptionDate = getFilterValue(filters, "receptionDate");
   if (receptionDate?.startDate != null) {
@@ -83,42 +70,76 @@ function buildFilteredSellOrders(q: InitialQueryBuilder, filters?: TSellOrderFil
     );
   }
 
-  const statuses = getFilterValue(filters, "statuses");
-  if (statuses && statuses.length > 0) {
-    query = query.where(({ sellOrder, pendingLines, statusClient }) => {
-      const isClientDeleted = and(not(isUndefined(statusClient)), not(isNull(statusClient.deletedAt)));
-      return statuses
-        .map((status) => {
-          switch (status) {
-            case SellOrderStatus.Deleted:
-              return not(isNull(sellOrder.deletedAt));
-            case SellOrderStatus.ClientDeleted:
-              return and(isNull(sellOrder.deletedAt), isClientDeleted);
-            case SellOrderStatus.Completed:
-              return and(isNull(sellOrder.deletedAt), not(isClientDeleted), isUndefined(pendingLines));
-            case SellOrderStatus.Pending:
-              return and(isNull(sellOrder.deletedAt), not(isClientDeleted), not(isUndefined(pendingLines)));
-          }
-        })
-        .reduce((combined, predicate) => or(combined, predicate));
-    });
+  const clientName = getFilterValue(filters, "clientName");
+  const statuses = getStatuses(filters);
+  const hasClientName = ({ statusClient }: { statusClient: { name: string } | undefined }) =>
+    clientName != null && includesIgnoringAccents(statusClient?.name ?? null, clientName);
+  // Every Pedido goes through each join, so the pending Líneas and the Cliente are only joined when a filter reads
+  // them. Named apart from the `client` include of the projection below, since an alias shared with an include leaks
+  // into it
+  if (!readsJoinedTables(filters)) return query;
+  if (statuses.length === 0) {
+    return query
+      .leftJoin({ statusClient: clientCollection }, ({ sellOrder, statusClient }) =>
+        eq(sellOrder.clientId, statusClient.id),
+      )
+      .fn.where(hasClientName);
   }
 
-  return query;
+  const pendingLineCounts = q
+    .from({ pendingLine: sellOrderLineCollection })
+    .where(({ pendingLine }) => and(isNull(pendingLine.deletedAt), not(eq(pendingLine.pendingQuantity, 0))))
+    .groupBy(({ pendingLine }) => pendingLine.sellOrderId)
+    .select(({ pendingLine }) => ({ sellOrderId: pendingLine.sellOrderId, pendingLineCount: count(pendingLine.id) }));
+  let statusQuery = query
+    .leftJoin({ pendingLines: pendingLineCounts }, ({ sellOrder, pendingLines }) =>
+      eq(sellOrder.id, pendingLines.sellOrderId),
+    )
+    .leftJoin({ statusClient: clientCollection }, ({ sellOrder, statusClient }) =>
+      eq(sellOrder.clientId, statusClient.id),
+    );
+  if (clientName != null) {
+    statusQuery = statusQuery.fn.where(hasClientName);
+  }
+  return statusQuery.where(({ sellOrder, pendingLines, statusClient }) => {
+    const isClientDeleted = and(not(isUndefined(statusClient)), not(isNull(statusClient.deletedAt)));
+    return statuses
+      .map((status) => {
+        switch (status) {
+          case SellOrderStatus.Deleted:
+            return not(isNull(sellOrder.deletedAt));
+          case SellOrderStatus.ClientDeleted:
+            return and(isNull(sellOrder.deletedAt), isClientDeleted);
+          case SellOrderStatus.Completed:
+            return and(isNull(sellOrder.deletedAt), not(isClientDeleted), isUndefined(pendingLines));
+          case SellOrderStatus.Pending:
+            return and(isNull(sellOrder.deletedAt), not(isClientDeleted), not(isUndefined(pendingLines)));
+        }
+      })
+      .reduce((combined, predicate) => or(combined, predicate));
+  });
 }
 
 function sellOrderSelectProjection(
   q: InitialQueryBuilder,
   { filters, sorts, pagination = null }: TBaseQueryProps<TSellOrderFilters> = {},
 ) {
-  let query = buildFilteredSellOrders(q, filters);
+  const filtered = buildFilteredSellOrders(q, filters);
+  const sortsByClientName = (sorts ?? DEFAULT_SORTING).some((sort) => sort.id === "clientName");
+  // A filter that reads a joined table discards its Pedidos after every join, the one of the sort included. As a
+  // subquery it discards them first, and the sort only joins the Cliente of the ones left
+  let query =
+    sortsByClientName && readsJoinedTables(filters)
+      ? q.from({ sellOrder: filtered.select(({ sellOrder }) => ({ ...sellOrder })) })
+      : filtered;
 
   for (const sort of sorts ?? DEFAULT_SORTING) {
     if (sort.id === "clientName") {
-      query = query.orderBy(({ statusClient }) => statusClient.name, {
-        direction: sort.desc ? "desc" : "asc",
-        nulls: "last",
-      });
+      query = query
+        .leftJoin({ sortClient: clientCollection }, ({ sellOrder, sortClient }) =>
+          eq(sellOrder.clientId, sortClient.id),
+        )
+        .orderBy(({ sortClient }) => sortClient.name, { direction: sort.desc ? "desc" : "asc", nulls: "last" });
       continue;
     }
     query = query.orderBy(({ sellOrder }) => sellOrder[sort.id as keyof typeof sellOrder], sort.desc ? "desc" : "asc");
