@@ -322,13 +322,19 @@ type TProductionOrderStatusRefs = {
   receivedQuantity: Ref<{ receivedQuantity: number | undefined }> | undefined;
 };
 
+// What decides whether an Orden de producción is produced, without the tables of its Pedido, Artículo or Tratamiento
+type TProductionOrderCandidateRefs = Pick<
+  TProductionOrderStatusRefs,
+  "assignedMachineCount" | "producedQuantity" | "productionOrder"
+>;
+
 const hasDeletedSellOrderLine = ({ sellOrderLine }: TProductionOrderStatusRefs) =>
   and(not(isUndefined(sellOrderLine)), not(isNull(sellOrderLine?.deletedAt)));
 
 const hasDeletedSellOrder = ({ sellOrder }: TProductionOrderStatusRefs) =>
   and(not(isUndefined(sellOrder)), not(isNull(sellOrder?.deletedAt)));
 
-const isDeletedProductionOrder = ({ productionOrder }: TProductionOrderStatusRefs) =>
+const isDeletedProductionOrder = ({ productionOrder }: TProductionOrderCandidateRefs) =>
   not(isNull(productionOrder.deletedAt));
 
 const isSellOrderLineDeletedProductionOrder = (refs: TProductionOrderStatusRefs) =>
@@ -340,12 +346,11 @@ const isSellOrderDeletedProductionOrder = (refs: TProductionOrderStatusRefs) =>
 const isAnyDeletedProductionOrder = (refs: TProductionOrderStatusRefs) =>
   or(isDeletedProductionOrder(refs), hasDeletedSellOrderLine(refs), hasDeletedSellOrder(refs));
 
-const hasActiveMachine = ({ assignedMachineCount }: TProductionOrderStatusRefs) =>
+const hasActiveMachine = ({ assignedMachineCount }: TProductionOrderCandidateRefs) =>
   and(not(isUndefined(assignedMachineCount)), gt(assignedMachineCount?.assignedMachineCount, 0));
 
-const isProducedProductionOrder = (refs: TProductionOrderStatusRefs) =>
+const hasProducedEnough = (refs: TProductionOrderCandidateRefs) =>
   and(
-    not(isAnyDeletedProductionOrder(refs)),
     not(isUndefined(refs.producedQuantity.producedQuantity)),
     or(
       and(
@@ -359,6 +364,9 @@ const isProducedProductionOrder = (refs: TProductionOrderStatusRefs) =>
       ),
     ),
   );
+
+const isProducedProductionOrder = (refs: TProductionOrderStatusRefs) =>
+  and(not(isAnyDeletedProductionOrder(refs)), hasProducedEnough(refs));
 
 const needsTreatment = ({ part }: TProductionOrderStatusRefs) => not(isNull(part.coatingId));
 
@@ -410,6 +418,85 @@ const productionOrderStatusPredicates: Record<
   [ProductionOrderStatus.SellOrderLineDeleted]: isSellOrderLineDeletedProductionOrder,
 };
 
+const isUnproducedCandidate = (refs: TProductionOrderCandidateRefs) =>
+  and(not(isDeletedProductionOrder(refs)), not(hasProducedEnough(refs)));
+
+/**
+ * What a status needs of the Orden de producción alone. Joining the Pedidos, Artículos and Tratamientos of every
+ * Orden de producción only to discard most of them took about a second, so these discard them first: almost every one
+ * is completed, and the table opens with the pending ones. The other statuses keep most of them, so they have none
+ */
+const productionOrderStatusCandidates: Partial<
+  Record<ProductionOrderStatus, (refs: TProductionOrderCandidateRefs) => IR.BasicExpression<boolean>>
+> = {
+  [ProductionOrderStatus.Deleted]: isDeletedProductionOrder,
+  [ProductionOrderStatus.InProduction]: (refs) => and(isUnproducedCandidate(refs), hasActiveMachine(refs)),
+  [ProductionOrderStatus.Pending]: isUnproducedCandidate,
+};
+
+function producedQuantities(q: InitialQueryBuilder) {
+  return q
+    .from({ partProduction: partProductionCollection })
+    .groupBy(({ partProduction }) => partProduction.productionOrderId)
+    .select(({ partProduction }) => ({
+      producedQuantity: sum(partProduction.quantity),
+      productionOrderId: partProduction.productionOrderId,
+    }));
+}
+
+// The alias must not collide with the `machine` alias used by the `assignedMachines` subquery of the table,
+// otherwise its filter leaks into it and hides the assigned machines of the rows
+function assignedMachineCounts(q: InitialQueryBuilder) {
+  return q
+    .from({ statusMachine: machineCollection })
+    .where(({ statusMachine }) => not(isNull(statusMachine.activeProductionOrderId)))
+    .groupBy(({ statusMachine }) => statusMachine.activeProductionOrderId)
+    .select(({ statusMachine }) => ({
+      activeProductionOrderId: statusMachine.activeProductionOrderId,
+      assignedMachineCount: count(statusMachine.id),
+    }));
+}
+
+// With the filters on its own columns, which reach its collection before any join
+function ownProductionOrders(q: InitialQueryBuilder, filters?: TProductionOrderFilters) {
+  let query = q.from({ productionOrder: productionOrderCollection });
+  if (getFilterValue(filters, "partId") != null) {
+    query = query.where(({ productionOrder }) => eq(productionOrder.partId, getFilterValue(filters, "partId")));
+  }
+  if (getFilterValue(filters, "quantity") != null) {
+    query = query.where(({ productionOrder }) => eq(productionOrder.quantity, getFilterValue(filters, "quantity")));
+  }
+  return query;
+}
+
+function statusCandidates(
+  q: InitialQueryBuilder,
+  statuses: Array<ProductionOrderStatus>,
+  filters?: TProductionOrderFilters,
+) {
+  const predicates = statuses.flatMap((status) => productionOrderStatusCandidates[status] ?? []);
+  if (predicates.length < statuses.length) return undefined;
+  return ownProductionOrders(q, filters)
+    .join({ candidateProducedQuantity: producedQuantities(q) }, ({ productionOrder, candidateProducedQuantity }) =>
+      eq(productionOrder.id, candidateProducedQuantity.productionOrderId),
+    )
+    .leftJoin({ candidateMachineCount: assignedMachineCounts(q) }, ({ productionOrder, candidateMachineCount }) =>
+      eq(productionOrder.id, candidateMachineCount.activeProductionOrderId),
+    )
+    .where(({ productionOrder, candidateProducedQuantity, candidateMachineCount }) =>
+      predicates
+        .map((predicate) =>
+          predicate({
+            assignedMachineCount: candidateMachineCount,
+            producedQuantity: candidateProducedQuantity,
+            productionOrder,
+          }),
+        )
+        .reduce((combined, predicate) => or(combined, predicate)),
+    )
+    .select(({ productionOrder }) => ({ id: productionOrder.id }));
+}
+
 function sentQuantities(q: InitialQueryBuilder) {
   return q
     .from({ sentShipment: treatmentShipmentCollection })
@@ -434,13 +521,14 @@ function receivedQuantities(q: InitialQueryBuilder) {
 }
 
 function buildFilteredProductionOrders(q: InitialQueryBuilder, filters?: TProductionOrderFilters) {
-  let query = q.from({ productionOrder: productionOrderCollection });
-
-  if (getFilterValue(filters, "partId") != null) {
-    query = query.where(({ productionOrder }) => eq(productionOrder.partId, getFilterValue(filters, "partId")));
-  }
-  if (getFilterValue(filters, "quantity") != null) {
-    query = query.where(({ productionOrder }) => eq(productionOrder.quantity, getFilterValue(filters, "quantity")));
+  const statuses = getFilterValue(filters, "statuses");
+  const hasStatuses = statuses != null && statuses.length > 0;
+  let query = ownProductionOrders(q, filters);
+  const candidates = hasStatuses ? statusCandidates(q, statuses, filters) : undefined;
+  if (candidates !== undefined) {
+    query = query.innerJoin({ statusCandidate: candidates }, ({ productionOrder, statusCandidate }) =>
+      eq(productionOrder.id, statusCandidate.id),
+    );
   }
 
   if (
@@ -541,30 +629,11 @@ function buildFilteredProductionOrders(q: InitialQueryBuilder, filters?: TProduc
       );
   }
 
-  const producedQuantities = q
-    .from({ partProduction: partProductionCollection })
-    .groupBy(({ partProduction }) => partProduction.productionOrderId)
-    .select(({ partProduction }) => ({
-      producedQuantity: sum(partProduction.quantity),
-      productionOrderId: partProduction.productionOrderId,
-    }));
-  let joinedQuery = query.join({ producedQuantity: producedQuantities }, ({ producedQuantity, productionOrder }) =>
+  let joinedQuery = query.join({ producedQuantity: producedQuantities(q) }, ({ producedQuantity, productionOrder }) =>
     eq(productionOrder.id, producedQuantity.productionOrderId),
   );
 
-  const statuses = getFilterValue(filters, "statuses");
-  if (statuses && statuses.length > 0) {
-    // The alias must not collide with the `machine` alias used by the `assignedMachines` subquery
-    // below, otherwise this filter leaks into it and hides the assigned machines of the rows
-    const assignedMachineCounts = q
-      .from({ statusMachine: machineCollection })
-      .where(({ statusMachine }) => not(isNull(statusMachine.activeProductionOrderId)))
-      .groupBy(({ statusMachine }) => statusMachine.activeProductionOrderId)
-      .select(({ statusMachine }) => ({
-        activeProductionOrderId: statusMachine.activeProductionOrderId,
-        assignedMachineCount: count(statusMachine.id),
-      }));
-
+  if (hasStatuses) {
     joinedQuery = joinedQuery
       .leftJoin({ statusSellOrderLine: sellOrderLineCollection }, ({ productionOrder, statusSellOrderLine }) =>
         eq(productionOrder.sellOrderLineId, statusSellOrderLine.id),
@@ -572,7 +641,7 @@ function buildFilteredProductionOrders(q: InitialQueryBuilder, filters?: TProduc
       .leftJoin({ statusSellOrder: sellOrderCollection }, ({ statusSellOrderLine, statusSellOrder }) =>
         eq(statusSellOrderLine.sellOrderId, statusSellOrder.id),
       )
-      .leftJoin({ assignedMachineCount: assignedMachineCounts }, ({ productionOrder, assignedMachineCount }) =>
+      .leftJoin({ assignedMachineCount: assignedMachineCounts(q) }, ({ productionOrder, assignedMachineCount }) =>
         eq(productionOrder.id, assignedMachineCount.activeProductionOrderId),
       )
       .innerJoin({ statusPart: partCollection }, ({ productionOrder, statusPart }) =>
