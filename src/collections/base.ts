@@ -46,7 +46,8 @@ function logSyncError(error: unknown) {
  * goes through tRPC, so the server can still reject it.
  *
  * Until PowerSync has brought the table, each query's rows come from Postgres (loadTableSubsetFn), so a first load does
- * not wait for every table it reads. PowerSync's first changes then replace them with the whole table
+ * not wait for every table it reads. PowerSync's rows replace them as they arrive, and once it has synced, the rows it
+ * did not bring were deleted meanwhile
  */
 export function powerSyncCollectionOptions<TSchema extends z.ZodType<object>, TKey extends string | number>({
   table,
@@ -67,6 +68,11 @@ export function powerSyncCollectionOptions<TSchema extends z.ZodType<object>, TK
         let active = true;
         let first = true;
         let lastApplied: SyncAppliedReceipt = true;
+        // Until PowerSync has brought the whole table: the rows Postgres answered, and the ones PowerSync brought, whose
+        // row may be newer
+        let synced = false;
+        const postgresKeys = new Set<TKey>();
+        const syncedKeys = new Set<TKey>();
 
         const cleanup = () => {
           if (!active) return;
@@ -80,7 +86,9 @@ export function powerSyncCollectionOptions<TSchema extends z.ZodType<object>, TK
         const toKeyedRow = (id: string, row: TPowerSyncRow): TRow | undefined => {
           try {
             const value = toAppRow({ ...row, id }) as TRow;
-            keys.set(id, config.getKey(value));
+            const key = config.getKey(value);
+            keys.set(id, key);
+            syncedKeys.add(key);
             return value;
           } catch (error) {
             logSyncError(error);
@@ -94,6 +102,7 @@ export function powerSyncCollectionOptions<TSchema extends z.ZodType<object>, TK
             if (row === null) {
               const key = keys.get(id);
               keys.delete(id);
+              if (key !== undefined) syncedKeys.delete(key);
               return key === undefined ? [] : [{ type: "delete", key }];
             }
             const value = toKeyedRow(id, row);
@@ -143,25 +152,41 @@ export function powerSyncCollectionOptions<TSchema extends z.ZodType<object>, TK
             fail(error);
           },
         });
-        // Stream and commit errors are handled above, and a cleanup cancels the wait
-        const synced = lease
+        const untilSynced = lease
           .waitForSync(controller.signal)
           .then(async () => lastApplied)
           .then(
+            async () => {
+              synced = true;
+              // A row deleted after Postgres answered never reaches this tab through PowerSync
+              const deleted = [...postgresKeys].filter((key) => !syncedKeys.has(key));
+              postgresKeys.clear();
+              if (!active || deleted.length === 0) return;
+              begin();
+              for (const key of deleted) write({ type: "delete", key });
+              const applied = commit(controller.signal);
+              if (applied !== true) await applied;
+            },
+            // Stream and commit errors are handled above, and a cleanup cancels the wait
             () => undefined,
-            () => undefined,
-          );
+          )
+          .catch(logSyncError);
 
         const loadFromPostgres = async (options: LoadSubsetOptions) => {
           const rows = await loadTableSubsetFn({ data: toSubsetRequest(table, options) }).catch((error: unknown) => {
             void log(LoggerLevels.error, LogMessages.tableSubsetLoadFailed, formatClientError(error));
             return null;
           });
-          if (rows === null) return synced;
-          // Once PowerSync's rows are in, these may be older, or deleted since
-          if (!active || !first || options.signal?.aborted === true) return;
+          if (rows === null) return untilSynced;
+          if (!active || synced || options.signal?.aborted === true) return;
           begin();
-          for (const row of rows) write({ type: "update", value: row as TRow });
+          for (const row of rows) {
+            const value = row as TRow;
+            const key = config.getKey(value);
+            if (syncedKeys.has(key)) continue;
+            postgresKeys.add(key);
+            write({ type: "update", value });
+          }
           const applied = commit(controller.signal);
           if (applied !== true) await applied;
         };
@@ -170,7 +195,7 @@ export function powerSyncCollectionOptions<TSchema extends z.ZodType<object>, TK
         markReady();
         return {
           cleanup,
-          loadSubset: (options: LoadSubsetOptions): true | Promise<void> => (first ? loadFromPostgres(options) : true),
+          loadSubset: (options: LoadSubsetOptions): true | Promise<void> => (synced ? true : loadFromPostgres(options)),
         };
       },
     },
