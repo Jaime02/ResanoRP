@@ -214,7 +214,7 @@ export default router({
       }
     }),
   ),
-  print: procedure.input(printDeliveryNoteSchema).mutation(async ({ input }) => {
+  print: procedure.input(printDeliveryNoteSchema).mutation(async ({ ctx, input }) => {
     const deliveryNote = await getDeliveryNoteWithLinesForDocument(input.id);
     if (!deliveryNote) {
       throw new TRPCError({
@@ -239,7 +239,7 @@ export default router({
       deliveryMethodName: deliveryNote.deliveryMethod?.name ?? null,
       deliveryNoteId: deliveryNote.id,
       lines: deliveryNote.deliveryNoteLines.map(getSalesDocumentLine),
-      withPrices: input.withPrices,
+      withPrices: input.withPrices && ctx.isAdmin,
     });
   }),
 });

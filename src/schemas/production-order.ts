@@ -56,7 +56,7 @@ export const printTagPartProductionSchema = z.object({
 
 export const updateMachineActiveProductionOrderSchema = z.object({
   machineId: requiredIdSchema,
-  productionOrderId: nullableIdSchema,
+  productionOrderId: requiredIdSchema,
 });
 
 const productionOrderFiltersSchema = z.array(

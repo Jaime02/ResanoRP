@@ -2,7 +2,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 
 import { TRPCError } from "@trpc/server";
-import { and, eq, inArray, isNull } from "drizzle-orm";
+import { and, eq, getTableName, inArray, isNull, sql } from "drizzle-orm";
 
 import { getConfiguration } from "@/db/functions/configuration";
 import {
@@ -27,6 +27,8 @@ import { formatDate } from "@/lib/formatters";
 import { handleMutationError } from "@/lib/handlers";
 import { formatCents, getDeliveryNoteLineUnitPrice, getUnpricedDeliveryNoteIds, getVatBreakdown } from "@/lib/prices";
 import {
+  INVOICE_NOT_DELETED_NOT_LAST_MESSAGE,
+  INVOICE_NOT_DELETED_SENT_MESSAGE,
   INVOICE_NOT_SENT_UNPRICED_MESSAGE,
   INVOICES_NOT_ACCOUNTED_AMOUNT_TOO_LARGE_MESSAGE,
   INVOICES_NOT_ACCOUNTED_UNPRICED_MESSAGE,
@@ -217,6 +219,21 @@ export default router({
           });
         }
 
+        const deliveryNoteIds = deliveryNotes.map((deliveryNote) => deliveryNote.id);
+        // Claimed before the Factura takes a number, so a conflict does not leave a gap in the numbering
+        const claimedDeliveryNotes = await tx
+          .select({ id: dbTableDeliveryNote.id })
+          .from(dbTableDeliveryNote)
+          .where(and(inArray(dbTableDeliveryNote.id, deliveryNoteIds), isNull(dbTableDeliveryNote.invoiceId)))
+          .for("update");
+        // Another Factura took some of them since they were listed
+        if (claimedDeliveryNotes.length !== deliveryNotes.length) {
+          throw new TRPCError({
+            code: "CONFLICT",
+            message: `Los Albaranes del Cliente ${client.name} ya se están facturando, inténtalo de nuevo`,
+          });
+        }
+
         const createdAt = new Date();
         const newInvoice = (
           await tx
@@ -238,26 +255,10 @@ export default router({
           });
         }
 
-        const invoicedDeliveryNotes = await tx
+        await tx
           .update(dbTableDeliveryNote)
           .set({ invoiceId: newInvoice.id })
-          .where(
-            and(
-              inArray(
-                dbTableDeliveryNote.id,
-                deliveryNotes.map((deliveryNote) => deliveryNote.id),
-              ),
-              isNull(dbTableDeliveryNote.invoiceId),
-            ),
-          )
-          .returning({ id: dbTableDeliveryNote.id });
-        // Another Factura took some of them since they were listed
-        if (invoicedDeliveryNotes.length !== deliveryNotes.length) {
-          throw new TRPCError({
-            code: "CONFLICT",
-            message: `Los Albaranes del Cliente ${client.name} ya se están facturando, inténtalo de nuevo`,
-          });
-        }
+          .where(inArray(dbTableDeliveryNote.id, deliveryNoteIds));
 
         return { item: newInvoice };
       } catch (error) {
@@ -268,26 +269,40 @@ export default router({
   delete: adminProcedure.input(requiredIdObjectSchema).mutation(async ({ ctx, input }) =>
     ctx.db.transaction(async (tx) => {
       try {
-        await tx
-          .update(dbTableDeliveryNote)
-          .set({ invoiceId: null })
-          .where(eq(dbTableDeliveryNote.invoiceId, input.id));
+        // Invoice numbers must be consecutive, so creating a Factura waits until the numbering is reset below
+        await tx.execute(sql`LOCK TABLE ${dbTableInvoice} IN SHARE ROW EXCLUSIVE MODE`);
 
+        const invoice = await tx.query.dbTableInvoice.findFirst({ where: { id: input.id } });
         // Prisma already has an accounted Factura, so its Albaranes would be invoiced and accounted twice
-        const deletedInvoice = (
-          await tx
-            .delete(dbTableInvoice)
-            .where(and(eq(dbTableInvoice.id, input.id), eq(dbTableInvoice.accounted, false)))
-            .returning()
-        ).at(0);
-        if (!deletedInvoice) {
+        if (!invoice || invoice.accounted) {
           throw new TRPCError({
             code: "NOT_FOUND",
             message: `Factura sin contabilizar con ID ${input.id} no encontrada, descontabilízala antes de eliminarla`,
           });
         }
+        // The Cliente would keep a Factura that no longer exists
+        if (invoice.sent) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: INVOICE_NOT_DELETED_SENT_MESSAGE(invoice.id) });
+        }
+        const lastInvoice = await tx.query.dbTableInvoice.findFirst({ orderBy: { id: "desc" } });
+        if (lastInvoice && lastInvoice.id !== invoice.id) {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: INVOICE_NOT_DELETED_NOT_LAST_MESSAGE(invoice.id, lastInvoice.id),
+          });
+        }
 
-        return { item: deletedInvoice };
+        await tx
+          .update(dbTableDeliveryNote)
+          .set({ invoiceId: null })
+          .where(eq(dbTableDeliveryNote.invoiceId, input.id));
+        await tx.delete(dbTableInvoice).where(eq(dbTableInvoice.id, input.id));
+        // Also gives back the numbers of creations that failed after taking one
+        await tx.execute(
+          sql`SELECT setval(pg_get_serial_sequence(${getTableName(dbTableInvoice)}, ${dbTableInvoice.id.name}), COALESCE(MAX(${dbTableInvoice.id}), 0) + 1, false) FROM ${dbTableInvoice}`,
+        );
+
+        return { item: invoice };
       } catch (error) {
         handleMutationError({ error });
       }

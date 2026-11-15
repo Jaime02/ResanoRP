@@ -1,7 +1,6 @@
 import { TRPCError } from "@trpc/server";
 import { and, eq, isNotNull, notExists } from "drizzle-orm";
 
-import { getMachineById } from "@/db/functions/machine";
 import { dbGetProductionOrderStatus, getProductionOrderById } from "@/db/functions/production-order";
 import {
   MACHINE_NAME_CONSTRAINT,
@@ -12,6 +11,7 @@ import {
 } from "@/db/schema";
 import { handleMutationError } from "@/lib/handlers";
 import { isProductionFinished } from "@/lib/production-order";
+import { ASSIGN_PRODUCTION_ORDER_REQUIRES_STOP_MESSAGE } from "@/messages/production-order";
 import { requiredIdObjectSchema } from "@/schemas";
 import { createMachineSchema, updateMachineSchema } from "@/schemas/machine";
 import { updateMachineProductionOrderSchema } from "@/schemas/machine-production-order";
@@ -196,43 +196,49 @@ export default router({
     .mutation(async ({ ctx, input }) =>
       ctx.db.transaction(async (tx) => {
         try {
-          if (input.productionOrderId !== null) {
-            if (!(await getProductionOrderById(input.productionOrderId, tx))) {
-              throw new TRPCError({
-                code: "NOT_FOUND",
-                message: `Orden de producción con ID ${input.productionOrderId} no encontrada`,
-              });
-            }
+          if (!(await getProductionOrderById(input.productionOrderId, tx))) {
+            throw new TRPCError({
+              code: "NOT_FOUND",
+              message: `Orden de producción con ID ${input.productionOrderId} no encontrada`,
+            });
           }
 
-          const machine = await getMachineById(input.machineId, tx);
-          if (!machine) {
+          // Locked like in stopProductionOrder, so a screen that missed the start of another Orden cannot replace it
+          // and lose its produced quantity
+          const machine = (
+            await tx.select().from(dbTableMachine).where(eq(dbTableMachine.id, input.machineId)).for("update")
+          ).at(0);
+          if (machine === undefined) {
             throw new TRPCError({
               code: "NOT_FOUND",
               message: `Máquina con ID ${input.machineId} no encontrada`,
             });
           }
+          if (machine.activeProductionOrderId !== null) {
+            throw new TRPCError({
+              code: "BAD_REQUEST",
+              message: ASSIGN_PRODUCTION_ORDER_REQUIRES_STOP_MESSAGE,
+            });
+          }
 
-          if (input.productionOrderId !== null) {
-            const updatedQueueRows = await tx
-              .update(dbTableMachineProductionOrderQueue)
-              .set({
-                timestamp: new Date(),
-              })
-              .where(
-                and(
-                  eq(dbTableMachineProductionOrderQueue.machineId, input.machineId),
-                  eq(dbTableMachineProductionOrderQueue.productionOrderId, input.productionOrderId),
-                ),
-              )
-              .returning();
-            // The machine filter of the Órdenes de producción only looks at the queue
-            if (updatedQueueRows.length === 0) {
-              throw new TRPCError({
-                code: "BAD_REQUEST",
-                message: `La Orden de producción ${input.productionOrderId} no está en la cola de la Máquina "${machine.name}"`,
-              });
-            }
+          const updatedQueueRows = await tx
+            .update(dbTableMachineProductionOrderQueue)
+            .set({
+              timestamp: new Date(),
+            })
+            .where(
+              and(
+                eq(dbTableMachineProductionOrderQueue.machineId, input.machineId),
+                eq(dbTableMachineProductionOrderQueue.productionOrderId, input.productionOrderId),
+              ),
+            )
+            .returning();
+          // The machine filter of the Órdenes de producción only looks at the queue
+          if (updatedQueueRows.length === 0) {
+            throw new TRPCError({
+              code: "BAD_REQUEST",
+              message: `La Orden de producción ${input.productionOrderId} no está en la cola de la Máquina "${machine.name}"`,
+            });
           }
 
           await tx

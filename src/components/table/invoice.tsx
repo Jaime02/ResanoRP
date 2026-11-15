@@ -128,7 +128,7 @@ export default function TableInvoice({ testId = "table-invoice", state, createIn
               cell: ({ row }) => (
                 <ModelActions
                   deleteButton={{
-                    disabled: row.original.accounted,
+                    disabled: row.original.accounted || row.original.sent,
                     dialogTitle: INVOICE_DELETE_TITLE,
                     dialogDescription: INVOICE_DELETE_MESSAGE,
                     serializedModel: serializeInvoice(row.original),

@@ -29,5 +29,9 @@ export const INVOICES_NOT_ACCOUNTED_UNPRICED_MESSAGE = (deliveryNoteIds: Array<n
   `No se han contabilizado las Facturas porque estos Albaranes tienen Líneas sin precio: ${deliveryNoteIds.join(", ")}`;
 export const INVOICES_NOT_ACCOUNTED_AMOUNT_TOO_LARGE_MESSAGE = (maxAmount: string, invoiceIds: Array<number>) =>
   `No se han contabilizado las Facturas porque estas tienen importes mayores de ${maxAmount}, que no caben en el fichero de Prisma: ${invoiceIds.join(", ")}`;
+export const INVOICE_NOT_DELETED_SENT_MESSAGE = (invoiceId: number) =>
+  `No se puede eliminar la Factura ${invoiceId} porque ya se ha enviado al Cliente`;
+export const INVOICE_NOT_DELETED_NOT_LAST_MESSAGE = (invoiceId: number, lastInvoiceId: number) =>
+  `No se puede eliminar la Factura ${invoiceId} porque la numeración quedaría con huecos, solo se puede eliminar la última Factura (${lastInvoiceId})`;
 export const INVOICE_NOT_SENT_UNPRICED_MESSAGE = (deliveryNoteIds: Array<number>) =>
   `No se ha enviado la Factura porque estos Albaranes tienen Líneas sin precio: ${deliveryNoteIds.join(", ")}`;

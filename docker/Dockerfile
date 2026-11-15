@@ -34,7 +34,7 @@ COPY . .
 # pdfjs-dist that react-pdf resolved in this image.
 RUN bun ./src/scripts/copy-pdf-worker.ts
 
-# public/styles.css is inlined at runtime when printing a tag (src/files/pdf.tsx).
+# public/styles.css is inlined at runtime when printing a tag (src/files/index.tsx).
 # Built here because it is no longer committed; the dev server regenerates it on
 # source changes (see vite.config.ts).
 RUN bun run build:css
