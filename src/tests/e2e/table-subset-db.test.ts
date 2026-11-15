@@ -3,7 +3,7 @@ import { compileSingleRowExpression, IR, toBooleanPredicate } from "@tanstack/re
 import { getTableName } from "drizzle-orm";
 
 import db from "@/db";
-import { loadTableSubset } from "@/db/functions/table-subset";
+import { loadTableSubset, MAX_LOOKUP_KEYS } from "@/db/functions/table-subset";
 import { dbTableSellOrderLine } from "@/db/schema";
 import type { TSubsetRequest } from "@/lib/table-subset-fns";
 import { toPlainExpression } from "@/lib/table-subset-fns";
@@ -75,11 +75,12 @@ test("the rows a query loads from Postgres before PowerSync brings its table", a
     }
   });
 
-  await test.step("a filter Postgres would compare differently waits for PowerSync", async () => {
+  await test.step("a filter Postgres would compare differently, or a join over many rows, waits for PowerSync", async () => {
     for (const where of [
       fn("eq", ref("partPrice"), val("1.50")),
       fn("gt", ref("description"), val("a")),
       fn("like", ref("description"), val("%a%")),
+      fn("in", ref("id"), val(Array.from({ length: MAX_LOOKUP_KEYS + 1 }, (_, index) => index + 1))),
     ]) {
       expect(await load(where), JSON.stringify(toPlainExpression(where))).toBeNull();
     }

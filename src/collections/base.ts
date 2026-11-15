@@ -13,6 +13,7 @@ import { formatClientError } from "@/lib/formatters";
 import { forgetPowerSyncToken, getPowerSyncClient, getToAppRow } from "@/lib/powersync";
 import type { TPowerSyncRow } from "@/lib/powersync";
 import { loadTableSubsetFn, toSubsetRequest } from "@/lib/table-subset-fns";
+import type { TSubsetRequest } from "@/lib/table-subset-fns";
 import log from "@/logging/log";
 import { LogMessages, LoggerLevels } from "@/logging/types";
 
@@ -218,13 +219,14 @@ export function powerSyncCollectionOptions<TSchema extends z.ZodType<object>, TK
           )
           .catch(logSyncError);
 
-        const loadFromPostgres = async (options: LoadSubsetOptions) => {
-          const rows = await loadTableSubsetFn({ data: toSubsetRequest(table, options) }).catch((error: unknown) => {
+        const loadFromPostgres = async (request: TSubsetRequest) => {
+          const rows = await loadTableSubsetFn({ data: request }).catch((error: unknown) => {
             void log(LoggerLevels.error, LogMessages.tableSubsetLoadFailed, formatClientError(error));
             return null;
           });
           if (rows === null) return untilSynced;
-          if (!active || synced || options.signal?.aborted === true) return;
+          // Shared by every query that asked for the same rows, so one of them giving up still writes them
+          if (!active || synced) return;
           begin();
           for (const row of rows) {
             const value = row as TRow;
@@ -237,12 +239,21 @@ export function powerSyncCollectionOptions<TSchema extends z.ZodType<object>, TK
           if (applied !== true) await applied;
         };
 
+        // The count and the rows of a table, and its joins, often ask for the same subset
+        const loads = new Map<string, Promise<void>>();
+        const loadSubset = (options: LoadSubsetOptions): true | Promise<void> => {
+          if (synced) return true;
+          const request = toSubsetRequest(table, options);
+          const id = JSON.stringify(request);
+          const load = loads.get(id) ?? loadFromPostgres(request);
+          loads.set(id, load);
+          return load;
+        };
+        void untilSynced.then(() => loads.clear());
+
         // Ready from the start: a query waits for its own subsets instead
         markReady();
-        return {
-          cleanup,
-          loadSubset: (options: LoadSubsetOptions): true | Promise<void> => (synced ? true : loadFromPostgres(options)),
-        };
+        return { cleanup, loadSubset };
       },
     },
   };
