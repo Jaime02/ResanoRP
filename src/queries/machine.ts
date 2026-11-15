@@ -1,4 +1,3 @@
-import type { InitialQueryBuilder } from "@tanstack/react-db";
 import { useLiveQuery, and, gte, inArray, isNull, lte, not, or, eq, materialize, sum } from "@tanstack/react-db";
 
 import blueprintCollection from "@/collections/blueprint";
@@ -69,20 +68,15 @@ export function useQueryMachines({ filters, sorts }: TBaseQueryProps<TMachineFil
   });
 }
 
-// Shared with the root loader, which preloads the Máquina of the user mode on the server
-export function machineByIdQuery(id: number) {
-  return {
-    query: (q: InitialQueryBuilder) =>
-      q
-        .from({ machine: machineCollection })
-        .where(({ machine }) => eq(machine.id, id))
-        .findOne(),
-  };
-}
-
 export function useQueryMachineById(id?: number) {
   return useLiveQuery({
-    query: (q) => (id === undefined ? undefined : machineByIdQuery(id).query(q)),
+    query: (q) =>
+      id === undefined
+        ? undefined
+        : q
+            .from({ machine: machineCollection })
+            .where(({ machine }) => eq(machine.id, id))
+            .findOne(),
   });
 }
 

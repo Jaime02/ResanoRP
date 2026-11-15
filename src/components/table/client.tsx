@@ -135,7 +135,6 @@ export default function TableClient({ testId = "table-client", state, createClie
                       void showToastOnTRPCMutation({
                         mutation: trpc.client.restore.mutate({ id: row.original.id }),
                         onSuccess: { title: CLIENT_RESTORED_MESSAGE },
-                        collection: clientCollection,
                       }),
                   },
                 })}

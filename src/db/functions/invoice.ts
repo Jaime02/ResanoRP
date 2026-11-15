@@ -7,8 +7,6 @@ import db from "@/db";
 import { dbTableDeliveryNote, dbTableDeliveryNoteLine, dbTableInvoice } from "@/db/schema";
 import { ACCOUNTED_DELIVERY_NOTE_MESSAGE } from "@/messages/delivery-note";
 
-// Only accounted Facturas are written: Electric emits no change for a row whose values did not change, so writing
-// one that is already not accounted would leave the client awaiting a txId that never arrives
 export async function unaccountInvoice(id: number, dbConnection: TDatabase = db) {
   return (
     await dbConnection
@@ -19,16 +17,12 @@ export async function unaccountInvoice(id: number, dbConnection: TDatabase = db)
   ).at(0);
 }
 
-// The content of the Factura changed, so it has to be accounted and sent again. Only a Factura that changes is
-// written, for the same reason as in unaccountInvoice
+// The content of the Factura changed, so it has to be accounted and sent again
 export async function resetInvoiceStatus(id: number, dbConnection: TDatabase = db) {
-  return (
-    await dbConnection
-      .update(dbTableInvoice)
-      .set({ accounted: false, sent: false })
-      .where(and(eq(dbTableInvoice.id, id), or(eq(dbTableInvoice.accounted, true), eq(dbTableInvoice.sent, true))))
-      .returning()
-  ).at(0);
+  await dbConnection
+    .update(dbTableInvoice)
+    .set({ accounted: false, sent: false })
+    .where(and(eq(dbTableInvoice.id, id), or(eq(dbTableInvoice.accounted, true), eq(dbTableInvoice.sent, true))));
 }
 
 // The Factura is computed from its Albaranes, so changing one means the Factura has to be accounted and sent again.
@@ -36,20 +30,19 @@ export async function resetInvoiceStatus(id: number, dbConnection: TDatabase = d
 export async function resetChangedDeliveryNoteInvoice(
   { deliveryNoteId, isAdmin }: { deliveryNoteId: number; isAdmin: boolean },
   dbConnection: TDatabase = db,
-): Promise<Array<number>> {
+): Promise<void> {
   const deliveryNote = await dbConnection.query.dbTableDeliveryNote.findFirst({
     where: { id: deliveryNoteId },
     with: { invoice: true },
   });
-  if (!deliveryNote?.invoice) return [];
+  if (!deliveryNote?.invoice) return;
   if (deliveryNote.invoice.accounted && !isAdmin) {
     throw new TRPCError({
       code: "FORBIDDEN",
       message: ACCOUNTED_DELIVERY_NOTE_MESSAGE(deliveryNote.id),
     });
   }
-  const resetInvoice = await resetInvoiceStatus(deliveryNote.invoice.id, dbConnection);
-  return resetInvoice === undefined ? [] : [resetInvoice.id];
+  await resetInvoiceStatus(deliveryNote.invoice.id, dbConnection);
 }
 
 // The Líneas del Albarán of a Línea del Pedido de venta take its price, unless they have their own, so the Facturas of
@@ -62,18 +55,15 @@ export async function resetSellOrderLineInvoices(sellOrderLineId: number, dbConn
     .where(
       and(eq(dbTableDeliveryNoteLine.sellOrderLineId, sellOrderLineId), isNull(dbTableDeliveryNoteLine.unitPrice)),
     );
-  return (
-    await dbConnection
-      .update(dbTableInvoice)
-      .set({ accounted: false, sent: false })
-      .where(
-        and(
-          inArray(dbTableInvoice.id, sellOrderLineInvoiceIds),
-          or(eq(dbTableInvoice.accounted, true), eq(dbTableInvoice.sent, true)),
-        ),
-      )
-      .returning({ id: dbTableInvoice.id })
-  ).map((invoice) => invoice.id);
+  await dbConnection
+    .update(dbTableInvoice)
+    .set({ accounted: false, sent: false })
+    .where(
+      and(
+        inArray(dbTableInvoice.id, sellOrderLineInvoiceIds),
+        or(eq(dbTableInvoice.accounted, true), eq(dbTableInvoice.sent, true)),
+      ),
+    );
 }
 
 export async function sendInvoice(id: number, dbConnection: TDatabase = db) {

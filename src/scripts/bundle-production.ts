@@ -10,6 +10,7 @@ const entries = [
   "Caddyfile",
   "trust-cert.ps1",
   "docker-compose.yml",
+  "powersync",
   "start.cmd",
   "images.tar",
   // Only staged by prepare-production --import

@@ -1,6 +1,5 @@
 import { useSelector } from "@tanstack/react-store";
 
-import productionOrderCollection from "@/collections/production-order";
 import { useAppContext } from "@/contexts/app-context";
 import { useAppForm } from "@/form";
 import useResetForm from "@/form/hooks/use-reset-form";
@@ -98,7 +97,6 @@ export default function useProductionOrderForm({
         onSuccess: {
           title: formMode === FormMode.Create ? PRODUCTION_ORDER_CREATED_MESSAGE : PRODUCTION_ORDER_EDITED_MESSAGE,
         },
-        collection: productionOrderCollection,
         onSubmit,
       });
     },

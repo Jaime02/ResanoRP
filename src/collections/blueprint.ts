@@ -1,31 +1,28 @@
-import { electricCollectionOptions } from "@tanstack/electric-db-collection";
-
-import { electricCollection } from "@/collections/base";
+import { awaitSynced, powerSyncCollection, powerSyncCollectionOptions } from "@/collections/base";
 import { collectionBlueprintSchema } from "@/schemas/blueprint";
 import trpc from "@/trpc/trpc-client";
 
-const blueprintCollection = electricCollection("blueprint", (baseOptions) => {
-  const { sync, ...options } = electricCollectionOptions({
+const blueprintCollection = powerSyncCollection("blueprint", (baseOptions) => {
+  const { sync, ...options } = powerSyncCollectionOptions({
     ...baseOptions,
-    syncMode: "on-demand",
     schema: collectionBlueprintSchema,
     getKey: (item) => item.id,
-    onInsert: async ({ transaction, collection }) => {
+    onInsert: async ({ transaction }) => {
       const { modified: newBlueprint } = transaction.mutations[0];
-      const result = await trpc.blueprint.create.mutate(newBlueprint);
-      await collection.utils.awaitTxId(result.txid);
+      await trpc.blueprint.create.mutate(newBlueprint);
+      await awaitSynced();
     },
-    onUpdate: async ({ transaction, collection }) => {
+    onUpdate: async ({ transaction }) => {
       const { modified: updatedBlueprint } = transaction.mutations[0];
-      const result = await trpc.blueprint.update.mutate(updatedBlueprint);
-      await collection.utils.awaitTxId(result.txid);
+      await trpc.blueprint.update.mutate(updatedBlueprint);
+      await awaitSynced();
     },
-    onDelete: async ({ transaction, collection }) => {
+    onDelete: async ({ transaction }) => {
       const { original: deletedBlueprint } = transaction.mutations[0];
-      const result = await trpc.blueprint.delete.mutate({
+      await trpc.blueprint.delete.mutate({
         id: deletedBlueprint.id,
       });
-      await collection.utils.awaitTxId(result.txid);
+      await awaitSynced();
     },
   });
 

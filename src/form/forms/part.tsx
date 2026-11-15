@@ -2,7 +2,6 @@ import { useNavigate } from "@tanstack/react-router";
 import { PlusIcon, TriangleAlertIcon } from "lucide-react";
 import { useCallback } from "react";
 
-import partCollection from "@/collections/part";
 import DialogCreateBlueprint from "@/components/dialog/create-blueprint";
 import LayoutBlueprint from "@/components/pdf/layout-blueprint-viewer";
 import ButtonRestoreModel from "@/components/table/button-restore-model";
@@ -350,7 +349,6 @@ export default function FormPart({
                 void showToastOnTRPCMutation({
                   mutation: trpc.part.restore.mutate({ id: part.id }),
                   onSuccess: { title: PART_RESTORED_MESSAGE },
-                  collection: partCollection,
                 })
               }
             />

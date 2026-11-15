@@ -13,7 +13,7 @@ import {
 } from "@/messages/part";
 import { partComponentKeySchema, partComponentSchema } from "@/schemas/part-component";
 import type { TPartComponent } from "@/schemas/part-component";
-import { router, generateTxId } from "@/trpc";
+import { router } from "@/trpc";
 import { adminProcedure } from "@/trpc";
 
 const PART_COMPONENT_LOCK_KEY = 4_242_001;
@@ -36,7 +36,6 @@ export default router({
   create: adminProcedure.input(partComponentSchema).mutation(async ({ ctx, input }) =>
     ctx.db.transaction(async (tx) => {
       try {
-        const txid = await generateTxId(tx);
         // Two concurrent inserts (A in B, B in A) would each pass the cycle check on their own snapshot
         await tx.execute(sql`SELECT pg_advisory_xact_lock(${PART_COMPONENT_LOCK_KEY})`);
         const [parentPart, componentPart] = await Promise.all([
@@ -56,7 +55,7 @@ export default router({
           throw new TRPCError({ code: "BAD_REQUEST", message: PART_COMPONENT_CYCLE_ERROR_MESSAGE });
         }
         const newPartComponent = (await tx.insert(dbTablePartComponent).values(input).returning()).at(0);
-        return { item: newPartComponent, txid };
+        return { item: newPartComponent };
       } catch (error) {
         handleMutationError({ error, uniqueConstraints });
       }
@@ -65,7 +64,6 @@ export default router({
   update: adminProcedure.input(partComponentSchema).mutation(async ({ ctx, input }) =>
     ctx.db.transaction(async (tx) => {
       try {
-        const txid = await generateTxId(tx);
         const updatedPartComponent = (
           await tx
             .update(dbTablePartComponent)
@@ -76,7 +74,7 @@ export default router({
         if (!updatedPartComponent) {
           throw new TRPCError({ code: "NOT_FOUND", message: "El Conjunto no contiene ese Artículo" });
         }
-        return { item: updatedPartComponent, txid };
+        return { item: updatedPartComponent };
       } catch (error) {
         handleMutationError({ error });
       }
@@ -85,14 +83,13 @@ export default router({
   delete: adminProcedure.input(partComponentKeySchema).mutation(async ({ ctx, input }) =>
     ctx.db.transaction(async (tx) => {
       try {
-        const txid = await generateTxId(tx);
         const deletedPartComponent = (
           await tx.delete(dbTablePartComponent).where(wherePartComponent(input)).returning()
         ).at(0);
         if (!deletedPartComponent) {
           throw new TRPCError({ code: "NOT_FOUND", message: "El Conjunto no contiene ese Artículo" });
         }
-        return { item: deletedPartComponent, txid };
+        return { item: deletedPartComponent };
       } catch (error) {
         handleMutationError({ error });
       }

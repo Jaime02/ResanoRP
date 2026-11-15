@@ -39,7 +39,7 @@ import {
   mockParts,
   mockSellOrders,
 } from "@/tests/mock-data";
-import { countTestIdInsertions, getTestId, trackSubsetSnapshots } from "@/tests/utils/components";
+import { countTestIdInsertions, getTestId } from "@/tests/utils/components";
 import {
   assertComboboxValue,
   clickInComboboxOption,
@@ -1066,7 +1066,6 @@ test("manage the delivery notes", { annotation: TestAnnotations.ResetTags }, asy
         .returning();
       await db.delete(dbTableDeliveryNote).where(eq(dbTableDeliveryNote.id, deletedDeliveryNote.id));
 
-      const waitForSubsetSnapshots = trackSubsetSnapshots(page);
       await page.goto("/delivery-note?createDeliveryNote=true");
       await expect(dialogCreateEditDeliveryNote).toBeVisible();
       // The dialog reopened after creating it must not take the new Albarán for a missing one while it syncs
@@ -1087,7 +1086,6 @@ test("manage the delivery notes", { annotation: TestAnnotations.ResetTags }, asy
       await expect(inputDeliveryNoteId).toHaveValue(String(deletedDeliveryNote.id + 1));
 
       // Another user takes the shown number while the dialog is open
-      await waitForSubsetSnapshots();
       const [otherUserDeliveryNote] = await db
         .insert(dbTableDeliveryNote)
         .values({ clientId: deliveryNoteClient.id, createdAt: MOCK_INITIAL_DATE })

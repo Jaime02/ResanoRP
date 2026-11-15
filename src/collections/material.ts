@@ -1,25 +1,23 @@
-import { electricCollectionOptions } from "@tanstack/electric-db-collection";
-
-import { electricCollection } from "@/collections/base";
+import { awaitSynced, powerSyncCollection, powerSyncCollectionOptions } from "@/collections/base";
 import { materialSchema } from "@/schemas/material";
 import trpc from "@/trpc/trpc-client";
 
-const materialCollection = electricCollection("material", (baseOptions) =>
-  electricCollectionOptions({
+const materialCollection = powerSyncCollection("material", (baseOptions) =>
+  powerSyncCollectionOptions({
     ...baseOptions,
     schema: materialSchema,
     getKey: (item) => item.id,
-    onInsert: async ({ transaction, collection }) => {
+    onInsert: async ({ transaction }) => {
       const { modified: newMaterial } = transaction.mutations[0];
-      const result = await trpc.material.create.mutate(newMaterial);
-      await collection.utils.awaitTxId(result.txid);
+      await trpc.material.create.mutate(newMaterial);
+      await awaitSynced();
     },
-    onDelete: async ({ transaction, collection }) => {
+    onDelete: async ({ transaction }) => {
       const { original: deletedMaterial } = transaction.mutations[0];
-      const result = await trpc.material.delete.mutate({
+      await trpc.material.delete.mutate({
         id: deletedMaterial.id,
       });
-      await collection.utils.awaitTxId(result.txid);
+      await awaitSynced();
     },
   }),
 );

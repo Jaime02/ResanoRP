@@ -105,7 +105,6 @@ function RouteComponent() {
                 void showToastOnTRPCMutation({
                   mutation: trpc.client.restore.mutate({ id: client.id }),
                   onSuccess: { title: CLIENT_RESTORED_MESSAGE },
-                  collection: clientCollection,
                 })
               }
             />

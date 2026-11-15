@@ -1,7 +1,6 @@
 ﻿import { useSelector } from "@tanstack/react-store";
 import { useEffect, useMemo } from "react";
 
-import sellOrderCollection from "@/collections/sell-order";
 import ButtonLink from "@/components/ui/button-link";
 import { useAppContext } from "@/contexts/app-context";
 import { useAppForm } from "@/form";
@@ -120,7 +119,6 @@ export default function useSellOrderForm({
       await showToastOnTRPCMutation({
         mutation,
         onSuccess: { title: formMode === FormMode.Create ? SELL_ORDER_CREATED_MESSAGE : SELL_ORDER_EDITED_MESSAGE },
-        collection: sellOrderCollection,
         onSubmit,
       });
     },

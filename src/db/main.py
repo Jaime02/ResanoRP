@@ -3,7 +3,7 @@ from __future__ import annotations
 from tqdm import tqdm
 
 from utils.load_raio_sql import load_raio_sql
-from migration_scripts.connections import setup
+from migration_scripts.connections import setup, start_powersync
 from migration_scripts.logger import clear_log
 from migration_scripts.firebird_migrate import (
     firebird_migrate_pagos,
@@ -56,6 +56,8 @@ def main():
 
     machines, production_orders = raio_migrate_machines_production_orders()
     raio_migrate_active_production_orders(machines, production_orders)
+
+    start_powersync()
 
 
 if __name__ == "__main__":

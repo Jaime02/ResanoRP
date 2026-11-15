@@ -31,7 +31,7 @@ docker compose up -d --wait db || exit /b 1
 docker compose exec -T db sh -c "pg_dump -U $POSTGRES_USER -d $POSTGRES_DB -Fc -f /tmp/backup.dump" || exit /b 1
 docker compose cp db:/tmp/backup.dump "%BACKUP_PATH%\production.dump" || exit /b 1
 
-rem Recreating the volume also drops Electric's replication slot, which still points at the replaced tables
+rem Recreating the volume also drops PowerSync's replication slot and storage database, which still hold the replaced rows
 docker compose down -v || exit /b 1
 
 echo Restoring the prisma database

@@ -8,8 +8,6 @@ import { PENDING_QUANTITY_EXCEEDED_MESSAGE } from "@/messages/delivery-note";
 import type { BaseDeliveryNoteLine } from "@/types/delivery-note-line";
 
 interface TDeleteDeliveryNoteLineResult {
-  /** Only set when the SellOrderLine row was actually written, so callers can await its collection. */
-  updatedSellOrderLineId?: number;
   deletedDeliveryNoteLine: BaseDeliveryNoteLine;
 }
 
@@ -25,14 +23,12 @@ export async function deleteDeliveryNoteLine(
     throw new Error(`Línea del Albarán con ID ${id} no encontrada`);
   }
 
-  return {
-    deletedDeliveryNoteLine,
-    updatedSellOrderLineId: await addSellOrderLinePendingQuantity(
-      deletedDeliveryNoteLine.sellOrderLineId,
-      deletedDeliveryNoteLine.quantity,
-      dbConnection,
-    ),
-  };
+  await addSellOrderLinePendingQuantity(
+    deletedDeliveryNoteLine.sellOrderLineId,
+    deletedDeliveryNoteLine.quantity,
+    dbConnection,
+  );
+  return { deletedDeliveryNoteLine };
 }
 
 // The pendingQuantity is clamped, so giving back more than was delivered would be lost, and deleting or editing the
@@ -54,29 +50,22 @@ export function assertPendingQuantityWithinQuantity(
   }
 }
 
-/** Returns the id of the SellOrderLine only when its row was actually written, so callers can await its collection. */
 export async function addSellOrderLinePendingQuantity(
   sellOrderLineId: number | null,
   quantity: number,
   dbConnection: TDatabase = db,
-): Promise<number | undefined> {
-  if (sellOrderLineId === null) return undefined;
+): Promise<void> {
+  if (sellOrderLineId === null) return;
   const newPendingQuantity = sql<number>`least(greatest(${dbTableSellOrderLine.pendingQuantity} + ${quantity}, least(${dbTableSellOrderLine.quantity}, 0)), greatest(${dbTableSellOrderLine.quantity}, 0))`;
 
   // The sum is done by the database in the same statement, so two changes at the same time do not overwrite each other.
-  // The pendingQuantity is clamped between 0 and the ordered quantity, which is negative for a return, so it can
-  // already be at its limit. Electric does not emit a change for a row whose values did not change, so writing it
-  // anyway would leave the client awaiting a txId that never arrives on the "sell_order_line" shape.
-  const updatedSellOrderLine = (
-    await dbConnection
-      .update(dbTableSellOrderLine)
-      .set({ pendingQuantity: newPendingQuantity })
-      .where(
-        and(eq(dbTableSellOrderLine.id, sellOrderLineId), ne(dbTableSellOrderLine.pendingQuantity, newPendingQuantity)),
-      )
-      .returning({ id: dbTableSellOrderLine.id })
-  ).at(0);
-  return updatedSellOrderLine?.id;
+  // The pendingQuantity is clamped between 0 and the ordered quantity, which is negative for a return.
+  await dbConnection
+    .update(dbTableSellOrderLine)
+    .set({ pendingQuantity: newPendingQuantity })
+    .where(
+      and(eq(dbTableSellOrderLine.id, sellOrderLineId), ne(dbTableSellOrderLine.pendingQuantity, newPendingQuantity)),
+    );
 }
 
 interface GetDeliveryNoteLineProps {

@@ -96,7 +96,6 @@ export default function TableMaintenanceMachine({ createMachine, ...props }: Tab
                       void showToastOnTRPCMutation({
                         mutation: trpc.machine.restore.mutate({ id: row.original.id }),
                         onSuccess: { title: MACHINE_RESTORED_MESSAGE },
-                        collection: machineCollection,
                       }),
                   },
                 })}

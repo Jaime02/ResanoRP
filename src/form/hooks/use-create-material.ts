@@ -1,6 +1,5 @@
 import { useSelector } from "@tanstack/react-store";
 
-import materialCollection from "@/collections/material";
 import { useAppContext } from "@/contexts/app-context";
 import { useAppForm } from "@/form";
 import { MATERIAL_CREATED_MESSAGE } from "@/messages/material";
@@ -33,7 +32,6 @@ export default function useCreateMaterialForm({ onSubmit }: UseCreateMaterialFor
       await showToastOnTRPCMutation({
         mutation: trpc.material.create.mutate(materialFormData as TCreateMaterial),
         onSuccess: { title: MATERIAL_CREATED_MESSAGE },
-        collection: materialCollection,
         onSubmit,
       });
     },

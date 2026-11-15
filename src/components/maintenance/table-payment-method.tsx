@@ -115,7 +115,6 @@ export default function TableMaintenancePaymentMethod({
                       void showToastOnTRPCMutation({
                         mutation: trpc.paymentMethod.restore.mutate({ id: row.original.id }),
                         onSuccess: { title: PAYMENT_METHOD_RESTORED_MESSAGE },
-                        collection: paymentMethodCollection,
                       }),
                   },
                 })}

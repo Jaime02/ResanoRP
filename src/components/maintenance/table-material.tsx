@@ -145,7 +145,6 @@ export default function TableMaintenanceMaterial({ createMaterial, ...props }: T
                       void showToastOnTRPCMutation({
                         mutation: trpc.material.restore.mutate({ id: row.original.id }),
                         onSuccess: { title: MATERIAL_RESTORED_MESSAGE },
-                        collection: materialCollection,
                       }),
                   },
                 })}

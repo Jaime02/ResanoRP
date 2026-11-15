@@ -19,9 +19,7 @@ import { DEFAULT_PAGINATION, type TBaseQueryProps } from "@/types";
 export function useQueryNextDeliveryNoteId({ skip = false }: { skip?: boolean } = {}): number | null {
   const [nextId, setNextId] = useState<number | null>(null);
 
-  // A delivery note created by another user moves the sequence, and arrives here as a new max id. It never arrives
-  // when an on-demand subset snapshot is requested while its change is still in flight
-  // TODO: https://github.com/electric-sql/electric/issues/4847
+  // A delivery note created by another user moves the sequence, and arrives here as a new max id
   const { data: maxIdData } = useLiveQuery((q) => {
     if (skip) return undefined;
     return q

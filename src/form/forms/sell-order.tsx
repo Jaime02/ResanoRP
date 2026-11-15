@@ -201,7 +201,6 @@ export default function FormSellOrder({
                       await showToastOnTRPCMutation({
                         mutation: trpc.sellOrder.restore.mutate(sellOrder.id),
                         onSuccess: { title: SELL_ORDER_RESTORED_MESSAGE },
-                        collection: sellOrderCollection,
                       });
                     },
                   }

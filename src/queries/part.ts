@@ -30,43 +30,48 @@ import { DEFAULT_PAGINATION, type TBaseQueryProps } from "@/types";
 
 export const DEFAULT_PART_SORTING: Array<TSort> = [{ id: "id", desc: false }];
 
+// The ids of the parts with a matching reference, so the parts are joined to one row each instead of to every reference
+function referencedPartIds(q: InitialQueryBuilder, filters?: TPartFilters) {
+  const reference = getFilterValue(filters, "reference");
+  const clientId = getFilterValue(filters, "clientId");
+  if (reference == null && clientId == null) return undefined;
+
+  let query = q
+    .from({ referenceCandidate: partReferenceCollection })
+    .leftJoin({ referenceCandidateClient: clientCollection }, ({ referenceCandidate, referenceCandidateClient }) =>
+      eq(referenceCandidateClient.id, referenceCandidate.clientId),
+    )
+    .where(({ referenceCandidate, referenceCandidateClient }) =>
+      and(
+        isNull(referenceCandidate.deletedAt),
+        or(isUndefined(referenceCandidateClient), isNull(referenceCandidateClient.deletedAt)),
+      ),
+    );
+  if (reference != null) {
+    query = query
+      .where(({ referenceCandidate }) =>
+        ilike(referenceCandidate.reference, getAccentInsensitiveLikePattern(reference)),
+      )
+      .fn.where(({ referenceCandidate }) => includesIgnoringAccents(referenceCandidate.reference, reference));
+  }
+  if (clientId != null && getFilterValue(filters, "includePartReferenceNullClientId") == true) {
+    query = query.where(({ referenceCandidate }) =>
+      or(eq(referenceCandidate.clientId, clientId), isNull(referenceCandidate.clientId)),
+    );
+  } else if (clientId != null) {
+    query = query.where(({ referenceCandidate }) => eq(referenceCandidate.clientId, clientId));
+  }
+
+  return query.select(({ referenceCandidate }) => ({ partId: referenceCandidate.partId })).distinct();
+}
+
 function buildFilteredParts(q: InitialQueryBuilder, filters?: TPartFilters) {
   let query = q.from({ part: partCollection });
-  if (getFilterValue(filters, "reference") != null || getFilterValue(filters, "clientId") != null) {
-    let queryWithPartReference = query
-      .leftJoin({ partReference: partReferenceCollection }, ({ partReference, part }) =>
-        eq(partReference.partId, part.id),
-      )
-      .leftJoin({ partReferenceClient: clientCollection }, ({ partReference, partReferenceClient }) =>
-        eq(partReferenceClient.id, partReference.clientId),
-      )
-      .where(({ partReference, partReferenceClient }) =>
-        and(
-          isNull(partReference.deletedAt),
-          or(isUndefined(partReferenceClient), isNull(partReferenceClient.deletedAt)),
-        ),
-      );
-
-    const reference = getFilterValue(filters, "reference");
-    if (reference != null) {
-      queryWithPartReference = queryWithPartReference
-        .where(({ partReference }) => ilike(partReference.reference, getAccentInsensitiveLikePattern(reference)))
-        .fn.where(({ partReference }) => includesIgnoringAccents(partReference?.reference ?? null, reference));
-    }
-    if (
-      getFilterValue(filters, "clientId") != null &&
-      getFilterValue(filters, "includePartReferenceNullClientId") == true
-    ) {
-      queryWithPartReference = queryWithPartReference.where(({ partReference }) =>
-        or(eq(partReference.clientId, getFilterValue(filters, "clientId")), isNull(partReference.clientId)),
-      );
-    } else if (getFilterValue(filters, "clientId") != null) {
-      queryWithPartReference = queryWithPartReference.where(({ partReference }) =>
-        eq(partReference.clientId, getFilterValue(filters, "clientId")),
-      );
-    }
-
-    query = queryWithPartReference;
+  const referencedParts = referencedPartIds(q, filters);
+  if (referencedParts !== undefined) {
+    query = query.innerJoin({ referencedPart: referencedParts }, ({ referencedPart, part }) =>
+      eq(referencedPart.partId, part.id),
+    );
   }
   const description = getFilterValue(filters, "description");
   if (description != null) {
@@ -118,16 +123,7 @@ function buildFilteredParts(q: InitialQueryBuilder, filters?: TPartFilters) {
   return query;
 }
 
-// Only the reference/client/material filters add a join in buildFilteredParts; those joins
-// can fan a single part out into several rows.
-function partsRequireJoin(filters?: TPartFilters) {
-  return (
-    getFilterValue(filters, "reference") != null ||
-    getFilterValue(filters, "clientId") != null ||
-    partsRequireMaterialJoin(filters)
-  );
-}
-
+// The material join can fan a single part out into several rows
 function partsRequireMaterialJoin(filters?: TPartFilters) {
   return (
     getFilterValue(filters, "materialId") != null ||
@@ -279,7 +275,7 @@ function partSelectProjection({
     ),
   }));
 
-  return partsRequireJoin(filters) ? projected.distinct() : projected;
+  return partsRequireMaterialJoin(filters) ? projected.distinct() : projected;
 }
 
 export function useQueryPartForm({ partId, skip = false }: { partId?: number; skip?: boolean }) {
@@ -316,33 +312,24 @@ export type TPartFormBlueprint = TPartForm["blueprints"][number];
 export type TPartFormPartFeature = TPartForm["features"][number];
 export type TPartFormPartComponent = TPartForm["components"][number];
 
-// Shared with the loaders that preload the table on the server, which only match queries built the same way
-export function partTableQueries({
+export function useQueryPartTable({
   filters,
   pagination = DEFAULT_PAGINATION,
   sorts = DEFAULT_PART_SORTING,
 }: TTablePartState = {}) {
-  return {
-    count: {
-      queryKey: ["partTableCount", filters],
-      query: (q: InitialQueryBuilder) => {
-        const filtered = buildFilteredParts(q, filters)
-          .select(({ part }) => ({ id: part.id }))
-          .distinct();
-        return q.from({ filteredPart: filtered }).select(({ filteredPart }) => ({ count: count(filteredPart.id) }));
-      },
+  const { data: countData, isReady: isCountReady } = useLiveQuery({
+    queryKey: ["partTableCount", filters],
+    query: (q) => {
+      const filtered = buildFilteredParts(q, filters)
+        .select(({ part }) => ({ id: part.id }))
+        .distinct();
+      return q.from({ filteredPart: filtered }).select(({ filteredPart }) => ({ count: count(filteredPart.id) }));
     },
-    parts: {
-      queryKey: ["partTable", filters, pagination, sorts],
-      query: (query: InitialQueryBuilder) => partSelectProjection({ query, filters, pagination, sorts }),
-    },
-  };
-}
-
-export function useQueryPartTable(state: TTablePartState = {}) {
-  const queries = partTableQueries(state);
-  const { data: countData, isReady: isCountReady } = useLiveQuery(queries.count);
-  const { data: partsData, ...rest } = useLiveQuery(queries.parts);
+  });
+  const { data: partsData, ...rest } = useLiveQuery({
+    queryKey: ["partTable", filters, pagination, sorts],
+    query: (query) => partSelectProjection({ query, filters, pagination, sorts }),
+  });
 
   // Replace each row's raw transaction streams with the computed running-balance ledger.
   const data = useMemo(

@@ -1,37 +1,28 @@
-import { electricCollectionOptions } from "@tanstack/electric-db-collection";
-
-import { electricCollection } from "@/collections/base";
-import clientCollection from "@/collections/client";
+import { awaitSynced, powerSyncCollection, powerSyncCollectionOptions } from "@/collections/base";
 import { deliveryMethodSchema } from "@/schemas/delivery-method";
 import trpc from "@/trpc/trpc-client";
 
-const deliveryMethodCollection = electricCollection("delivery_method", (baseOptions, dbClient) =>
-  electricCollectionOptions({
+const deliveryMethodCollection = powerSyncCollection("delivery_method", (baseOptions) =>
+  powerSyncCollectionOptions({
     ...baseOptions,
     schema: deliveryMethodSchema,
     getKey: (item) => item.id,
-    onInsert: async ({ transaction, collection }) => {
+    onInsert: async ({ transaction }) => {
       const { modified: newDeliveryMethod } = transaction.mutations[0];
-      const result = await trpc.deliveryMethod.create.mutate(newDeliveryMethod);
-      await collection.utils.awaitTxId(result.txid);
+      await trpc.deliveryMethod.create.mutate(newDeliveryMethod);
+      await awaitSynced();
     },
-    onUpdate: async ({ transaction, collection }) => {
+    onUpdate: async ({ transaction }) => {
       const { modified: updatedDeliveryMethod } = transaction.mutations[0];
-      const result = await trpc.deliveryMethod.update.mutate(updatedDeliveryMethod);
-      await collection.utils.awaitTxId(result.txid);
+      await trpc.deliveryMethod.update.mutate(updatedDeliveryMethod);
+      await awaitSynced();
     },
-    onDelete: async ({ transaction, collection }) => {
+    onDelete: async ({ transaction }) => {
       const { original: deletedDeliveryMethod } = transaction.mutations[0];
-      const result = await trpc.deliveryMethod.delete.mutate({
+      await trpc.deliveryMethod.delete.mutate({
         id: deletedDeliveryMethod.id,
       });
-      // Awaiting a collection the delete did not write times out
-      await Promise.all([
-        collection.utils.awaitTxId(result.txid),
-        ...(result.updatedClientIds.length > 0
-          ? [dbClient.collection(clientCollection).utils.awaitTxId(result.txid)]
-          : []),
-      ]);
+      await awaitSynced();
     },
   }),
 );

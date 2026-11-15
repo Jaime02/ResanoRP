@@ -1,18 +1,16 @@
-import { electricCollectionOptions } from "@tanstack/electric-db-collection";
-
-import { electricCollection } from "@/collections/base";
+import { awaitSynced, powerSyncCollection, powerSyncCollectionOptions } from "@/collections/base";
 import { configurationSchema } from "@/schemas/configuration";
 import trpc from "@/trpc/trpc-client";
 
-const configurationCollection = electricCollection("configuration", (baseOptions) =>
-  electricCollectionOptions({
+const configurationCollection = powerSyncCollection("configuration", (baseOptions) =>
+  powerSyncCollectionOptions({
     ...baseOptions,
     schema: configurationSchema,
     getKey: (item) => item.id,
-    onUpdate: async ({ transaction, collection }) => {
+    onUpdate: async ({ transaction }) => {
       const { modified: updatedConfiguration } = transaction.mutations[0];
-      const result = await trpc.configuration.update.mutate(updatedConfiguration);
-      await collection.utils.awaitTxId(result.txid);
+      await trpc.configuration.update.mutate(updatedConfiguration);
+      await awaitSynced();
     },
   }),
 );

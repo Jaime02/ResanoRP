@@ -1,6 +1,5 @@
 import { useSelector } from "@tanstack/react-store";
 
-import blueprintCollection from "@/collections/blueprint";
 import { useAppContext } from "@/contexts/app-context";
 import { useAppForm } from "@/form";
 import useResetForm from "@/form/hooks/use-reset-form";
@@ -30,7 +29,6 @@ export default function useCreateBlueprintForm({ partId, onSubmit }: UseCreateBl
       showToastOnTRPCMutation({
         mutation: trpc.blueprint.create.mutate(objectToFormData(input as TCreateBlueprint)),
         onSuccess: { title: BLUEPRINT_CREATED_MESSAGE },
-        collection: blueprintCollection,
         onSubmit,
       }),
     validators: {

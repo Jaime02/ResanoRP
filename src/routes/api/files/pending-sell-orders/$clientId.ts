@@ -2,7 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { z } from "zod";
 
 import { getClientById } from "@/db/functions/client";
-import { getPendingSellOrderLinesByClientId, getSellOrderLineStatus } from "@/db/functions/sell-order-line";
+import { getPendingSellOrderLinesByClientId, getSellOrderLineStatuses } from "@/db/functions/sell-order-line";
 import { renderPendingSellOrders } from "@/files/pending-sell-orders";
 import { DateFormat, formatDate } from "@/lib/formatters";
 import { textResponse } from "@/lib/responses";
@@ -46,22 +46,21 @@ export const Route = createFileRoute("/api/files/pending-sell-orders/$clientId")
         const now = new Date();
 
         try {
+          const statuses = await getSellOrderLineStatuses(lines);
           const pdf = await renderPendingSellOrders({
             clientName: client.name,
             date: formatDate(now, DateFormat.Datetime) ?? "",
-            lines: await Promise.all(
-              sortPendingSellOrderLines(lines).map(async (line) => ({
-                description: line.partReference?.part.description ?? line.description,
-                id: line.id,
-                notes: line.notes,
-                pendingQuantity: line.pendingQuantity,
-                quantity: line.quantity,
-                reference: line.partReference?.reference ?? null,
-                requestedDeliveryDate: formatDate(line.requestedDeliveryDate),
-                sellOrderReference: line.sellOrder?.clientReference ?? String(line.sellOrderId),
-                status: await getSellOrderLineStatus({ sellOrder: line.sellOrder ?? undefined, sellOrderLine: line }),
-              })),
-            ),
+            lines: sortPendingSellOrderLines(lines).map((line) => ({
+              description: line.partReference?.part.description ?? line.description,
+              id: line.id,
+              notes: line.notes,
+              pendingQuantity: line.pendingQuantity,
+              quantity: line.quantity,
+              reference: line.partReference?.reference ?? null,
+              requestedDeliveryDate: formatDate(line.requestedDeliveryDate),
+              sellOrderReference: line.sellOrder?.clientReference ?? String(line.sellOrderId),
+              status: statuses.get(line.id)!,
+            })),
             withCheckboxes,
           });
           const fileName = `Pedidos Pendientes ${sanitizePath(client.name) ?? clientId} ${(formatDate(now) ?? "").replaceAll("/", "-")}.pdf`;

@@ -1,7 +1,6 @@
 import { useSelector } from "@tanstack/react-store";
 import { useCallback, useState } from "react";
 
-import sellOrderLineCollection from "@/collections/sell-order-line";
 import { useAppContext } from "@/contexts/app-context";
 import { useAppForm } from "@/form";
 import useResetForm from "@/form/hooks/use-reset-form";
@@ -52,7 +51,6 @@ export default function useCreateSellOrderLineForm({ sellOrderId, onSubmit }: Us
       await showToastOnTRPCMutation({
         mutation: trpc.sellOrderLine.create.mutate(rest as TCreateSellOrderLine),
         onSuccess: { title: SELL_ORDER_LINE_CREATED_MESSAGE },
-        collection: sellOrderLineCollection,
         onSubmit: async (item) => {
           await onSubmit?.(item);
           formApi.reset();

@@ -1,7 +1,6 @@
 import { FileDownIcon } from "lucide-react";
 import { useCallback, useState } from "react";
 
-import invoiceCollection from "@/collections/invoice";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -33,7 +32,6 @@ export default function DialogAccountInvoices() {
         downloadUrl(`/api/files/accounting-export/${result.fileName}?generatedAt=${Date.now()}`, result.fileName);
         return result;
       }),
-      collection: invoiceCollection,
       onSuccess: { title: INVOICES_ACCOUNTED_MESSAGE },
     });
   }, [showToastOnTRPCMutation]);

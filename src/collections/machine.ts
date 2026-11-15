@@ -1,37 +1,28 @@
-import { electricCollectionOptions } from "@tanstack/electric-db-collection";
-
-import { electricCollection } from "@/collections/base";
-import machineProductionOrderQueueCollection from "@/collections/machine-production-order-queue";
+import { awaitSynced, powerSyncCollection, powerSyncCollectionOptions } from "@/collections/base";
 import { machineSchema } from "@/schemas/machine";
 import trpc from "@/trpc/trpc-client";
 
-const machineCollection = electricCollection("machine", (baseOptions, dbClient) =>
-  electricCollectionOptions({
+const machineCollection = powerSyncCollection("machine", (baseOptions) =>
+  powerSyncCollectionOptions({
     ...baseOptions,
     schema: machineSchema,
     getKey: (item) => item.id,
-    onInsert: async ({ transaction, collection }) => {
+    onInsert: async ({ transaction }) => {
       const { modified: newMachine } = transaction.mutations[0];
-      const result = await trpc.machine.create.mutate(newMachine);
-      await collection.utils.awaitTxId(result.txid);
+      await trpc.machine.create.mutate(newMachine);
+      await awaitSynced();
     },
-    onUpdate: async ({ transaction, collection }) => {
+    onUpdate: async ({ transaction }) => {
       const { modified: updatedMachine } = transaction.mutations[0];
-      const result = await trpc.machine.update.mutate(updatedMachine);
-      await collection.utils.awaitTxId(result.txid);
+      await trpc.machine.update.mutate(updatedMachine);
+      await awaitSynced();
     },
-    onDelete: async ({ transaction, collection }) => {
+    onDelete: async ({ transaction }) => {
       const { original: deletedMachine } = transaction.mutations[0];
-      const result = await trpc.machine.delete.mutate({
+      await trpc.machine.delete.mutate({
         id: deletedMachine.id,
       });
-      // Awaiting a collection the delete did not write times out
-      await Promise.all([
-        collection.utils.awaitTxId(result.txid),
-        ...(result.removedFromQueue
-          ? [dbClient.collection(machineProductionOrderQueueCollection).utils.awaitTxId(result.txid)]
-          : []),
-      ]);
+      await awaitSynced();
     },
   }),
 );

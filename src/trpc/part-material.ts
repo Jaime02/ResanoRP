@@ -5,7 +5,7 @@ import { getPartById } from "@/db/functions/part";
 import { PART_MATERIAL_CONSTRAINT, dbTablePartMaterial } from "@/db/schema";
 import { handleMutationError } from "@/lib/handlers";
 import { partMaterialSchema } from "@/schemas/part-material";
-import { router, generateTxId } from "@/trpc";
+import { router } from "@/trpc";
 import { adminProcedure } from "@/trpc";
 
 const uniqueConstraints = [
@@ -19,9 +19,8 @@ export default router({
   addMaterialToPart: adminProcedure.input(partMaterialSchema).mutation(async ({ ctx, input }) =>
     ctx.db.transaction(async (tx) => {
       try {
-        const txid = await generateTxId(tx);
         const newPartMaterial = (await tx.insert(dbTablePartMaterial).values(input).returning()).at(0);
-        return { item: newPartMaterial, txid };
+        return { item: newPartMaterial };
       } catch (error) {
         handleMutationError({ error, uniqueConstraints });
       }
@@ -30,7 +29,6 @@ export default router({
   deleteMaterialFromPart: adminProcedure.input(partMaterialSchema).mutation(async ({ ctx, input }) =>
     ctx.db.transaction(async (tx) => {
       try {
-        const txid = await generateTxId(tx);
         const deletedPartMaterial = (
           await tx
             .delete(dbTablePartMaterial)
@@ -49,7 +47,7 @@ export default router({
             message: `El Artículo "${updatedPart.description}" no utiliza el Material ${input.materialId}`,
           });
         }
-        return { item: deletedPartMaterial, txid };
+        return { item: deletedPartMaterial };
       } catch (error) {
         handleMutationError({ error });
       }

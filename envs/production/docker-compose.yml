@@ -19,31 +19,72 @@ services:
       - POSTGRES_DB=${POSTGRES_DB}
     volumes:
       - db_data:/var/lib/postgresql/data
+      - ./powersync/init.sql:/init.sql:ro
     ports:
       - "${POSTGRES_PORT}:5432"
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      # See docker-compose.base.yml
+      test:
+        [
+          "CMD-SHELL",
+          "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB} && { test -f /tmp/powersync-init || { psql -U ${POSTGRES_USER} -d ${POSTGRES_DB} -v ON_ERROR_STOP=1 -q -f /init.sql && touch /tmp/powersync-init; }; }",
+        ]
       interval: 2s
-      timeout: 3s
+      timeout: 60s
       retries: 4
-    command: postgres -c wal_level=logical -c listen_addresses='*'
-  electric:
+    # A stopped PowerSync would otherwise keep WAL until the disk fills. Past the cap, it replicates again from scratch
+    command: postgres -c wal_level=logical -c listen_addresses='*' -c max_slot_wal_keep_size=10GB
+  powersync:
     logging: *logging
-    image: electricsql/electric:1.6.0
+    image: journeyapps/powersync-service:1.28.1
     restart: unless-stopped
-    environment:
-      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}?sslmode=disable
-      ELECTRIC_INSECURE: true
-      ELECTRIC_USAGE_REPORTING: false
-    ports:
-      - "${VITE_ELECTRIC_PORT}:3000"
+    command: ["start", "-r", "unified"]
+    environment: &powersync-environment
+      POWERSYNC_CONFIG_PATH: /config/service.yaml
+      PS_DATA_SOURCE_URI: postgresql://powersync_role:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
+      PS_STORAGE_SOURCE_URI: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/powersync_storage
+      PS_JWT_SECRET: ${POWERSYNC_JWT_SECRET}
+    volumes:
+      - ./powersync:/config:ro
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - "fetch('http://localhost:8080/probes/liveness', {signal:AbortSignal.timeout(2500)}).then((r) => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))"
+      interval: 5s
+      timeout: 5s
+      start_period: 30s
+      retries: 15
     depends_on:
       db:
+        condition: service_healthy
+  # See docker/docker-compose.base.yml
+  powersync-compact:
+    logging: *logging
+    image: journeyapps/powersync-service:1.28.1
+    restart: unless-stopped
+    # sh as PID 1 ignores SIGTERM, so without tini every stop waits out the grace period and kills a running compact
+    init: true
+    entrypoint: ["sh", "-c", "while true; do node service/lib/entry.js compact; sleep 600; done"]
+    environment: *powersync-environment
+    volumes:
+      - ./powersync:/config:ro
+    depends_on:
+      powersync:
         condition: service_healthy
   caddy:
     logging: *logging
     image: caddy:2
     restart: unless-stopped
+    # An intermediate that expired while Caddy was stopped still signs the site certificate on the next startup
+    # (net::ERR_CERT_DATE_INVALID). A missing one is created before anything is signed. Browsers only trust the root
+    command:
+      [
+        "sh",
+        "-c",
+        "rm -f /data/caddy/pki/authorities/local/intermediate.* && exec caddy run --config /etc/caddy/Caddyfile --adapter caddyfile",
+      ]
     environment:
       - VITE_HOST=${VITE_HOST}
       - VITE_CADDY_HTTP_PORT=${VITE_CADDY_HTTP_PORT}
@@ -59,6 +100,8 @@ services:
     depends_on:
       app:
         condition: service_healthy
+      powersync:
+        condition: service_healthy
   app:
     logging: *logging
     image: resanorp-app:production
@@ -68,7 +111,6 @@ services:
     env_file: .env
     environment:
       - DATABASE_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}?sslmode=disable
-      - ELECTRIC_URL=http://electric:3000
       - PORT=5173
     volumes:
       - vite_cache:/app/node_modules/.vite

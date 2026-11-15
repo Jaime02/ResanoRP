@@ -2,8 +2,6 @@ import { useNavigate } from "@tanstack/react-router";
 import { ArrowUpToLineIcon, PlayIcon } from "lucide-react";
 import { useCallback, useMemo } from "react";
 
-import machineCollection from "@/collections/machine";
-import machineProductionOrderQueueCollection from "@/collections/machine-production-order-queue";
 import DialogBlueprintViewer from "@/components/dialog/blueprint-viewer";
 import CogWorking from "@/components/icons/cog-working";
 import ShapeIcon from "@/components/icons/shape";
@@ -79,7 +77,6 @@ export default function TableMachineProductionOrderQueue({
           productionOrderId,
         }),
         onSuccess: { title: PRODUCTION_ORDER_ASSIGNED_MESSAGE },
-        collection: [machineCollection, machineProductionOrderQueueCollection],
         onSubmit: async () =>
           navigate({
             search: (prev) => ({ ...prev, dialogMachineProductionOrderQueueOpen: undefined }),
@@ -161,7 +158,6 @@ export default function TableMachineProductionOrderQueue({
                         productionOrderId: row.original.id,
                       }),
                       onSuccess: { title: PRODUCTION_ORDER_PRIORITIZED_MESSAGE },
-                      collection: machineProductionOrderQueueCollection,
                     });
                   }}
                 >

@@ -4,7 +4,7 @@ import { and, eq, isNotNull } from "drizzle-orm";
 import { COATING_NAME_CONSTRAINT, dbTableCoating, dbTablePart } from "@/db/schema";
 import { handleMutationError } from "@/lib/handlers";
 import { createModelWithNameSchema, requiredIdObjectSchema, updateModelWithNameSchema } from "@/schemas";
-import { router, generateTxId } from "@/trpc";
+import { router } from "@/trpc";
 import { adminProcedure } from "@/trpc";
 
 const uniqueConstraints = [
@@ -18,7 +18,6 @@ export default router({
   create: adminProcedure.input(createModelWithNameSchema).mutation(async ({ ctx, input }) =>
     ctx.db.transaction(async (tx) => {
       try {
-        const txid = await generateTxId(tx);
         const newCoating = (await tx.insert(dbTableCoating).values(input).returning()).at(0);
         if (!newCoating) {
           throw new TRPCError({
@@ -26,7 +25,7 @@ export default router({
             message: "Error al crear el Tratamiento",
           });
         }
-        return { item: newCoating, txid };
+        return { item: newCoating };
       } catch (error) {
         handleMutationError({ error, uniqueConstraints });
       }
@@ -35,7 +34,6 @@ export default router({
   update: adminProcedure.input(updateModelWithNameSchema).mutation(async ({ ctx, input }) =>
     ctx.db.transaction(async (tx) => {
       try {
-        const txid = await generateTxId(tx);
         const updatedCoating = (
           await tx.update(dbTableCoating).set(input).where(eq(dbTableCoating.id, input.id)).returning()
         ).at(0);
@@ -45,7 +43,7 @@ export default router({
             message: `Tratamiento con ID ${input.id} no encontrado`,
           });
         }
-        return { item: updatedCoating, txid };
+        return { item: updatedCoating };
       } catch (error) {
         handleMutationError({ error, uniqueConstraints });
       }
@@ -54,7 +52,6 @@ export default router({
   delete: adminProcedure.input(requiredIdObjectSchema).mutation(async ({ ctx, input }) =>
     ctx.db.transaction(async (tx) => {
       try {
-        const txid = await generateTxId(tx);
         const deletedCoating = (
           await tx
             .update(dbTableCoating)
@@ -68,12 +65,8 @@ export default router({
             message: `Tratamiento con ID ${input.id} no encontrado`,
           });
         }
-        const updatedParts = await tx
-          .update(dbTablePart)
-          .set({ coatingId: null })
-          .where(eq(dbTablePart.coatingId, input.id))
-          .returning({ id: dbTablePart.id });
-        return { item: deletedCoating, txid, updatedPartIds: updatedParts.map((part) => part.id) };
+        await tx.update(dbTablePart).set({ coatingId: null }).where(eq(dbTablePart.coatingId, input.id));
+        return { item: deletedCoating };
       } catch (error) {
         handleMutationError({ error });
       }
@@ -82,7 +75,6 @@ export default router({
   restore: adminProcedure.input(requiredIdObjectSchema).mutation(async ({ ctx, input }) =>
     ctx.db.transaction(async (tx) => {
       try {
-        const txid = await generateTxId(tx);
         const restoredCoating = (
           await tx
             .update(dbTableCoating)
@@ -96,7 +88,7 @@ export default router({
             message: `Tratamiento con ID ${input.id} no encontrado o no eliminado`,
           });
         }
-        return { item: restoredCoating, txid };
+        return { item: restoredCoating };
       } catch (error) {
         handleMutationError({ error, uniqueConstraints });
       }

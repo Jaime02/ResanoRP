@@ -1,12 +1,9 @@
-import { electricCollectionOptions } from "@tanstack/electric-db-collection";
-
-import { electricCollection } from "@/collections/base";
+import { powerSyncCollection, powerSyncCollectionOptions } from "@/collections/base";
 import { treatmentShipmentSchema } from "@/schemas/treatment";
 
-const treatmentShipmentCollection = electricCollection("treatment_shipment", (baseOptions) =>
-  electricCollectionOptions({
+const treatmentShipmentCollection = powerSyncCollection("treatment_shipment", (baseOptions) =>
+  powerSyncCollectionOptions({
     ...baseOptions,
-    syncMode: "on-demand",
     schema: treatmentShipmentSchema,
     getKey: (item) => item.id,
   }),

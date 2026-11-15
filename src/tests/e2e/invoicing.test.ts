@@ -15,7 +15,11 @@ import { formatDate, formatPrice } from "@/lib/formatters";
 import { formatCents, getLineTotalInCents } from "@/lib/prices";
 import { NEXT_PAGE_LABEL, CLIENT_LABEL, DATE_LABEL, FROM_LABEL, TO_LABEL } from "@/messages/common";
 import { ACCOUNTED_DELIVERY_NOTE_MESSAGE } from "@/messages/delivery-note";
-import { INVOICE_CREATE_TITLE, INVOICE_NOT_SENT_UNPRICED_MESSAGE } from "@/messages/invoice";
+import {
+  INVOICE_CREATE_TITLE,
+  INVOICE_NOT_DELETED_NOT_LAST_MESSAGE,
+  INVOICE_NOT_SENT_UNPRICED_MESSAGE,
+} from "@/messages/invoice";
 import {
   MOCK_INITIAL_DATE,
   mockClientInvoiceEmails,
@@ -168,6 +172,8 @@ test("create, change and delete invoices", async ({ page, db }) => {
     expect(email).toContain(`filename="Factura ${invoice.id}.pdf"`);
     await expect(rowInvoice.getByTestId("checkbox-sent")).toBeChecked();
     expect((await getInvoiceById(invoice.id))?.sent).toBe(true);
+    // The Cliente would keep a Factura that no longer exists
+    await expect(rowInvoice.getByTestId("button-delete")).toBeDisabled();
   });
 
   await test.step("deleting a line of an invoiced delivery note marks its invoice to be accounted and sent again", async () => {
@@ -559,7 +565,18 @@ test("create, change and delete invoices", async ({ page, db }) => {
     for (const clientWithDeliveryNotes of clientsWithDeliveryNotes) {
       invoices.push(await workflowCreateInvoice(page, { client: clientWithDeliveryNotes }));
     }
-    const [deletedInvoice, ...remainingInvoices] = invoices;
+    const deletedInvoice = invoices.at(-1)!;
+    const remainingInvoices = invoices.slice(0, -1);
+
+    // Only the last Factura can be deleted, so the numbering has no gaps
+    const notLastMessage = INVOICE_NOT_DELETED_NOT_LAST_MESSAGE(remainingInvoices[0].id, deletedInvoice.id);
+    await openAndConfirmAlertDialog(
+      page,
+      getTableRowByTestId(tableInvoices, remainingInvoices[0].id).getByTestId("button-delete"),
+      "dialog-delete-model-content",
+    );
+    await expectSingleToast(page, notLastMessage);
+    expectRejectedMutation({ code: "BAD_REQUEST", message: notLastMessage, procedurePath: "invoice.delete" });
 
     await workflowDeleteInvoice(page, deletedInvoice.id);
 
@@ -577,6 +594,8 @@ test("create, change and delete invoices", async ({ page, db }) => {
     const reinvoicedInvoice = await workflowCreateInvoice(page, {
       client: getMockClientById(deletedInvoice.clientId)!,
     });
+    // The number of the deleted Factura is given again
+    expect(reinvoicedInvoice.id).toBe(deletedInvoice.id);
     expect(reinvoicedInvoice.deliveryNotes.map((deliveryNote) => deliveryNote.id).sort((a, b) => a - b)).toEqual(
       deletedInvoice.deliveryNotes.map((deliveryNote) => deliveryNote.id).sort((a, b) => a - b),
     );

@@ -1,7 +1,6 @@
 import { Undo2Icon } from "lucide-react";
 import { useState } from "react";
 
-import invoiceCollection from "@/collections/invoice";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -49,7 +48,6 @@ export default function DialogUnaccountInvoice({ invoiceId, disabled }: DialogUn
             onClick={() =>
               void showToastOnTRPCMutation({
                 mutation: trpc.invoice.unaccount.mutate({ id: invoiceId }),
-                collection: invoiceCollection,
                 onSuccess: { title: INVOICE_UNACCOUNTED_MESSAGE },
               })
             }

@@ -5,7 +5,7 @@ import { RAW_MATERIAL_NAME_CONSTRAINT, dbTableRawMaterial } from "@/db/schema";
 import { handleMutationError } from "@/lib/handlers";
 import { requiredIdObjectSchema } from "@/schemas";
 import { createRawMaterialSchema, updateRawMaterialSchema } from "@/schemas/raw-material";
-import { router, generateTxId } from "@/trpc";
+import { router } from "@/trpc";
 import { adminProcedure } from "@/trpc";
 
 const uniqueConstraints = [
@@ -19,8 +19,6 @@ export default router({
   create: adminProcedure.input(createRawMaterialSchema).mutation(async ({ ctx, input }) =>
     ctx.db.transaction(async (tx) => {
       try {
-        const txid = await generateTxId(tx);
-
         const newRawMaterial = (await tx.insert(dbTableRawMaterial).values(input).returning()).at(0);
         if (!newRawMaterial) {
           throw new TRPCError({
@@ -29,7 +27,7 @@ export default router({
           });
         }
 
-        return { item: newRawMaterial, txid };
+        return { item: newRawMaterial };
       } catch (error) {
         handleMutationError({ error, uniqueConstraints });
       }
@@ -38,7 +36,6 @@ export default router({
   update: adminProcedure.input(updateRawMaterialSchema).mutation(async ({ ctx, input }) =>
     ctx.db.transaction(async (tx) => {
       try {
-        const txid = await generateTxId(tx);
         const updatedRawMaterial = (
           await tx.update(dbTableRawMaterial).set(input).where(eq(dbTableRawMaterial.id, input.id)).returning()
         ).at(0);
@@ -48,7 +45,7 @@ export default router({
             message: `Materia Prima con ID ${input.id} no encontrada`,
           });
         }
-        return { item: updatedRawMaterial, txid };
+        return { item: updatedRawMaterial };
       } catch (error) {
         handleMutationError({ error, uniqueConstraints });
       }
@@ -57,7 +54,6 @@ export default router({
   delete: adminProcedure.input(requiredIdObjectSchema).mutation(async ({ ctx, input }) =>
     ctx.db.transaction(async (tx) => {
       try {
-        const txid = await generateTxId(tx);
         const deletedRawMaterial = (
           await tx
             .update(dbTableRawMaterial)
@@ -71,7 +67,7 @@ export default router({
             message: `Materia Prima con ID ${input.id} no encontrada`,
           });
         }
-        return { item: deletedRawMaterial, txid };
+        return { item: deletedRawMaterial };
       } catch (error) {
         handleMutationError({ error });
       }
@@ -80,7 +76,6 @@ export default router({
   restore: adminProcedure.input(requiredIdObjectSchema).mutation(async ({ ctx, input }) =>
     ctx.db.transaction(async (tx) => {
       try {
-        const txid = await generateTxId(tx);
         const restoredRawMaterial = (
           await tx
             .update(dbTableRawMaterial)
@@ -94,7 +89,7 @@ export default router({
             message: `Materia Prima con ID ${input.id} no encontrada o no eliminada`,
           });
         }
-        return { item: restoredRawMaterial, txid };
+        return { item: restoredRawMaterial };
       } catch (error) {
         handleMutationError({ error, uniqueConstraints });
       }

@@ -119,7 +119,6 @@ export default function PartReferencesTable({
                             void showToastOnTRPCMutation({
                               mutation: trpc.partReference.restore.mutate({ id: row.original.id }),
                               onSuccess: { title: PART_REFERENCE_RESTORED_MESSAGE },
-                              collection: partReferenceCollection,
                             }),
                         },
                       })}

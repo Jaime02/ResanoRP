@@ -1,8 +1,6 @@
 import { CheckIcon, PackageCheckIcon, PlusIcon } from "lucide-react";
 import { useMemo, useState } from "react";
 
-import treatmentReceptionCollection from "@/collections/treatment-reception";
-import treatmentShipmentCollection from "@/collections/treatment-shipment";
 import DialogBlueprintViewer from "@/components/dialog/blueprint-viewer";
 import BaseTable from "@/components/table/base-table";
 import ButtonDeleteModel from "@/components/table/button-delete-model";
@@ -142,7 +140,6 @@ export default function TableTreatmentBatch({ batch }: { batch: TTreatmentBatch 
                   onConfirm={() =>
                     void showToastOnTRPCMutation({
                       mutation: trpc.treatment.deleteReception.mutate({ id: treatmentReception.id }),
-                      collection: treatmentReceptionCollection,
                       onSuccess: { title: RECEPTION_DELETED_MESSAGE },
                     })
                   }
@@ -201,7 +198,6 @@ export default function TableTreatmentBatch({ batch }: { batch: TTreatmentBatch 
                 onConfirm: () =>
                   void showToastOnTRPCMutation({
                     mutation: trpc.treatment.deleteShipment.mutate({ id: row.original.id }),
-                    collection: treatmentShipmentCollection,
                     onSuccess: { title: SHIPMENT_DELETED_MESSAGE },
                   }),
               },
@@ -237,7 +233,6 @@ export default function TableTreatmentBatch({ batch }: { batch: TTreatmentBatch 
               setIsReceiving(true);
               const result = await showToastOnTRPCMutation({
                 mutation: trpc.treatment.receive.mutate(items),
-                collection: treatmentReceptionCollection,
                 onSuccess: { title: PARTS_RECEIVED_FROM_TREATMENT_MESSAGE },
               });
               if (result !== null) {

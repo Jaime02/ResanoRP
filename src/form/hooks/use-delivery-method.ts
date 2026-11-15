@@ -1,6 +1,5 @@
 import { useSelector } from "@tanstack/react-store";
 
-import deliveryMethodCollection from "@/collections/delivery-method";
 import { useAppContext } from "@/contexts/app-context";
 import { useAppForm } from "@/form";
 import useResetForm from "@/form/hooks/use-reset-form";
@@ -64,7 +63,6 @@ export default function useDeliveryMethodForm({
         onSuccess: {
           title: formMode === FormMode.Create ? DELIVERY_METHOD_CREATED_MESSAGE : DELIVERY_METHOD_EDITED_MESSAGE,
         },
-        collection: deliveryMethodCollection,
         onSubmit: async (item) => {
           await onSubmit?.(item);
           if (formMode === FormMode.Create) formApi.reset();

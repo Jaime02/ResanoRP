@@ -1,10 +1,8 @@
-import { electricCollectionOptions } from "@tanstack/electric-db-collection";
-
-import { electricCollection } from "@/collections/base";
+import { powerSyncCollection, powerSyncCollectionOptions } from "@/collections/base";
 import { shapeSchema } from "@/schemas/shape";
 
-const shapeCollection = electricCollection("shape", (baseOptions) =>
-  electricCollectionOptions({
+const shapeCollection = powerSyncCollection("shape", (baseOptions) =>
+  powerSyncCollectionOptions({
     ...baseOptions,
     schema: shapeSchema,
     getKey: (item) => item.id,

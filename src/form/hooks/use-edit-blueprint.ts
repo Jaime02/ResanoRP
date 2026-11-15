@@ -1,6 +1,5 @@
 import { useSelector } from "@tanstack/react-store";
 
-import blueprintCollection from "@/collections/blueprint";
 import { useAppContext } from "@/contexts/app-context";
 import { useAppForm } from "@/form";
 import useResetForm from "@/form/hooks/use-reset-form";
@@ -29,7 +28,6 @@ export default function useEditBlueprintForm({ blueprint, onSubmit }: UseEditBlu
       showToastOnTRPCMutation({
         mutation: trpc.blueprint.update.mutate(input as TUpdateBlueprintForm),
         onSuccess: { title: BLUEPRINT_EDITED_MESSAGE },
-        collection: blueprintCollection,
         onSubmit,
       }),
     validators: {

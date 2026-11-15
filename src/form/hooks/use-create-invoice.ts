@@ -1,8 +1,6 @@
 import { useSelector } from "@tanstack/react-store";
 import { useEffect, useMemo } from "react";
 
-import deliveryNoteCollection from "@/collections/delivery-note";
-import invoiceCollection from "@/collections/invoice";
 import { useAppContext } from "@/contexts/app-context";
 import { useAppForm } from "@/form";
 import { endOfAppDay, startOfAppDay } from "@/lib/dates";
@@ -35,7 +33,6 @@ export default function useCreateInvoiceForm({ onSubmit }: UseCreateInvoiceFormP
       const result = await showToastOnTRPCMutation({
         mutation: trpc.invoice.create.mutate(createInvoiceFormData as TFormCreateInvoice),
         onSuccess: { title: INVOICE_CREATED_MESSAGE },
-        collection: [invoiceCollection, deliveryNoteCollection],
         onSubmit,
       });
       if (result !== null) {

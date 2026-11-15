@@ -7,7 +7,7 @@ import { dbTablePartFeature, dbTableQualityCheck } from "@/db/schema";
 import { handleMutationError } from "@/lib/handlers";
 import { isWithinPartFeatureRange } from "@/schemas/part-feature";
 import { createQualityCheckSchema } from "@/schemas/quality-check";
-import { generateTxId, procedure, router } from "@/trpc";
+import { procedure, router } from "@/trpc";
 
 async function getQualityControlProductionOrder(productionOrderId: number, tx: TDatabase) {
   const productionOrder = await getProductionOrderById(productionOrderId, tx);
@@ -36,7 +36,6 @@ export default router({
   create: procedure.input(createQualityCheckSchema).mutation(async ({ ctx, input }) =>
     ctx.db.transaction(async (tx) => {
       try {
-        const txid = await generateTxId(tx);
         const productionOrder = await getQualityControlProductionOrder(input.productionOrderId, tx);
         const partFeatures = await tx
           .select()
@@ -86,7 +85,7 @@ export default router({
             }),
           )
           .returning();
-        return { item: { qualityChecks }, txid };
+        return { item: { qualityChecks } };
       } catch (error) {
         handleMutationError({ error });
       }

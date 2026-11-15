@@ -1,6 +1,5 @@
 import { useSelector } from "@tanstack/react-store";
 
-import partStockCollection from "@/collections/part-stock";
 import { useAppContext } from "@/contexts/app-context";
 import { useAppForm } from "@/form";
 import { PART_STOCK_CREATED_MESSAGE } from "@/messages/part";
@@ -33,7 +32,6 @@ export default function useCreatePartStockForm({ partId, onSubmit }: UseCreatePa
       showToastOnTRPCMutation({
         mutation: trpc.partStock.create.mutate(partStockFormData as TCreatePartStock),
         onSuccess: { title: PART_STOCK_CREATED_MESSAGE },
-        collection: partStockCollection,
         onSubmit,
       }),
     validators: {

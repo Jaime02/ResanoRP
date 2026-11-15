@@ -1,0 +1,32 @@
+# yaml-language-server: $schema=https://unpkg.com/@powersync/service-schema@1.28.1/json-schema/powersync-config.json
+telemetry:
+  disable_telemetry_sharing: true
+
+replication:
+  connections:
+    - type: postgresql
+      uri: !env PS_DATA_SOURCE_URI
+      sslmode: disable
+
+# Its own database on the same server: the publication covers every table of the app database, so storage tables there
+# would be replicated back into PowerSync
+storage:
+  type: postgresql
+  uri: !env PS_STORAGE_SOURCE_URI
+  sslmode: disable
+
+port: 8080
+
+sync_config:
+  path: sync-config.yaml
+
+# The app has no user login, so the app server signs every browser a token with this shared secret. The kid and the
+# audience match POWERSYNC_JWT_KEY_ID and POWERSYNC_JWT_AUDIENCE in src/lib/powersync-token.ts
+client_auth:
+  jwks:
+    keys:
+      - kty: oct
+        alg: HS256
+        kid: resanorp
+        k: !env PS_JWT_SECRET
+  audience: ["powersync"]

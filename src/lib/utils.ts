@@ -35,9 +35,8 @@ export function includesIgnoringAccents(text: string | null, search: string): bo
   return text !== null && removeAccents(text).toLowerCase().includes(removeAccents(search).toLowerCase());
 }
 
-// Electric can't push unaccent down to Postgres, so any letter that may carry an accent matches any character and
-// includesIgnoringAccents narrows the loaded rows down
-// ponytail: a search made only of those letters loads almost every row, an unaccented generated column if that hurts
+// A query pushes a `where` down below its joins, but not a functional one, so this pattern filters early with every
+// letter that may carry an accent matching any character, and includesIgnoringAccents narrows the rows down
 export function getAccentInsensitiveLikePattern(search: string): string {
   return `%${removeAccents(search).replace(/[aeiounc]/gi, "_")}%`;
 }

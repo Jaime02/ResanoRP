@@ -17,7 +17,7 @@ import {
   updateDeliveryNoteLinePriceSchema,
   updateDeliveryNoteLineSchema,
 } from "@/schemas/delivery-note-line";
-import { router, generateTxId } from "@/trpc";
+import { router } from "@/trpc";
 import { adminProcedure, procedure } from "@/trpc";
 
 export default router({
@@ -30,11 +30,7 @@ export default router({
             message: "Solo el Administrador puede poner el precio de una Línea del Albarán",
           });
         }
-        const txid = await generateTxId(tx);
-        const resetInvoiceIds = await resetChangedDeliveryNoteInvoice(
-          { deliveryNoteId: input.deliveryNoteId, isAdmin: ctx.isAdmin },
-          tx,
-        );
+        await resetChangedDeliveryNoteInvoice({ deliveryNoteId: input.deliveryNoteId, isAdmin: ctx.isAdmin }, tx);
         const vatPercentage = await getConfigurationVatPercentage(tx);
         const newDeliveryNoteLine = (
           await tx
@@ -48,7 +44,7 @@ export default router({
             message: "Error al crear la Línea del Albarán",
           });
         }
-        return { item: newDeliveryNoteLine, txid, resetInvoiceIds };
+        return { item: newDeliveryNoteLine };
       } catch (error) {
         handleMutationError({ error });
       }
@@ -57,7 +53,6 @@ export default router({
   update: procedure.input(updateDeliveryNoteLineSchema).mutation(async ({ ctx, input }) =>
     ctx.db.transaction(async (tx) => {
       try {
-        const txid = await generateTxId(tx);
         const previousDeliveryNoteLine = await tx.query.dbTableDeliveryNoteLine.findFirst({ where: { id: input.id } });
         const updatedDeliveryNoteLine = (
           await tx
@@ -78,21 +73,12 @@ export default router({
             ? undefined
             : await getSellOrderLineById(updatedDeliveryNoteLine.sellOrderLineId, tx);
         if (sellOrderLine) assertPendingQuantityWithinQuantity(sellOrderLine, addedPendingQuantity);
-        const updatedSellOrderLineId = await addSellOrderLinePendingQuantity(
-          updatedDeliveryNoteLine.sellOrderLineId,
-          addedPendingQuantity,
-          tx,
-        );
-        const resetInvoiceIds = await resetChangedDeliveryNoteInvoice(
+        await addSellOrderLinePendingQuantity(updatedDeliveryNoteLine.sellOrderLineId, addedPendingQuantity, tx);
+        await resetChangedDeliveryNoteInvoice(
           { deliveryNoteId: updatedDeliveryNoteLine.deliveryNoteId, isAdmin: ctx.isAdmin },
           tx,
         );
-        return {
-          item: updatedDeliveryNoteLine,
-          txid,
-          resetInvoiceIds,
-          updatedSellOrderLineIds: updatedSellOrderLineId === undefined ? [] : [updatedSellOrderLineId],
-        };
+        return { item: updatedDeliveryNoteLine };
       } catch (error) {
         handleMutationError({ error });
       }
@@ -101,7 +87,6 @@ export default router({
   updatePrice: adminProcedure.input(updateDeliveryNoteLinePriceSchema).mutation(async ({ ctx, input }) =>
     ctx.db.transaction(async (tx) => {
       try {
-        const txid = await generateTxId(tx);
         const updatedDeliveryNoteLine = (
           await tx
             .update(dbTableDeliveryNoteLine)
@@ -115,11 +100,11 @@ export default router({
             message: `Línea del Albarán con ID ${input.id} no encontrada`,
           });
         }
-        const resetInvoiceIds = await resetChangedDeliveryNoteInvoice(
+        await resetChangedDeliveryNoteInvoice(
           { deliveryNoteId: updatedDeliveryNoteLine.deliveryNoteId, isAdmin: ctx.isAdmin },
           tx,
         );
-        return { item: updatedDeliveryNoteLine, txid, resetInvoiceIds };
+        return { item: updatedDeliveryNoteLine };
       } catch (error) {
         handleMutationError({ error });
       }
@@ -128,24 +113,15 @@ export default router({
   delete: adminProcedure.input(requiredIdObjectSchema).mutation(async ({ ctx, input }) =>
     ctx.db.transaction(async (tx) => {
       try {
-        const txid = await generateTxId(tx);
         const deletedDeliveryNoteLineResult = await deleteDeliveryNoteLine(input.id, tx);
-        const resetInvoiceIds = await resetChangedDeliveryNoteInvoice(
+        await resetChangedDeliveryNoteInvoice(
           {
             deliveryNoteId: deletedDeliveryNoteLineResult.deletedDeliveryNoteLine.deliveryNoteId,
             isAdmin: ctx.isAdmin,
           },
           tx,
         );
-        return {
-          item: deletedDeliveryNoteLineResult.deletedDeliveryNoteLine,
-          txid,
-          resetInvoiceIds,
-          updatedSellOrderLineIds:
-            deletedDeliveryNoteLineResult.updatedSellOrderLineId === undefined
-              ? []
-              : [deletedDeliveryNoteLineResult.updatedSellOrderLineId],
-        };
+        return { item: deletedDeliveryNoteLineResult.deletedDeliveryNoteLine };
       } catch (error) {
         handleMutationError({ error });
       }

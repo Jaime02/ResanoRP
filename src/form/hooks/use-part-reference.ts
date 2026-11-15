@@ -1,6 +1,5 @@
 import { useSelector } from "@tanstack/react-store";
 
-import partReferenceCollection from "@/collections/part-reference";
 import { useAppContext } from "@/contexts/app-context";
 import { useAppForm } from "@/form";
 import useResetForm from "@/form/hooks/use-reset-form";
@@ -80,7 +79,6 @@ export default function usePartReferenceForm({
         onSuccess: {
           title: formMode === FormMode.Create ? PART_REFERENCE_CREATED_MESSAGE : PART_REFERENCE_EDITED_MESSAGE,
         },
-        collection: partReferenceCollection,
         onSubmit: async (item) => {
           await onSubmit?.(item);
           if (formMode === FormMode.Create) formApi.reset();

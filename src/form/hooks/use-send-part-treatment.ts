@@ -1,6 +1,5 @@
 import { useSelector } from "@tanstack/react-store";
 
-import treatmentShipmentCollection from "@/collections/treatment-shipment";
 import { useAppContext } from "@/contexts/app-context";
 import { useAppForm } from "@/form";
 import { PARTS_SENT_TO_TREATMENT_MESSAGE } from "@/messages/treatment";
@@ -26,7 +25,6 @@ export default function useSendPartTreatmentForm({ onSubmit }: UseSendPartTreatm
       showToastOnTRPCMutation({
         mutation: trpc.treatment.sendPart.mutate(sendPartTreatmentFormData as TSendPartTreatment),
         onSuccess: { title: PARTS_SENT_TO_TREATMENT_MESSAGE },
-        collection: treatmentShipmentCollection,
         onSubmit,
       }),
     validators: {

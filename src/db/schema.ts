@@ -13,7 +13,7 @@ import {
 } from "drizzle-orm/pg-core";
 import type { PgColumn } from "drizzle-orm/pg-core";
 
-// With time zone so Electric sends the offset, otherwise browsers parse the UTC values as local time
+// With time zone so PowerSync sends the offset, otherwise browsers parse the UTC values as local time
 const datetimeType = (colName: string) => timestamp(colName, { withTimezone: true });
 const deletedAtType = datetimeType("deletedAt");
 const idType = integer("id").generatedByDefaultAsIdentity({ startWith: 1 }).primaryKey();

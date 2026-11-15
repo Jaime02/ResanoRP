@@ -1,33 +1,23 @@
-import { electricCollectionOptions } from "@tanstack/electric-db-collection";
-
-import { electricCollection } from "@/collections/base";
-import blueprintCollection from "@/collections/blueprint";
+import { awaitSynced, powerSyncCollection, powerSyncCollectionOptions } from "@/collections/base";
 import { partSchema } from "@/schemas/part";
 import trpc from "@/trpc/trpc-client";
 
-const partCollection = electricCollection("part", (baseOptions, dbClient) =>
-  electricCollectionOptions({
+const partCollection = powerSyncCollection("part", (baseOptions) =>
+  powerSyncCollectionOptions({
     ...baseOptions,
-    syncMode: "on-demand",
     schema: partSchema,
     getKey: (item) => item.id,
-    onUpdate: async ({ transaction, collection }) => {
+    onUpdate: async ({ transaction }) => {
       const { modified: updatedPart } = transaction.mutations[0];
-      const result = await trpc.part.update.mutate(updatedPart);
-      await collection.utils.awaitTxId(result.txid);
+      await trpc.part.update.mutate(updatedPart);
+      await awaitSynced();
     },
-    onDelete: async ({ transaction, collection }) => {
+    onDelete: async ({ transaction }) => {
       const { original: deletedPart } = transaction.mutations[0];
-      const result = await trpc.part.delete.mutate({
+      await trpc.part.delete.mutate({
         id: deletedPart.id,
       });
-      // Awaiting a collection the delete did not write times out
-      await Promise.all([
-        collection.utils.awaitTxId(result.txid),
-        ...(result.deletedBlueprintIds.length > 0
-          ? [dbClient.collection(blueprintCollection).utils.awaitTxId(result.txid)]
-          : []),
-      ]);
+      await awaitSynced();
     },
   }),
 );

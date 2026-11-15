@@ -57,7 +57,7 @@ export function useQueryPendingSellOrderLines({
   clientId?: number | null;
   sellOrderId?: number | null;
 }) {
-  // No Cliente chosen yet has no pending lines, and an on-demand collection cannot load a comparison with null
+  // No Cliente chosen yet has no pending lines
   const hasNoClient = sellOrderId === undefined && clientId === null;
   const { data, ...rest } = useLiveQuery((q) => {
     if ((clientId === undefined && sellOrderId === undefined) || hasNoClient) {

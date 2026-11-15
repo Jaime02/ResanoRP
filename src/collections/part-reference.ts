@@ -1,31 +1,28 @@
-import { electricCollectionOptions } from "@tanstack/electric-db-collection";
-
-import { electricCollection } from "@/collections/base";
+import { awaitSynced, powerSyncCollection, powerSyncCollectionOptions } from "@/collections/base";
 import { partReferenceSchema } from "@/schemas/part-reference";
 import trpc from "@/trpc/trpc-client";
 
-const partReferenceCollection = electricCollection("part_reference", (baseOptions) =>
-  electricCollectionOptions({
+const partReferenceCollection = powerSyncCollection("part_reference", (baseOptions) =>
+  powerSyncCollectionOptions({
     ...baseOptions,
-    syncMode: "on-demand",
     schema: partReferenceSchema,
     getKey: (item) => item.id,
-    onInsert: async ({ transaction, collection }) => {
+    onInsert: async ({ transaction }) => {
       const { modified: newPartReference } = transaction.mutations[0];
-      const result = await trpc.partReference.create.mutate(newPartReference);
-      await collection.utils.awaitTxId(result.txid);
+      await trpc.partReference.create.mutate(newPartReference);
+      await awaitSynced();
     },
-    onUpdate: async ({ transaction, collection }) => {
+    onUpdate: async ({ transaction }) => {
       const { modified: updatedPartReference } = transaction.mutations[0];
-      const result = await trpc.partReference.update.mutate(updatedPartReference);
-      await collection.utils.awaitTxId(result.txid);
+      await trpc.partReference.update.mutate(updatedPartReference);
+      await awaitSynced();
     },
-    onDelete: async ({ transaction, collection }) => {
+    onDelete: async ({ transaction }) => {
       const { original: deletedPartReference } = transaction.mutations[0];
-      const result = await trpc.partReference.delete.mutate({
+      await trpc.partReference.delete.mutate({
         id: deletedPartReference.id,
       });
-      await collection.utils.awaitTxId(result.txid);
+      await awaitSynced();
     },
   }),
 );

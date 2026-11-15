@@ -15,35 +15,84 @@ services:
       - POSTGRES_DB=${POSTGRES_DB}
     volumes:
       - db_data:/var/lib/postgresql/data
+      - ./docker/powersync/init.sql:/init.sql:ro
     networks:
       - frontend
     ports:
       - "${POSTGRES_PORT}:5432"
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      # Healthy only once init.sql, PowerSync's storage database, publication and role, has run in this container. Once
+      # per container instead of per volume, so it also covers a volume created before PowerSync or restored from a dump
+      test:
+        [
+          "CMD-SHELL",
+          "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB} && { test -f /tmp/powersync-init || { psql -U ${POSTGRES_USER} -d ${POSTGRES_DB} -v ON_ERROR_STOP=1 -q -f /init.sql && touch /tmp/powersync-init; }; }",
+        ]
       interval: 2s
-      timeout: 3s
+      # A timeout kills the shell but not psql, so an init.sql slower than it never reaches the touch and the db never
+      # turns healthy. pg_isready gives up after 3s by itself
+      timeout: 60s
       retries: 4
-    command: postgres -c wal_level=logical -c listen_addresses='*'
-  electric:
+    # A stopped PowerSync would otherwise keep WAL until the disk fills. Past the cap, it replicates again from scratch
+    command: postgres -c wal_level=logical -c listen_addresses='*' -c max_slot_wal_keep_size=10GB
+  powersync:
     logging: *logging
-    image: electricsql/electric:1.6.0
+    image: journeyapps/powersync-service:1.28.1
     restart: unless-stopped
-    environment:
-      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}?sslmode=disable
-      ELECTRIC_INSECURE: true
-      ELECTRIC_USAGE_REPORTING: false
+    command: ["start", "-r", "unified"]
+    environment: &powersync-environment
+      POWERSYNC_CONFIG_PATH: /config/service.yaml
+      PS_DATA_SOURCE_URI: postgresql://powersync_role:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
+      PS_STORAGE_SOURCE_URI: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/powersync_storage
+      PS_JWT_SECRET: ${POWERSYNC_JWT_SECRET}
+    volumes:
+      - ./docker/powersync:/config:ro
     networks:
       - frontend
-    ports:
-      - "${VITE_ELECTRIC_PORT}:3000"
+    healthcheck:
+      # See the app healthcheck: the fetch needs its own deadline
+      test:
+        - CMD
+        - node
+        - -e
+        - "fetch('http://localhost:8080/probes/liveness', {signal:AbortSignal.timeout(2500)}).then((r) => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))"
+      interval: 5s
+      timeout: 5s
+      start_period: 30s
+      start_interval: 2s
+      retries: 15
     depends_on:
       db:
+        condition: service_healthy
+  # PowerSync never compacts its storage on its own: every change keeps the operations it replaced, and a page load
+  # downloads all of them. The test store held 63k operations for 184 rows, the legacy data 973k for 101k
+  powersync-compact:
+    logging: *logging
+    image: journeyapps/powersync-service:1.28.1
+    restart: unless-stopped
+    # sh as PID 1 ignores SIGTERM, so without tini every stop waits out the grace period and kills a running compact
+    init: true
+    entrypoint: ["sh", "-c", "while true; do node service/lib/entry.js compact; sleep 600; done"]
+    environment: *powersync-environment
+    volumes:
+      - ./docker/powersync:/config:ro
+    networks:
+      - frontend
+    depends_on:
+      powersync:
         condition: service_healthy
   caddy:
     logging: *logging
     image: caddy:2
     restart: unless-stopped
+    # An intermediate that expired while Caddy was stopped still signs the site certificate on the next startup
+    # (net::ERR_CERT_DATE_INVALID). A missing one is created before anything is signed. Browsers only trust the root
+    command:
+      [
+        "sh",
+        "-c",
+        "rm -f /data/caddy/pki/authorities/local/intermediate.* && exec caddy run --config /etc/caddy/Caddyfile --adapter caddyfile",
+      ]
     environment:
       - VITE_HOST=${VITE_HOST}
       - VITE_CADDY_HTTP_PORT=${VITE_CADDY_HTTP_PORT}
@@ -58,6 +107,10 @@ services:
       - caddy_config:/config
     networks:
       - frontend
+    # The app is useless until the browser can sync
+    depends_on:
+      powersync:
+        condition: service_healthy
   app:
     logging: *logging
     build:
@@ -76,7 +129,6 @@ services:
       - frontend
     environment:
       - DATABASE_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}?sslmode=disable
-      - ELECTRIC_URL=http://electric:3000
     working_dir: /app
     volumes:
       # No bind mount for /app on purpose: source and node_modules are baked into

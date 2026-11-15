@@ -1,7 +1,6 @@
 import { CheckIcon, PlusIcon, SendIcon } from "lucide-react";
 import { useMemo, useState } from "react";
 
-import treatmentShipmentCollection from "@/collections/treatment-shipment";
 import DialogBlueprintViewer from "@/components/dialog/blueprint-viewer";
 import DialogSendPartTreatment from "@/components/dialog/send-part-treatment";
 import BaseTable from "@/components/table/base-table";
@@ -174,7 +173,6 @@ export default function TableTreatmentPending({ state }: { state?: TTableTreatme
               setIsSending(true);
               const result = await showToastOnTRPCMutation({
                 mutation: trpc.treatment.send.mutate(items),
-                collection: treatmentShipmentCollection,
                 onSuccess: { title: PARTS_SENT_TO_TREATMENT_MESSAGE },
               });
               if (result !== null) {

@@ -1,5 +1,5 @@
 services:
-  electric:
+  powersync:
     stop_grace_period: 5s
   caddy:
     profiles: ["development"]

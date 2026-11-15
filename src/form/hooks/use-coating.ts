@@ -1,6 +1,5 @@
 import { useSelector } from "@tanstack/react-store";
 
-import coatingCollection from "@/collections/coating";
 import { useAppContext } from "@/contexts/app-context";
 import { useAppForm } from "@/form";
 import useResetForm from "@/form/hooks/use-reset-form";
@@ -54,7 +53,6 @@ export default function useCoatingForm({ requestedFormMode, editCoatingId, onSub
       await showToastOnTRPCMutation({
         mutation,
         onSuccess: { title: formMode === FormMode.Create ? COATING_CREATED_MESSAGE : COATING_EDITED_MESSAGE },
-        collection: coatingCollection,
         onSubmit: async (item) => {
           await onSubmit?.(item);
           if (formMode === FormMode.Create) formApi.reset();

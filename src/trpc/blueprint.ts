@@ -10,7 +10,7 @@ import { handleMutationError } from "@/lib/handlers";
 import { BLUEPRINT_FILE_NAME_TAKEN_MESSAGE } from "@/messages/blueprint";
 import { requiredIdObjectSchema } from "@/schemas";
 import { updateBlueprintSchema, createBlueprintFormDataSchema } from "@/schemas/blueprint";
-import { router, generateTxId } from "@/trpc";
+import { router } from "@/trpc";
 import { adminProcedure } from "@/trpc";
 
 // Writing or renaming over the file of another Plano would replace it
@@ -67,10 +67,9 @@ export default router({
     removeOnRollback(async (createdPaths) =>
       ctx.db.transaction(async (tx) => {
         try {
-          const txid = await generateTxId(tx);
           await assertBlueprintFileNameIsFree(input);
           const newBlueprint = await createBlueprint(tx, input, createdPaths);
-          return { item: newBlueprint, txid };
+          return { item: newBlueprint };
         } catch (error) {
           handleMutationError({ error });
         }
@@ -80,7 +79,6 @@ export default router({
   update: adminProcedure.input(updateBlueprintSchema).mutation(async ({ ctx, input }) =>
     ctx.db.transaction(async (tx) => {
       try {
-        const txid = await generateTxId(tx);
         const blueprint = await getBlueprintById(input.id, tx);
         if (!blueprint) {
           throw new TRPCError({
@@ -120,7 +118,7 @@ export default router({
             message: `No se pudo editar el Plano con ID ${input.id}`,
           });
         }
-        return { item: updatedBlueprint, txid };
+        return { item: updatedBlueprint };
       } catch (error) {
         handleMutationError({ error });
       }
@@ -129,8 +127,6 @@ export default router({
   delete: adminProcedure.input(requiredIdObjectSchema).mutation(async ({ ctx, input }) =>
     ctx.db.transaction(async (tx) => {
       try {
-        const txid = await generateTxId(tx);
-
         const deletedBlueprint = (
           await tx.delete(dbTableBlueprint).where(eq(dbTableBlueprint.id, input.id)).returning()
         ).at(0);
@@ -146,7 +142,7 @@ export default router({
             message: `No se encontró la ruta del archivo para el Plano con ID ${input.id}`,
           });
         }
-        return { item: deletedBlueprint, txid };
+        return { item: deletedBlueprint };
       } catch (error) {
         handleMutationError({ error });
       }

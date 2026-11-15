@@ -18,7 +18,7 @@ import { SELL_ORDER_REFERENCE_TAKEN_MESSAGE } from "@/messages/sell-order";
 import { requiredIdObjectSchema, requiredIdSchema } from "@/schemas";
 import { createSellOrderFormDataSchema, updateSellOrderFormDataSchema } from "@/schemas/sell-order";
 import { dateToFileName } from "@/schemas/utils";
-import { adminProcedure, generateTxId, router } from "@/trpc";
+import { adminProcedure, router } from "@/trpc";
 import type { BaseSellOrder } from "@/types/sell-order";
 
 const uniqueConstraints = [
@@ -57,7 +57,6 @@ export default router({
   create: adminProcedure.input(createSellOrderFormDataSchema).mutation(async ({ ctx, input }) =>
     ctx.db.transaction(async (tx) => {
       try {
-        const txid = await generateTxId(tx);
         const { sellOrderFile, ...sellOrder } = input;
         const newSellOrder = (
           await tx
@@ -76,7 +75,7 @@ export default router({
         if (sellOrderFile != null) {
           await saveSellOrderFile(newSellOrder, sellOrderFile, tx);
         }
-        return { item: newSellOrder, txid };
+        return { item: newSellOrder };
       } catch (error) {
         handleMutationError({ error, uniqueConstraints });
       }
@@ -85,7 +84,6 @@ export default router({
   update: adminProcedure.input(updateSellOrderFormDataSchema).mutation(async ({ ctx, input }) =>
     ctx.db.transaction(async (tx) => {
       try {
-        const txid = await generateTxId(tx);
         const { sellOrderFile, ...sellOrder } = input;
         const updatedSellOrder = (
           await tx
@@ -103,7 +101,7 @@ export default router({
         if (sellOrderFile != null) {
           await saveSellOrderFile(updatedSellOrder, sellOrderFile, tx);
         }
-        return { item: updatedSellOrder, txid };
+        return { item: updatedSellOrder };
       } catch (error) {
         handleMutationError({ error, uniqueConstraints });
       }
@@ -112,7 +110,6 @@ export default router({
   delete: adminProcedure.input(requiredIdObjectSchema).mutation(async ({ ctx, input }) =>
     ctx.db.transaction(async (tx) => {
       try {
-        const txid = await generateTxId(tx);
         const deletedSellOrder = (
           await tx
             .update(dbTableSellOrder)
@@ -131,14 +128,11 @@ export default router({
           .from(dbTableProductionOrder)
           .innerJoin(dbTableSellOrderLine, eq(dbTableProductionOrder.sellOrderLineId, dbTableSellOrderLine.id))
           .where(eq(dbTableSellOrderLine.sellOrderId, input.id));
-        return {
-          item: deletedSellOrder,
-          txid,
-          ...(await removeProductionOrdersFromMachines(
-            productionOrders.map((productionOrder) => productionOrder.id),
-            tx,
-          )),
-        };
+        await removeProductionOrdersFromMachines(
+          productionOrders.map((productionOrder) => productionOrder.id),
+          tx,
+        );
+        return { item: deletedSellOrder };
       } catch (error) {
         handleMutationError({ error });
       }
@@ -147,7 +141,6 @@ export default router({
   restore: adminProcedure.input(requiredIdSchema).mutation(async ({ ctx, input }) =>
     ctx.db.transaction(async (tx) => {
       try {
-        const txid = await generateTxId(tx);
         const restoredSellOrder = (
           await tx
             .update(dbTableSellOrder)
@@ -161,7 +154,7 @@ export default router({
             message: `Pedido de venta con ID ${input} no encontrado o no eliminado`,
           });
         }
-        return { item: restoredSellOrder, txid };
+        return { item: restoredSellOrder };
       } catch (error) {
         handleMutationError({ error, uniqueConstraints });
       }
@@ -170,7 +163,6 @@ export default router({
   deleteFile: adminProcedure.input(requiredIdSchema).mutation(async ({ ctx, input: sellOrderId }) =>
     ctx.db.transaction(async (tx) => {
       try {
-        const txid = await generateTxId(tx);
         const updatedSellOrder = (
           await tx
             .update(dbTableSellOrder)
@@ -195,7 +187,7 @@ export default router({
           filePath,
           newFileName: `DELETED_${dateToFileName(new Date())}.${sellOrderId}.pdf`,
         });
-        return { item: updatedSellOrder, txid };
+        return { item: updatedSellOrder };
       } catch (error) {
         handleMutationError({ error });
       }

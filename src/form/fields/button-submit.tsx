@@ -35,7 +35,6 @@ export default function ButtonSubmit({
             isLoading === true ||
             !isValid ||
             !canSubmit ||
-            // An update that changes nothing never syncs back, so waiting for its txid would time out
             (disableIfPristine && (isPristine || (formMode === FormMode.Update && isDefaultValue))) ||
             disabled
           }

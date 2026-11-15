@@ -4,7 +4,7 @@ import log from "@/logging/log";
 import { LogMessages, LoggerLevels } from "@/logging/types";
 
 // Kept apart from the app context: log reads its cookie name, and the context pulls in
-// every Electric collection, so leaving the class there made anything that logs - server side code
+// every PowerSync collection, so leaving the class there made anything that logs - server side code
 // included - open the whole client data layer.
 export enum UserMode {
   Machine = "Máquina",

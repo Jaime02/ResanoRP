@@ -1,14 +1,21 @@
-import { FetchError } from "@electric-sql/client";
-import type { ShapeStreamOptions } from "@electric-sql/client";
-import type { ElectricCollectionUtils } from "@tanstack/electric-db-collection";
-import { BasicIndex, collectionOptions } from "@tanstack/react-db";
-import type { CollectionConfig, CollectionOptions, DbClient, NonSingleResult } from "@tanstack/react-db";
+import { BasicIndex, collectionOptions, withPublicationContext } from "@tanstack/react-db";
+import type {
+  ChangeMessageOrDeleteKeyMessage,
+  CollectionConfig,
+  DbClient,
+  SyncAppliedReceipt,
+} from "@tanstack/react-db";
+import type { z } from "zod";
 
 import { formatClientError } from "@/lib/formatters";
+import { forgetPowerSyncToken, getPowerSyncClient, getToAppRow } from "@/lib/powersync";
+import type { TPowerSyncRow } from "@/lib/powersync";
+import type { TableChanges } from "@/lib/powersync-lite/client";
 import log from "@/logging/log";
 import { LogMessages, LoggerLevels } from "@/logging/types";
 
-export type TElectricCollection = CollectionOptions<any, any, any, ElectricCollectionUtils<any>> & NonSingleResult;
+const SYNC_TIMEOUT_MS = 10_000;
+const SYNC_RETRY_MS = 100;
 
 function baseCollectionOptions(table: string) {
   return {
@@ -17,34 +24,214 @@ function baseCollectionOptions(table: string) {
     // A DbClient creates its Collections without any hook to add indexes to them, so each query creates the ones it
     // needs when it compiles
     autoIndex: "eager" as const,
-    shapeOptions: {
-      url: new URL(
-        `/api/models/${table}`,
-        typeof window !== `undefined` ? window.location.origin : `http://localhost:5173`,
-      ).toString(),
-      // Electric leaves timestamptz as a string, but the schemas expect a Date. Asserted to the default Parser so the
-      // row type inferred from each collection's schema is not overridden by Date
-      parser: { timestamptz: (date: string) => new Date(date) } as unknown as NonNullable<ShapeStreamOptions["parser"]>,
-      // An on-demand join loads its other side by key, and a long list of keys in the URL is rejected with a 431
-      subsetMethod: "POST" as const,
-      // Electric does not retry a response whose body breaks off while it is read, as leaving the page does to every
-      // shape still loading, and the collection would fail for good
-      // TODO: https://github.com/electric-sql/electric/issues/4843
-      onError: (error: Error) => {
-        if (error instanceof FetchError && error.status >= 200 && error.status < 300) {
-          return {};
-        }
-        void log(LoggerLevels.error, LogMessages.collectionSyncFailed(table), formatClientError(error));
-        return undefined;
+    table,
+  };
+}
+
+type TPowerSyncOptions<TSchema extends z.ZodType<object>, TKey extends string | number> = ReturnType<
+  typeof baseCollectionOptions
+> &
+  Omit<CollectionConfig<z.output<TSchema>, TKey, TSchema>, "id" | "sync" | "syncMode" | "utils"> & {
+    schema: TSchema;
+  };
+
+function logSyncError(error: unknown) {
+  void log(LoggerLevels.error, LogMessages.powerSyncSyncFailed, formatClientError(error));
+}
+
+type TPendingCommit = { commit: () => void; fail: (error: unknown) => void };
+const pendingCommits: Array<TPendingCommit> = [];
+
+/**
+ * The client reports a checkpoint table by table, in one turn. A live query runs after every commit of a table it
+ * reads, so committing them one by one joins the tables that have arrived so far and corrects the result with each
+ * next one. Inside one publication the live queries run once, after the last table. withPublicationContext is internal
+ * to TanStack DB and exported by its patch.
+ *
+ * The microtask runs before the client's waiters, so the rows are committed before a collection is marked ready and
+ * before awaitSynced resolves
+ */
+function commitWithCheckpoint(pendingCommit: TPendingCommit) {
+  pendingCommits.push(pendingCommit);
+  if (pendingCommits.length > 1) return;
+  queueMicrotask(() => {
+    const commits = pendingCommits.splice(0);
+    try {
+      withPublicationContext(() => {
+        for (const { commit } of commits) commit();
+      });
+    } catch (error) {
+      // A live query failed on rows that are already committed, so it no longer matches any of these tables
+      logSyncError(error);
+      for (const { fail } of commits) fail(error);
+    }
+  });
+}
+
+/**
+ * Syncs the rows of the table from PowerSync, but keeps the app's own schema, key and mutation handlers: every write
+ * goes through tRPC, so the server can still reject it
+ */
+export function powerSyncCollectionOptions<TSchema extends z.ZodType<object>, TKey extends string | number>({
+  table,
+  ...config
+}: TPowerSyncOptions<TSchema, TKey>): CollectionConfig<z.output<TSchema>, TKey, TSchema> {
+  type TRow = z.output<TSchema>;
+  const toAppRow = getToAppRow(table);
+  return {
+    ...config,
+    syncMode: "eager",
+    sync: {
+      rowUpdateMode: "full",
+      sync: ({ begin, write, commit, markReady, fail, truncate }) => {
+        const client = getPowerSyncClient();
+        const controller = new AbortController();
+        // A deleted row only arrives with its PowerSync id, which is not the key of the tables keyed by other columns
+        const keys = new Map<string, TKey>();
+        let first = true;
+        let active = true;
+        let lastApplied: SyncAppliedReceipt = true;
+
+        const cleanup = () => {
+          if (!active) return;
+          active = false;
+          controller.abort();
+          lease.release();
+          unlisten();
+        };
+
+        // A row that fails to convert keeps its last synced value, instead of dropping every other row it came with
+        const toKeyedRow = (id: string, row: TPowerSyncRow): TRow | undefined => {
+          try {
+            const value = toAppRow({ ...row, id }) as TRow;
+            keys.set(id, config.getKey(value));
+            return value;
+          } catch (error) {
+            logSyncError(error);
+            return undefined;
+          }
+        };
+
+        const onChanges = (changes: TableChanges) => {
+          if (!active) return;
+          const writes = [...changes].flatMap(([id, row]): Array<ChangeMessageOrDeleteKeyMessage<TRow, TKey>> => {
+            if (row === null) {
+              const key = keys.get(id);
+              keys.delete(id);
+              return key === undefined ? [] : [{ type: "delete", key }];
+            }
+            const value = toKeyedRow(id, row);
+            return value === undefined ? [] : [{ type: "update", value }];
+          });
+          if (!first && writes.length === 0) return;
+          begin();
+          // The first changes are every row, which replace the ones of an earlier run
+          if (first) truncate({ markReady: false });
+          for (const operation of writes) write(operation);
+          const applied = commit(controller.signal);
+          lastApplied = applied;
+          first = false;
+          // Not awaited: TanStack holds the receipt until a mutation handler settles, which may be waiting for these
+          // rows in awaitSynced
+          if (applied !== true) {
+            applied.catch((error: unknown) => {
+              if (!active) return;
+              cleanup();
+              logSyncError(error);
+              fail(error);
+            });
+          }
+        };
+
+        const unlisten = client.listen(table, {
+          onChanges: (changes) => {
+            const commitChanges = () => {
+              try {
+                onChanges(changes);
+              } catch (error) {
+                // TanStack rejected the rows, so the collection no longer matches the server
+                logSyncError(error);
+                fail(error);
+              }
+            };
+            // The rows the client already holds arrive while it registers the listener. Committed at once, the live
+            // query that started the collection finds them in it and only loads the ones it needs
+            if (first) {
+              commitChanges();
+              return;
+            }
+            commitWithCheckpoint({
+              commit: commitChanges,
+              fail: (error) => {
+                if (active) fail(error);
+              },
+            });
+          },
+          // Connection errors, which the client retries and logs once from its status
+          onError: () => undefined,
+        });
+        // One stream per table, see docker/powersync/sync-config.yaml
+        const lease = client.acquireStreams([{ name: table }], {
+          // The service rejected the stream, which no retry fixes. Releasing it keeps every reconnect from failing and
+          // logging it again
+          onError: (error) => {
+            if (!active) return;
+            cleanup();
+            logSyncError(error);
+            fail(error);
+          },
+        });
+        lease
+          .waitForSync(controller.signal)
+          .then(async () => lastApplied)
+          .then(
+            () => {
+              if (active) markReady();
+            },
+            // Stream and commit errors are handled above, and a cleanup cancels the wait
+            () => undefined,
+          );
+
+        return cleanup;
       },
     },
   };
 }
 
-// Each DbClient, one per server request and one in the browser, materializes its own Collection from the descriptor
-export function electricCollection<TConfig extends CollectionConfig<any, any, any, any>>(
+// Each DbClient materializes its own Collection from the descriptor. Only the browser's does: the server renders no
+// component that reads one
+export function powerSyncCollection<TConfig extends CollectionConfig<any, any, any, any>>(
   table: string,
   createConfig: (baseOptions: ReturnType<typeof baseCollectionOptions>, dbClient: DbClient) => TConfig,
 ) {
   return collectionOptions(`"${table}"`, (dbClient) => createConfig(baseCollectionOptions(table), dbClient));
+}
+
+/**
+ * Waits until the collections show what the server has committed so far. A mutation handler awaits it after its tRPC
+ * call, so its optimistic rows are swapped for the synced ones without showing the old rows in between.
+ *
+ * One checkpoint covers every table, whichever ones the mutation wrote.
+ */
+export async function awaitSynced() {
+  const client = getPowerSyncClient();
+  const signal = AbortSignal.timeout(SYNC_TIMEOUT_MS);
+  for (;;) {
+    // No collection is syncing, so none has rows to wait for
+    if (client.status.state === "idle") return;
+    try {
+      await client.confirmWrites({ signal });
+      return;
+    } catch {
+      if (signal.aborted) {
+        // The server already committed the mutation, so failing here would report an error for a saved change and
+        // invite a retry that saves it twice. The synced rows still arrive on their own
+        void log(LoggerLevels.warning, LogMessages.powerSyncSyncTimedOut);
+        return;
+      }
+      // The token or checkpoint request failed while the service is unreachable, which the client retries and logs
+      forgetPowerSyncToken();
+      await new Promise((resolve) => setTimeout(resolve, SYNC_RETRY_MS));
+    }
+  }
 }

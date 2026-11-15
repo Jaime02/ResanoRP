@@ -10,8 +10,6 @@ import { ToastList } from "@/components/ui/toast";
 import { AppContextProvider } from "@/contexts/app-context-provider";
 import { AppContextStorage, UserMode } from "@/contexts/app-context-storage";
 import { ADMIN_SESSION_COOKIE_NAME, isAdminSession } from "@/lib/admin-session";
-import { preloadLiveQueries } from "@/lib/preload-live-queries";
-import { machineByIdQuery } from "@/queries/machine";
 
 import appCss from "./styles.css?url";
 
@@ -54,12 +52,6 @@ export const Route = createRootRouteWithContext<RouteContext>()({
       throw redirect({ to: "/" });
     }
     return { userStateCookie };
-  },
-  loader: async ({ context }) => {
-    const { userModeMachineId } = AppContextStorage.parse(context.userStateCookie);
-    if (userModeMachineId !== undefined) {
-      await preloadLiveQueries(context.dbClient, [machineByIdQuery(userModeMachineId)]);
-    }
   },
   component: RootComponent,
   shellComponent: RootDocument,

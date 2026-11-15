@@ -1,6 +1,5 @@
 import { useSelector } from "@tanstack/react-store";
 
-import partPriceCollection from "@/collections/part-price";
 import { useAppContext } from "@/contexts/app-context";
 import { useAppForm } from "@/form";
 import useResetForm from "@/form/hooks/use-reset-form";
@@ -84,7 +83,6 @@ export default function usePartPriceForm({
       await showToastOnTRPCMutation({
         mutation,
         onSuccess: { title: formMode === FormMode.Create ? PART_PRICE_CREATED_MESSAGE : PART_PRICE_EDITED_MESSAGE },
-        collection: partPriceCollection,
         onSubmit,
       });
     },

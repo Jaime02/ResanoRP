@@ -33,16 +33,22 @@ FB_USER = os.getenv("FB_USER")
 FB_PASSWORD = os.getenv("FB_PASSWORD")
 
 
+DOCKER_COMPOSE = "docker compose -p resanorp-prisma --project-directory . -f docker/docker-compose.base.yml -f docker/docker-compose.prisma.yml --env-file ./envs/.env.prisma --profile prisma"
+
+
+def docker_compose(args: str):
+    subprocess.run(f"{DOCKER_COMPOSE} {args}", check=True, capture_output=True, text=True, shell=True, cwd=project_root)
+
+
 def setup():
     try:
         # `bun run prisma` is the foreground watcher; without it the exec target doesn't exist
-        subprocess.run(
-            "docker compose -p resanorp-prisma --project-directory . -f docker/docker-compose.base.yml -f docker/docker-compose.prisma.yml --env-file ./envs/.env.prisma --profile prisma up -d --wait app-prisma",
-            check=True,
-            capture_output=True,
-            text=True,
-            shell=True,
-            cwd=project_root,
+        docker_compose("up -d --wait app-prisma")
+        # PowerSync would store every intermediate version of every migrated row. Without its slot it snapshots the
+        # final data once when start_powersync runs, which is much faster than replaying the migration
+        docker_compose("stop powersync")
+        get_read_cursor().execute(
+            "SELECT pg_drop_replication_slot(slot_name) FROM pg_replication_slots WHERE slot_name LIKE 'powersync%'"
         )
         subprocess.run(
             ["bun", "run", "reset-env:prisma"],
@@ -66,6 +72,11 @@ def setup():
             f"An unexpected error occurred while running drizzle database reset: {e}"
         )
         sys.exit(1)
+
+
+def start_powersync():
+    docker_compose("up -d powersync")
+    tqdm.write("PowerSync started, it syncs the migrated data in about 30 seconds")
 
 
 @contextmanager

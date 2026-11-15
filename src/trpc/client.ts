@@ -6,7 +6,7 @@ import { createClientFolder } from "@/files/sell-order";
 import { handleMutationError } from "@/lib/handlers";
 import { requiredIdObjectSchema } from "@/schemas";
 import { createClientSchema, updateClientSchema } from "@/schemas/client";
-import { router, generateTxId } from "@/trpc";
+import { router } from "@/trpc";
 import { adminProcedure } from "@/trpc";
 
 const uniqueConstraints = [
@@ -20,7 +20,6 @@ export default router({
   create: adminProcedure.input(createClientSchema).mutation(async ({ ctx, input }) =>
     ctx.db.transaction(async (tx) => {
       try {
-        const txid = await generateTxId(tx);
         const newClient = (await tx.insert(dbTableClient).values(input).returning()).at(0);
         if (!newClient) {
           throw new TRPCError({
@@ -30,7 +29,7 @@ export default router({
         }
         createClientFolder(newClient);
 
-        return { item: newClient, txid };
+        return { item: newClient };
       } catch (error) {
         handleMutationError({ error, uniqueConstraints });
       }
@@ -39,7 +38,6 @@ export default router({
   update: adminProcedure.input(updateClientSchema).mutation(async ({ ctx, input }) =>
     ctx.db.transaction(async (tx) => {
       try {
-        const txid = await generateTxId(tx);
         const updatedClient = (
           await tx.update(dbTableClient).set(input).where(eq(dbTableClient.id, input.id)).returning()
         ).at(0);
@@ -49,7 +47,7 @@ export default router({
             message: `Cliente con ID ${input.id} no encontrado`,
           });
         }
-        return { item: updatedClient, txid };
+        return { item: updatedClient };
       } catch (error) {
         handleMutationError({ error, uniqueConstraints });
       }
@@ -58,7 +56,6 @@ export default router({
   delete: adminProcedure.input(requiredIdObjectSchema).mutation(async ({ ctx, input }) =>
     ctx.db.transaction(async (tx) => {
       try {
-        const txid = await generateTxId(tx);
         const deletedClient = (
           await tx
             .update(dbTableClient)
@@ -72,15 +69,8 @@ export default router({
             message: `Cliente con ID ${input.id} no encontrado`,
           });
         }
-        const deletedClientInvoiceEmails = await tx
-          .delete(dbTableClientInvoiceEmail)
-          .where(eq(dbTableClientInvoiceEmail.clientId, input.id))
-          .returning({ id: dbTableClientInvoiceEmail.id });
-        return {
-          item: deletedClient,
-          txid,
-          deletedClientInvoiceEmailIds: deletedClientInvoiceEmails.map((clientInvoiceEmail) => clientInvoiceEmail.id),
-        };
+        await tx.delete(dbTableClientInvoiceEmail).where(eq(dbTableClientInvoiceEmail.clientId, input.id));
+        return { item: deletedClient };
       } catch (error) {
         handleMutationError({ error });
       }
@@ -89,7 +79,6 @@ export default router({
   restore: adminProcedure.input(requiredIdObjectSchema).mutation(async ({ ctx, input }) =>
     ctx.db.transaction(async (tx) => {
       try {
-        const txid = await generateTxId(tx);
         const restoredClient = (
           await tx
             .update(dbTableClient)
@@ -103,7 +92,7 @@ export default router({
             message: `Cliente con ID ${input.id} no encontrado o no eliminado`,
           });
         }
-        return { item: restoredClient, txid };
+        return { item: restoredClient };
       } catch (error) {
         handleMutationError({ error, uniqueConstraints });
       }
