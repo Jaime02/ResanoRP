@@ -7,9 +7,12 @@ import db from "@/db";
 import * as dbSchema from "@/db/schema";
 import type { TPlainExpression, TSubsetRequest } from "@/lib/table-subset-fns";
 
-// A larger answer is downloaded again in full by PowerSync, and joins over it ask for subsets as large, which made the
-// pages that read whole tables slower than waiting for PowerSync
-export const MAX_SUBSET_ROWS = 1000;
+// A join over many rows looks up the rows of the next table by their keys, and then the ones of the table after it, one
+// request after another. Past this many keys that chain took longer than waiting for PowerSync, which brings them anyway
+export const MAX_LOOKUP_KEYS = 100;
+// shortcut: above the 13,022 Pedidos the sell order list counts in full on a first load; derive it from the data if a
+// table that size grows past it or a page reads larger tables whole
+export const MAX_SUBSET_ROWS = 20_000;
 
 // The JavaScript type of each column the app compares as Postgres does. Numerics are strings in the app, so '1.5' and
 // '1.50' differ there, and text sorts with localeCompare instead of the database's collation
@@ -77,6 +80,7 @@ export async function loadTableSubset(request: TSubsetRequest) {
         return refuse("in without a column and a list");
       }
       const items: Array<unknown> = list.value.filter((item) => item !== null && item !== undefined);
+      if (items.length > MAX_LOOKUP_KEYS) return refuse(`in with ${items.length} keys`);
       if (items.some((item) => typeof item !== EQUALITY_TYPES[column.columnType])) {
         return refuse(`in on ${column.columnType}`);
       }
