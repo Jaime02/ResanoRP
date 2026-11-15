@@ -2164,7 +2164,7 @@ test("create a part with its blueprint", { annotation: TestAnnotations.ResetBlue
   await expect(formPart.getByTestId(`card-blueprint-${blueprint.id}`)).toContainText(blueprintFileName);
 });
 
-test("manage multi-level part sets", async ({ page, db }) => {
+test("manage multi-level part sets", { annotation: TestAnnotations.ResetBlueprints }, async ({ page, db }) => {
   const getMockPart = (partId: number) => mockParts.find((part) => part.id === partId)!;
   const isMockPartSet = (partId: number) => getMockPartComponentsOfPart(partId).length > 0;
   const partComponents = mockPartComponents.map((partComponent) => ({ ...partComponent }));
@@ -2284,7 +2284,7 @@ test("manage multi-level part sets", async ({ page, db }) => {
     await expectPartSetTooltip(setPart.id);
   });
 
-  await test.step("the tooltip opens the blueprints of a component without navigating or closing, and links to it", async () => {
+  await test.step("the tooltip opens the blueprints of a component without navigating, hides while they are open, and links to it", async () => {
     const nodeWithBlueprints = getExpectedTree(setPart.id).find(
       ({ part }) => getMockPartBlueprints(part.id).length > 0,
     )!;
@@ -2305,10 +2305,10 @@ test("manage multi-level part sets", async ({ page, db }) => {
       if (index > 0) await dialogBlueprints.getByTestId("button-next-file").click();
       await expect(dialogBlueprints.getByTestId(`card-blueprint-${blueprint.id}`)).toBeVisible();
     }
-    await expect(popoverPartSet).toBeVisible();
+    await expect(popoverPartSet).toBeHidden();
     await expect(page).toHaveURL("/part");
 
-    // The tooltip stays open after the dialog closes, even with the pointer away from it, until it is dismissed
+    // The tooltip comes back when the dialog closes and stays open, even with the pointer away from it, until it is dismissed
     await page.keyboard.press("Escape");
     await expect(dialogBlueprints).toBeHidden();
     await page.mouse.move(0, 0);

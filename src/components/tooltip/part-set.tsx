@@ -1,4 +1,3 @@
-import type { PopoverRootChangeEventReason } from "@base-ui/react/popover";
 import { FileIcon, LayersIcon, TriangleAlertIcon } from "lucide-react";
 import { useState } from "react";
 
@@ -14,8 +13,14 @@ import { PART_SET_LABEL } from "@/messages/part";
 import type { TPartFormPartComponent } from "@/queries/part";
 import { useQueryPartComponents } from "@/queries/part-component";
 
-// After a blueprint dialog the pointer is usually away from the tooltip, which only an explicit dismissal should close
-const PINNED_CLOSE_REASONS: Array<PopoverRootChangeEventReason> = ["outside-press", "escape-key", "trigger-press"];
+// One popup at a time, so the tooltip never competes with the dialog for its focus, keys or clicks
+enum PartSetView {
+  Closed,
+  Tooltip,
+  // After the dialog the pointer is usually away from the tooltip, so only an explicit dismissal closes it
+  PinnedTooltip,
+  Blueprints,
+}
 
 interface TooltipPartSetProps {
   partId: number;
@@ -23,9 +28,7 @@ interface TooltipPartSetProps {
 }
 
 export default function TooltipPartSet({ partId, componentsCount }: TooltipPartSetProps) {
-  const [isOpen, setIsOpen] = useState(false);
-  const [isPinned, setIsPinned] = useState(false);
-  const [isBlueprintsOpen, setIsBlueprintsOpen] = useState(false);
+  const [view, setView] = useState(PartSetView.Closed);
   // Kept after closing, so the dialog still shows its blueprints during the closing animation
   const [blueprintsComponent, setBlueprintsComponent] = useState<TPartFormPartComponent | null>(null);
 
@@ -36,27 +39,26 @@ export default function TooltipPartSet({ partId, componentsCount }: TooltipPartS
   return (
     <>
       <Popover
-        open={isOpen}
-        onOpenChange={(open, { reason }) => {
-          if (open) {
-            setIsOpen(true);
-            return;
-          }
-          // Interacting with the blueprint dialog counts as leaving the tooltip
-          if (isBlueprintsOpen || (isPinned && !PINNED_CLOSE_REASONS.includes(reason))) return;
-          setIsOpen(false);
-          setIsPinned(false);
+        open={view === PartSetView.Tooltip || view === PartSetView.PinnedTooltip}
+        onOpenChange={(open) => {
+          // Already closed for the dialog, the tooltip still reports the end of its hover
+          if (view === PartSetView.Blueprints) return;
+          setView(open ? PartSetView.Tooltip : PartSetView.Closed);
         }}
       >
-        <InfoPopoverTrigger data-testid="tooltip-part-set" aria-label={PART_SET_LABEL} Icon={LayersIcon} />
+        <InfoPopoverTrigger
+          data-testid="tooltip-part-set"
+          aria-label={PART_SET_LABEL}
+          Icon={LayersIcon}
+          openOnHover={view !== PartSetView.PinnedTooltip}
+        />
         <PopoverContent>
           <span className="font-bold">{PART_SET_LABEL}</span>
           <PartComponentTree
             partId={partId}
             onOpenBlueprints={(component) => {
-              setIsPinned(true);
               setBlueprintsComponent(component);
-              setIsBlueprintsOpen(true);
+              setView(PartSetView.Blueprints);
             }}
           />
         </PopoverContent>
@@ -66,8 +68,8 @@ export default function TooltipPartSet({ partId, componentsCount }: TooltipPartS
         testId="dialog-part-set-blueprints"
         title={`${BLUEPRINTS_OF_PART_TITLE} "${blueprintsComponent?.part.description}"`}
         blueprints={blueprintsComponent?.blueprints}
-        open={isBlueprintsOpen}
-        onOpenChange={setIsBlueprintsOpen}
+        open={view === PartSetView.Blueprints}
+        onOpenChange={(open) => setView(open ? PartSetView.Blueprints : PartSetView.PinnedTooltip)}
       />
     </>
   );
