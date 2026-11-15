@@ -8,7 +8,7 @@
         "@base-ui/react": "1.9.0",
         "@date-fns/tz": "^1.5.0",
         "@daypicker/react": "^10.0.2",
-        "@powersync/shared-internals": "1.6.0",
+        "@powersync/standalone-client": "0.1.1",
         "@tailwindcss/vite": "^4.3.5",
         "@tanstack/react-db": "1.0.0-rc.1.5",
         "@tanstack/react-form": "1.33.5",
@@ -286,6 +286,8 @@
     "@playwright/test": ["@playwright/test@1.65.0", "", { "dependencies": { "playwright": "1.65.0" }, "bin": { "playwright": "cli.js" } }, "sha512-iGURLGuKDLakSEl7Pgfv8h7f+XLT+V861Wfhz0zlEl5nyFuKUopdkFBPKqTllTUp06aOwPuH8iuUEb3yp3MpbQ=="],
 
     "@powersync/shared-internals": ["@powersync/shared-internals@1.6.0", "", { "peerDependencies": { "@powersync/common": "^2.5.0" }, "optionalPeers": ["@powersync/common"] }, "sha512-UduDSVv9qfonIezOklBUR6c3KNlwOQ8/XCsTDwrBUXnVv4wmAZuIDO7C2hX2KKcQGKn+rU0Z5R9uPtgl1uK7Vg=="],
+
+    "@powersync/standalone-client": ["@powersync/standalone-client@0.1.1", "", { "dependencies": { "@powersync/shared-internals": "1.6.0" }, "peerDependencies": { "react": "*" }, "optionalPeers": ["react"] }, "sha512-SSCFzNJ7GvqOyK4edl7Ymot53mheEYCNJcefxoEOAu3qV+8YeRkvGME8GVlm2Ye2A7bJXRuDdAupzenFhWCFjQ=="],
 
     "@rolldown/binding-android-arm-eabi": ["@rolldown/binding-android-arm-eabi@1.2.18", "", { "os": "android", "cpu": "arm" }, "sha512-ubTG+4KlidvioxjOFdsdEa2F6JVGZb8m2ByJUqQ7fYzUeT1cEn194POcsQ10PKH4p//q0YQn4SB3YpSuzcA1Yg=="],
 

@@ -1,3 +1,4 @@
+import type { TableChanges } from "@powersync/standalone-client";
 import { BasicIndex, collectionOptions, withPublicationContext } from "@tanstack/react-db";
 import type {
   ChangeMessageOrDeleteKeyMessage,
@@ -10,7 +11,6 @@ import type { z } from "zod";
 import { formatClientError } from "@/lib/formatters";
 import { forgetPowerSyncToken, getPowerSyncClient, getToAppRow } from "@/lib/powersync";
 import type { TPowerSyncRow } from "@/lib/powersync";
-import type { TableChanges } from "@/lib/powersync-lite/client";
 import log from "@/logging/log";
 import { LogMessages, LoggerLevels } from "@/logging/types";
 

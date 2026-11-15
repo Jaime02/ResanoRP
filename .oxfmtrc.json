@@ -14,8 +14,7 @@
     "build/**",
     "node_modules/**",
     "coverage/**",
-    "pdf.worker.min.mjs",
-    "src/lib/powersync-lite/**"
+    "pdf.worker.min.mjs"
   ],
   "sortPackageJson": {
     "sortScripts": true

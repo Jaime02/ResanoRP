@@ -21,10 +21,10 @@ applied it", whatever tables changed.
 
 ## 2. What was chosen
 
-- **Client: `@powersync/tanstack-db-lite`** (in memory, online only), vendored at commit `6de2267` in
-  `src/lib/powersync-lite/` because it is not on npm. Only `client.ts` and `subscriptions.ts`; its collection adapter
-  assumes string ids and an older TanStack DB. The connection comes from `@powersync/shared-internals@1.6.0`
-  (`standalone`), an internal API, so it is pinned.
+- **Client: `@powersync/standalone-client@0.1.1`** (in memory, online only), pinned. It was vendored from
+  `@powersync/tanstack-db-lite` at commit `6de2267` until 2026-11-15 (benchmark run 27 showed no difference). Only its
+  connection client is used: `src/collections/base.ts` has its own collection adapter for string ids and this TanStack
+  DB. It depends on `@powersync/shared-internals@1.6.0` (`standalone`), an internal API.
 - **Writes stay in tRPC.** The server validates, authorizes, writes files and can reject. PowerSync's upload queue is not
   used. After each write the client requests a checkpoint (PowerSync's "checkpoint requests" pattern), which is what
   keeps optimistic rows from flickering without the queue.
@@ -133,7 +133,7 @@ mutation ──► optimistic row ──► tRPC ──► Drizzle tx ──► 
 | After a timeout the UI shows the old rows until the synced ones arrive.                                                                                                                                                        | By design: no retry, nothing saved twice.                         |
 | Storage reset while tabs are open (`start.cmd` import): a tab that saved before waits for a checkpoint the new storage never sends, and would never apply another change.                                                      | Fixed: a reconnect after an error requests a new checkpoint (§6). |
 | Service unreachable on a first load: collections stay loading, the error is logged after 5 s.                                                                                                                                  | By design.                                                        |
-| Vendored alpha code and an internal `shared-internals` API.                                                                                                                                                                    | Pinned. Replace the folder once Lite is published.                |
+| Alpha client (0.1.x) on an internal `shared-internals` API.                                                                                                                                                                    | Pinned.                                                           |
 | Needs HTTPS (`crypto.randomUUID`) and a recent browser (`Map.prototype.getOrInsertComputed`, iterator helpers, `URL.parse`, `Map.groupBy`, `Promise.withResolvers`).                                                           | Add polyfills if workshop PCs run old browsers.                   |
 | A dropped table is invisible to PowerSync.                                                                                                                                                                                     | `reset-env.ts` cleans first.                                      |
 | Shared credentials: anyone reaching the app can sync every table.                                                                                                                                                              | Unchanged from Electric.                                          |
@@ -146,7 +146,6 @@ vendored client driven by Bun). No e2e run.
 
 | Point                                                                                            | Verdict                                                                                                                                                                               |
 | ------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Vendored files unmodified                                                                        | True: identical to upstream at `6de2267`.                                                                                                                                             |
 | Replication as `powersync_role`, sync and checkpoint requests through Caddy                      | Works (stack).                                                                                                                                                                        |
 | Role can read tables created after `init.sql`, and after `DROP SCHEMA public CASCADE` + recreate | Works (stack).                                                                                                                                                                        |
 | Storage reset freezes a tab that saved before                                                    | Reproduced: another user's row never arrived. With the fix it arrived. The service only applies checkpoint ids that advance the stored one, per user and client (`checkpointing.ts`). |
@@ -315,7 +314,7 @@ stream leased at ~230, token server function 5–8 ms, sync request from ~240 to
   - Row conversion (`getToAppRow`) is 2–3% of a load, a third to half of it parsing timestamps. A loop instead of
     `Object.fromEntries` was no faster in a microbenchmark and a generated function 13% faster, so 0.4% of a load. Not
     worth changing.
-  - The parsing is the vendored client and `@powersync/shared-internals`. It runs while the service is still sending,
+  - The parsing is the standalone client and `@powersync/shared-internals`. It runs while the service is still sending,
     so most of it costs no time.
   - The live query graphs are the largest cost, and they run once per table a checkpoint brings: each run joins the
     tables that have arrived so far, and the next one corrects it.
@@ -326,3 +325,50 @@ stream leased at ~230, token server function 5–8 ms, sync request from ~240 to
   commit at once. Measured switched on and off in one unminified build (median of 9 reloads): production orders 1941
   against 2541 ms (24% sooner), parts 2376 against 2470, sell orders 1713 against 1731, create delivery note 2363
   against 2319. Dropping the patch needs upstream to offer a way to commit several collections together.
+
+## 12. Benchmark history and final comparison (2026-11-13 to 2026-11-15)
+
+Raw outputs in `ignore/benchmark/results/` (not versioned; `README.md` there has the rerun steps). Same method as §10:
+production builds, one `pg_dump` (101,239 rows), targets interleaved, medians of 5, same row counts on every target.
+"10 pages" is the sum of the page medians. Compare targets only within one file: machine load moved absolute times by
+up to 40% between runs.
+
+| Runs   | What                                                                                       | Result                                                                             |
+| ------ | ------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------- |
+| 1, 6   | master, powersync (SQLite), lite; 6 is after the line status fix and rc.1.5                | cold 10 pages 9.8 / 168.7 / 24.3 s; session 7.8 / 21.5 / 6.2 s (run 6)             |
+| 2-5    | compaction on lite (§10)                                                                   | 8.1-8.8 s uncompacted, 2.4-2.6 s compacted = fresh                                 |
+| 7, 8   | early sync request, builds swapped (§11)                                                   | reloads 3.2% sooner, first loads and navigation within noise; removed              |
+| 9-12   | one graph run per checkpoint (§11)                                                         | production orders 2.60 → 1.93 s cold, other pages within ±5%; kept                 |
+| 13, 14 | progressive collections PoC                                                                | cold detail pages 0.27-0.37 s; production orders +27%, treatment +22%; not merged  |
+| 15-22  | query fixes (`docs/query-performance.md`); 15 compares 27 query variants, all counts equal | see below                                                                          |
+| 23-26  | PoC rebased on the query fixes                                                             | cold 10 pages 11.2 s (master 8.0, lite 19.0); session 2.9 s (master 6.1, lite 4.2) |
+
+PowerSync with SQLite was left out of the runs after 6: ~17 s on every first load while it fills SQLite.
+
+### Final: master (Electric) against the latest Lite
+
+Runs 21 and 22 (builds swapped between the stacks, averaged), both with the query fixes: `master2` against `lite2`.
+Milliseconds until the tables show data.
+
+| Page                   | cold master | cold Lite  | warm master | warm Lite  | navigation master | navigation Lite |
+| ---------------------- | ----------- | ---------- | ----------- | ---------- | ----------------- | --------------- |
+| sell orders            | 667         | 1270       | 671         | 1205       | 504               | 1136            |
+| delivery notes         | 619         | 1868       | 623         | 1943       | 493               | 988             |
+| parts                  | 285         | 2158       | 269         | 2170       | 401               | 374             |
+| production orders      | 2442        | 1598       | 2608        | 1581       | 2145              | 487             |
+| invoicing              | 514         | 1842       | 471         | 1852       | 277               | 253             |
+| treatment              | 1360        | 1611       | 1462        | 1594       | 868               | 243             |
+| create delivery note   | 645         | 2100       | 650         | 2036       | 181               | 105             |
+| sell order             | 427         | 1407       | 373         | 1376       | 223               | 72              |
+| delivery note          | 325         | 1670       | 270         | 1618       | 73                | 34              |
+| part                   | 333         | 1987       | 274         | 1928       | 81                | 33              |
+| **10 pages / session** | **7.6 s**   | **17.5 s** | **7.7 s**   | **17.3 s** | **5.25 s**        | **3.73 s**      |
+
+- **First and repeated loads**: Lite is 2.3x slower than master in total. It is faster only on production orders
+  (1.6 against 2.4 s) and close on treatment. The cause is the one in §10: Lite downloads every table a page reads, in
+  full, while master loads only the rows each query needs.
+- **In-app navigation**: Lite is 29% faster than master (3.73 against 5.25 s). It wins on 7 of 10 pages; master is
+  ahead only on sell orders and delivery notes. The query fixes took Lite's session from 4.40 to 3.73 s.
+- **Memory**: the page heap is 75-146 MB on Lite against 15-82 MB on master.
+- **Closing the cold-load gap**: only the progressive collections PoC did (§11, `docs/query-performance.md` §7), at the
+  cost of the production orders and treatment regressions and 2-4 MB more sent per load.

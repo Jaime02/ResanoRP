@@ -1,9 +1,9 @@
+import { PowerSyncClient } from "@powersync/standalone-client";
 import { getTableColumns, getTableName, is } from "drizzle-orm";
 import { PgTable } from "drizzle-orm/pg-core";
 
 import * as dbSchema from "@/db/schema";
 import { formatClientError } from "@/lib/formatters";
-import { PowerSyncClient } from "@/lib/powersync-lite/client";
 import { getPowerSyncTokenFn } from "@/lib/powersync-token-fns";
 import log from "@/logging/log";
 import { LogMessages, LoggerLevels } from "@/logging/types";
