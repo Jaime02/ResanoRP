@@ -68,6 +68,7 @@ export const LogMessages = {
   sellOrderLineValidationFailed: "Validation error when editing Sell Order Line",
   sellOrderNotFound: "Sell Order not found",
   sellOrderPathNotFound: "Sell Order path not found",
+  tableSubsetLoadFailed: "Failed to load the rows of a query from Postgres, waiting for PowerSync instead",
   stageNotPendingSellOrderLine: "Logic error: Trying to stage a sell order line that is not pending",
   stageSellOrderLineOfAnotherSellOrder:
     "Logic error: Trying to stage a sell order line of another sell order for a client that splits them",

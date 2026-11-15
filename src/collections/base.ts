@@ -4,6 +4,7 @@ import type {
   ChangeMessageOrDeleteKeyMessage,
   CollectionConfig,
   DbClient,
+  LoadSubsetOptions,
   SyncAppliedReceipt,
 } from "@tanstack/react-db";
 import type { z } from "zod";
@@ -11,6 +12,7 @@ import type { z } from "zod";
 import { formatClientError } from "@/lib/formatters";
 import { forgetPowerSyncToken, getPowerSyncClient, getToAppRow } from "@/lib/powersync";
 import type { TPowerSyncRow } from "@/lib/powersync";
+import { loadTableSubsetFn, toSubsetRequest } from "@/lib/table-subset-fns";
 import log from "@/logging/log";
 import { LogMessages, LoggerLevels } from "@/logging/types";
 
@@ -73,7 +75,10 @@ function commitWithCheckpoint(pendingCommit: TPendingCommit) {
 
 /**
  * Syncs the rows of the table from PowerSync, but keeps the app's own schema, key and mutation handlers: every write
- * goes through tRPC, so the server can still reject it
+ * goes through tRPC, so the server can still reject it.
+ *
+ * Until PowerSync has brought the table, each query's rows come from Postgres (loadTableSubsetFn), so a first load does
+ * not wait for every table it reads. PowerSync's first changes then replace them with the whole table
  */
 export function powerSyncCollectionOptions<TSchema extends z.ZodType<object>, TKey extends string | number>({
   table,
@@ -84,7 +89,7 @@ export function powerSyncCollectionOptions<TSchema extends z.ZodType<object>, TK
   const toAppRow = getToAppRow(table);
   return {
     ...config,
-    syncMode: "eager",
+    syncMode: "on-demand",
     sync: {
       rowUpdateMode: "full",
       sync: ({ begin, write, commit, markReady, fail, truncate }) => {
@@ -92,8 +97,8 @@ export function powerSyncCollectionOptions<TSchema extends z.ZodType<object>, TK
         const controller = new AbortController();
         // A deleted row only arrives with its PowerSync id, which is not the key of the tables keyed by other columns
         const keys = new Map<string, TKey>();
-        let first = true;
         let active = true;
+        let first = true;
         let lastApplied: SyncAppliedReceipt = true;
 
         const cleanup = () => {
@@ -184,18 +189,35 @@ export function powerSyncCollectionOptions<TSchema extends z.ZodType<object>, TK
             fail(error);
           },
         });
-        lease
+        // Stream and commit errors are handled above, and a cleanup cancels the wait
+        const synced = lease
           .waitForSync(controller.signal)
           .then(async () => lastApplied)
           .then(
-            () => {
-              if (active) markReady();
-            },
-            // Stream and commit errors are handled above, and a cleanup cancels the wait
+            () => undefined,
             () => undefined,
           );
 
-        return cleanup;
+        const loadFromPostgres = async (options: LoadSubsetOptions) => {
+          const rows = await loadTableSubsetFn({ data: toSubsetRequest(table, options) }).catch((error: unknown) => {
+            void log(LoggerLevels.error, LogMessages.tableSubsetLoadFailed, formatClientError(error));
+            return null;
+          });
+          if (rows === null) return synced;
+          // Once PowerSync's rows are in, these may be older, or deleted since
+          if (!active || !first || options.signal?.aborted === true) return;
+          begin();
+          for (const row of rows) write({ type: "update", value: row as TRow });
+          const applied = commit(controller.signal);
+          if (applied !== true) await applied;
+        };
+
+        // Ready from the start: a query waits for its own subsets instead
+        markReady();
+        return {
+          cleanup,
+          loadSubset: (options: LoadSubsetOptions): true | Promise<void> => (first ? loadFromPostgres(options) : true),
+        };
       },
     },
   };
