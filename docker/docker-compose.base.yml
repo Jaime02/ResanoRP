@@ -15,38 +15,32 @@ services:
       - POSTGRES_DB=${POSTGRES_DB}
     volumes:
       - db_data:/var/lib/postgresql/data
+      - ./docker/powersync/init.sql:/init.sql:ro
     networks:
       - frontend
     ports:
       - "${POSTGRES_PORT}:5432"
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      # Healthy only once init.sql, PowerSync's storage database, publication and role, has run in this container. Once
+      # per container instead of per volume, so it also covers a volume created before PowerSync or restored from a dump
+      test:
+        [
+          "CMD-SHELL",
+          "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB} && { test -f /tmp/powersync-init || { psql -U ${POSTGRES_USER} -d ${POSTGRES_DB} -v ON_ERROR_STOP=1 -q -f /init.sql && touch /tmp/powersync-init; }; }",
+        ]
       interval: 2s
-      timeout: 3s
+      # A timeout kills the shell but not psql, so an init.sql slower than it never reaches the touch and the db never
+      # turns healthy. pg_isready gives up after 3s by itself
+      timeout: 60s
       retries: 4
     # A stopped PowerSync would otherwise keep WAL until the disk fills. Past the cap, it replicates again from scratch
     command: postgres -c wal_level=logical -c listen_addresses='*' -c max_slot_wal_keep_size=10GB
-  # Creates PowerSync's storage database and publication. A one-off, so it also covers a database volume created
-  # before PowerSync or restored from a dump
-  powersync-init:
-    logging: *logging
-    image: postgres:16
-    environment:
-      - PGPASSWORD=${POSTGRES_PASSWORD}
-    volumes:
-      - ./docker/powersync/init.sql:/init.sql:ro
-    networks:
-      - frontend
-    command: psql -h db -U ${POSTGRES_USER} -d ${POSTGRES_DB} -v ON_ERROR_STOP=1 -f /init.sql
-    depends_on:
-      db:
-        condition: service_healthy
   powersync:
     logging: *logging
     image: journeyapps/powersync-service:1.28.1
     restart: unless-stopped
     command: ["start", "-r", "unified"]
-    environment:
+    environment: &powersync-environment
       POWERSYNC_CONFIG_PATH: /config/service.yaml
       PS_DATA_SOURCE_URI: postgresql://powersync_role:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
       PS_STORAGE_SOURCE_URI: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/powersync_storage
@@ -68,8 +62,25 @@ services:
       start_interval: 2s
       retries: 15
     depends_on:
-      powersync-init:
-        condition: service_completed_successfully
+      db:
+        condition: service_healthy
+  # PowerSync never compacts its storage on its own: every change keeps the operations it replaced, and a page load
+  # downloads all of them. The test store held 63k operations for 184 rows, the legacy data 973k for 101k
+  powersync-compact:
+    logging: *logging
+    image: journeyapps/powersync-service:1.28.1
+    restart: unless-stopped
+    # sh as PID 1 ignores SIGTERM, so without tini every stop waits out the grace period and kills a running compact
+    init: true
+    entrypoint: ["sh", "-c", "while true; do node service/lib/entry.js compact; sleep 600; done"]
+    environment: *powersync-environment
+    volumes:
+      - ./docker/powersync:/config:ro
+    networks:
+      - frontend
+    depends_on:
+      powersync:
+        condition: service_healthy
   caddy:
     logging: *logging
     image: caddy:2

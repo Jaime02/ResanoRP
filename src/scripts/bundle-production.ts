@@ -10,7 +10,6 @@ const entries = [
   "Caddyfile",
   "trust-cert.ps1",
   "docker-compose.yml",
-  // Mounted by the powersync and powersync-init services
   "powersync",
   "start.cmd",
   "images.tar",

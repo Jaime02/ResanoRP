@@ -19,33 +19,27 @@ services:
       - POSTGRES_DB=${POSTGRES_DB}
     volumes:
       - db_data:/var/lib/postgresql/data
+      - ./powersync/init.sql:/init.sql:ro
     ports:
       - "${POSTGRES_PORT}:5432"
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      # See docker-compose.base.yml
+      test:
+        [
+          "CMD-SHELL",
+          "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB} && { test -f /tmp/powersync-init || { psql -U ${POSTGRES_USER} -d ${POSTGRES_DB} -v ON_ERROR_STOP=1 -q -f /init.sql && touch /tmp/powersync-init; }; }",
+        ]
       interval: 2s
-      timeout: 3s
+      timeout: 60s
       retries: 4
     # A stopped PowerSync would otherwise keep WAL until the disk fills. Past the cap, it replicates again from scratch
     command: postgres -c wal_level=logical -c listen_addresses='*' -c max_slot_wal_keep_size=10GB
-  # See docker-compose.base.yml
-  powersync-init:
-    logging: *logging
-    image: postgres:16
-    environment:
-      - PGPASSWORD=${POSTGRES_PASSWORD}
-    volumes:
-      - ./powersync/init.sql:/init.sql:ro
-    command: psql -h db -U ${POSTGRES_USER} -d ${POSTGRES_DB} -v ON_ERROR_STOP=1 -f /init.sql
-    depends_on:
-      db:
-        condition: service_healthy
   powersync:
     logging: *logging
     image: journeyapps/powersync-service:1.28.1
     restart: unless-stopped
     command: ["start", "-r", "unified"]
-    environment:
+    environment: &powersync-environment
       POWERSYNC_CONFIG_PATH: /config/service.yaml
       PS_DATA_SOURCE_URI: postgresql://powersync_role:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
       PS_STORAGE_SOURCE_URI: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/powersync_storage
@@ -63,8 +57,22 @@ services:
       start_period: 30s
       retries: 15
     depends_on:
-      powersync-init:
-        condition: service_completed_successfully
+      db:
+        condition: service_healthy
+  # See docker/docker-compose.base.yml
+  powersync-compact:
+    logging: *logging
+    image: journeyapps/powersync-service:1.28.1
+    restart: unless-stopped
+    # sh as PID 1 ignores SIGTERM, so without tini every stop waits out the grace period and kills a running compact
+    init: true
+    entrypoint: ["sh", "-c", "while true; do node service/lib/entry.js compact; sleep 600; done"]
+    environment: *powersync-environment
+    volumes:
+      - ./powersync:/config:ro
+    depends_on:
+      powersync:
+        condition: service_healthy
   caddy:
     logging: *logging
     image: caddy:2

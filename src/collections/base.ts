@@ -1,4 +1,4 @@
-import { BasicIndex, collectionOptions } from "@tanstack/react-db";
+import { BasicIndex, collectionOptions, withPublicationContext } from "@tanstack/react-db";
 import type {
   ChangeMessageOrDeleteKeyMessage,
   CollectionConfig,
@@ -37,6 +37,35 @@ type TPowerSyncOptions<TSchema extends z.ZodType<object>, TKey extends string | 
 
 function logSyncError(error: unknown) {
   void log(LoggerLevels.error, LogMessages.powerSyncSyncFailed, formatClientError(error));
+}
+
+type TPendingCommit = { commit: () => void; fail: (error: unknown) => void };
+const pendingCommits: Array<TPendingCommit> = [];
+
+/**
+ * The client reports a checkpoint table by table, in one turn. A live query runs after every commit of a table it
+ * reads, so committing them one by one joins the tables that have arrived so far and corrects the result with each
+ * next one. Inside one publication the live queries run once, after the last table. withPublicationContext is internal
+ * to TanStack DB and exported by its patch.
+ *
+ * The microtask runs before the client's waiters, so the rows are committed before a collection is marked ready and
+ * before awaitSynced resolves
+ */
+function commitWithCheckpoint(pendingCommit: TPendingCommit) {
+  pendingCommits.push(pendingCommit);
+  if (pendingCommits.length > 1) return;
+  queueMicrotask(() => {
+    const commits = pendingCommits.splice(0);
+    try {
+      withPublicationContext(() => {
+        for (const { commit } of commits) commit();
+      });
+    } catch (error) {
+      // A live query failed on rows that are already committed, so it no longer matches any of these tables
+      logSyncError(error);
+      for (const { fail } of commits) fail(error);
+    }
+  });
 }
 
 /**
@@ -116,13 +145,27 @@ export function powerSyncCollectionOptions<TSchema extends z.ZodType<object>, TK
 
         const unlisten = client.listen(table, {
           onChanges: (changes) => {
-            try {
-              onChanges(changes);
-            } catch (error) {
-              // TanStack rejected the rows, so the collection no longer matches the server
-              logSyncError(error);
-              fail(error);
+            const commitChanges = () => {
+              try {
+                onChanges(changes);
+              } catch (error) {
+                // TanStack rejected the rows, so the collection no longer matches the server
+                logSyncError(error);
+                fail(error);
+              }
+            };
+            // The rows the client already holds arrive while it registers the listener. Committed at once, the live
+            // query that started the collection finds them in it and only loads the ones it needs
+            if (first) {
+              commitChanges();
+              return;
             }
+            commitWithCheckpoint({
+              commit: commitChanges,
+              fail: (error) => {
+                if (active) fail(error);
+              },
+            });
           },
           // Connection errors, which the client retries and logs once from its status
           onError: () => undefined,

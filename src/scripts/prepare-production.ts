@@ -24,8 +24,8 @@ if (process.argv.includes("--import")) {
   }
 
   execSync(`${prismaCompose} up -d --wait db`, { stdio: "inherit" });
-  // PowerSync's publication and the grants to its role are left out: start.cmd restores before powersync-init has
-  // created the role, and powersync-init creates both again once production starts
+  // PowerSync's publication and the grants to its role are left out: the db healthcheck has already created both
+  // before start.cmd restores, and its default privileges grant the restored tables
   execSync(
     `${prismaCompose} exec -T db sh -c "pg_dump -U $POSTGRES_USER -d $POSTGRES_DB -Fc --no-publications --no-privileges -f /tmp/prisma.dump"`,
     { stdio: "inherit" },

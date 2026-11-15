@@ -1,3 +1,21 @@
+diff --git a/dist/cjs/index.cjs b/dist/cjs/index.cjs
+index 52d399e0f135a43679b2c88cbdd57b200ef70c36..875175c4df28b7face1063bbce21bd2dc8284e46 100644
+--- a/dist/cjs/index.cjs	
++++ b/dist/cjs/index.cjs
+@@ -317,3 +317,4 @@ exports.withCollectionConfigFactory = require_client.withCollectionConfigFactory
+ exports.withCollectionSyncConfigCleanup = require_index.withCollectionSyncConfigCleanup;
+ exports.withCollectionSyncConfigFactory = require_index.withCollectionSyncConfigFactory;
+ exports.withFlatChangeTracking = require_proxy.withFlatChangeTracking;
++exports.withPublicationContext = require("./scheduler.cjs").withPublicationContext;
+diff --git a/dist/cjs/index.d.cts b/dist/cjs/index.d.cts
+index bfc560fd155e3b4a6cdc772f82a8d98a4d126f57..aab8a73fd384247a8ffae649ffeb83b00346b031 100644
+--- a/dist/cjs/index.d.cts	
++++ b/dist/cjs/index.d.cts
+@@ -49,3 +49,4 @@ export { operators, type OperatorName } from "./query/builder/functions.cjs";
+ export { compareTemporalValues } from './utils/comparison.cjs';
+ /** @internal Used by first-party collection adapters. */
+ export { makeComparator } from './utils/comparison.cjs';
++export { withPublicationContext } from './scheduler.cjs';
 diff --git a/dist/cjs/live-query-observer-client.cjs b/dist/cjs/live-query-observer-client.cjs
 index 1d1efebaff81d996ffed62d964054fab9de1d4ee..ca938edfcb0bd9a3b28f6eb67c7155003fef38fa 100644
 --- a/dist/cjs/live-query-observer-client.cjs	
@@ -11,6 +29,24 @@ index 1d1efebaff81d996ffed62d964054fab9de1d4ee..ca938edfcb0bd9a3b28f6eb67c715500
  			const waiting = this.client._waitForSsrLiveQuery(this.queryHash, true);
  			if (waiting) throw waiting;
  			const query = this.client._getLiveQuery(this.queryHash, true);
+diff --git a/dist/esm/index.d.ts b/dist/esm/index.d.ts
+index facfe8183148623b2ba4fdec2b0f51cba7cf5a25..9fb88c774d9e674bc4d7919d073c481ac1f28ae2 100644
+--- a/dist/esm/index.d.ts	
++++ b/dist/esm/index.d.ts
+@@ -49,3 +49,4 @@ export { operators, type OperatorName } from './query/builder/functions.js';
+ export { compareTemporalValues } from './utils/comparison.js';
+ /** @internal Used by first-party collection adapters. */
+ export { makeComparator } from './utils/comparison.js';
++export { withPublicationContext } from './scheduler.js';
+diff --git a/dist/esm/index.js b/dist/esm/index.js
+index 62b4126f264bbe810daca6aad3e793303d82c0a3..18f026e7b78d6b75f2fa48e2c728cf54b4e28a01 100644
+--- a/dist/esm/index.js	
++++ b/dist/esm/index.js
+@@ -51,3 +51,4 @@ import { safeRandomUUID } from "./utils/uuid.js";
+ import { add, and, avg, caseWhen, coalesce, concat, count, divide, eq, gt, gte, ilike, inArray, isNull, isUndefined, length, like, lower, lt, lte, max, min, multiply, not, operators, or, subtract, sum, upper } from "./query/builder/functions.js";
+ import { compareTemporalValues, makeComparator } from "./utils/comparison.js";
+ export { AggregateFunctionNotInSelectError, BTreeIndex, BaseIndex, BaseQueryBuilder, BasicIndex, CannotCombineEmptyExpressionListError, CollectionConfigurationError, CollectionHasSubscribersError, CollectionImpl, CollectionInErrorStateError, CollectionInputNotFoundError, CollectionIsInErrorStateError, CollectionOperationError, CollectionPreloadAbortedError, CollectionReloadCrashedError, CollectionReloadDuringSyncEntryError, CollectionRequiresConfigError, CollectionRequiresSyncConfigError, CollectionStateError, DatabaseRequiredError, DbClient, DebounceCallDroppedError, DeduplicatedLoadSubset, DeleteKeyNotFoundError, DistinctRequiresSelectError, DuplicateDbInstanceError, DuplicateKeyError, DuplicateKeySyncError, DuplicateTransactionIdError, EmptyReferencePathError, FnSelectWithGroupByError, GetKeyRequiredError, GroupByError, GroupingOperatorRequiredError, HavingRequiresGroupByError, ir_exports as IR, IncludeOperatorRequiredError, InvalidCollectionStatusTransitionError, InvalidJoinCondition, InvalidJoinConditionLeftSourceError, InvalidJoinConditionRightSourceError, InvalidJoinConditionSameSourceError, InvalidJoinConditionSourceMismatchError, InvalidKeyError, InvalidPoolOptionError, InvalidSchemaError, InvalidSourceError, InvalidSourceTypeError, InvalidStorageDataFormatError, InvalidStorageObjectFormatError, InvalidSyncPersistenceCapabilityError, InvalidWhereExpressionError, JoinCollectionNotFoundError, JoinConditionMustBeEqualityError, JoinError, KeyUpdateNotAllowedError, LimitOffsetRequireOrderByError, LiveQueryObserverDisposedError, LiveQueryWindowControllerDisposedError, LoadSubsetOperationAbortedError, LocalStorageCollectionError, MissingAliasInputsError, MissingDeleteHandlerError, MissingHandlerError, MissingInsertHandlerError, MissingMutationFunctionError, MissingUpdateArgumentError, MissingUpdateHandlerError, NameRequiredError, NegativeActiveSubscribersError, NoKeysPassedToDeleteError, NoKeysPassedToUpdateError, NoPendingSyncTransactionCommitError, NoPendingSyncTransactionWriteError, NonAggregateExpressionNotInGroupByError, NonRetriableError, ObjectStoreNotFoundError, OnMutateMustBeSynchronousError, OnlyOneSourceAllowedError, PacedTransactionManualCommitError, Query, QueryBuilderError, QueryCompilationError, QueryMustHaveFromClauseError, QueryOptimizerError, QueueCapacityExceededError, QueueDisposedError, ReverseIndex, SYNC_PERSISTENCE_PROTOCOL, SYNC_PERSISTENCE_VERSION, SchemaMustBeSynchronousError, SchemaValidationError, SerializationError, SetWindowFindOneLimitError, SetWindowReentrancyError, SetWindowRequiresOrderByError, SourceCollectionIdReuseError, StorageError, StorageKeyRequiredError, SubQueryMustHaveFromClauseError, SyncCleanupError, SyncQueueInvariantError, SyncRowReusedWithoutPreviousValueError, SyncTransactionAbortedError, SyncTransactionAlreadyCommittedError, SyncTransactionAlreadyCommittedWriteError, TanStackDBError, ThrottleCallDroppedError, TransactionAlreadyCompletedRollbackError, TransactionError, TransactionNotPendingCommitError, TransactionNotPendingMutateError, TransactionScope, UndefinedKeyError, UnhashableQueryIRError, UnknownExpressionTypeError, UnknownFunctionError, UnknownHavingExpressionTypeError, UnsafeAliasPathError, UnsupportedAggregateFunctionError, UnsupportedFnSelectResultError, UnsupportedFromTypeError, UnsupportedJoinSourceTypeError, UnsupportedJoinTypeError, UnsupportedRootScalarSelectError, UpdateKeyNotFoundError, add, and, avg, bindLiveQueryWindow, canonicalizeQueryIR, caseWhen, claimLiveQuerySourceIds, clear, clearQueryPatterns, coalesce, collectionOptions, collectionOptionsClaim, compareTemporalValues, compileExpression, compileQuery, compileSingleRowExpression, concat, configPool, configureIndexDevMode, count, createArrayChangeProxy, createChangeProxy, createCollection, createEffect, createIndexedDB, createLiveQueryCollection, createLiveQueryObserver, createLiveQuerySourceIdClaims, createLiveQueryWindowController, createObjectStore, createOptimisticAction, createPacedMutations, createTransaction, debounceStrategy, deepEquals, deleteByKey, deleteDatabase, divide, eq, equalPersistedSnapshotValues, executeTransaction, extractFieldPath, extractSimpleComparisons, extractValue, fetchNextLiveQueryWindowPage, findIndexForField, findProblems, getActiveTransaction, getAll, getAllKeys, getByKey, getIndexDevModeConfig, getLiveQueryHash, getLiveQueryKey, getLiveQueryStatusFlags, getLoadSubsetDemandKey, getPreparedLiveQueryIdentity, getPreparedLiveQuerySources, getPublicCollection, getQueryIdentity, getQueryPatterns, getSourceObjectToken, getStableQueryBuilderHash, getStableQueryIRHash, getStableValueHash, groupKeys, grouping as groupingCompiler, gt, gte, hasVirtualProps, identifyLiveQuery, ilike, inArray, include, includesRuntime, indexedDBCollectionOptions, isCollection, isCollectionOptions, isDevModeEnabled, isFailedStatus, isNull, isSingleResultCollection, isUndefined, length, like, liveQueryCollectionOptions, localOnlyCollectionOptions, localStorageCollectionOptions, lower, lt, lte, makeComparator, materialize, max, min, multiply, not, openDatabase, operators, optimizeExpressionWithIndexes, or, parseLoadSubsetOptions, parseOrderByExpression, parseWhereExpression, pooledLiveQueries, prepareLiveQueryValue, put, queryOnce, queueStrategy, readLiveQueryWindowPageShape, rejectLiveQueryInput, releaseDeferredOnReclaim, reportUncaught, resolveLiveQueryValue, resumeDeferredLiveQueryCollections, safeRandomUUID, subtract, sum, syncWriteNamesWholeRow, throttleStrategy, toArray, toBooleanPredicate, toBoundaryError, trackQuery, upper, validateSyncPersistenceCapability, walkExpression, whenSyncAccepted, withAcceptedReceipt, withArrayChangeTracking, withChangeTracking, withCollectionConfigFactory, withCollectionSyncConfigCleanup, withCollectionSyncConfigFactory, withFlatChangeTracking };
++export { withPublicationContext } from "./scheduler.js";
 diff --git a/dist/esm/live-query-observer-client.js b/dist/esm/live-query-observer-client.js
 index 9b940756f6c74de5553bfe78eb2e4242aeca874f..2af3cc06dbc459ae88bddac9fb1ccbfb868d3b06 100644
 --- a/dist/esm/live-query-observer-client.js	

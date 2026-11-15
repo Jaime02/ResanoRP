@@ -1,4 +1,4 @@
--- Runs on every start, so a database restored or recreated without these objects gets them back
+-- Runs once per db container (see its healthcheck), so a database restored or recreated without these objects gets them back
 SELECT 'CREATE DATABASE powersync_storage'
 WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = 'powersync_storage')\gexec
 
@@ -10,7 +10,7 @@ WHERE NOT EXISTS (SELECT FROM pg_publication WHERE pubname = 'powersync')\gexec
 SELECT 'CREATE ROLE powersync_role WITH LOGIN REPLICATION BYPASSRLS'
 WHERE NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'powersync_role')\gexec
 -- The superuser's password, which the compose files also give PowerSync for this role
-\getenv powersync_password PGPASSWORD
+\getenv powersync_password POSTGRES_PASSWORD
 ALTER ROLE powersync_role WITH PASSWORD :'powersync_password';
 GRANT USAGE ON SCHEMA public TO powersync_role;
 GRANT SELECT ON ALL TABLES IN SCHEMA public TO powersync_role;
