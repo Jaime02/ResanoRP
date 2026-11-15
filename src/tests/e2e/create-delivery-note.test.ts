@@ -4,7 +4,7 @@ import path from "node:path";
 import { expect } from "@playwright/test";
 import type { Locator } from "@playwright/test";
 import { addDays } from "date-fns";
-import { eq, inArray } from "drizzle-orm";
+import { eq, inArray, sql } from "drizzle-orm";
 
 import { UserMode } from "@/contexts/app-context";
 import { getDeliveryNote, getDeliveryNotes } from "@/db/functions/delivery-note";
@@ -43,7 +43,7 @@ import {
   getTableRows,
   getTableSubrowById,
 } from "@/tests/utils/components/table";
-import { expectSingleToast } from "@/tests/utils/components/toast";
+import { expectSingleToast, getToasts, getToastType } from "@/tests/utils/components/toast";
 import {
   expectRejectedMutation,
   httpRequestFailedEvent,
@@ -59,6 +59,7 @@ import {
 } from "@/tests/utils/mock-data-utils";
 import { holdRequestWhile } from "@/tests/utils/trpc";
 import {
+  getButtonSubmitFormDeliveryNote,
   workflowAppendStagedLinesToDeliveryNote,
   workflowDeleteDeliveryNote,
   workflowEditDeliveryNoteLineQuantity,
@@ -69,6 +70,7 @@ import {
 import { workflowPickInvoiceClient } from "@/tests/workflows/invoice";
 import { assertPartStockConsumption } from "@/tests/workflows/part-stock";
 import { workflowPrintTag } from "@/tests/workflows/tag";
+import { ToastType } from "@/types";
 import type { BaseDeliveryNote } from "@/types/delivery-note";
 import type { BaseDeliveryNoteLine } from "@/types/delivery-note-line";
 import type { BaseSellOrderLine } from "@/types/sell-order-line";
@@ -80,7 +82,7 @@ let buttonSubmitFormDeliveryNote: Locator;
 test.beforeEach(({ page }) => {
   tablePendingSellOrderLines = page.getByTestId("table-pending-sell-orders");
   tableStagedSellOrderLines = page.getByTestId("table-staged-sell-order-lines");
-  buttonSubmitFormDeliveryNote = page.getByTestId("button-submit-form-delivery-note");
+  buttonSubmitFormDeliveryNote = getButtonSubmitFormDeliveryNote(page);
 });
 
 const activeClients = mockClients.filter((client) => client.deletedAt === null);
@@ -636,6 +638,77 @@ for (const client of clientsWithPendingLines) {
       await inputStagedQuantity.pressSequentially("0");
       await expect(buttonSubmitFormDeliveryNote).toBeDisabled();
     });
+  });
+}
+
+{
+  const client = clientsWithPendingLines[0];
+  test(`two delivery notes of ${client.name} sent at the same time cannot deliver the same pending parts twice`, async ({
+    db,
+    page,
+  }) => {
+    const partSellOrderLine = (await getMockPendingSellOrderLines(client.id)).find(
+      (line) => line.partReferenceId !== null,
+    )!;
+    expect(partSellOrderLine, "Wrong test set up: the client should have a pending line with part").toBeDefined();
+    const [sellOrderLine] = await db
+      .insert(dbTableSellOrderLine)
+      .values({
+        partPrice: "1.5",
+        partReferenceId: partSellOrderLine.partReferenceId,
+        pendingQuantity: 10,
+        quantity: 10,
+        sellOrderId: partSellOrderLine.sellOrderId,
+      })
+      .returning();
+    const previousDeliveryNoteIds = (await getDeliveryNotes()).map((deliveryNote) => deliveryNote.id);
+    // Waiting for a lock, either the one of the test or the one of the other request
+    const countBlockedTransactions = async () => {
+      const result: { rows: Array<{ count: number }> } = await db.execute(
+        sql`SELECT count(*)::int AS count FROM pg_stat_activity WHERE datname = current_database() AND cardinality(pg_blocking_pids(pid)) > 0`,
+      );
+      return result.rows[0].count;
+    };
+
+    await inAnotherTab(page, async (anotherPage) => {
+      const pages = [page, anotherPage];
+      for (const tabPage of pages) {
+        await workflowOpenCreateDeliveryNoteForClient(tabPage, client);
+        const stagedRow = await workflowStageSingleSellOrderLine(tabPage, sellOrderLine.id);
+        await expect(getEditableCellById(stagedRow, "quantity")).toHaveValue(String(sellOrderLine.pendingQuantity));
+      }
+
+      // Holding the line until both requests wait for it makes them reach it before either one is committed, which is
+      // how two delivery notes sent at the same time race
+      await db.transaction(async (tx) => {
+        await tx.select().from(dbTableSellOrderLine).where(eq(dbTableSellOrderLine.id, sellOrderLine.id)).for("update");
+        for (const tabPage of pages) {
+          await getButtonSubmitFormDeliveryNote(tabPage).click();
+        }
+        await expect.poll(countBlockedTransactions).toBe(pages.length);
+      });
+
+      const toastTypes = await Promise.all(
+        pages.map(async (tabPage) => {
+          await expect(getToasts(tabPage)).toHaveCount(1);
+          return getToastType(getToasts(tabPage).first());
+        }),
+      );
+      expect(toastTypes).toEqual(expect.arrayContaining([ToastType.Error, ToastType.Success]));
+      const message = PENDING_QUANTITY_EXCEEDED_MESSAGE(sellOrderLine.id);
+      await expectSingleToast(pages[toastTypes.indexOf(ToastType.Error)], message);
+      await expectSingleToast(pages[toastTypes.indexOf(ToastType.Success)]);
+      expectRejectedMutation({ code: "BAD_REQUEST", message, procedurePath: "deliveryNote.createWithLines" });
+    });
+
+    const createdDeliveryNotes = (await getDeliveryNotes()).filter(
+      (deliveryNote) => !previousDeliveryNoteIds.includes(deliveryNote.id),
+    );
+    expect(createdDeliveryNotes).toHaveLength(1);
+    expect(
+      (await getDeliveryNoteLinesByDeliveryNoteId(createdDeliveryNotes[0].id)).map((line) => line.quantity),
+    ).toEqual([sellOrderLine.pendingQuantity]);
+    expect((await getSellOrderLineById(sellOrderLine.id))?.pendingQuantity).toBe(0);
   });
 }
 

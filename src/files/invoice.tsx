@@ -13,6 +13,7 @@ import {
   INVOICE_TOTAL_LABEL,
   TAXABLE_BASE_LABEL,
 } from "@/messages/invoice";
+import { dateToFileName } from "@/schemas/utils";
 
 if (process.env.INVOICE_ROOT_PATH === undefined) {
   throw new Error("Environment variable INVOICE_ROOT_PATH is not set");
@@ -124,6 +125,14 @@ function InvoiceDocument({ company, client, invoiceId, date, deliveryNotes, ...f
 export function getInvoicePath(invoiceId: number) {
   return path.join(process.env.INVOICE_ROOT_PATH!, `${invoiceId}.pdf`);
 }
+
+// The first and last Factura can be the same in a later export, after unaccounting them, so the time of the export
+// keeps it from replacing the file of the earlier one
+export function getAccountingExportFileName(invoiceIds: Array<number>, exportedAt: Date) {
+  return `facturas-${invoiceIds[0]}-${invoiceIds.at(-1)}-${dateToFileName(exportedAt)}.csv`;
+}
+
+export const ACCOUNTING_EXPORT_FILE_NAME_REGEX = /^facturas-(\d+)-(\d+)-[\d_]+\.csv$/;
 
 export function getAccountingExportPath(fileName: string) {
   return path.join(process.env.INVOICE_ROOT_PATH!, fileName);

@@ -20,7 +20,7 @@ import {
   MAX_AMOUNT_IN_CENTS,
 } from "@/files/accounting-export";
 import { removeOnRollback } from "@/files/functions";
-import { getAccountingExportPath, printInvoice } from "@/files/invoice";
+import { getAccountingExportFileName, getAccountingExportPath, printInvoice } from "@/files/invoice";
 import { getSalesDocumentLine } from "@/files/sales-document";
 import { addAppDays, endOfAppDay, startOfAppDay } from "@/lib/dates";
 import { formatDate } from "@/lib/formatters";
@@ -114,7 +114,10 @@ export default router({
           }
 
           // Saved before the Facturas are committed as accounted, so the file is not lost when its download fails
-          const fileName = `facturas-${invoices[0].id}-${invoices.at(-1)!.id}.csv`;
+          const fileName = getAccountingExportFileName(
+            invoices.map((invoice) => invoice.id),
+            new Date(),
+          );
           const filePath = getAccountingExportPath(fileName);
           await fs.mkdir(path.dirname(filePath), { recursive: true });
           createdPaths.push(filePath);

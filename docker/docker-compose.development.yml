@@ -1,4 +1,7 @@
 services:
+  db:
+    ports:
+      - "${POSTGRES_PORT}:5432"
   powersync:
     stop_grace_period: 5s
   caddy:

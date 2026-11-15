@@ -10,6 +10,8 @@ import {
   deleteDeliveryNoteLine,
 } from "@/db/functions/delivery-note-line";
 import { resetChangedDeliveryNoteInvoice, resetInvoiceStatus } from "@/db/functions/invoice";
+import { getSellOrderById } from "@/db/functions/sell-order";
+import { getSellOrderLineForUpdate } from "@/db/functions/sell-order-line";
 import { dbTableDeliveryNote, dbTableDeliveryNoteLine, dbTableInvoice } from "@/db/schema";
 import { printDeliveryNote } from "@/files/delivery-note";
 import { getSalesDocumentLine } from "@/files/sales-document";
@@ -37,17 +39,14 @@ async function insertStagedSellOrderLines(
   const vatPercentage = await getConfigurationVatPercentage(tx);
 
   for (const stagedSellOrderLine of stagedSellOrderLines) {
-    const sellOrderLine = await tx.query.dbTableSellOrderLine.findFirst({
-      where: { id: stagedSellOrderLine.id },
-      with: { sellOrder: true },
-    });
+    const sellOrderLine = await getSellOrderLineForUpdate(stagedSellOrderLine.id, tx);
     if (!sellOrderLine) {
       throw new TRPCError({
         code: "NOT_FOUND",
         message: `Línea de pedido de venta ${stagedSellOrderLine.id} no encontrada`,
       });
     }
-    if (sellOrderLine.sellOrder?.clientId !== deliveryNote.clientId) {
+    if ((await getSellOrderById(sellOrderLine.sellOrderId, tx))?.clientId !== deliveryNote.clientId) {
       throw new TRPCError({
         code: "BAD_REQUEST",
         message: SELL_ORDER_LINE_NOT_OF_CLIENT_MESSAGE(stagedSellOrderLine.id),

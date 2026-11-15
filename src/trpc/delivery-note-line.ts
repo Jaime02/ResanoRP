@@ -8,7 +8,7 @@ import {
   deleteDeliveryNoteLine,
 } from "@/db/functions/delivery-note-line";
 import { resetChangedDeliveryNoteInvoice } from "@/db/functions/invoice";
-import { getSellOrderLineById } from "@/db/functions/sell-order-line";
+import { getSellOrderLineForUpdate } from "@/db/functions/sell-order-line";
 import { dbTableDeliveryNoteLine } from "@/db/schema";
 import { handleMutationError } from "@/lib/handlers";
 import { requiredIdObjectSchema } from "@/schemas";
@@ -71,7 +71,7 @@ export default router({
         const sellOrderLine =
           updatedDeliveryNoteLine.sellOrderLineId === null
             ? undefined
-            : await getSellOrderLineById(updatedDeliveryNoteLine.sellOrderLineId, tx);
+            : await getSellOrderLineForUpdate(updatedDeliveryNoteLine.sellOrderLineId, tx);
         if (sellOrderLine) assertPendingQuantityWithinQuantity(sellOrderLine, addedPendingQuantity);
         await addSellOrderLinePendingQuantity(updatedDeliveryNoteLine.sellOrderLineId, addedPendingQuantity, tx);
         await resetChangedDeliveryNoteInvoice(

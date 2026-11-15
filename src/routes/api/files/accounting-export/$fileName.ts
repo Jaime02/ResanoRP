@@ -4,7 +4,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { getCookie } from "@tanstack/react-start/server";
 import { z } from "zod";
 
-import { getAccountingExportPath } from "@/files/invoice";
+import { ACCOUNTING_EXPORT_FILE_NAME_REGEX, getAccountingExportPath } from "@/files/invoice";
 import { ADMIN_SESSION_COOKIE_NAME, isAdminSession } from "@/lib/admin-session";
 import { textResponse } from "@/lib/responses";
 import logger from "@/logging/logger";
@@ -12,7 +12,7 @@ import { LogMessages } from "@/logging/types";
 import { ADMIN_ONLY_MESSAGE } from "@/messages/common";
 
 const routeParamsSchema = z.object({
-  fileName: z.string().regex(/^facturas-\d+-\d+\.csv$/),
+  fileName: z.string().regex(ACCOUNTING_EXPORT_FILE_NAME_REGEX),
 });
 
 export const Route = createFileRoute("/api/files/accounting-export/$fileName")({

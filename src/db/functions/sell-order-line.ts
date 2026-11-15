@@ -1,8 +1,10 @@
+import { eq } from "drizzle-orm";
+
 import type { TDatabase } from "@/db";
 import db from "@/db";
 import { getMachines } from "@/db/functions/machine";
-import { dbGetProductionOrderStatus } from "@/db/functions/production-order";
 import { getSellOrderById } from "@/db/functions/sell-order";
+import { dbTableSellOrderLine } from "@/db/schema";
 import { computeProductionOrderStatus } from "@/lib/production-order";
 import { computeSellOrderLineStatus } from "@/lib/sell-order-line";
 import type { SellOrderLineStatus } from "@/schemas/sell-order-line";
@@ -41,10 +43,21 @@ export async function getSellOrderLineById(
   });
 }
 
+// Locked until the transaction ends, so changes made at the same time check its pending quantity one after the other
+// instead of all passing the check against the same value
+export async function getSellOrderLineForUpdate(
+  sellOrderLineId: number,
+  tx: TDatabase,
+): Promise<BaseSellOrderLine | undefined> {
+  return (
+    await tx.select().from(dbTableSellOrderLine).where(eq(dbTableSellOrderLine.id, sellOrderLineId)).for("update")
+  ).at(0);
+}
+
 const sumQuantities = (rows: Array<{ quantity: number }>) => rows.reduce((sum, row) => sum + row.quantity, 0);
 
-// The same statuses as getSellOrderLineStatus, with one query per table instead of about seven per Orden de
-// producción, which would fill the connection pool for a Cliente with many Líneas
+// One query per table instead of about seven per Orden de producción, which would fill the connection pool for a
+// Cliente with many Líneas
 export async function getSellOrderLineStatuses(
   sellOrderLines: Array<BaseSellOrderLine & { sellOrder: BaseSellOrder | null }>,
   dbConnection: TDatabase = db,
@@ -98,16 +111,10 @@ export async function getSellOrderLineStatus(
     sellOrder?: BaseSellOrder;
   },
   dbConnection: TDatabase = db,
-) {
-  const productionOrders = await dbConnection.query.dbTableProductionOrder.findMany({
-    where: { sellOrderLineId: sellOrderLine.id },
-  });
-
-  return computeSellOrderLineStatus({
-    productionOrderStatuses: await Promise.all(
-      productionOrders.map(async (productionOrder) => dbGetProductionOrderStatus(productionOrder, dbConnection)),
-    ),
-    sellOrder: (sellOrder ?? (await getSellOrderById(sellOrderLine.sellOrderId, dbConnection)))!,
-    sellOrderLine,
-  });
+): Promise<SellOrderLineStatus> {
+  const statuses = await getSellOrderLineStatuses(
+    [{ ...sellOrderLine, sellOrder: sellOrder ?? (await getSellOrderById(sellOrderLine.sellOrderId, dbConnection))! }],
+    dbConnection,
+  );
+  return statuses.get(sellOrderLine.id)!;
 }

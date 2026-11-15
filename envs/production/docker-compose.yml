@@ -20,8 +20,8 @@ services:
     volumes:
       - db_data:/var/lib/postgresql/data
       - ./powersync/init.sql:/init.sql:ro
-    ports:
-      - "${POSTGRES_PORT}:5432"
+    # No published port: only the app and PowerSync reach the database, through the compose network. A published port
+    # would let any machine on the network log in as the superuser
     healthcheck:
       # See docker-compose.base.yml
       test:

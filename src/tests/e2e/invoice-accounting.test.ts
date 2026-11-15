@@ -20,7 +20,7 @@ import {
   hasAmountTooLarge,
   MAX_AMOUNT_IN_CENTS,
 } from "@/files/accounting-export";
-import { getAccountingExportPath } from "@/files/invoice";
+import { ACCOUNTING_EXPORT_FILE_NAME_REGEX, getAccountingExportPath } from "@/files/invoice";
 import { formatCents, getDeliveryNoteLineUnitPrice, getVatBreakdown } from "@/lib/prices";
 import { PRISMA_ACCOUNTING_ACCOUNT_LABEL } from "@/messages/client";
 import { CLOSE_LABEL } from "@/messages/common";
@@ -56,6 +56,10 @@ import {
 
 const expectAccountRejected = (message: string, code: TErrorCode = "BAD_REQUEST") =>
   expectRejectedMutation({ code, message, procedurePath: "invoice.account" });
+
+// The name ends with the time of the export on the server, which the clock of the browser does not set
+const getExportedInvoiceIdRange = (fileName: string) =>
+  ACCOUNTING_EXPORT_FILE_NAME_REGEX.exec(fileName)?.slice(1, 3).map(Number);
 
 const MOCK_INVOICES: Array<TAccountingExportInvoice> = [
   {
@@ -423,7 +427,7 @@ test("account the invoices into the file for Prisma", async ({ page, db }) => {
     await page.goto("/invoicing");
     const { content, fileName } = await workflowAccountInvoices(page);
 
-    expect(fileName).toBe(`facturas-${pendingInvoices.at(0)!.id}-${pendingInvoices.at(-1)!.id}.csv`);
+    expect(getExportedInvoiceIdRange(fileName)).toEqual([pendingInvoices.at(0)!.id, pendingInvoices.at(-1)!.id]);
     expect(await fs.readFile(getAccountingExportPath(fileName)), "The server keeps the exported file").toEqual(content);
     const csv = content.toString("latin1");
     expect(csv.endsWith("\r\n")).toBe(true);
@@ -561,7 +565,7 @@ test("account the invoices into the file for Prisma", async ({ page, db }) => {
       .map((invoice) => invoice.id)
       .sort((a, b) => a - b);
     // The unaccounted invoice has a lower id but is updated last, so its row is no longer in id order
-    expect(fileName).toBe(`facturas-${exportedInvoiceIds.at(0)}-${exportedInvoiceIds.at(-1)}.csv`);
+    expect(getExportedInvoiceIdRange(fileName)).toEqual([exportedInvoiceIds.at(0), exportedInvoiceIds.at(-1)]);
     const exportedInvoiceNumbers = new Set(
       parseRecords(content.toString("latin1")).map((record) =>
         (record[0] === "2" ? record[11] : record[0] === "3" ? record[5] : record[4]).trim(),

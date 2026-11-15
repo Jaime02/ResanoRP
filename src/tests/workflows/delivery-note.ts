@@ -90,6 +90,10 @@ export async function workflowOpenCreateDeliveryNoteForClient(page: Page, client
   await expect(page.getByTestId("table-pending-sell-orders")).toBeVisible();
 }
 
+export function getButtonSubmitFormDeliveryNote(page: Page) {
+  return page.getByTestId("button-submit-form-delivery-note");
+}
+
 export async function workflowStageSingleSellOrderLine(page: Page, sellOrderLineId: number) {
   await getTableRowByTestId(page.getByTestId("table-pending-sell-orders"), sellOrderLineId)
     .getByTestId("button-success")

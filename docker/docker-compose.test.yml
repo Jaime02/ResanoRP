@@ -1,4 +1,7 @@
 services:
+  db:
+    ports:
+      - "${POSTGRES_PORT}:5432"
   caddy:
     profiles: ["test"]
     depends_on:

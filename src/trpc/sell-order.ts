@@ -1,4 +1,5 @@
 import fs from "node:fs";
+import path from "node:path";
 
 import { TRPCError } from "@trpc/server";
 import { and, eq, isNotNull } from "drizzle-orm";
@@ -11,7 +12,7 @@ import {
   dbTableSellOrder,
   dbTableSellOrderLine,
 } from "@/db/schema";
-import { renameFile, saveUpload } from "@/files/functions";
+import { removeOnRollback, renameFile, saveUpload } from "@/files/functions";
 import { getSellOrderPath } from "@/files/sell-order";
 import { handleMutationError } from "@/lib/handlers";
 import { SELL_ORDER_REFERENCE_TAKEN_MESSAGE } from "@/messages/sell-order";
@@ -28,7 +29,12 @@ const uniqueConstraints = [
   },
 ];
 
-async function saveSellOrderFile(sellOrder: BaseSellOrder, sellOrderFile: File, tx: TDatabase) {
+async function saveSellOrderFile(
+  sellOrder: BaseSellOrder,
+  sellOrderFile: File,
+  tx: TDatabase,
+  createdPaths: Array<string>,
+) {
   const filePath = await getSellOrderPath(
     {
       clientId: sellOrder.clientId,
@@ -43,69 +49,77 @@ async function saveSellOrderFile(sellOrder: BaseSellOrder, sellOrderFile: File, 
       message: "Error al guardar el archivo del Pedido de venta",
     });
   }
+  // Saved apart first, so an upload that fails leaves the current file where it is
+  const uploadPath = `${filePath}.upload`;
+  createdPaths.push(uploadPath);
+  await saveUpload({
+    fileUpload: sellOrderFile,
+    location: uploadPath,
+  });
   // A replaced file is kept, renamed as deleteFile does
   if (fs.existsSync(filePath)) {
     await renameFile({ filePath, newFileName: `DELETED_${dateToFileName(new Date())}.${sellOrder.id}.pdf` });
   }
-  await saveUpload({
-    fileUpload: sellOrderFile,
-    location: filePath,
-  });
+  await renameFile({ filePath: uploadPath, newFileName: path.basename(filePath) });
 }
 
 export default router({
   create: adminProcedure.input(createSellOrderFormDataSchema).mutation(async ({ ctx, input }) =>
-    ctx.db.transaction(async (tx) => {
-      try {
-        const { sellOrderFile, ...sellOrder } = input;
-        const newSellOrder = (
-          await tx
-            .insert(dbTableSellOrder)
-            .values({ ...sellOrder, fileUploadedAt: sellOrderFile != null ? new Date() : null })
-            .returning()
-        ).at(0);
+    removeOnRollback(async (createdPaths) =>
+      ctx.db.transaction(async (tx) => {
+        try {
+          const { sellOrderFile, ...sellOrder } = input;
+          const newSellOrder = (
+            await tx
+              .insert(dbTableSellOrder)
+              .values({ ...sellOrder, fileUploadedAt: sellOrderFile != null ? new Date() : null })
+              .returning()
+          ).at(0);
 
-        if (!newSellOrder) {
-          throw new TRPCError({
-            code: "INTERNAL_SERVER_ERROR",
-            message: "Error al crear el Pedido de venta",
-          });
-        }
+          if (!newSellOrder) {
+            throw new TRPCError({
+              code: "INTERNAL_SERVER_ERROR",
+              message: "Error al crear el Pedido de venta",
+            });
+          }
 
-        if (sellOrderFile != null) {
-          await saveSellOrderFile(newSellOrder, sellOrderFile, tx);
+          if (sellOrderFile != null) {
+            await saveSellOrderFile(newSellOrder, sellOrderFile, tx, createdPaths);
+          }
+          return { item: newSellOrder };
+        } catch (error) {
+          handleMutationError({ error, uniqueConstraints });
         }
-        return { item: newSellOrder };
-      } catch (error) {
-        handleMutationError({ error, uniqueConstraints });
-      }
-    }),
+      }),
+    ),
   ),
   update: adminProcedure.input(updateSellOrderFormDataSchema).mutation(async ({ ctx, input }) =>
-    ctx.db.transaction(async (tx) => {
-      try {
-        const { sellOrderFile, ...sellOrder } = input;
-        const updatedSellOrder = (
-          await tx
-            .update(dbTableSellOrder)
-            .set({ ...sellOrder, ...(sellOrderFile != null ? { fileUploadedAt: new Date() } : {}) })
-            .where(eq(dbTableSellOrder.id, input.id))
-            .returning()
-        ).at(0);
-        if (!updatedSellOrder) {
-          throw new TRPCError({
-            code: "NOT_FOUND",
-            message: `Pedido de venta con ID ${input.id} no encontrado`,
-          });
+    removeOnRollback(async (createdPaths) =>
+      ctx.db.transaction(async (tx) => {
+        try {
+          const { sellOrderFile, ...sellOrder } = input;
+          const updatedSellOrder = (
+            await tx
+              .update(dbTableSellOrder)
+              .set({ ...sellOrder, ...(sellOrderFile != null ? { fileUploadedAt: new Date() } : {}) })
+              .where(eq(dbTableSellOrder.id, input.id))
+              .returning()
+          ).at(0);
+          if (!updatedSellOrder) {
+            throw new TRPCError({
+              code: "NOT_FOUND",
+              message: `Pedido de venta con ID ${input.id} no encontrado`,
+            });
+          }
+          if (sellOrderFile != null) {
+            await saveSellOrderFile(updatedSellOrder, sellOrderFile, tx, createdPaths);
+          }
+          return { item: updatedSellOrder };
+        } catch (error) {
+          handleMutationError({ error, uniqueConstraints });
         }
-        if (sellOrderFile != null) {
-          await saveSellOrderFile(updatedSellOrder, sellOrderFile, tx);
-        }
-        return { item: updatedSellOrder };
-      } catch (error) {
-        handleMutationError({ error, uniqueConstraints });
-      }
-    }),
+      }),
+    ),
   ),
   delete: adminProcedure.input(requiredIdObjectSchema).mutation(async ({ ctx, input }) =>
     ctx.db.transaction(async (tx) => {

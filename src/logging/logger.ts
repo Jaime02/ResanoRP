@@ -49,11 +49,30 @@ const consoleFormat = winston.format.combine(
   }),
 );
 
+const ERRORS_LOG_MAX_BYTES = 1024 * 1024 * 1; // 1 MB
+const LOG_MAX_BYTES = 1024 * 1024 * 5; // 5 MB
+const LOG_SIZE_CHECK_INTERVAL_MS = 10_000;
+
+// Any browser can write to the logs through logFromClientFn, so without a limit a stuck page fills the disk. Winston
+// can only start a new file when one is full, and there must be a single file per log, so a file over its limit is
+// emptied instead. Its stream appends, so it keeps writing to the same file
+function limitLogFileSize(filePath: string, maxBytes: number) {
+  setInterval(() => {
+    try {
+      if (fs.statSync(filePath).size > maxBytes) fs.truncateSync(filePath);
+    } catch {
+      // The file does not exist yet
+    }
+  }, LOG_SIZE_CHECK_INTERVAL_MS).unref();
+}
+
+limitLogFileSize(errorsLogFilePath, ERRORS_LOG_MAX_BYTES);
+limitLogFileSize(logFilePath, LOG_MAX_BYTES);
+
 const errorFileTransport = new winston.transports.File({
   filename: errorsLogFilePath,
   format: fileFormat,
   level: LoggerLevels.warning,
-  maxsize: 1024 * 1024 * 1, // 1 MB
 });
 
 const transports: Array<winston.transport> = [
@@ -70,7 +89,6 @@ const transports: Array<winston.transport> = [
       })(),
       fileFormat,
     ),
-    maxsize: 1024 * 1024 * 5, // 5 MB
   }),
   new winston.transports.Console({
     format: consoleFormat,

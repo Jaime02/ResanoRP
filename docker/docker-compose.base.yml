@@ -18,8 +18,6 @@ services:
       - ./docker/powersync/init.sql:/init.sql:ro
     networks:
       - frontend
-    ports:
-      - "${POSTGRES_PORT}:5432"
     healthcheck:
       # Healthy only once init.sql, PowerSync's storage database, publication and role, has run in this container. Once
       # per container instead of per volume, so it also covers a volume created before PowerSync or restored from a dump
