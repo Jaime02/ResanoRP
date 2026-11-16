@@ -39,6 +39,7 @@ import {
   QUANTITY_LABEL,
   NON_ZERO_QUANTITY_MESSAGE,
 } from "@/messages/common";
+import { PART_PRICE_CREATED_MESSAGE } from "@/messages/part-price";
 import { PRODUCTION_ORDER_DELETED_MESSAGE, PRODUCTION_ORDER_RESTORED_MESSAGE } from "@/messages/production-order";
 import {
   SELL_ORDER_LINE_DELETED_MESSAGE,
@@ -1285,7 +1286,7 @@ test("create the part prices of a sell order for its client", async ({ page }) =
     await getFormInputByLabel(card, QUANTITY_LABEL, InputElementType.Number).pressSequentially(String(quantity));
     await getFormInputByLabel(card, PRICE_LABEL, InputElementType.Number).pressSequentially(price);
     await card.getByTestId("button-submit").click();
-    await expectSingleSuccessToast(page, SELL_ORDER_LINE_CREATED_MESSAGE);
+    await expectSingleSuccessToast(page, PART_PRICE_CREATED_MESSAGE);
 
     const newPartPrice = (await getPartPricesByPartId(partId)).find(
       (partPrice) => !existingPartPriceIds.includes(partPrice.id),

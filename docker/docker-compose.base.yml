@@ -43,6 +43,7 @@ services:
       PS_DATA_SOURCE_URI: postgresql://powersync_role:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
       PS_STORAGE_SOURCE_URI: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/powersync_storage
       PS_JWT_SECRET: ${POWERSYNC_JWT_SECRET}
+      PS_LOG_LEVEL: ${PS_LOG_LEVEL:-info}
     volumes:
       - ./docker/powersync:/config:ro
     networks:

@@ -75,7 +75,12 @@ import {
   getTableSubrowById,
 } from "@/tests/utils/components/table";
 import { expectSingleToast, expectSingleSuccessToast } from "@/tests/utils/components/toast";
-import { clientErrorEvent, expectRejectedMutation, schemaErrorMessage } from "@/tests/utils/errors-log";
+import {
+  clientErrorEvent,
+  expectRejectedMutation,
+  schemaErrorMessage,
+  schemaToastMessage,
+} from "@/tests/utils/errors-log";
 import { TestAnnotations, expectErrorsLog, setUserMode, test } from "@/tests/utils/fixtures";
 import {
   getMockClientParts,
@@ -636,14 +641,11 @@ test("manage the delivery notes", { annotation: TestAnnotations.ResetTags }, asy
       // Once set, a price can be changed but not removed
       await inputUnitPrice.clear();
       await inputUnitPrice.blur();
-      const priceRemovalErrorMessage = schemaErrorMessage(updateDeliveryNoteLinePriceSchema, {
-        id: userDeliveryNoteLine.id,
-        unitPrice: null,
-      });
-      await expectSingleToast(page, priceRemovalErrorMessage);
+      const priceRemoval = { id: userDeliveryNoteLine.id, unitPrice: null };
+      await expectSingleToast(page, schemaToastMessage(updateDeliveryNoteLinePriceSchema, priceRemoval));
       expectRejectedMutation({
         code: "BAD_REQUEST",
-        message: priceRemovalErrorMessage,
+        message: schemaErrorMessage(updateDeliveryNoteLinePriceSchema, priceRemoval),
         procedurePath: "deliveryNoteLine.updatePrice",
         serverError: null,
       });

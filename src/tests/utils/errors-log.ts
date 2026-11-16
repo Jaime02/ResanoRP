@@ -9,6 +9,7 @@ import { AppContextStorage, UserMode } from "@/contexts/app-context";
 import { PG_UNIQUE_VIOLATION } from "@/lib/handlers";
 import { LoggerLevels, LogMessages, UNLOGGED_HTTP_STATUS_CODE } from "@/logging/types";
 import type { AppRouter } from "@/routes/api/trpc/$";
+import { formatZodError } from "@/schemas/utils";
 import { expectErrorsLog, type TUserConfig } from "@/tests/utils/fixtures";
 import type { TProcedurePath } from "@/tests/utils/trpc";
 
@@ -88,9 +89,18 @@ export function clientErrorEvent(
 
 // The message of the error of a schema that rejects the input, as both the client and the server log it
 export function schemaErrorMessage(schema: z.ZodType, input: unknown) {
+  return rejectedSchemaError(schema, input).message;
+}
+
+// The toast shows the formatted issues of the schema instead of the raw ones
+export function schemaToastMessage(schema: z.ZodType, input: unknown) {
+  return formatZodError(rejectedSchemaError(schema, input));
+}
+
+function rejectedSchemaError(schema: z.ZodType, input: unknown) {
   const result = schema.safeParse(input);
   expect(result.success, "Wrong test set up: The schema should reject the input").toBe(false);
-  return result.error!.message;
+  return result.error!;
 }
 
 export function trpcError(code: TErrorCode, message: string) {

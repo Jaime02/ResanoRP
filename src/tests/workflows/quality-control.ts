@@ -4,7 +4,7 @@ import type { Page } from "@playwright/test";
 import { getPartFeaturesOfPart } from "@/db/functions/part";
 import { getProductionOrderById } from "@/db/functions/production-order";
 import { getQualityChecksOfProductionOrder } from "@/db/functions/quality-check";
-import { QUALITY_CHECK_SAVED_MESSAGE } from "@/messages/production-order";
+import { PRODUCTION_ORDER_EDITED_MESSAGE, QUALITY_CHECK_SAVED_MESSAGE } from "@/messages/production-order";
 import {
   mockMachineProductionOrderQueues,
   mockMachines,
@@ -136,7 +136,7 @@ export async function workflowSetQualityControl(page: Page, productionOrderId: n
   await checkbox.click();
   await expect(checkbox).toBeChecked({ checked: qualityControl });
   await buttonSubmit.click();
-  await expectSingleSuccessToast(page, QUALITY_CHECK_SAVED_MESSAGE);
+  await expectSingleSuccessToast(page, PRODUCTION_ORDER_EDITED_MESSAGE);
   await expect(checkbox).toBeChecked({ checked: qualityControl });
   await expect(getQualityControlLocators(page).table).toHaveCount(qualityControl ? 1 : 0);
 }
