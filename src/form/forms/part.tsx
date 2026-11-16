@@ -219,19 +219,21 @@ export default function FormPart({
           infoSection,
           {
             content: (
-              <>
-                <LayoutBlueprint blueprints={part?.blueprints} />
-                {formMode !== FormMode.ReadOnly && (
-                  <ButtonLink
-                    testId="button-add-blueprint"
-                    variant="success"
-                    to="."
-                    search={(prev) => ({ ...prev, createBlueprint: true })}
-                  >
-                    <PlusIcon />
-                    {ADD_BLUEPRINT_LABEL}
-                  </ButtonLink>
-                )}
+              <div className="flex flex-row flex-wrap items-center justify-center gap-2">
+                <div className="flex flex-col items-center gap-2">
+                  <LayoutBlueprint blueprints={part?.blueprints} />
+                  {formMode !== FormMode.ReadOnly && (
+                    <ButtonLink
+                      testId="button-add-blueprint"
+                      variant="success"
+                      to="."
+                      search={(prev) => ({ ...prev, createBlueprint: true })}
+                    >
+                      <PlusIcon />
+                      {ADD_BLUEPRINT_LABEL}
+                    </ButtonLink>
+                  )}
+                </div>
                 <DialogCreateBlueprint open={createBlueprint} partId={part?.id} />
                 <TablePartFeatures
                   tableMode={formModeToTableModeMap[formMode]}
@@ -241,7 +243,7 @@ export default function FormPart({
                   skeletonRowsCount={2}
                   title={PART_FEATURES_TITLE}
                 />
-              </>
+              </div>
             ),
             label: BLUEPRINTS_TITLE,
             value: "blueprints",

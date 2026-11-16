@@ -14,12 +14,20 @@ import { endOfAppDay, isSameAppDay, startOfAppDay } from "@/lib/dates";
 import { formatDate, formatPrice } from "@/lib/formatters";
 import { formatCents, getLineTotalInCents } from "@/lib/prices";
 import { NEXT_PAGE_LABEL, CLIENT_LABEL, DATE_LABEL, FROM_LABEL, TO_LABEL } from "@/messages/common";
-import { ACCOUNTED_DELIVERY_NOTE_MESSAGE } from "@/messages/delivery-note";
+import {
+  ACCOUNTED_DELIVERY_NOTE_MESSAGE,
+  DELIVERY_NOTE_LINE_DELETED_MESSAGE,
+  DELIVERY_NOTE_LINE_EDITED_MESSAGE,
+  DELIVERY_NOTE_LINE_CREATED_MESSAGE,
+  DELIVERY_NOTE_EDITED_MESSAGE,
+} from "@/messages/delivery-note";
 import {
   INVOICE_CREATE_TITLE,
   INVOICE_NOT_DELETED_NOT_LAST_MESSAGE,
   INVOICE_NOT_SENT_UNPRICED_MESSAGE,
+  INVOICE_CREATED_MESSAGE,
 } from "@/messages/invoice";
+import { SELL_ORDER_LINE_EDITED_MESSAGE } from "@/messages/sell-order";
 import {
   MOCK_INITIAL_DATE,
   mockClientInvoiceEmails,
@@ -43,7 +51,7 @@ import {
   getTableRows,
   getTableSubrowById,
 } from "@/tests/utils/components/table";
-import { expectSingleToast } from "@/tests/utils/components/toast";
+import { expectSingleToast, expectSingleSuccessToast } from "@/tests/utils/components/toast";
 import { expectRejectedMutation } from "@/tests/utils/errors-log";
 import { TestAnnotations, inAnotherTab, test } from "@/tests/utils/fixtures";
 import {
@@ -191,7 +199,7 @@ test("create, change and delete invoices", async ({ page, db }) => {
       ).getByTestId("button-delete"),
       "dialog-delete-model-content",
     );
-    await expectSingleToast(page);
+    await expectSingleSuccessToast(page, DELIVERY_NOTE_LINE_DELETED_MESSAGE);
 
     expect(await getInvoiceById(invoice.id)).toMatchObject({ accounted: false, sent: false });
 
@@ -210,7 +218,7 @@ test("create, change and delete invoices", async ({ page, db }) => {
 
     await workflowOpenEditDeliveryNote(page, deliveryNote.id);
     await workflowEditDeliveryNoteLineQuantity(page, deliveryNoteLine.id, deliveryNoteLine.quantity + 1);
-    await expectSingleToast(page);
+    await expectSingleSuccessToast(page, DELIVERY_NOTE_LINE_EDITED_MESSAGE);
 
     expect(await getInvoiceById(invoice.id)).toMatchObject({ accounted: false, sent: false });
 
@@ -226,7 +234,7 @@ test("create, change and delete invoices", async ({ page, db }) => {
       unitPrice: "1",
     });
     await buttonSubmitLine.click();
-    await expectSingleToast(page);
+    await expectSingleSuccessToast(page, DELIVERY_NOTE_LINE_CREATED_MESSAGE);
     expect(await getInvoiceById(invoice.id)).toMatchObject({ accounted: false, sent: false });
   });
 
@@ -488,7 +496,7 @@ test("create, change and delete invoices", async ({ page, db }) => {
       expect(newInvoice.deliveryNotes.map((deliveryNote) => deliveryNote.id).sort((a, b) => a - b)).toEqual(
         invoicedDeliveryNotes.map((deliveryNote) => deliveryNote.id).sort((a, b) => a - b),
       );
-      await expectSingleToast(page);
+      await expectSingleSuccessToast(page, INVOICE_CREATED_MESSAGE);
       return newInvoice;
     });
 
@@ -524,7 +532,7 @@ test("create, change and delete invoices", async ({ page, db }) => {
       getTableRowByTestId(tableDeliveryNoteLines, deletedDeliveryNoteLine.id).getByTestId("button-delete"),
       "dialog-delete-model-content",
     );
-    await expectSingleToast(page);
+    await expectSingleSuccessToast(page, DELIVERY_NOTE_LINE_DELETED_MESSAGE);
 
     await selectDateInputDate(
       page,
@@ -533,7 +541,7 @@ test("create, change and delete invoices", async ({ page, db }) => {
     );
     await dialogCreateEditDeliveryNote.getByTestId("button-submit").click();
     await expect(dialogCreateEditDeliveryNote).not.toBeVisible();
-    await expectSingleToast(page);
+    await expectSingleSuccessToast(page, DELIVERY_NOTE_EDITED_MESSAGE);
 
     await page.goto("/invoicing");
     const rowInvoice = getTableRowByTestId(tableInvoices, invoice.id);
@@ -751,7 +759,7 @@ test("changing the price of a sell order line marks the invoices that take it to
     await inputPartPrice.clear();
     await inputPartPrice.pressSequentially(partPrice);
     await inputPartPrice.press("Enter");
-    await expectSingleToast(page);
+    await expectSingleSuccessToast(page, SELL_ORDER_LINE_EDITED_MESSAGE);
   };
 
   // The same price typed with more trailing zeros does not change the Factura

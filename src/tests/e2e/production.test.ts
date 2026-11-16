@@ -7,12 +7,18 @@ import { getMachineById } from "@/db/functions/machine";
 import { getMachineProductionOrderQueue } from "@/db/functions/machine-production-order-queue";
 import { getProductionOrderById, getProductionOrderProducedQuantity } from "@/db/functions/production-order";
 import { CLIENT_LABEL, NOTES_LABEL } from "@/messages/common";
+import {
+  PRODUCTION_ORDER_EDITED_MESSAGE,
+  PRODUCTION_ORDER_PRIORITIZED_MESSAGE,
+  PRODUCTION_ORDER_STOPPED_MESSAGE,
+  LABEL_PRINTED_MESSAGE,
+} from "@/messages/production-order";
 import { ProductionOrderStatus } from "@/schemas/production-order";
 import { mockMachineProductionOrderQueues, mockMachines, mockProductionOrders } from "@/tests/mock-data";
 import { getTestId } from "@/tests/utils/components";
 import { InputElementType, getFormInputByLabel } from "@/tests/utils/components/form";
 import { getTableRowByTestId, getTableRowByPosition, getTableRows } from "@/tests/utils/components/table";
-import { expectSingleToast } from "@/tests/utils/components/toast";
+import { expectSingleSuccessToast } from "@/tests/utils/components/toast";
 import { TestAnnotations, test } from "@/tests/utils/fixtures";
 import {
   getMockProducedProductionOrderStatus,
@@ -90,7 +96,7 @@ test(
         await inputNotes.fill(newNotes);
         await inputNotes.blur();
 
-        await expectSingleToast(page);
+        await expectSingleSuccessToast(page, PRODUCTION_ORDER_EDITED_MESSAGE);
 
         const updatedDbProductionOrder = await getProductionOrderById(dbProductionOrder.id);
         expect(updatedDbProductionOrder).toBeDefined();
@@ -123,7 +129,7 @@ test(
         await expect(buttonMoveToQueueStart).toBeVisible();
         await buttonMoveToQueueStart.click();
 
-        await expectSingleToast(page);
+        await expectSingleSuccessToast(page, PRODUCTION_ORDER_PRIORITIZED_MESSAGE);
 
         const dbUpdatedMachineProductionOrdersQueue = await getMachineProductionOrderQueue(userMachine.id);
         expect(dbUpdatedMachineProductionOrdersQueue.length).toBe(machineProductionOrderQueue.length);
@@ -180,7 +186,7 @@ test(
         await expect(dialogContentNoTagPrinted).toBeHidden();
         await expect(dialogContentStopProductionOrder).toBeHidden();
 
-        await expectSingleToast(page);
+        await expectSingleSuccessToast(page, PRODUCTION_ORDER_STOPPED_MESSAGE);
 
         expect((await getMachineById(userMachine.id))?.activeProductionOrderId).toBeNull();
         expect(await getProductionOrderProducedQuantity(activeProductionOrderId)).toBe(producedQuantityBefore);
@@ -216,7 +222,7 @@ test(
         await expect(printTagButton).toBeEnabled();
         await printTagButton.click();
 
-        await expectSingleToast(page);
+        await expectSingleSuccessToast(page, LABEL_PRINTED_MESSAGE);
 
         assertTagFileGenerated(tagFilePath);
 

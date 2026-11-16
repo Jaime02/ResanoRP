@@ -6,7 +6,12 @@ import { getPartPriceEstimatorByPartId } from "@/db/functions/part-price-estimat
 import { formatPrice, formatPricePerKilo } from "@/lib/formatters";
 import type { EstimatorMaterial, EstimatorValues } from "@/lib/part-price-estimator";
 import { DEFAULT_ESTIMATION_QUANTITIES, getEstimation, roundPrice } from "@/lib/part-price-estimator";
-import { SAVE_NEW_PRICE_LABEL, SAVE_PENDING_PRICE_LABEL, SELECT_MATERIAL_MESSAGE } from "@/messages/part-price";
+import {
+  SAVE_NEW_PRICE_LABEL,
+  SAVE_PENDING_PRICE_LABEL,
+  SELECT_MATERIAL_MESSAGE,
+  PRICE_SAVED_MESSAGE,
+} from "@/messages/part-price";
 import {
   mockClients,
   mockCoatings,
@@ -25,7 +30,7 @@ import {
   getTableRowByTestId,
   getTableRows,
 } from "@/tests/utils/components/table";
-import { expectSingleToast } from "@/tests/utils/components/toast";
+import { expectSingleSuccessToast } from "@/tests/utils/components/toast";
 import { test } from "@/tests/utils/fixtures";
 import type { BasePart } from "@/types/part";
 
@@ -249,7 +254,7 @@ for (const part of activeParts.filter((activePart) =>
         await formEstimator.getByTestId("button-submit").click();
         savedPartPriceCount++;
 
-        await expectSingleToast(page);
+        await expectSingleSuccessToast(page, PRICE_SAVED_MESSAGE);
 
         expect(await getPartPriceById(pendingPartPrice.id)).toMatchObject({
           clientId: pendingPartPrice.clientId,
@@ -294,7 +299,7 @@ for (const part of activeParts.filter((activePart) =>
         await formEstimator.getByTestId("button-submit").click();
         createdPartPriceCount++;
 
-        await expectSingleToast(page);
+        await expectSingleSuccessToast(page, PRICE_SAVED_MESSAGE);
 
         const dbPartPrices = await getPartPricesByPartId(part.id);
         expect(dbPartPrices).toHaveLength(

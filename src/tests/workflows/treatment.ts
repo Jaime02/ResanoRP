@@ -5,6 +5,12 @@ import { asc, gt } from "drizzle-orm";
 import db from "@/db";
 import { dbTableTreatmentReception, dbTableTreatmentShipment } from "@/db/schema";
 import {
+  PARTS_RECEIVED_FROM_TREATMENT_MESSAGE,
+  PARTS_SENT_TO_TREATMENT_MESSAGE,
+  RECEPTION_DELETED_MESSAGE,
+  SHIPMENT_DELETED_MESSAGE,
+} from "@/messages/treatment";
+import {
   mockPartProduction,
   mockParts,
   mockProductionOrders,
@@ -15,7 +21,7 @@ import { openAndConfirmAlertDialog } from "@/tests/utils/components/alert-dialog
 import { selectDateInputDate } from "@/tests/utils/components/date-input";
 import { openPartPicker } from "@/tests/utils/components/picker";
 import { getEditableCellById, getTableRowByTestId } from "@/tests/utils/components/table";
-import { expectSingleToast } from "@/tests/utils/components/toast";
+import { expectSingleSuccessOrErrorToast } from "@/tests/utils/components/toast";
 import {
   getMockSellOrderById,
   getMockSellOrderLineById,
@@ -187,7 +193,7 @@ export async function workflowSendToTreatment(
     await expect(input).toHaveValue(String(quantity));
   }
   await page.getByTestId("button-send-treatment").click();
-  await expectSingleToast(page, expectedErrorMessage);
+  await expectSingleSuccessOrErrorToast(page, PARTS_SENT_TO_TREATMENT_MESSAGE, expectedErrorMessage);
 }
 
 export async function workflowSendPartToTreatment(
@@ -205,7 +211,7 @@ export async function workflowSendPartToTreatment(
   await expect(dialogPickerPartContent).not.toBeVisible();
   await dialog.getByTestId("input-send-part-treatment-quantity").pressSequentially(String(quantity));
   await dialog.getByTestId("button-confirm-send-part-treatment").click();
-  await expectSingleToast(page, expectedErrorMessage);
+  await expectSingleSuccessOrErrorToast(page, PARTS_SENT_TO_TREATMENT_MESSAGE, expectedErrorMessage);
   if (expectedErrorMessage === undefined) {
     await expect(dialog).not.toBeVisible();
   }
@@ -224,7 +230,7 @@ export async function workflowReceiveFromTreatment(
     await expect(input).toHaveValue(String(quantity));
   }
   await getButtonReceiveTreatment(tableBatch).click();
-  await expectSingleToast(page, expectedErrorMessage);
+  await expectSingleSuccessOrErrorToast(page, PARTS_RECEIVED_FROM_TREATMENT_MESSAGE, expectedErrorMessage);
 }
 
 export async function workflowDeleteTreatmentShipment(
@@ -238,7 +244,7 @@ export async function workflowDeleteTreatmentShipment(
     getTableRowByTestId(getTableTreatmentBatch(page, sentAt), treatmentShipmentId).getByTestId("button-delete"),
     "dialog-delete-model-content",
   );
-  await expectSingleToast(page, expectedErrorMessage);
+  await expectSingleSuccessOrErrorToast(page, SHIPMENT_DELETED_MESSAGE, expectedErrorMessage);
 }
 
 export async function workflowDeleteTreatmentReception(
@@ -254,5 +260,5 @@ export async function workflowDeleteTreatmentReception(
       .getByTestId("button-delete-reception"),
     "dialog-delete-model-content",
   );
-  await expectSingleToast(page, expectedErrorMessage);
+  await expectSingleSuccessOrErrorToast(page, RECEPTION_DELETED_MESSAGE, expectedErrorMessage);
 }

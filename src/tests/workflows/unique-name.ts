@@ -4,7 +4,7 @@ import type { PgTable } from "drizzle-orm/pg-core";
 
 import { NAME_LABEL } from "@/messages/common";
 import { assertFormLoaded, getFormInputByLabel } from "@/tests/utils/components/form";
-import { expectSingleToast, getToasts } from "@/tests/utils/components/toast";
+import { expectSingleSuccessToast, expectSingleToast, getToasts } from "@/tests/utils/components/toast";
 import { expectUniqueViolation } from "@/tests/utils/db";
 import { expectUniqueViolationRejected, uniqueNameViolation } from "@/tests/utils/errors-log";
 
@@ -116,6 +116,7 @@ export async function workflowRejectCreateWithTakenName<T extends TNamedItem>({
 
 interface WorkflowReuseDeletedNameParams<T extends TNamedItem> {
   page: Page;
+  createdToastTitle: string;
   item: T;
   form: Locator;
   openCreate: () => Promise<void>;
@@ -128,6 +129,7 @@ interface WorkflowReuseDeletedNameParams<T extends TNamedItem> {
 // be restored if they were kept
 export async function workflowReuseDeletedName<T extends TNamedItem>({
   page,
+  createdToastTitle,
   item,
   form,
   openCreate,
@@ -138,7 +140,7 @@ export async function workflowReuseDeletedName<T extends TNamedItem>({
   await openCreate();
   await fill(item, `  ${item.name}  `);
   await form.getByTestId("button-submit").click();
-  await expectSingleToast(page);
+  await expectSingleSuccessToast(page, createdToastTitle);
   await expect(form).toBeHidden();
 
   await expectUniqueViolation(restoreDeleted(), constraintName);

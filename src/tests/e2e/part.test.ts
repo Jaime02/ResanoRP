@@ -33,10 +33,16 @@ import {
 import { getBlueprintPath } from "@/files/blueprint";
 import { formatPrice } from "@/lib/formatters";
 import { translatedEnums } from "@/lib/translations";
-import { BLUEPRINTS_TITLE, BLUEPRINT_FILE_NAME_TAKEN_MESSAGE, BLUEPRINT_LABEL } from "@/messages/blueprint";
+import {
+  BLUEPRINTS_TITLE,
+  BLUEPRINT_DELETED_DESCRIPTION,
+  BLUEPRINT_DELETED_MESSAGE,
+  BLUEPRINT_FILE_NAME_TAKEN_MESSAGE,
+  BLUEPRINT_LABEL,
+  BLUEPRINT_CREATED_MESSAGE,
+} from "@/messages/blueprint";
 import {
   ACTIONS_LABEL,
-  DELETE_FILTERS_LABEL,
   NEXT_PAGE_LABEL,
   PREVIOUS_PAGE_LABEL,
   DESCRIPTION_LABEL,
@@ -47,7 +53,7 @@ import {
   DROP_FILE_PLACEHOLDER,
   REFERENCE_LABEL,
 } from "@/messages/common";
-import { MATERIALS_LABEL } from "@/messages/material";
+import { MATERIALS_LABEL, MATERIAL_DELETED_MESSAGE } from "@/messages/material";
 import {
   GENERAL_LABEL,
   NO_COMPATIBLE_MATERIALS_MESSAGE,
@@ -62,8 +68,21 @@ import {
   PART_FEATURE_LABEL,
   PART_REFERENCE_DELETED_TOOLTIP_MESSAGE,
   PART_STOCK_UPDATE_QUANTITY_LABEL,
+  PART_FEATURE_CREATED_MESSAGE,
+  PART_EDITED_MESSAGE,
+  PART_MATERIAL_ASSIGNED_MESSAGE,
+  PART_FEATURE_EDITED_MESSAGE,
+  PART_RESTORED_MESSAGE,
+  PART_REFERENCE_CREATED_MESSAGE,
+  PART_REFERENCE_DELETED_MESSAGE,
+  PART_COMPONENT_EDITED_MESSAGE,
 } from "@/messages/part";
-import { PRICES_TITLE } from "@/messages/part-price";
+import {
+  PRICES_TITLE,
+  PART_PRICE_EDITED_MESSAGE,
+  PART_PRICE_DELETED_MESSAGE,
+  PART_PRICE_CREATED_MESSAGE,
+} from "@/messages/part-price";
 import type { TTablePartState } from "@/schemas/part";
 import { ProductionOrderStatus } from "@/schemas/production-order";
 import { sanitizePath } from "@/schemas/utils";
@@ -115,7 +134,7 @@ import {
   getTablePagerButton,
   getTableRows,
 } from "@/tests/utils/components/table";
-import { clearToasts, expectSingleToast } from "@/tests/utils/components/toast";
+import { clearToasts, expectSingleToast, expectSingleSuccessToast } from "@/tests/utils/components/toast";
 import { expectCheckViolation, expectUniqueViolation } from "@/tests/utils/db";
 import {
   expectRejectedMutation,
@@ -148,6 +167,7 @@ import type { BaseMaterial } from "@/types/material";
 import { COMPATIBLE_MATERIALS_PAGE_SIZE } from "@/types/material";
 import type { BasePart } from "@/types/part";
 import { PART_PRODUCTION_HISTORY_PAGE_SIZE } from "@/types/part-production";
+import { ToastType } from "@/types/toast";
 
 const activeParts = mockParts.filter((part) => part.deletedAt === null);
 const deletedParts = mockParts.filter((part) => part.deletedAt !== null);
@@ -422,7 +442,7 @@ test("manage the parts", { annotation: TestAnnotations.ResetBlueprints }, async 
       await getFormInputByLabel(dialogCreatePartFeature, PART_FEATURE_LABEL).fill("Característica sin guardar");
       await dialogCreatePartFeature.getByTestId("button-submit").click();
       await expect(dialogCreatePartFeature).toBeHidden();
-      await expectSingleToast(page);
+      await expectSingleSuccessToast(page, PART_FEATURE_CREATED_MESSAGE);
 
       await page.getByRole("tab", { name: GENERAL_LABEL }).click();
       await expect(inputDescription).toHaveValue(unsavedDescription);
@@ -459,7 +479,7 @@ test("manage the parts", { annotation: TestAnnotations.ResetBlueprints }, async 
       await clearToasts(page);
       await formPart.getByTestId("button-submit").click();
 
-      await expectSingleToast(page);
+      await expectSingleSuccessToast(page, PART_EDITED_MESSAGE);
 
       expect(await getPartById(part.id)).toMatchObject({
         description: updatedDescription,
@@ -592,7 +612,7 @@ test("edit, delete and create the prices of every part", async ({ page }) => {
       await expect(rowPartPrice.getByRole("cell", { exact: true, name: formatPrice(newPrice) })).toBeVisible();
       expect(await getPartPriceById(partPrice.id)).toMatchObject({ clientId: newClient.id, price: newPrice });
       expect(await getPartPricesByPartId(part.id)).toHaveLength(partPrices.length);
-      await expectSingleToast(page);
+      await expectSingleSuccessToast(page, PART_PRICE_EDITED_MESSAGE);
     }
 
     for (const [index, partPrice] of partPrices.entries()) {
@@ -604,7 +624,7 @@ test("edit, delete and create the prices of every part", async ({ page }) => {
       await expect(rowPartPrice).not.toBeVisible();
       await assertTableRowCount(tablePartPrices, partPrices.length - index - 1);
       expect(await getPartPriceById(partPrice.id)).toBeUndefined();
-      await expectSingleToast(page);
+      await expectSingleSuccessToast(page, PART_PRICE_DELETED_MESSAGE);
     }
 
     const cardCreatePartPrice = formPart.getByTestId("card-create-part-price");
@@ -633,7 +653,7 @@ test("edit, delete and create the prices of every part", async ({ page }) => {
       const rowNewPartPrice = getTableRowByTestId(tablePartPrices, dbPartPrice!.id);
       await expect(rowNewPartPrice.getByRole("cell", { exact: true, name: newQuantity })).toBeVisible();
       await expect(rowNewPartPrice.getByRole("cell", { exact: true, name: formatPrice(newPrice) })).toBeVisible();
-      await expectSingleToast(page);
+      await expectSingleSuccessToast(page, PART_PRICE_CREATED_MESSAGE);
     }
   }
 });
@@ -712,14 +732,14 @@ test("remove every material of every part and add the compatible ones back", asy
         getTableRowByTestId(tablePartMaterials, material.id).getByTestId("button-delete"),
         "dialog-delete-model-content",
       );
-      await expectSingleToast(page);
+      await expectSingleSuccessToast(page, MATERIAL_DELETED_MESSAGE);
       assignedMaterialIds.delete(material.id);
       await assertPartMaterials();
     }
 
     for (const material of getCompatibleMaterials(part, assignedMaterialIds)) {
       await getTableRowByTestId(tableCompatiblePartMaterials, material.id).getByTestId("button-success").click();
-      await expectSingleToast(page);
+      await expectSingleSuccessToast(page, PART_MATERIAL_ASSIGNED_MESSAGE);
       assignedMaterialIds.add(material.id);
       await assertPartMaterials();
     }
@@ -849,7 +869,7 @@ test("list, create, edit and delete the features of every part", async ({ page, 
     await getFormInputByLabel(dialogCreatePartFeature, PART_FEATURE_LABEL).fill(newFeature);
     await dialogCreatePartFeature.getByTestId("button-submit").click();
     await expect(dialogCreatePartFeature).toBeHidden();
-    await expectSingleToast(page);
+    await expectSingleSuccessToast(page, PART_FEATURE_CREATED_MESSAGE);
     expect((await db.query.dbTablePartFeature.findFirst({ where: { feature: newFeature } }))?.partId).toBe(part.id);
     await assertTableRowCount(tablePartFeatures, partFeatures.length + 1);
 
@@ -858,7 +878,7 @@ test("list, create, edit and delete the features of every part", async ({ page, 
       const inputFeature = getEditableCellById(getTableRowByTestId(tablePartFeatures, partFeature.id), "feature");
       await inputFeature.fill(updatedFeature);
       await inputFeature.blur();
-      await expectSingleToast(page);
+      await expectSingleSuccessToast(page, PART_FEATURE_EDITED_MESSAGE);
       expect((await db.query.dbTablePartFeature.findFirst({ where: { id: partFeature.id } }))?.feature).toBe(
         updatedFeature,
       );
@@ -956,7 +976,7 @@ test("a part cannot have two features with the same name, but different parts ca
   await assertFormLoaded(formPart);
   await createPartFeature(firstFeature.feature);
   await expect(dialogCreatePartFeature).toBeHidden();
-  await expectSingleToast(page);
+  await expectSingleSuccessToast(page, PART_FEATURE_CREATED_MESSAGE);
   expect(await db.query.dbTablePartFeature.findMany({ where: { feature: firstFeature.feature } })).toHaveLength(2);
 });
 
@@ -981,7 +1001,7 @@ test("a feature can have a range of up to 2 decimals whose minimum cannot exceed
   await expect(buttonSubmit).toBeEnabled();
   await buttonSubmit.click();
   await expect(dialogCreatePartFeature).toBeHidden();
-  await expectSingleToast(page);
+  await expectSingleSuccessToast(page, PART_FEATURE_CREATED_MESSAGE);
   const created = (await db.query.dbTablePartFeature.findFirst({ where: { feature, partId: part.id } }))!;
   expect([created.minValue, created.maxValue]).toEqual(["5.5", "5.75"]);
 
@@ -990,7 +1010,7 @@ test("a feature can have a range of up to 2 decimals whose minimum cannot exceed
   const inputMax = getEditableCellById(row, "maxValue");
   await inputMax.fill("");
   await inputMax.blur();
-  await expectSingleToast(page);
+  await expectSingleSuccessToast(page, PART_FEATURE_EDITED_MESSAGE);
   expect((await db.query.dbTablePartFeature.findFirst({ where: { id: created.id } }))?.maxValue).toBeNull();
 });
 
@@ -1029,7 +1049,7 @@ test("the range of a feature that has quality checks cannot change but its name 
   const inputFeature = getEditableCellById(row, "feature");
   await inputFeature.fill(renamedFeature);
   await inputFeature.blur();
-  await expectSingleToast(page);
+  await expectSingleSuccessToast(page, PART_FEATURE_EDITED_MESSAGE);
   const renamed = (await db.query.dbTablePartFeature.findFirst({ where: { id: checkedFeature.id } }))!;
   expect([renamed.feature, renamed.minValue, renamed.maxValue]).toEqual([
     renamedFeature,
@@ -1050,7 +1070,7 @@ test("the range of a feature that has quality checks cannot change but its name 
   );
   await inputUncheckedMax.fill("-0,25");
   await inputUncheckedMax.blur();
-  await expectSingleToast(page);
+  await expectSingleSuccessToast(page, PART_FEATURE_EDITED_MESSAGE);
   const updated = (await db.query.dbTablePartFeature.findFirst({ where: { id: uncheckedFeature.id } }))!;
   expect(Number(updated.maxValue)).toBe(-0.25);
   expect(updated.minValue).toBe(uncheckedFeature.minValue);
@@ -1150,6 +1170,11 @@ test(
           "dialog-delete-model-content",
         );
 
+        await expectSingleToast(page, {
+          description: BLUEPRINT_DELETED_DESCRIPTION(fileName),
+          title: BLUEPRINT_DELETED_MESSAGE,
+          type: ToastType.Success,
+        });
         await expect(cardBlueprint).not.toBeVisible();
         expect(await getBlueprintById(blueprint.id)).toBeUndefined();
         expect(
@@ -1223,7 +1248,7 @@ test(
       await expect(tableRowPart.getByTestId("button-delete")).toHaveCount(0);
       await openAndConfirmAlertDialog(page, tableRowPart.getByTestId("button-restore"), "dialog-restore-model-content");
 
-      await expectSingleToast(page);
+      await expectSingleSuccessToast(page, PART_RESTORED_MESSAGE);
       await expect(tableRowPart.getByTestId("button-restore")).toHaveCount(0);
       await expect(tableRowPart.getByTestId("button-delete")).toBeVisible();
       expect((await getPartById(part.id))?.deletedAt).toBeNull();
@@ -1515,7 +1540,7 @@ test("create a part reference for every part, unique for each client", async ({ 
 
     await submitPartReference(newReference, newClient.name, newDescription);
 
-    await expectSingleToast(page);
+    await expectSingleSuccessToast(page, PART_REFERENCE_CREATED_MESSAGE);
     await expect(dialogCreateEditPartReference).not.toBeVisible();
     await expect(tablePartReferencesRows).toHaveCount(partReferencesCount + 1);
     const newReferenceRow = filterByExactText(tablePartReferencesRows, newReference);
@@ -1546,7 +1571,7 @@ test("create a part reference for every part, unique for each client", async ({ 
       // ...but another Cliente can
       await submitPartReference(newReference, otherClient.name);
       await expect(dialogCreateEditPartReference).not.toBeVisible();
-      await expectSingleToast(page);
+      await expectSingleSuccessToast(page, PART_REFERENCE_CREATED_MESSAGE);
       await expect(tablePartReferencesRows).toHaveCount(partReferencesCount + index * 2 + 2);
       const otherClientReference = await db.query.dbTablePartReference.findFirst({
         where: { clientId: otherClient.id, deletedAt: { isNull: true }, reference: newReference },
@@ -1560,13 +1585,13 @@ test("create a part reference for every part, unique for each client", async ({ 
         rowOtherClientReference.getByTestId("button-delete"),
         "dialog-delete-model-content",
       );
-      await expectSingleToast(page);
+      await expectSingleSuccessToast(page, PART_REFERENCE_DELETED_MESSAGE);
       await expect(rowOtherClientReference.getByTestId("tooltip-deleted")).toBeVisible();
       await expect(tablePartReferencesRows).toHaveCount(partReferencesCount + index * 2 + 2);
 
       await submitPartReference(newReference, otherClient.name);
       await expect(dialogCreateEditPartReference).not.toBeVisible();
-      await expectSingleToast(page);
+      await expectSingleSuccessToast(page, PART_REFERENCE_CREATED_MESSAGE);
       await expect(tablePartReferencesRows).toHaveCount(partReferencesCount + index * 2 + 3);
 
       // ...so the deleted Referencia can no longer be restored
@@ -1759,7 +1784,7 @@ test("page through the compatible materials of a part", async ({ page, db }) => 
 
   for (const material of lastPageMaterials) {
     await getTableRowByTestId(tableCompatiblePartMaterials, material.id).getByTestId("button-success").click();
-    await expectSingleToast(page);
+    await expectSingleSuccessToast(page, PART_MATERIAL_ASSIGNED_MESSAGE);
     await expect(getTableRowByTestId(tablePartMaterials, material.id)).toBeVisible();
   }
 
@@ -1806,7 +1831,7 @@ test("filter the compatible materials of a part by their raw material, starting 
 
   const tablePager = tableCompatiblePartMaterials.locator("xpath=preceding-sibling::div[1]");
   const comboboxRawMaterial = tableCompatiblePartMaterials.getByTestId("combobox-raw-material");
-  const buttonRemoveFilters = formPart.getByRole("button", { name: DELETE_FILTERS_LABEL });
+  const buttonClearRawMaterial = comboboxRawMaterial.getByTestId("button-clear");
 
   async function expectCompatibleMaterials(expectedMaterials: typeof allMaterials) {
     await expect(getTableRows(tableCompatiblePartMaterials)).toHaveCount(expectedMaterials.length);
@@ -1820,7 +1845,7 @@ test("filter the compatible materials of a part by their raw material, starting 
 
   await page.goto(`/part/${part.id}?tab=materials`);
   await assertFormLoaded(formPart);
-  await expect(buttonRemoveFilters).not.toBeVisible();
+  await expect(buttonClearRawMaterial).not.toBeVisible();
 
   await getTablePagerButton(tableCompatiblePartMaterials, NEXT_PAGE_LABEL).click();
   await expect(tablePager.getByText("Página 2 de 2", { exact: true })).toBeVisible();
@@ -1832,8 +1857,8 @@ test("filter the compatible materials of a part by their raw material, starting 
   await getTablePagerButton(tableCompatiblePartMaterials, NEXT_PAGE_LABEL).click();
   await expect(tablePager.getByText("Página 2 de 2", { exact: true })).toBeVisible();
 
-  await buttonRemoveFilters.click();
-  await expect(buttonRemoveFilters).not.toBeVisible();
+  await buttonClearRawMaterial.click();
+  await expect(buttonClearRawMaterial).not.toBeVisible();
   await assertComboboxValue(comboboxRawMaterial, null);
   await expect(tablePager.getByText("Página 1 de 2", { exact: true })).toBeVisible();
   await expectCompatibleMaterials(allMaterials.slice(0, COMPATIBLE_MATERIALS_PAGE_SIZE));
@@ -2094,7 +2119,7 @@ test(
       await getFormInputByLabel(dialogCreateBlueprint, NAME_LABEL).fill(blueprintFileName);
       await dialogCreateBlueprint.getByTestId("button-submit").click();
       await expect(dialogCreateBlueprint).not.toBeVisible();
-      await expectSingleToast(page);
+      await expectSingleSuccessToast(page, BLUEPRINT_CREATED_MESSAGE);
 
       const [blueprint] = await getBlueprintsByPartId(partId);
       expect(blueprint.fileName).toBe(blueprintFileName);
@@ -2423,12 +2448,12 @@ test("manage multi-level part sets", { annotation: TestAnnotations.ResetBlueprin
 
     await inputQuantity.fill("7");
     await inputQuantity.blur();
-    await expectSingleToast(page);
+    await expectSingleSuccessToast(page, PART_COMPONENT_EDITED_MESSAGE);
     expect(await getPartComponentQuantity(setPart.id, subSetPart.id)).toBe(7);
 
     await inputQuantity.fill("");
     await inputQuantity.blur();
-    await expectSingleToast(page, PART_COMPONENT_EDIT_VALIDATION_ERROR_MESSAGE);
+    await expectSingleToast(page, { title: PART_COMPONENT_EDIT_VALIDATION_ERROR_MESSAGE, type: ToastType.Error });
     expect(await getPartComponentQuantity(setPart.id, subSetPart.id)).toBe(7);
 
     await page.reload();
@@ -2462,7 +2487,7 @@ test("manage multi-level part sets", { annotation: TestAnnotations.ResetBlueprin
     await page.goto(`/part/${deletedSetPart.id}`);
     await assertFormLoaded(formPart);
     await openAndConfirmAlertDialog(page, formPart.getByTestId("button-restore"), "dialog-restore-model-content");
-    await expectSingleToast(page);
+    await expectSingleSuccessToast(page, PART_RESTORED_MESSAGE);
 
     const tablePartComponents = await gotoPartComponents(page, deletedSetPart.id);
     await assertTableRowCount(tablePartComponents, getMockPartComponentsOfPart(deletedSetPart.id).length);

@@ -4,7 +4,7 @@ import { and, eq, ne, sql } from "drizzle-orm";
 import type { TDatabase } from "@/db";
 import db from "@/db";
 import { dbTableDeliveryNoteLine, dbTableSellOrderLine } from "@/db/schema";
-import { PENDING_QUANTITY_EXCEEDED_MESSAGE } from "@/messages/delivery-note";
+import { PENDING_QUANTITY_EXCEEDED_MESSAGE, SELL_ORDER_LINE_ALREADY_DELIVERED_MESSAGE } from "@/messages/delivery-note";
 import type { BaseDeliveryNoteLine } from "@/types/delivery-note-line";
 
 interface TDeleteDeliveryNoteLineResult {
@@ -46,6 +46,17 @@ export function assertPendingQuantityWithinQuantity(
     throw new TRPCError({
       code: "BAD_REQUEST",
       message: PENDING_QUANTITY_EXCEEDED_MESSAGE(sellOrderLine.id),
+    });
+  }
+}
+
+// Delivering more than ordered is allowed while something is pending, but a Línea that is already delivered must not be
+// delivered again, which is what two Albaranes sent at the same time would do
+export function assertSellOrderLineNotDelivered(sellOrderLine: { id: number; pendingQuantity: number }) {
+  if (sellOrderLine.pendingQuantity === 0) {
+    throw new TRPCError({
+      code: "BAD_REQUEST",
+      message: SELL_ORDER_LINE_ALREADY_DELIVERED_MESSAGE(sellOrderLine.id),
     });
   }
 }

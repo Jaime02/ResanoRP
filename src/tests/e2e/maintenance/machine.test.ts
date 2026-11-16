@@ -15,6 +15,8 @@ import {
   VIEW_MACHINES_LABEL,
   MACHINE_MAX_DIAMETER_LABEL,
   MACHINE_MIN_DIAMETER_LABEL,
+  MACHINE_CREATED_MESSAGE,
+  MACHINE_EDITED_MESSAGE,
 } from "@/messages/machine";
 import { ProductionOrderStatus } from "@/schemas/production-order";
 import {
@@ -32,7 +34,7 @@ import {
   getTableRowByTestId,
   getTableRows,
 } from "@/tests/utils/components/table";
-import { expectSingleToast } from "@/tests/utils/components/toast";
+import { expectSingleToast, expectSingleSuccessToast } from "@/tests/utils/components/toast";
 import { expectUniqueViolationRejected, uniqueNameViolation } from "@/tests/utils/errors-log";
 import { test } from "@/tests/utils/fixtures";
 import {
@@ -204,7 +206,7 @@ test("manage the machines", async ({ page, db }) => {
       await dialogCreateMachine.getByTestId("button-submit").click();
 
       await expect(dialogCreateMachine).not.toBeVisible();
-      await expectSingleToast(page);
+      await expectSingleSuccessToast(page, MACHINE_CREATED_MESSAGE);
       await expect(tableMaintenanceMachine.getByText(machine.name, { exact: true })).toBeVisible();
 
       // ...so the deleted Máquina can no longer be restored
@@ -316,7 +318,7 @@ test("delete every machine, emptying its queue but keeping what it produced, and
     expect((await getMachineById(machine.id))?.deletedAt).toBeInstanceOf(Date);
 
     await openAndConfirmAlertDialog(page, formMachine.getByTestId("button-restore"), "dialog-restore-model-content");
-    await expectSingleToast(page);
+    await expectSingleSuccessToast(page, MACHINE_RESTORED_MESSAGE);
 
     await expect(formMachine.getByText(MACHINE_DELETED_MESSAGE, { exact: true })).not.toBeVisible();
     await expect(formMachine.getByTestId("button-submit")).toBeVisible();
@@ -375,7 +377,7 @@ test("set the diameter range of the machines", async ({ page, toasts }) => {
     await dialogCreateMachine.getByTestId("button-submit").click();
 
     await expect(dialogCreateMachine).not.toBeVisible();
-    await expectSingleToast(page);
+    await expectSingleSuccessToast(page, MACHINE_CREATED_MESSAGE);
     const createdMachine = await getMachineById(NEW_MACHINE_ID);
     expect(createdMachine?.name).toBe(newMachineName);
     expect(createdMachine?.minDiameter).toBe(15);
@@ -410,7 +412,7 @@ test("set the diameter range of the machines", async ({ page, toasts }) => {
       await getFormInputByLabel(formMachine, MACHINE_MAX_DIAMETER_LABEL).fill("80");
       await formMachine.getByTestId("button-submit").click();
 
-      await expectSingleToast(page);
+      await expectSingleSuccessToast(page, MACHINE_EDITED_MESSAGE);
       const updatedMachine = await getMachineById(machine.id);
       expect(updatedMachine?.minDiameter).toBe(50);
       expect(updatedMachine?.maxDiameter).toBe(80);
@@ -426,7 +428,7 @@ test("set the diameter range of the machines", async ({ page, toasts }) => {
       await getFormInputByLabel(formMachine, MACHINE_MAX_DIAMETER_LABEL).clear();
       await formMachine.getByTestId("button-submit").click();
 
-      await expectSingleToast(page);
+      await expectSingleSuccessToast(page, MACHINE_EDITED_MESSAGE);
       const updatedMachine = await getMachineById(machine.id);
       expect(updatedMachine?.minDiameter).toBeNull();
       expect(updatedMachine?.maxDiameter).toBeNull();
@@ -496,6 +498,7 @@ test("list the deleted machines only when asked for and restore them from the ta
     ids: activeMachines.map(({ id }) => id),
     // The page of a deleted Máquina shows it read only, with its own restore button
     editButton: EditButtonVisibility.Always,
+    deletedToastTitle: MACHINE_DELETED_MESSAGE,
     restoredToastTitle: MACHINE_RESTORED_MESSAGE,
   });
 });
@@ -509,5 +512,6 @@ test("a deleted machine cannot be restored from the table while another one has 
     insertDuplicate: async () => db.insert(dbTableMachine).values({ name: machine.name }),
     uniqueViolation: uniqueNameViolation(MACHINE_NAME_CONSTRAINT, dbTableMachine, machine.name),
     errorMessage: NAME_TAKEN_MESSAGE,
+    deletedToastTitle: MACHINE_DELETED_MESSAGE,
   });
 });

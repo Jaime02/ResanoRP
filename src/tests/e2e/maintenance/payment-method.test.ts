@@ -6,16 +6,19 @@ import { DEFAULT_PAYMENT_METHOD_LABEL } from "@/messages/client";
 import { NAME_LABEL, PAYMENT_METHOD_LABEL } from "@/messages/common";
 import {
   PAYMENT_METHOD_CREATE_TITLE,
+  PAYMENT_METHOD_DELETED_MESSAGE,
   PAYMENT_METHOD_RESTORED_MESSAGE,
   SHOW_DELETED_PAYMENT_METHODS_LABEL,
   PAYMENT_METHOD_DUE_DAYS_LABEL,
+  PAYMENT_METHOD_CREATED_MESSAGE,
+  PAYMENT_METHOD_EDITED_MESSAGE,
 } from "@/messages/payment-method";
 import { mockClients, mockInvoices, mockPaymentMethods, mockSellOrders } from "@/tests/mock-data";
 import { openAndConfirmAlertDialog } from "@/tests/utils/components/alert-dialog";
 import { assertComboboxValue, fillComboboxFilter, openCombobox } from "@/tests/utils/components/combobox";
 import { InputElementType, assertFormLoaded, getFormInputByLabel } from "@/tests/utils/components/form";
 import { filterByExactText, findTableRowByText, getTableRows } from "@/tests/utils/components/table";
-import { expectSingleToast } from "@/tests/utils/components/toast";
+import { expectSingleSuccessToast } from "@/tests/utils/components/toast";
 import { uniqueNameViolation } from "@/tests/utils/errors-log";
 import { test } from "@/tests/utils/fixtures";
 import {
@@ -77,7 +80,7 @@ test("manage the Formas de pago", async ({ page, db }) => {
     await dialogCreateEditPaymentMethod.getByTestId("button-submit").click();
 
     await expect(dialogCreateEditPaymentMethod).not.toBeVisible();
-    await expectSingleToast(page);
+    await expectSingleSuccessToast(page, PAYMENT_METHOD_CREATED_MESSAGE);
 
     const newPaymentMethod = await db.query.dbTablePaymentMethod.findFirst({ where: { name: newPaymentMethodName } });
     expect(newPaymentMethod?.generatesReceipt).toBe(true);
@@ -109,7 +112,7 @@ test("manage the Formas de pago", async ({ page, db }) => {
       await dialogCreateEditPaymentMethod.getByTestId("button-submit").click();
 
       await expect(dialogCreateEditPaymentMethod).not.toBeVisible();
-      await expectSingleToast(page);
+      await expectSingleSuccessToast(page, PAYMENT_METHOD_EDITED_MESSAGE);
 
       expect(await db.query.dbTablePaymentMethod.findFirst({ where: { id: paymentMethod.id } })).toEqual({
         ...paymentMethod,
@@ -183,7 +186,7 @@ test("manage the Formas de pago", async ({ page, db }) => {
         (await findTableRowByText(tablePaymentMethod, paymentMethod.name)).getByTestId("button-delete"),
         "dialog-delete-model-content",
       );
-      await expectSingleToast(page);
+      await expectSingleSuccessToast(page, PAYMENT_METHOD_DELETED_MESSAGE);
       deletedPaymentMethodIds.add(paymentMethod.id);
 
       await expect(filterByExactText(getTableRows(tablePaymentMethod), paymentMethod.name)).toHaveCount(0);
@@ -253,6 +256,7 @@ test("manage the Formas de pago", async ({ page, db }) => {
       // Its name can be used again, so the deleted Forma de pago can no longer be restored
       await page.goto(MAINTENANCE_PAYMENT_METHOD_URL);
       await workflowReuseDeletedName({
+        createdToastTitle: PAYMENT_METHOD_CREATED_MESSAGE,
         page,
         item: paymentMethod,
         form: dialogCreateEditPaymentMethod,
@@ -279,6 +283,7 @@ test("list the deleted Formas de pago only when asked for and restore them from 
     getDeletedAt: async (id) => (await db.query.dbTablePaymentMethod.findFirst({ where: { id } }))?.deletedAt,
     ids: mockPaymentMethods.filter((paymentMethod) => paymentMethod.deletedAt === null).map(({ id }) => id),
     editButton: EditButtonVisibility.OnlyActive,
+    deletedToastTitle: PAYMENT_METHOD_DELETED_MESSAGE,
     restoredToastTitle: PAYMENT_METHOD_RESTORED_MESSAGE,
   });
 });
@@ -296,5 +301,6 @@ test("a deleted Forma de pago cannot be restored from the table while another on
     insertDuplicate: async () => db.insert(dbTablePaymentMethod).values({ name: paymentMethod.name }),
     uniqueViolation: uniqueNameViolation(PAYMENT_METHOD_NAME_CONSTRAINT, dbTablePaymentMethod, paymentMethod.name),
     errorMessage: NAME_TAKEN_MESSAGE,
+    deletedToastTitle: PAYMENT_METHOD_DELETED_MESSAGE,
   });
 });

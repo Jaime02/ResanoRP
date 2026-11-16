@@ -24,6 +24,7 @@ import { DELIVERY_NOTE_LABEL, DELIVERY_NOTES_LABEL } from "@/messages/delivery-n
 import {
   INVOICE_DELETE_MESSAGE,
   INVOICE_DELETE_TITLE,
+  INVOICE_DELETED_DESCRIPTION,
   INVOICE_DELETED_MESSAGE,
   INVOICE_NO_DELIVERY_NOTES_MESSAGE,
   DUE_DATE_LABEL,
@@ -137,7 +138,7 @@ export default function TableInvoice({ testId = "table-invoice", state, createIn
                         mutation: trpc.invoice.delete.mutate({ id: row.original.id }),
                         onSuccess: {
                           title: INVOICE_DELETED_MESSAGE,
-                          description: `La factura ${row.original.id} ha sido eliminada correctamente`,
+                          description: INVOICE_DELETED_DESCRIPTION(row.original.id),
                         },
                       }),
                   }}

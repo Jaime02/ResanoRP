@@ -24,6 +24,7 @@ import {
   DELIVERY_NOTE_DELETE_MESSAGE,
   DELIVERY_NOTE_DELETE_TITLE,
   DELIVERY_NOTE_CREATE_TITLE,
+  DELIVERY_NOTE_DELETED_DESCRIPTION,
   DELIVERY_NOTE_DELETED_MESSAGE,
 } from "@/messages/delivery-note";
 import type { TDeliveryNote } from "@/queries/delivery-note";
@@ -129,7 +130,7 @@ export default function TableDeliveryNote({
                         mutation: trpc.deliveryNote.delete.mutate({ id: row.original.id }),
                         onSuccess: {
                           title: DELIVERY_NOTE_DELETED_MESSAGE,
-                          description: `El albarán ${row.original.id} ha sido eliminado correctamente`,
+                          description: DELIVERY_NOTE_DELETED_DESCRIPTION(row.original.id),
                         },
                       }),
                   },

@@ -5,6 +5,8 @@ export const EDIT_BLUEPRINT_TITLE = "Editar Plano";
 export const DELETE_BLUEPRINT_TITLE = "Eliminar Plano";
 export const DELETE_BLUEPRINT_MESSAGE = "¿Estás seguro que quieres eliminar el Plano?";
 export const BLUEPRINT_DELETED_MESSAGE = "Plano eliminado";
+export const BLUEPRINT_DELETED_DESCRIPTION = (fileName: string) =>
+  `El plano "${fileName}" ha sido eliminado correctamente`;
 export const BLUEPRINT_CREATION_DATE_LABEL = "Fecha de creación";
 export const BLUEPRINT_CREATED_MESSAGE = "Plano creado";
 export const BLUEPRINT_EDITED_MESSAGE = "Plano editado";

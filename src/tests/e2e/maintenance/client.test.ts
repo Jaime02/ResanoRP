@@ -11,6 +11,7 @@ import {
 } from "@/db/schema";
 import {
   CLIENT_CREATE_TITLE,
+  CLIENT_DELETED_MESSAGE,
   CLIENT_RESTORED_MESSAGE,
   SHOW_DELETED_CLIENTS_LABEL,
   VIEW_CLIENTS_LABEL,
@@ -20,6 +21,10 @@ import {
   PRISMA_ACCOUNTING_ACCOUNT_LABEL,
   CLIENT_INVOICE_EMAIL_DELETED_CLIENT_MESSAGE,
   CLIENT_INVOICE_EMAIL_TAKEN_MESSAGE,
+  CLIENT_EDITED_MESSAGE,
+  CLIENT_INVOICE_EMAIL_CREATED_MESSAGE,
+  CLIENT_CREATED_MESSAGE,
+  INVOICE_EMAIL_DELETED_MESSAGE,
 } from "@/messages/client";
 import {
   STATUS_DELETED_LABEL,
@@ -64,7 +69,7 @@ import {
   getTableRowByTestId,
   getTableRows,
 } from "@/tests/utils/components/table";
-import { expectSingleToast } from "@/tests/utils/components/toast";
+import { expectSingleToast, expectSingleSuccessToast } from "@/tests/utils/components/toast";
 import { expectUniqueViolation } from "@/tests/utils/db";
 import {
   expectRejectedMutation,
@@ -157,7 +162,7 @@ test("set and remove the default delivery method of every client", async ({ page
       }
       await formClient.getByTestId("button-submit").click();
 
-      await expectSingleToast(page);
+      await expectSingleSuccessToast(page, CLIENT_EDITED_MESSAGE);
       expect((await getClientById(client.id))?.defaultDeliveryMethodId).toBe(deliveryMethod.id);
       await page.reload();
       await workflowAssertClientFormData(formClient, { ...client, defaultDeliveryMethodId: deliveryMethod.id });
@@ -166,7 +171,7 @@ test("set and remove the default delivery method of every client", async ({ page
     await getClearComboboxButton(comboboxDeliveryMethod).click();
     await formClient.getByTestId("button-submit").click();
 
-    await expectSingleToast(page);
+    await expectSingleSuccessToast(page, CLIENT_EDITED_MESSAGE);
     expect((await getClientById(client.id))?.defaultDeliveryMethodId).toBeNull();
     await page.reload();
     await workflowAssertClientFormData(formClient, { ...client, defaultDeliveryMethodId: null });
@@ -261,7 +266,7 @@ test("manage the clients", { annotation: TestAnnotations.ResetSellOrders }, asyn
 
         await formClient.getByTestId("button-submit").click();
 
-        await expectSingleToast(page);
+        await expectSingleSuccessToast(page, CLIENT_EDITED_MESSAGE);
         expect((await getClientById(client.id))?.defaultPaymentMethodId).toBe(paymentMethod.id);
 
         await page.reload();
@@ -276,7 +281,7 @@ test("manage the clients", { annotation: TestAnnotations.ResetSellOrders }, asyn
 
       await formClient.getByTestId("button-submit").click();
 
-      await expectSingleToast(page);
+      await expectSingleSuccessToast(page, CLIENT_EDITED_MESSAGE);
 
       await page.reload();
       await assertFormLoaded(formClient);
@@ -302,7 +307,7 @@ test("manage the clients", { annotation: TestAnnotations.ResetSellOrders }, asyn
       await inputAddEmail.fill(newEmail);
       await buttonAddEmail.click();
 
-      await expectSingleToast(page);
+      await expectSingleSuccessToast(page, CLIENT_INVOICE_EMAIL_CREATED_MESSAGE);
       await expect(formClient.getByText(newEmail, { exact: true })).toBeVisible();
       await expect(inputAddEmail).toHaveValue("");
       expect(
@@ -387,7 +392,7 @@ test("manage the clients", { annotation: TestAnnotations.ResetSellOrders }, asyn
       await inputAccountingAccountId.fill(updatedAccountingAccountId);
       await formClient.getByTestId("button-submit").click();
 
-      await expectSingleToast(page);
+      await expectSingleSuccessToast(page, CLIENT_EDITED_MESSAGE);
 
       expect(await getClientById(client.id)).toEqual({
         ...currentClient,
@@ -435,7 +440,7 @@ test("manage the clients", { annotation: TestAnnotations.ResetSellOrders }, asyn
     await dialogCreateClient.getByTestId("button-submit").click();
 
     await expect(page).toHaveURL(`/client/${NEW_CLIENT_ID}`);
-    await expectSingleToast(page);
+    await expectSingleSuccessToast(page, CLIENT_CREATED_MESSAGE);
     await assertFormLoaded(formClient);
     await expect(getFormInputByLabel(formClient, NAME_LABEL)).toHaveValue(newClient.name);
     await expect(formClient.getByTestId("card-table-client-invoice-email")).not.toHaveAttribute("inert");
@@ -467,7 +472,7 @@ test("remove every client invoice email", async ({ page, db }) => {
 
     const emailRow = filterByExactText(formClient.getByRole("row"), emailToDelete.email);
     await openAndConfirmAlertDialog(page, emailRow.getByTestId("button-delete"), "dialog-delete-model-content");
-    await expectSingleToast(page);
+    await expectSingleSuccessToast(page, INVOICE_EMAIL_DELETED_MESSAGE);
     removedEmailIds.add(emailToDelete.id);
 
     await expect(formClient.getByText(emailToDelete.email, { exact: true })).not.toBeVisible();
@@ -495,7 +500,7 @@ test("delete every client when confirmed and restore it", async ({ page, db }) =
       (await findTableRowByText(tableMaintenanceClient, client.name)).getByTestId("button-delete"),
       "dialog-delete-model-content",
     );
-    await expectSingleToast(page);
+    await expectSingleSuccessToast(page, CLIENT_DELETED_MESSAGE);
     deletedClientIds.add(client.id);
 
     await expect(getClientRows(client.name)).toHaveCount(0);
@@ -518,7 +523,7 @@ test("delete every client when confirmed and restore it", async ({ page, db }) =
     await assertInvoiceEmailsCard({ isReadOnly: true, emails: [] });
 
     await openAndConfirmAlertDialog(page, formClient.getByTestId("button-restore"), "dialog-restore-model-content");
-    await expectSingleToast(page);
+    await expectSingleSuccessToast(page, CLIENT_RESTORED_MESSAGE);
 
     await expect(formClient.getByTestId("badge-client-deleted")).not.toBeVisible();
     await expect(formClient.getByTestId("button-submit")).toBeVisible();
@@ -590,6 +595,7 @@ test("list the deleted clients only when asked for and restore them from the tab
     ids: activeClients.map(({ id }) => id),
     // The page of a deleted Cliente shows it read only, with its own restore button
     editButton: EditButtonVisibility.Always,
+    deletedToastTitle: CLIENT_DELETED_MESSAGE,
     restoredToastTitle: CLIENT_RESTORED_MESSAGE,
   });
 });
@@ -603,6 +609,7 @@ test("a deleted client cannot be restored from the table while another one has i
     insertDuplicate: async () => db.insert(dbTableClient).values(getRequiredClientFields(client)),
     uniqueViolation: uniqueNameViolation(CLIENT_NAME_CONSTRAINT, dbTableClient, client.name),
     errorMessage: NAME_TAKEN_MESSAGE,
+    deletedToastTitle: CLIENT_DELETED_MESSAGE,
   });
 });
 
@@ -784,7 +791,7 @@ test(
       await dialogCreateClient.getByTestId("button-submit").click();
 
       await expect(dialogCreateClient).not.toBeVisible();
-      await expectSingleToast(page);
+      await expectSingleSuccessToast(page, CLIENT_CREATED_MESSAGE);
       await assertFormLoaded(formClient);
       await expect(getFormInputByLabel(formClient, NAME_LABEL)).toHaveValue(client.name);
 

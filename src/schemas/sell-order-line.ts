@@ -1,5 +1,6 @@
 import { z } from "zod";
 
+import { SELL_ORDER_LINE_PENDING_QUANTITY_RANGE_MESSAGE } from "@/messages/sell-order";
 import {
   nonZeroQuantitySchema,
   nullableIdSchema,
@@ -42,7 +43,7 @@ const sellOrderLineFieldsSchema = baseSellOrderLineSchema.extend({
 export const updateSellOrderLineSchema = sellOrderLineFieldsSchema.refine(
   ({ pendingQuantity, quantity }) =>
     pendingQuantity >= Math.min(quantity, 0) && pendingQuantity <= Math.max(quantity, 0),
-  { message: "La cantidad pendiente debe estar entre 0 y la cantidad", path: ["pendingQuantity"] },
+  { message: SELL_ORDER_LINE_PENDING_QUANTITY_RANGE_MESSAGE, path: ["pendingQuantity"] },
 );
 export type TUpdateSellOrderLine = z.infer<typeof updateSellOrderLineSchema>;
 

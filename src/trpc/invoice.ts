@@ -33,6 +33,7 @@ import {
   INVOICES_NOT_ACCOUNTED_AMOUNT_TOO_LARGE_MESSAGE,
   INVOICES_NOT_ACCOUNTED_UNPRICED_MESSAGE,
   INVOICES_NOT_ACCOUNTED_WITHOUT_ACCOUNT_MESSAGE,
+  NO_PENDING_INVOICES_TO_ACCOUNT_MESSAGE,
 } from "@/messages/invoice";
 import { requiredIdObjectSchema } from "@/schemas";
 import { createInvoiceSchema } from "@/schemas/invoice";
@@ -56,7 +57,7 @@ export default router({
           if (accountedInvoiceIds.length === 0) {
             throw new TRPCError({
               code: "NOT_FOUND",
-              message: "No hay Facturas pendientes de contabilizar",
+              message: NO_PENDING_INVOICES_TO_ACCOUNT_MESSAGE,
             });
           }
 

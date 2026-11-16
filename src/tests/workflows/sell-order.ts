@@ -7,12 +7,18 @@ import { getSellOrderById } from "@/db/functions/sell-order";
 import { getSellOrderLineById } from "@/db/functions/sell-order-line";
 import { getSellOrderPath } from "@/files/sell-order";
 import { FILE_LABEL } from "@/messages/common";
+import {
+  SELL_ORDER_DELETED_MESSAGE,
+  SELL_ORDER_EDITED_MESSAGE,
+  SELL_ORDER_FILE_DELETED_MESSAGE,
+  SELL_ORDER_LINE_DELETED_MESSAGE,
+} from "@/messages/sell-order";
 import { openAndConfirmAlertDialog } from "@/tests/utils/components/alert-dialog";
 import { setInputFiles } from "@/tests/utils/components/file-input";
 import { InputElementType, assertFormLoaded, getFormInputByLabel } from "@/tests/utils/components/form";
 import { openPartPicker } from "@/tests/utils/components/picker";
 import { getTableRowByTestId } from "@/tests/utils/components/table";
-import { expectSingleToast } from "@/tests/utils/components/toast";
+import { expectSingleSuccessToast, expectSingleToast } from "@/tests/utils/components/toast";
 
 export async function workflowDeleteSellOrder(page: Page, sellOrderId: number) {
   await page.goto(`/sell-order/${sellOrderId}`);
@@ -28,7 +34,7 @@ export async function workflowDeleteSellOrder(page: Page, sellOrderId: number) {
   await expect(buttonDeleteSellOrder).toBeEnabled();
 
   await openAndConfirmAlertDialog(page, buttonDeleteSellOrder, "dialog-delete-model-content");
-  await expectSingleToast(page);
+  await expectSingleSuccessToast(page, SELL_ORDER_DELETED_MESSAGE);
 
   await expect(buttonDeleteSellOrder).toBeHidden();
   await expect(buttonRestoreSellOrder).toBeVisible();
@@ -45,14 +51,14 @@ export async function workflowOpenSellOrder(page: Page, sellOrderId: number) {
   return formSellOrder;
 }
 
-export async function workflowSubmitSellOrder(page: Page) {
+export async function workflowSubmitSellOrder(page: Page, toastTitle: string) {
   await page.getByTestId("button-submit-form-sell-order").click();
-  await expectSingleToast(page);
+  await expectSingleSuccessToast(page, toastTitle);
 }
 
 export async function workflowUploadSellOrderFile(page: Page, filePath: string) {
   await setInputFiles(page, getFormInputByLabel(page, FILE_LABEL, InputElementType.File), filePath);
-  await workflowSubmitSellOrder(page);
+  await workflowSubmitSellOrder(page, SELL_ORDER_EDITED_MESSAGE);
 }
 
 export const getSellOrderFilePath = async (sellOrderId: number) =>
@@ -86,14 +92,16 @@ export async function workflowDownloadSellOrderFile(page: Page, dialogFile: Loca
 export async function workflowDeleteSellOrderFile(
   page: Page,
   dialogFile: Locator,
-  expectedToast?: Parameters<typeof expectSingleToast>[1],
+  expectedErrorMessage?: string | RegExp,
 ) {
   await openAndConfirmAlertDialog(
     page,
     dialogFile.getByTestId("button-delete-sell-order-file"),
     "dialog-delete-model-content",
   );
-  await expectSingleToast(page, expectedToast);
+  await (expectedErrorMessage === undefined
+    ? expectSingleSuccessToast(page, SELL_ORDER_FILE_DELETED_MESSAGE)
+    : expectSingleToast(page, expectedErrorMessage));
 }
 
 export async function workflowOpenCreateSellOrderLine(page: Page, sellOrderId: number) {
@@ -115,7 +123,7 @@ export async function workflowDeleteSellOrderLine(page: Page, sellOrderLineId: n
   await expect(rowSellOrderLine).toBeVisible();
 
   await openAndConfirmAlertDialog(page, rowSellOrderLine.getByTestId("button-delete"), "dialog-delete-model-content");
-  await expectSingleToast(page);
+  await expectSingleSuccessToast(page, SELL_ORDER_LINE_DELETED_MESSAGE);
 
   expect((await getSellOrderLineById(sellOrderLineId))?.deletedAt).toBeInstanceOf(Date);
   return rowSellOrderLine;

@@ -7,6 +7,7 @@ import { getDeliveryNoteWithLinesForDocument, getNextDeliveryNoteId } from "@/db
 import {
   addSellOrderLinePendingQuantity,
   assertPendingQuantityWithinQuantity,
+  assertSellOrderLineNotDelivered,
   deleteDeliveryNoteLine,
 } from "@/db/functions/delivery-note-line";
 import { resetChangedDeliveryNoteInvoice, resetInvoiceStatus } from "@/db/functions/invoice";
@@ -53,6 +54,7 @@ async function insertStagedSellOrderLines(
       });
     }
     assertPendingQuantityWithinQuantity(sellOrderLine, -stagedSellOrderLine.quantity);
+    assertSellOrderLineNotDelivered(sellOrderLine);
 
     let description = sellOrderLine.description;
     if (sellOrderLine.partReferenceId !== null) {

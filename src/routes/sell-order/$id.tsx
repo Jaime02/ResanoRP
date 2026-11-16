@@ -33,7 +33,7 @@ function RouteComponent() {
   const { id } = Route.useParams();
   const { createSellOrderLine, editPartPriceId } = Route.useSearch();
   const { isAdmin } = useAppContext();
-  const siblings = useSellOrderNavigation(id);
+  const siblings = useQuerySellOrderNavigationIds(id);
 
   return (
     <div className="flex flex-col items-center gap-3">
@@ -58,9 +58,4 @@ function RouteComponent() {
       )}
     </div>
   );
-}
-
-// TODO mejora esta wea
-function useSellOrderNavigation(id: number | undefined) {
-  return useQuerySellOrderNavigationIds(id);
 }

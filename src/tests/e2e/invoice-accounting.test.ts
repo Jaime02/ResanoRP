@@ -22,12 +22,13 @@ import {
 } from "@/files/accounting-export";
 import { ACCOUNTING_EXPORT_FILE_NAME_REGEX, getAccountingExportPath } from "@/files/invoice";
 import { formatCents, getDeliveryNoteLineUnitPrice, getVatBreakdown } from "@/lib/prices";
-import { PRISMA_ACCOUNTING_ACCOUNT_LABEL } from "@/messages/client";
+import { PRISMA_ACCOUNTING_ACCOUNT_LABEL, CLIENT_EDITED_MESSAGE } from "@/messages/client";
 import { CLOSE_LABEL } from "@/messages/common";
 import {
   INVOICES_NOT_ACCOUNTED_AMOUNT_TOO_LARGE_MESSAGE,
   INVOICES_NOT_ACCOUNTED_UNPRICED_MESSAGE,
   INVOICES_NOT_ACCOUNTED_WITHOUT_ACCOUNT_MESSAGE,
+  NO_PENDING_INVOICES_TO_ACCOUNT_MESSAGE,
 } from "@/messages/invoice";
 import {
   MOCK_INITIAL_DATE,
@@ -40,7 +41,7 @@ import {
 } from "@/tests/mock-data";
 import { getFormInputByLabel, assertFormLoaded } from "@/tests/utils/components/form";
 import { getTableRowByTestId } from "@/tests/utils/components/table";
-import { expectSingleToast } from "@/tests/utils/components/toast";
+import { expectSingleToast, expectSingleSuccessToast } from "@/tests/utils/components/toast";
 import { expectRejectedMutation, type TErrorCode } from "@/tests/utils/errors-log";
 import { test } from "@/tests/utils/fixtures";
 import { getMockClientById, getMockPaymentMethodById, getMockSellOrderLineById } from "@/tests/utils/mock-data-utils";
@@ -341,7 +342,7 @@ test("account the invoices into the file for Prisma", async ({ page, db }) => {
       clientWithoutAccount.prismaAccountingAccountId!,
     );
     await formClient.getByTestId("button-submit").click();
-    await expectSingleToast(page);
+    await expectSingleSuccessToast(page, CLIENT_EDITED_MESSAGE);
 
     // Nothing is accounted while an Albarán has a Línea without price, added by hand or from a Pedido de venta,
     // as it would be exported at 0 €
@@ -502,8 +503,8 @@ test("account the invoices into the file for Prisma", async ({ page, db }) => {
     // ...so a new export has nothing to download
     downloads.length = 0;
     await confirmAccountInvoices(page);
-    await expectSingleToast(page, "No hay Facturas pendientes de contabilizar");
-    expectAccountRejected("No hay Facturas pendientes de contabilizar", "NOT_FOUND");
+    await expectSingleToast(page, NO_PENDING_INVOICES_TO_ACCOUNT_MESSAGE);
+    expectAccountRejected(NO_PENDING_INVOICES_TO_ACCOUNT_MESSAGE, "NOT_FOUND");
     expect(downloads).toHaveLength(0);
   });
 

@@ -3,7 +3,13 @@ import { eq } from "drizzle-orm";
 
 import { getCoatingById } from "@/db/functions/coating";
 import { COATING_NAME_CONSTRAINT, dbTableCoating } from "@/db/schema";
-import { COATING_CREATE_TITLE, COATING_RESTORED_MESSAGE, SHOW_DELETED_COATINGS_LABEL } from "@/messages/coating";
+import {
+  COATING_CREATED_MESSAGE,
+  COATING_CREATE_TITLE,
+  COATING_DELETED_MESSAGE,
+  COATING_RESTORED_MESSAGE,
+  SHOW_DELETED_COATINGS_LABEL,
+} from "@/messages/coating";
 import { COATING_LABEL, NAME_LABEL } from "@/messages/common";
 import { mockCoatings, mockParts } from "@/tests/mock-data";
 import { openAndConfirmAlertDialog } from "@/tests/utils/components/alert-dialog";
@@ -15,7 +21,7 @@ import {
   getTableRowByTestId,
   getTableRows,
 } from "@/tests/utils/components/table";
-import { expectSingleToast } from "@/tests/utils/components/toast";
+import { expectSingleSuccessToast } from "@/tests/utils/components/toast";
 import { uniqueNameViolation } from "@/tests/utils/errors-log";
 import { test } from "@/tests/utils/fixtures";
 import {
@@ -101,7 +107,7 @@ test("manage the Tratamientos", async ({ page, db }) => {
         (await findTableRowByText(tableCoating, coating.name)).getByTestId("button-delete"),
         "dialog-delete-model-content",
       );
-      await expectSingleToast(page);
+      await expectSingleSuccessToast(page, COATING_DELETED_MESSAGE);
       deletedCoatingIds.add(coating.id);
 
       await expect(filterByExactText(getTableRows(tableCoating), coating.name)).toHaveCount(0);
@@ -117,6 +123,7 @@ test("manage the Tratamientos", async ({ page, db }) => {
 
       // Its name can be used again, so the deleted Tratamiento can no longer be restored
       await workflowReuseDeletedName({
+        createdToastTitle: COATING_CREATED_MESSAGE,
         page,
         item: coating,
         form: dialogCreateEditCoating,
@@ -167,6 +174,7 @@ test("list the deleted Tratamientos only when asked for and restore them from th
     page,
     ids: mockCoatings.filter((coating) => coating.deletedAt === null).map(({ id }) => id),
     editButton: EditButtonVisibility.OnlyActive,
+    deletedToastTitle: COATING_DELETED_MESSAGE,
     restoredToastTitle: COATING_RESTORED_MESSAGE,
   });
 });
@@ -180,5 +188,6 @@ test("a deleted Tratamiento cannot be restored from the table while another one 
     insertDuplicate: async () => db.insert(dbTableCoating).values({ name: coating.name }),
     uniqueViolation: uniqueNameViolation(COATING_NAME_CONSTRAINT, dbTableCoating, coating.name),
     errorMessage: NAME_TAKEN_MESSAGE,
+    deletedToastTitle: COATING_DELETED_MESSAGE,
   });
 });

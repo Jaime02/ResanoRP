@@ -1,23 +1,29 @@
 import { expect } from "@playwright/test";
 import type { Locator, Page } from "@playwright/test";
 
-import { ToastType } from "@/types";
+import { ERROR_TITLE } from "@/messages/common";
+import { ToastType } from "@/types/toast";
+import type { TToast } from "@/types/toast";
 
-interface TExpectedToast {
-  type: ToastType;
-  message?: string;
-}
-
-// A string is the message of an error toast, and without anything the toast has to be a success one
-export async function expectSingleToast(page: Page, expected: string | TExpectedToast = { type: ToastType.Success }) {
-  const { type, message } = typeof expected === "string" ? { message: expected, type: ToastType.Error } : expected;
+// A string is the description of the error toast shown when a mutation fails
+export async function expectSingleToast(page: Page, expected: string | RegExp | Omit<TToast<string | RegExp>, "id">) {
+  const { type, title, description } =
+    typeof expected === "string" || expected instanceof RegExp
+      ? { description: expected, title: ERROR_TITLE, type: ToastType.Error }
+      : expected;
   const toasts = getToasts(page);
   await expect(toasts).toHaveCount(1);
-  expect(await getToastType(toasts.first())).toBe(type);
-  if (message !== undefined) {
-    await expect(toasts.first()).toContainText(message);
+  const toast = toasts.first();
+  expect(await getToastType(toast)).toBe(type);
+  await expect(toast.getByTestId("toast-title")).toHaveText(title);
+  if (description !== undefined) {
+    await expect(toast).toContainText(description);
   }
   await clearToasts(page);
+}
+
+export async function expectSingleSuccessToast(page: Page, title: string, description?: string) {
+  await expectSingleToast(page, { description, title, type: ToastType.Success });
 }
 
 export function getToasts(page: Page): Locator {
@@ -36,4 +42,10 @@ export async function clearToasts(page: Page) {
     await expect(toast).not.toBeVisible();
   }
   await expect(toasts).toHaveCount(0);
+}
+
+export async function expectSingleSuccessOrErrorToast(page: Page, successTitle: string, expectedErrorMessage?: string) {
+  await (expectedErrorMessage === undefined
+    ? expectSingleSuccessToast(page, successTitle)
+    : expectSingleToast(page, expectedErrorMessage));
 }

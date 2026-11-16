@@ -1,5 +1,5 @@
 import { useDbClient } from "@tanstack/react-db";
-import { FunnelIcon, XIcon } from "lucide-react";
+import { FunnelIcon } from "lucide-react";
 import { useCallback, useMemo, useState } from "react";
 
 import partMaterialCollection, { getPartMaterialKey } from "@/collections/part-material";
@@ -8,13 +8,12 @@ import BaseTable from "@/components/table/base-table";
 import ButtonDeleteModel from "@/components/table/button-delete-model";
 import { createTableColumnHelper } from "@/components/table/column-helper";
 import TooltipInactiveMaterial from "@/components/tooltip/inactive-material";
-import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { ModelActions } from "@/components/ui/model-actions";
 import { Separator } from "@/components/ui/separator";
 import { useAppContext } from "@/contexts/app-context";
 import { serializeMaterial } from "@/lib/serializers";
-import { ACTIONS_LABEL, DELETE_FILTERS_LABEL, MATERIAL_LABEL, SHAPE_LABEL, SIZE_LABEL } from "@/messages/common";
+import { ACTIONS_LABEL, MATERIAL_LABEL, SHAPE_LABEL, SIZE_LABEL } from "@/messages/common";
 import { MATERIAL_DELETE_TITLE, MATERIAL_DELETED_MESSAGE, MATERIALS_LABEL } from "@/messages/material";
 import {
   NO_COMPATIBLE_MATERIALS_MESSAGE,
@@ -218,19 +217,6 @@ export default function PartMaterialsTable({
             }
             state={compatibleMaterialsState}
             onStateChange={setCompatibleMaterialsState}
-            headerExtraComponents={
-              selectedRawMaterialId !== undefined ? (
-                <Button
-                  variant="destructive"
-                  onClick={() => {
-                    setSelectedRawMaterial(undefined);
-                  }}
-                >
-                  {DELETE_FILTERS_LABEL}
-                  <XIcon />
-                </Button>
-              ) : undefined
-            }
           />
         </>
       )}

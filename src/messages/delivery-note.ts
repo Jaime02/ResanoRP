@@ -10,6 +10,7 @@ export const DELIVERY_NOTE_FETCH_ERROR_MESSAGE = "Error al obtener los datos del
 export const DELIVERY_NOTE_DELETE_TITLE = "Eliminar Albarán";
 export const DELIVERY_NOTE_DELETE_MESSAGE = "¿Estás seguro que quieres eliminar el Albarán?";
 export const DELIVERY_NOTE_DELETED_MESSAGE = "Albarán eliminado";
+export const DELIVERY_NOTE_DELETED_DESCRIPTION = (id: number) => `El albarán ${id} ha sido eliminado correctamente`;
 export const DELIVERY_NOTE_NO_PARTS_MESSAGE = "El Albarán no tiene Artículos";
 export const NO_PENDING_DELIVERY_NOTES_MESSAGE = "No hay Albaranes pendientes de facturar";
 export const ADD_LINES_REQUIRES_DELIVERY_NOTE_MESSAGE = "Para añadir líneas al Albarán, primero debes crear el Albarán";
@@ -51,6 +52,8 @@ export const PRINT_TWICE_LABEL = "Imprimir x2";
 export const ADD_LABEL_GROUP_LABEL = "Añadir grupo de Etiquetas";
 export const PENDING_QUANTITY_EXCEEDED_MESSAGE = (sellOrderLineId: number) =>
   `La cantidad pendiente de la Línea de pedido de venta ${sellOrderLineId} no puede pasar de su cantidad`;
+export const SELL_ORDER_LINE_ALREADY_DELIVERED_MESSAGE = (sellOrderLineId: number) =>
+  `La Línea de pedido de venta ${sellOrderLineId} ya está entregada por completo`;
 export const ACCOUNTED_DELIVERY_NOTE_MESSAGE = (deliveryNoteId: number) =>
   `El Albarán ${deliveryNoteId} pertenece a una Factura contabilizada, solo el Administrador puede cambiar sus líneas`;
 export const SELL_ORDER_LINE_NOT_OF_CLIENT_MESSAGE = (sellOrderLineId: number) =>

@@ -2,12 +2,23 @@ import { expect } from "@playwright/test";
 import type { Page } from "@playwright/test";
 
 import { getPartById, getPartComponentsOfPart, getPartFeaturesOfPart } from "@/db/functions/part";
-import { PART_FEATURE_LABEL } from "@/messages/part";
+import {
+  PART_COMPONENT_CREATED_MESSAGE,
+  PART_COMPONENT_DELETED_MESSAGE,
+  PART_DELETED_MESSAGE,
+  PART_FEATURE_CREATED_MESSAGE,
+  PART_FEATURE_DELETED_MESSAGE,
+  PART_FEATURE_LABEL,
+} from "@/messages/part";
 import { openAndConfirmAlertDialog } from "@/tests/utils/components/alert-dialog";
 import { assertFormLoaded, getFormInputByLabel } from "@/tests/utils/components/form";
 import { openPartPicker } from "@/tests/utils/components/picker";
 import { getEditableCellById, getTableRowByTestId } from "@/tests/utils/components/table";
-import { expectSingleToast } from "@/tests/utils/components/toast";
+import {
+  expectSingleSuccessOrErrorToast,
+  expectSingleSuccessToast,
+  expectSingleToast,
+} from "@/tests/utils/components/toast";
 import { expectRejectedMutation } from "@/tests/utils/errors-log";
 import { getMockActivePartSetsOfPart } from "@/tests/utils/mock-data-utils";
 
@@ -26,7 +37,7 @@ export async function workflowDeletePart(page: Page, partId: number, expectedErr
     expect((await getPartById(partId))?.deletedAt).toBeNull();
     return;
   }
-  await expectSingleToast(page);
+  await expectSingleSuccessToast(page, PART_DELETED_MESSAGE);
   await expect(rowPart).not.toBeVisible();
   expect((await getPartById(partId))?.deletedAt).toBeInstanceOf(Date);
 }
@@ -62,7 +73,7 @@ export async function workflowCreatePartComponent(
   await expect(dialogPickerPartContent).not.toBeVisible();
   await dialog.getByTestId("input-create-part-component-quantity").pressSequentially(String(quantity));
   await dialog.getByTestId("button-submit").click();
-  await expectSingleToast(page, expectedErrorMessage);
+  await expectSingleSuccessOrErrorToast(page, PART_COMPONENT_CREATED_MESSAGE, expectedErrorMessage);
 
   if (expectedErrorMessage !== undefined) {
     await expect(dialog).toBeVisible();
@@ -80,7 +91,7 @@ export async function workflowDeletePartComponent(page: Page, parentPartId: numb
   const tablePartComponents = await gotoPartComponents(page, parentPartId);
   const rowPartComponent = getTableRowByTestId(tablePartComponents, componentPartId);
   await openAndConfirmAlertDialog(page, rowPartComponent.getByTestId("button-delete"), "dialog-delete-model-content");
-  await expectSingleToast(page);
+  await expectSingleSuccessToast(page, PART_COMPONENT_DELETED_MESSAGE);
   await expect(rowPartComponent).toHaveCount(0);
   expect(await getPartComponentQuantity(parentPartId, componentPartId)).toBeUndefined();
 }
@@ -107,7 +118,7 @@ export async function workflowCreatePartFeature(page: Page, partId: number, feat
   await getFormInputByLabel(dialogCreatePartFeature, PART_FEATURE_LABEL).fill(feature);
   await dialogCreatePartFeature.getByTestId("button-submit").click();
   await expect(dialogCreatePartFeature).toBeHidden();
-  await expectSingleToast(page);
+  await expectSingleSuccessToast(page, PART_FEATURE_CREATED_MESSAGE);
   const createdFeature = (await getPartFeaturesOfPart(partId)).find((partFeature) => partFeature.feature === feature);
   expect(createdFeature).toBeDefined();
   return createdFeature!;
@@ -125,7 +136,7 @@ export async function workflowDeletePartFeature(
     getTableRowByTestId(tablePartFeatures, partFeatureId).getByTestId("button-delete"),
     "dialog-delete-model-content",
   );
-  await expectSingleToast(page, expectedErrorMessage);
+  await expectSingleSuccessOrErrorToast(page, PART_FEATURE_DELETED_MESSAGE, expectedErrorMessage);
   const isDeleted = (await getPartFeaturesOfPart(partId)).every((partFeature) => partFeature.id !== partFeatureId);
   expect(isDeleted).toBe(expectedErrorMessage === undefined);
   await expect(getTableRowByTestId(tablePartFeatures, partFeatureId)).toHaveCount(

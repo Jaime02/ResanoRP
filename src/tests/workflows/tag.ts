@@ -3,7 +3,8 @@ import fs from "node:fs";
 import { expect } from "@playwright/test";
 import type { Locator, Page } from "@playwright/test";
 
-import { expectSingleToast } from "@/tests/utils/components/toast";
+import { LABEL_PRINTED_MESSAGE } from "@/messages/production-order";
+import { expectSingleSuccessToast } from "@/tests/utils/components/toast";
 
 // Only the existence of the generated PDF is asserted, not its content
 export function assertTagFileGenerated(tagFilePath: string) {
@@ -19,7 +20,7 @@ export async function workflowPrintTag(page: Page, row: Locator, tagFilePath: st
   await expect(dialogPrintTag).toBeVisible();
   await dialogPrintTag.getByTestId("button-submit").click();
 
-  await expectSingleToast(page);
+  await expectSingleSuccessToast(page, LABEL_PRINTED_MESSAGE);
 
   await expect(dialogPrintTag).not.toBeVisible();
   assertTagFileGenerated(tagFilePath);

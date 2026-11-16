@@ -3,11 +3,16 @@ import type { Page } from "@playwright/test";
 
 import { getMachineById } from "@/db/functions/machine";
 import { NAME_LABEL } from "@/messages/common";
-import { MACHINE_CREATE_TITLE } from "@/messages/machine";
+import {
+  MACHINE_CREATED_MESSAGE,
+  MACHINE_CREATE_TITLE,
+  MACHINE_DELETED_MESSAGE,
+  MACHINE_EDITED_MESSAGE,
+} from "@/messages/machine";
 import { openAndConfirmAlertDialog } from "@/tests/utils/components/alert-dialog";
 import { assertFormLoaded, getFormInputByLabel } from "@/tests/utils/components/form";
 import { findTableRowByText } from "@/tests/utils/components/table";
-import { expectSingleToast } from "@/tests/utils/components/toast";
+import { expectSingleSuccessToast } from "@/tests/utils/components/toast";
 
 export async function workflowCreateMachine(page: Page, machineId: number, machineName: string) {
   const tableMaintenanceMachine = page.getByTestId("table-machine");
@@ -26,7 +31,7 @@ export async function workflowCreateMachine(page: Page, machineId: number, machi
   await dialogCreateMachine.getByTestId("button-submit").click();
 
   await expect(dialogCreateMachine).not.toBeVisible();
-  await expectSingleToast(page);
+  await expectSingleSuccessToast(page, MACHINE_CREATED_MESSAGE);
   await expect(tableMaintenanceMachine.getByText(machineName, { exact: true })).toBeVisible();
 
   const dbMachine = await getMachineById(machineId);
@@ -49,7 +54,7 @@ export async function workflowEditMachine(page: Page, machineId: number, current
   await formMachine.locator(`input[value="${currentName}"]`).fill(updatedName);
   await formMachine.getByTestId("button-submit").click();
 
-  await expectSingleToast(page);
+  await expectSingleSuccessToast(page, MACHINE_EDITED_MESSAGE);
 
   const dbMachine = await getMachineById(machineId);
   expect(dbMachine).toBeDefined();
@@ -73,7 +78,7 @@ export async function workflowDeleteMachine(page: Page, machineId: number, machi
     "dialog-delete-model-content",
   );
 
-  await expectSingleToast(page);
+  await expectSingleSuccessToast(page, MACHINE_DELETED_MESSAGE);
   await expect(tableMaintenanceMachine.getByText(machineName, { exact: true })).not.toBeVisible();
 
   expect((await getMachineById(machineId))?.deletedAt).toBeInstanceOf(Date);

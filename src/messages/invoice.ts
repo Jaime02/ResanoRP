@@ -6,6 +6,7 @@ export const INVOICE_DELETE_TITLE = "Eliminar Factura";
 export const INVOICE_DELETE_MESSAGE =
   "¿Estás seguro que quieres eliminar la Factura? Sus Albaranes volverán a estar pendientes de facturar.";
 export const INVOICE_DELETED_MESSAGE = "Factura eliminada";
+export const INVOICE_DELETED_DESCRIPTION = (id: number) => `La factura ${id} ha sido eliminada correctamente`;
 export const INVOICE_NO_DELIVERY_NOTES_MESSAGE = "La Factura no tiene Albaranes";
 export const SEND_INVOICE_LABEL = "Enviar Factura";
 export const UNACCOUNT_INVOICE_TITLE = "Marcar Factura como no contabilizada";
@@ -35,3 +36,4 @@ export const INVOICE_NOT_DELETED_NOT_LAST_MESSAGE = (invoiceId: number, lastInvo
   `No se puede eliminar la Factura ${invoiceId} porque la numeración quedaría con huecos, solo se puede eliminar la última Factura (${lastInvoiceId})`;
 export const INVOICE_NOT_SENT_UNPRICED_MESSAGE = (deliveryNoteIds: Array<number>) =>
   `No se ha enviado la Factura porque estos Albaranes tienen Líneas sin precio: ${deliveryNoteIds.join(", ")}`;
+export const NO_PENDING_INVOICES_TO_ACCOUNT_MESSAGE = "No hay Facturas pendientes de contabilizar";

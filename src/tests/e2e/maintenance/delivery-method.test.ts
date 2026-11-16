@@ -6,8 +6,10 @@ import { DEFAULT_DELIVERY_METHOD_LABEL } from "@/messages/client";
 import { STATUS_DELETED_LABEL, DELIVERY_METHOD_LABEL } from "@/messages/common";
 import {
   DELIVERY_METHOD_CREATE_TITLE,
+  DELIVERY_METHOD_DELETED_MESSAGE,
   DELIVERY_METHOD_RESTORED_MESSAGE,
   SHOW_DELETED_DELIVERY_METHODS_LABEL,
+  DELIVERY_METHOD_CREATED_MESSAGE,
 } from "@/messages/delivery-method";
 import { mockClients, mockDeliveryMethods, mockDeliveryNotes } from "@/tests/mock-data";
 import { openAndConfirmAlertDialog } from "@/tests/utils/components/alert-dialog";
@@ -15,7 +17,7 @@ import { assertComboboxValue, fillComboboxFilter, openCombobox } from "@/tests/u
 import { InputElementType, assertFormLoaded, getFormInputByLabel } from "@/tests/utils/components/form";
 import { getPopoverContent } from "@/tests/utils/components/popover";
 import { filterByExactText, findTableRowByText, getTableRows } from "@/tests/utils/components/table";
-import { expectSingleToast } from "@/tests/utils/components/toast";
+import { expectSingleSuccessToast } from "@/tests/utils/components/toast";
 import { uniqueNameViolation } from "@/tests/utils/errors-log";
 import { test } from "@/tests/utils/fixtures";
 import {
@@ -102,7 +104,7 @@ test("manage the Transportes", async ({ page, db }) => {
         (await findTableRowByText(tableDeliveryMethod, deliveryMethod.name)).getByTestId("button-delete"),
         "dialog-delete-model-content",
       );
-      await expectSingleToast(page);
+      await expectSingleSuccessToast(page, DELIVERY_METHOD_DELETED_MESSAGE);
       deletedDeliveryMethodIds.add(deliveryMethod.id);
 
       await expect(filterByExactText(getTableRows(tableDeliveryMethod), deliveryMethod.name)).toHaveCount(0);
@@ -179,6 +181,7 @@ test("manage the Transportes", async ({ page, db }) => {
       // Its name can be used again, so the deleted Transporte can no longer be restored
       await page.goto(MAINTENANCE_DELIVERY_METHOD_URL);
       await workflowReuseDeletedName({
+        createdToastTitle: DELIVERY_METHOD_CREATED_MESSAGE,
         page,
         item: deliveryMethod,
         form: dialogCreateEditDeliveryMethod,
@@ -208,6 +211,7 @@ test("list the deleted Transportes only when asked for and restore them from the
     getDeletedAt: async (id) => (await db.query.dbTableDeliveryMethod.findFirst({ where: { id } }))?.deletedAt,
     ids: mockDeliveryMethods.filter((deliveryMethod) => deliveryMethod.deletedAt === null).map(({ id }) => id),
     editButton: EditButtonVisibility.OnlyActive,
+    deletedToastTitle: DELIVERY_METHOD_DELETED_MESSAGE,
     restoredToastTitle: DELIVERY_METHOD_RESTORED_MESSAGE,
   });
 });
@@ -222,5 +226,6 @@ test("a deleted Transporte cannot be restored from the table while another one h
     insertDuplicate: async () => db.insert(dbTableDeliveryMethod).values({ name: deliveryMethod.name }),
     uniqueViolation: uniqueNameViolation(DELIVERY_METHOD_NAME_CONSTRAINT, dbTableDeliveryMethod, deliveryMethod.name),
     errorMessage: NAME_TAKEN_MESSAGE,
+    deletedToastTitle: DELIVERY_METHOD_DELETED_MESSAGE,
   });
 });

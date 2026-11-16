@@ -27,6 +27,10 @@ import {
   PRODUCTION_ORDER_NOT_ASSIGNABLE_MESSAGE,
   QUANTITY_TO_PRODUCE_LABEL,
   SELL_ORDER_LINE_NOT_OF_PART_MESSAGE,
+  MACHINE_ASSIGNED_MESSAGE,
+  MACHINE_UNASSIGNED_MESSAGE,
+  PRODUCTION_ORDER_CREATED_MESSAGE,
+  PRODUCTION_ORDER_EDITED_MESSAGE,
 } from "@/messages/production-order";
 import { ProductionOrderStatus } from "@/schemas/production-order";
 import type { TProductionOrderFilters, TTableProductionOrderState } from "@/schemas/production-order";
@@ -60,7 +64,7 @@ import {
   getTableRowByTestId,
   getTableRows,
 } from "@/tests/utils/components/table";
-import { expectSingleToast } from "@/tests/utils/components/toast";
+import { expectSingleToast, expectSingleSuccessToast } from "@/tests/utils/components/toast";
 import { expectRejectedMutation, type TErrorCode } from "@/tests/utils/errors-log";
 import { inAnotherTab, setUserMode, test } from "@/tests/utils/fixtures";
 import {
@@ -159,7 +163,7 @@ test("assign, unassign and filter the machines of the production orders", async 
 
     await selectComboboxOption(page, tableRowToAssign.getByTestId("combobox-assign-machine"), assignedMachine!.name);
 
-    await expectSingleToast(page);
+    await expectSingleSuccessToast(page, MACHINE_ASSIGNED_MESSAGE);
 
     const updatedAssignedMachines = await getProductionOrderAssignedMachines(productionOrderToAssign.id);
     expect(updatedAssignedMachines.length).toBe(previouslyAssignedMachines.length + 1);
@@ -210,7 +214,7 @@ test("assign, unassign and filter the machines of the production orders", async 
     await expect(buttonUnassignMachine).toBeVisible();
     await buttonUnassignMachine.click();
 
-    await expectSingleToast(page);
+    await expectSingleSuccessToast(page, MACHINE_UNASSIGNED_MESSAGE);
 
     const updatedAssignedMachines = await getProductionOrderAssignedMachines(productionOrderToUnassign!.id);
     expect(updatedAssignedMachines.some((m) => m.id === selectedMachine!.id)).toBe(false);
@@ -976,7 +980,7 @@ test("create production orders by hand and from a sell order line", async ({ pag
     await page.getByTestId("button-submit").click();
 
     await expect(page).toHaveURL(/\/production-order\/\d+$/);
-    await expectSingleToast(page);
+    await expectSingleSuccessToast(page, PRODUCTION_ORDER_CREATED_MESSAGE);
     const [newProductionOrder] = await getNewProductionOrders();
     expect(newProductionOrder).toMatchObject({
       partId: part.id,
@@ -1012,7 +1016,7 @@ test("create production orders by hand and from a sell order line", async ({ pag
     await page.getByTestId("button-submit").click();
 
     await expect(page).toHaveURL(/\/production-order\/\d+$/);
-    await expectSingleToast(page);
+    await expectSingleSuccessToast(page, PRODUCTION_ORDER_CREATED_MESSAGE);
     const newProductionOrders = await getNewProductionOrders();
     expect(newProductionOrders).toHaveLength(2);
     expect(newProductionOrders[1]).toMatchObject({
@@ -1156,7 +1160,7 @@ test("urgent production orders are tinted and their urgency can be edited", asyn
     await expect(checkboxUrgent).toBeChecked({ checked: !urgent });
     await checkboxUrgent.click();
     await page.getByTestId("button-submit").click();
-    await expectSingleToast(page);
+    await expectSingleSuccessToast(page, PRODUCTION_ORDER_EDITED_MESSAGE);
     expect((await getProductionOrderById(productionOrderId))?.urgent).toBe(urgent);
   };
 

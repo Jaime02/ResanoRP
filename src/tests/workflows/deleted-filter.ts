@@ -4,9 +4,8 @@ import type { Locator, Page } from "@playwright/test";
 import { openAndConfirmAlertDialog } from "@/tests/utils/components/alert-dialog";
 import { getPopoverContent } from "@/tests/utils/components/popover";
 import { assertTableRowCount, getTableRowByTestId } from "@/tests/utils/components/table";
-import { expectSingleToast } from "@/tests/utils/components/toast";
+import { expectSingleSuccessToast, expectSingleToast } from "@/tests/utils/components/toast";
 import { expectUniqueViolationRejected, type TUniqueViolation } from "@/tests/utils/errors-log";
-import { ToastType } from "@/types";
 
 export enum EditButtonVisibility {
   Always = "always",
@@ -25,6 +24,7 @@ interface DeletedFilterTableParams {
 interface WorkflowDeletedFilterAndRestoreParams extends DeletedFilterTableParams {
   ids: Array<number>;
   editButton: EditButtonVisibility;
+  deletedToastTitle: string;
   restoredToastTitle: string;
   assertRow?: (row: Locator, isDeleted: boolean) => Promise<void>;
 }
@@ -34,6 +34,7 @@ interface WorkflowRestoreTakenParams extends DeletedFilterTableParams {
   insertDuplicate: () => Promise<unknown>;
   uniqueViolation: TUniqueViolation;
   errorMessage: string;
+  deletedToastTitle: string;
 }
 
 async function openDeletedFilter(page: Page, table: Locator, filterLabel: string, isChecked: boolean) {
@@ -67,6 +68,7 @@ export async function workflowDeletedFilterAndRestore({
   getDeletedAt,
   ids,
   editButton,
+  deletedToastTitle,
   restoredToastTitle,
   assertRow,
 }: WorkflowDeletedFilterAndRestoreParams) {
@@ -100,7 +102,7 @@ export async function workflowDeletedFilterAndRestore({
     await assertRows(false);
 
     await openAndConfirmAlertDialog(page, row.getByTestId("button-delete"), "dialog-delete-model-content");
-    await expectSingleToast(page);
+    await expectSingleSuccessToast(page, deletedToastTitle);
     deletedIds.add(id);
     await assertRows(false);
     expect(await getDeletedAt(id)).toBeInstanceOf(Date);
@@ -124,14 +126,14 @@ export async function workflowDeletedFilterAndRestore({
     expect(await getDeletedAt(id)).toBeInstanceOf(Date);
 
     await openAndConfirmAlertDialog(page, row.getByTestId("button-restore"), "dialog-restore-model-content");
-    await expectSingleToast(page, { message: restoredToastTitle, type: ToastType.Success });
+    await expectSingleSuccessToast(page, restoredToastTitle);
     deletedIds.delete(id);
     await assertRows(true);
     expect(await getDeletedAt(id)).toBeNull();
 
     // Deleting it while the deleted ones are listed keeps its row, which can be restored again
     await openAndConfirmAlertDialog(page, row.getByTestId("button-delete"), "dialog-delete-model-content");
-    await expectSingleToast(page);
+    await expectSingleSuccessToast(page, deletedToastTitle);
     deletedIds.add(id);
     await assertRows(true);
     expect(await getDeletedAt(id)).toBeInstanceOf(Date);
@@ -151,13 +153,14 @@ export async function workflowRestoreTaken({
   insertDuplicate,
   uniqueViolation,
   errorMessage,
+  deletedToastTitle,
 }: WorkflowRestoreTakenParams) {
   const table = page.getByTestId(tableTestId);
   const row = getTableRowByTestId(table, id);
 
   await page.goto(url);
   await openAndConfirmAlertDialog(page, row.getByTestId("button-delete"), "dialog-delete-model-content");
-  await expectSingleToast(page);
+  await expectSingleSuccessToast(page, deletedToastTitle);
   await expect(row).toHaveCount(0);
 
   await insertDuplicate();

@@ -6,10 +6,13 @@ import { formatPrice } from "@/lib/formatters";
 import { NAME_LABEL } from "@/messages/common";
 import {
   RAW_MATERIAL_CREATE_TITLE,
+  RAW_MATERIAL_DELETED_MESSAGE,
   RAW_MATERIAL_RESTORED_MESSAGE,
   SHOW_DELETED_RAW_MATERIALS_LABEL,
   RAW_MATERIAL_DENSITY_LABEL,
   RAW_MATERIAL_PRICE_LABEL,
+  RAW_MATERIAL_CREATED_MESSAGE,
+  RAW_MATERIAL_EDITED_MESSAGE,
 } from "@/messages/material";
 import { mockMaterials, mockRawMaterials } from "@/tests/mock-data";
 import { openAndConfirmAlertDialog } from "@/tests/utils/components/alert-dialog";
@@ -22,7 +25,7 @@ import {
   getTableRowByTestId,
   getTableRows,
 } from "@/tests/utils/components/table";
-import { expectSingleToast } from "@/tests/utils/components/toast";
+import { expectSingleSuccessToast } from "@/tests/utils/components/toast";
 import { uniqueNameViolation } from "@/tests/utils/errors-log";
 import { test } from "@/tests/utils/fixtures";
 import {
@@ -156,7 +159,7 @@ test("manage the Materias primas", async ({ page, db }) => {
       await dialogCreateEditRawMaterial.getByTestId("button-submit").click();
 
       await expect(dialogCreateEditRawMaterial).not.toBeVisible();
-      await expectSingleToast(page);
+      await expectSingleSuccessToast(page, RAW_MATERIAL_EDITED_MESSAGE);
       await expect(filterByExactText(getTableRows(tableRawMaterial), newName)).toHaveCount(1);
       expect(await db.query.dbTableRawMaterial.findFirst({ where: { id: rawMaterial.id } })).toEqual({
         ...rawMaterial,
@@ -198,7 +201,7 @@ test("manage the Materias primas", async ({ page, db }) => {
         (await findTableRowByText(tableRawMaterial, rawMaterial.name)).getByTestId("button-delete"),
         "dialog-delete-model-content",
       );
-      await expectSingleToast(page);
+      await expectSingleSuccessToast(page, RAW_MATERIAL_DELETED_MESSAGE);
       deleted.rawMaterialIds.add(rawMaterial.id);
 
       await expect(filterByExactText(getTableRows(tableRawMaterial), rawMaterial.name)).toHaveCount(0);
@@ -228,6 +231,7 @@ test("manage the Materias primas", async ({ page, db }) => {
       // Its name can be used again, so the deleted Materia prima can no longer be restored
       await page.goto(MAINTENANCE_RAW_MATERIAL_URL);
       await workflowReuseDeletedName({
+        createdToastTitle: RAW_MATERIAL_CREATED_MESSAGE,
         page,
         item: rawMaterial,
         form: dialogCreateEditRawMaterial,
@@ -255,6 +259,7 @@ test("list the deleted Materias primas only when asked for and restore them from
     getDeletedAt: async (id) => (await db.query.dbTableRawMaterial.findFirst({ where: { id } }))?.deletedAt,
     ids: mockRawMaterials.filter((rawMaterial) => rawMaterial.deletedAt === null).map(({ id }) => id),
     editButton: EditButtonVisibility.OnlyActive,
+    deletedToastTitle: RAW_MATERIAL_DELETED_MESSAGE,
     restoredToastTitle: RAW_MATERIAL_RESTORED_MESSAGE,
   });
 });
@@ -272,5 +277,6 @@ test("a deleted Materia prima cannot be restored from the table while another on
     insertDuplicate: async () => db.insert(dbTableRawMaterial).values({ name: rawMaterial.name }),
     uniqueViolation: uniqueNameViolation(RAW_MATERIAL_NAME_CONSTRAINT, dbTableRawMaterial, rawMaterial.name),
     errorMessage: NAME_TAKEN_MESSAGE,
+    deletedToastTitle: RAW_MATERIAL_DELETED_MESSAGE,
   });
 });

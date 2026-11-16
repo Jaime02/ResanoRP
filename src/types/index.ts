@@ -29,12 +29,6 @@ export enum FormMode {
   NotApplicable = "notApplicable",
 }
 
-export enum ToastType {
-  Success = "success",
-  Error = "error",
-  Info = "info",
-}
-
 export enum TablePartPickerMode {
   PickReferences,
   PickParts,

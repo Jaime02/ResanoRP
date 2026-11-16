@@ -2,6 +2,7 @@ import { z } from "zod";
 import { zfd } from "zod-form-data";
 
 import { LoggerLevels } from "@/logging/types";
+import { NON_ZERO_QUANTITY_MESSAGE } from "@/messages/common";
 
 export const requiredIdSchema = z.number({ error: "Campo obligatorio" }).int().positive();
 export const nullableIdSchema = requiredIdSchema.nullable();
@@ -90,7 +91,7 @@ export const quantitySchema = z
 export const positiveQuantitySchema = quantitySchema.gt(0, "La cantidad debe ser un número positivo");
 
 // A negative quantity is a return, which the old system also recorded as a Línea
-export const nonZeroQuantitySchema = quantitySchema.refine((quantity) => quantity !== 0, "La cantidad no puede ser 0");
+export const nonZeroQuantitySchema = quantitySchema.refine((quantity) => quantity !== 0, NON_ZERO_QUANTITY_MESSAGE);
 
 export const priceSchema = decimalSchema(3);
 

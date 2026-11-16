@@ -8,9 +8,11 @@ import { SHAPE_LABEL } from "@/messages/common";
 import {
   INACTIVE_MATERIAL_DELETED_MESSAGE,
   MATERIAL_CREATE_TITLE,
+  MATERIAL_DELETED_MESSAGE,
   MATERIAL_RESTORED_MESSAGE,
   SHOW_DELETED_MATERIALS_LABEL,
   RAW_MATERIAL_LABEL,
+  MATERIAL_CREATED_MESSAGE,
 } from "@/messages/material";
 import { mockMaterials, mockRawMaterials, mockShapes } from "@/tests/mock-data";
 import { openAndConfirmAlertDialog } from "@/tests/utils/components/alert-dialog";
@@ -22,7 +24,7 @@ import {
 } from "@/tests/utils/components/combobox";
 import { InputElementType, getFormInputByLabel } from "@/tests/utils/components/form";
 import { assertTableRowCount, getTableNoDataRow, getTableRowByTestId } from "@/tests/utils/components/table";
-import { expectSingleToast } from "@/tests/utils/components/toast";
+import { expectSingleToast, expectSingleSuccessToast } from "@/tests/utils/components/toast";
 import { expectUniqueViolation } from "@/tests/utils/db";
 import { expectUniqueViolationRejected, uniqueColumnsViolation } from "@/tests/utils/errors-log";
 import { test } from "@/tests/utils/fixtures";
@@ -200,7 +202,7 @@ test("manage the Materiales", async ({ page, db }) => {
         getTableRowByTestId(tableMaterial, material.id).getByTestId("button-delete"),
         "dialog-delete-model-content",
       );
-      await expectSingleToast(page);
+      await expectSingleSuccessToast(page, MATERIAL_DELETED_MESSAGE);
       deleted.materialIds.add(material.id);
 
       await expectVisibleMaterials(
@@ -235,7 +237,7 @@ test("manage the Materiales", async ({ page, db }) => {
       await fillMaterialForm(page, material);
       await dialogCreateMaterial.getByTestId("button-submit").click();
       await expect(dialogCreateMaterial).not.toBeVisible();
-      await expectSingleToast(page);
+      await expectSingleSuccessToast(page, MATERIAL_CREATED_MESSAGE);
       deleted.materialIds.delete(material.id);
 
       await expectVisibleMaterials(
@@ -262,6 +264,7 @@ test("list the deleted Materiales only when asked for and restore them from the 
     getDeletedAt: async (id) => (await getMaterial(db, id))?.deletedAt,
     ids: mockMaterials.filter((material) => material.deletedAt === null).map(({ id }) => id),
     editButton: EditButtonVisibility.Never,
+    deletedToastTitle: MATERIAL_DELETED_MESSAGE,
     restoredToastTitle: MATERIAL_RESTORED_MESSAGE,
     // None of the mock Materias primas is deleted, so only the deleted Materiales are flagged
     assertRow: async (row, isDeleted) =>
@@ -287,5 +290,6 @@ test("a deleted Material cannot be restored from the table while another one has
         .values({ rawMaterialId: material.rawMaterialId, shapeId: material.shapeId, width: material.width }),
     uniqueViolation: getCombinationViolation(material),
     errorMessage: COMBINATION_TAKEN_MESSAGE,
+    deletedToastTitle: MATERIAL_DELETED_MESSAGE,
   });
 });

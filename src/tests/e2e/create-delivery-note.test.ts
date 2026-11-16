@@ -21,7 +21,12 @@ import { CLOSE_LABEL, STATUS_PENDING_LABEL } from "@/messages/common";
 import {
   ACCOUNTED_DELIVERY_NOTE_MESSAGE,
   PENDING_QUANTITY_EXCEEDED_MESSAGE,
+  SELL_ORDER_LINE_ALREADY_DELIVERED_MESSAGE,
   SELL_ORDER_LINE_NOT_OF_CLIENT_MESSAGE,
+  DELIVERY_NOTE_CREATED_MESSAGE,
+  DELIVERY_NOTE_LINE_EDITED_MESSAGE,
+  DELIVERY_NOTE_LINE_PRICE_EDITED_MESSAGE,
+  LINES_ADDED_TO_DELIVERY_NOTE_MESSAGE,
 } from "@/messages/delivery-note";
 import { INVOICE_CREATE_TITLE } from "@/messages/invoice";
 import { SHOW_PREPARED_LINES_LABEL } from "@/messages/sell-order";
@@ -43,7 +48,7 @@ import {
   getTableRows,
   getTableSubrowById,
 } from "@/tests/utils/components/table";
-import { expectSingleToast, getToasts, getToastType } from "@/tests/utils/components/toast";
+import { expectSingleToast, getToasts, getToastType, expectSingleSuccessToast } from "@/tests/utils/components/toast";
 import {
   expectRejectedMutation,
   httpRequestFailedEvent,
@@ -70,10 +75,10 @@ import {
 import { workflowPickInvoiceClient } from "@/tests/workflows/invoice";
 import { assertPartStockConsumption } from "@/tests/workflows/part-stock";
 import { workflowPrintTag } from "@/tests/workflows/tag";
-import { ToastType } from "@/types";
 import type { BaseDeliveryNote } from "@/types/delivery-note";
 import type { BaseDeliveryNoteLine } from "@/types/delivery-note-line";
 import type { BaseSellOrderLine } from "@/types/sell-order-line";
+import { ToastType } from "@/types/toast";
 
 let tablePendingSellOrderLines: Locator;
 let tableStagedSellOrderLines: Locator;
@@ -188,7 +193,7 @@ for (const selectedClient of clientsWithPendingLines) {
         await expect(buttonSubmitFormDeliveryNote).toBeEnabled();
         await buttonSubmitFormDeliveryNote.click();
 
-        await expectSingleToast(page);
+        await expectSingleSuccessToast(page, DELIVERY_NOTE_CREATED_MESSAGE);
 
         // The delivered quantity is taken from the stock, which never goes below zero
         const remainingPartStock = await getLatestPartStockTransactionByPartId(stagedPart!.id);
@@ -281,7 +286,7 @@ for (const selectedClient of clientsWithPendingLines) {
         await expect(buttonSubmitFormDeliveryNote).toBeEnabled();
         await buttonSubmitFormDeliveryNote.click();
 
-        await expectSingleToast(page);
+        await expectSingleSuccessToast(page, DELIVERY_NOTE_CREATED_MESSAGE);
 
         // The previous step used the next id of the sequence, so the created Albarán is the only new one
         const createdDeliveryNotes = (await getDeliveryNotes()).filter(
@@ -384,7 +389,7 @@ for (const client of clientsWithPendingLines) {
         const previousDeliveryNoteIds = (await getDeliveryNotes()).map((deliveryNote) => deliveryNote.id);
         await expect(getTableRowByTestId(tableStagedSellOrderLines, customSellOrderLine.id)).toBeVisible();
         await buttonSubmitFormDeliveryNote.click();
-        await expectSingleToast(page);
+        await expectSingleSuccessToast(page, DELIVERY_NOTE_CREATED_MESSAGE);
 
         const createdDeliveryNote = (await getDeliveryNotes()).find(
           (deliveryNote) => !previousDeliveryNoteIds.includes(deliveryNote.id),
@@ -413,7 +418,7 @@ for (const client of clientsWithPendingLines) {
         await expect(deliveryNoteLineRow.getByTestId("partReference")).toHaveText("");
 
         await workflowEditDeliveryNoteLineQuantity(page, deliveryNoteLine.id, 2);
-        await expectSingleToast(page);
+        await expectSingleSuccessToast(page, DELIVERY_NOTE_LINE_EDITED_MESSAGE);
         deliveryNoteLine = (await getDeliveryNoteLine({ id: deliveryNoteLine.id }))!;
         expect(deliveryNoteLine.quantity).toBe(2);
         // The part no longer delivered is pending again
@@ -523,7 +528,7 @@ for (const client of clientsWithPendingLines) {
     const createDeliveryNote = async (stagedQuantities: Array<[BaseSellOrderLine, number]>) => {
       const previousDeliveryNoteIds = (await getDeliveryNotes()).map((deliveryNote) => deliveryNote.id);
       await submitStagedQuantities(stagedQuantities);
-      await expectSingleToast(page);
+      await expectSingleSuccessToast(page, DELIVERY_NOTE_CREATED_MESSAGE);
       const createdDeliveryNote = (await getDeliveryNotes()).find(
         (deliveryNote) => !previousDeliveryNoteIds.includes(deliveryNote.id),
       )!;
@@ -581,7 +586,7 @@ for (const client of clientsWithPendingLines) {
       await inputUnitPrice.clear();
       await inputUnitPrice.pressSequentially("-0.5");
       await inputUnitPrice.blur();
-      await expectSingleToast(page);
+      await expectSingleSuccessToast(page, DELIVERY_NOTE_LINE_PRICE_EDITED_MESSAGE);
       expect((await getDeliveryNoteLine({ id: returnDeliveryNoteLine.id }))?.unitPrice).toBe("-0.5");
       await expect(row.getByTestId("total")).toHaveText(formatCents(8500));
       await expect(dialogCreateEditDeliveryNote.getByTestId("span-delivery-note-lines-total")).toContainText(
@@ -695,9 +700,9 @@ for (const client of clientsWithPendingLines) {
         }),
       );
       expect(toastTypes).toEqual(expect.arrayContaining([ToastType.Error, ToastType.Success]));
-      const message = PENDING_QUANTITY_EXCEEDED_MESSAGE(sellOrderLine.id);
+      const message = SELL_ORDER_LINE_ALREADY_DELIVERED_MESSAGE(sellOrderLine.id);
       await expectSingleToast(pages[toastTypes.indexOf(ToastType.Error)], message);
-      await expectSingleToast(pages[toastTypes.indexOf(ToastType.Success)]);
+      await expectSingleSuccessToast(pages[toastTypes.indexOf(ToastType.Success)], DELIVERY_NOTE_CREATED_MESSAGE);
       expectRejectedMutation({ code: "BAD_REQUEST", message, procedurePath: "deliveryNote.createWithLines" });
     });
 
@@ -986,7 +991,7 @@ for (const client of clientsWithPendingLines) {
       await assertComboboxValue(comboboxDeliveryNote, String(deliveryNoteId));
 
       await buttonSubmit.click();
-      await expectSingleToast(page);
+      await expectSingleSuccessToast(page, LINES_ADDED_TO_DELIVERY_NOTE_MESSAGE);
 
       await expect(dialog).not.toBeVisible();
       await expect(getDivDisabledMessage(tableStagedSellOrderLines)).toBeVisible();

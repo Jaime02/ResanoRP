@@ -2,9 +2,10 @@ import type { ToastManagerAddOptions } from "@base-ui/react/toast";
 import type { Transaction } from "@tanstack/react-db";
 import { createContext, use } from "react";
 
-import type { TToast, ToastFunction } from "@/components/ui/toast";
+import type { ToastFunction } from "@/components/ui/toast";
 import { AppContextStorage, UserMode } from "@/contexts/app-context-storage";
 import type { BaseMachine } from "@/types/machine";
+import type { TToast } from "@/types/toast";
 
 export { AppContextStorage, UserMode };
 

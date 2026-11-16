@@ -8,13 +8,20 @@ import { getInvoiceById, getInvoices } from "@/db/functions/invoice";
 import { startOfAppDay } from "@/lib/dates";
 import { formatCents, getDeliveryNoteLineUnitPrice, getLinesTotalInCents, getTotalWithVatInCents } from "@/lib/prices";
 import { CLIENT_LABEL, FROM_LABEL, TO_LABEL } from "@/messages/common";
-import { INVOICE_CREATE_TITLE } from "@/messages/invoice";
+import {
+  INVOICES_ACCOUNTED_MESSAGE,
+  INVOICE_UNACCOUNTED_MESSAGE,
+  INVOICE_CREATED_MESSAGE,
+  INVOICE_CREATE_TITLE,
+  INVOICE_DELETED_DESCRIPTION,
+  INVOICE_DELETED_MESSAGE,
+} from "@/messages/invoice";
 import { openAndConfirmAlertDialog } from "@/tests/utils/components/alert-dialog";
 import { selectComboboxOption } from "@/tests/utils/components/combobox";
 import { selectDateInputDate } from "@/tests/utils/components/date-input";
 import { InputElementType, getFormInputByLabel } from "@/tests/utils/components/form";
 import { assertTableRowCount, getTableRowByTestId } from "@/tests/utils/components/table";
-import { expectSingleToast } from "@/tests/utils/components/toast";
+import { expectSingleSuccessOrErrorToast, expectSingleSuccessToast } from "@/tests/utils/components/toast";
 import type { BaseClient } from "@/types/client";
 import type { BaseDeliveryNote } from "@/types/delivery-note";
 
@@ -145,7 +152,7 @@ export async function workflowCreateInvoice(
   await dialogCreateInvoice.getByTestId("button-submit").click();
 
   await expect(dialogCreateInvoice).not.toBeVisible();
-  await expectSingleToast(page);
+  await expectSingleSuccessToast(page, INVOICE_CREATED_MESSAGE);
 
   // A single Factura is created, holding only the Albaranes of the picked Cliente
   const newInvoices = (await getInvoices()).filter((invoice) => !previousInvoiceIds.includes(invoice.id));
@@ -169,7 +176,7 @@ export async function workflowDeleteInvoice(page: Page, invoiceId: number) {
   await openAndConfirmAlertDialog(page, rowInvoice.getByTestId("button-delete"), "dialog-delete-model-content");
 
   await expect(rowInvoice).not.toBeVisible();
-  await expectSingleToast(page);
+  await expectSingleSuccessToast(page, INVOICE_DELETED_MESSAGE, INVOICE_DELETED_DESCRIPTION(invoiceId));
 
   expect(await getInvoiceById(invoiceId)).toBeUndefined();
 
@@ -188,7 +195,7 @@ export async function workflowUnaccountInvoice(page: Page, invoiceId: number, ex
     getTableRowByTestId(page.getByTestId("table-invoice"), invoiceId).getByTestId("button-unaccount-invoice"),
     "dialog-unaccount-invoice-content",
   );
-  await expectSingleToast(page, expectedErrorMessage);
+  await expectSingleSuccessOrErrorToast(page, INVOICE_UNACCOUNTED_MESSAGE, expectedErrorMessage);
 }
 
 export async function confirmAccountInvoices(page: Page) {
@@ -203,7 +210,7 @@ export async function workflowAccountInvoices(page: Page) {
   const downloadPromise = page.waitForEvent("download");
   await confirmAccountInvoices(page);
   const download: Download = await downloadPromise;
-  await expectSingleToast(page);
+  await expectSingleSuccessToast(page, INVOICES_ACCOUNTED_MESSAGE);
   const content = await fs.readFile(await download.path());
   return { content, fileName: download.suggestedFilename() };
 }

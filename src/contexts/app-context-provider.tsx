@@ -8,7 +8,6 @@ import { useCallback, useEffect, useRef, useSyncExternalStore } from "react";
 import type { ReactNode } from "react";
 
 import { awaitSynced } from "@/collections/base";
-import type { TToast } from "@/components/ui/toast";
 import { AppContext, AppContextStorage, UserMode } from "@/contexts/app-context";
 import type { ShowToastOnTRPCMutationProps, TBaseMutationResult } from "@/contexts/app-context";
 import { logoutAdminFn } from "@/lib/admin-session-fns";
@@ -16,8 +15,9 @@ import log from "@/logging/log";
 import { LogMessages, LoggerLevels } from "@/logging/types";
 import { ERROR_TITLE, UNKNOWN_ERROR_MESSAGE } from "@/messages/common";
 import { useQueryMachineById } from "@/queries/machine";
-import { ToastType } from "@/types";
 import type { BaseMachine } from "@/types/machine";
+import type { TToast } from "@/types/toast";
+import { ToastType } from "@/types/toast";
 
 const DEFAULT_TOAST_TIMEOUT = 5000; // 5 seconds
 

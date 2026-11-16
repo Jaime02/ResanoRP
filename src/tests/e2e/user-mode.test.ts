@@ -55,6 +55,7 @@ import {
 } from "@/tests/utils/mock-data-utils";
 import { holdRequestWhile } from "@/tests/utils/trpc";
 import { workflowUnaccountInvoice } from "@/tests/workflows/invoice";
+import { ToastType } from "@/types/toast";
 
 const activeMachines = mockMachines.filter((machine) => machine.deletedAt === null);
 
@@ -405,7 +406,7 @@ test(
       await dialogLogin.getByRole("button", { name: UserMode.Admin }).click();
       await inputAdminPassword.fill(`${process.env.ADMIN_PASSWORD}-incorrecta`);
       await dialogInputAdminPassword.getByTestId("button-submit").click();
-      await expectSingleToast(page, WRONG_PASSWORD_MESSAGE);
+      await expectSingleToast(page, { title: WRONG_PASSWORD_MESSAGE, type: ToastType.Error });
       expectErrorsLog(clientLogEvent(LoggerLevels.emerg, LogMessages.wrongUserModePassword, {}));
       await expect(dialogInputAdminPassword).toBeVisible();
       expect(await getAdminSessionCookie()).toBeUndefined();

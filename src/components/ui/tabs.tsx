@@ -48,7 +48,7 @@ function TabsTrigger({ className, ...props }: React.ComponentProps<typeof BaseTa
 }
 
 function TabsContent({ className, ...props }: React.ComponentProps<typeof BaseTabs.Panel>) {
-  return <BaseTabs.Panel className={cn("mx-auto flex flex-col gap-2 outline-none", className)} {...props} />;
+  return <BaseTabs.Panel className={cn("mx-auto flex max-w-full flex-col gap-2 outline-none", className)} {...props} />;
 }
 
 function TabsIndicator({ className, ...props }: React.ComponentProps<typeof BaseTabs.Indicator>) {

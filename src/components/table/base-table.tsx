@@ -380,7 +380,7 @@ export default function BaseTable<TRow extends TBaseModel, TState extends TTable
         testId={testId}
         data-row-count={isLoading || rows === undefined || rowCount === null ? undefined : table.getRowCount()}
         disabledMessage={disabledMessage}
-        className="self-start"
+        className="self-center"
         tableClassName={cn("w-max max-w-full", tableClassName)}
         style={getColumnSizeVars()}
       >

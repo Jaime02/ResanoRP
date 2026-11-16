@@ -12,6 +12,7 @@ import { ModelActions } from "@/components/ui/model-actions";
 import { useAppContext } from "@/contexts/app-context";
 import { serializeBlueprint } from "@/lib/serializers";
 import {
+  BLUEPRINT_DELETED_DESCRIPTION,
   BLUEPRINT_DELETED_MESSAGE,
   BLUEPRINTS_EMPTY_MESSAGE,
   DELETE_BLUEPRINT_MESSAGE,
@@ -63,7 +64,7 @@ export default function LayoutBlueprintViewer({
                               }),
                             onSuccess: {
                               title: BLUEPRINT_DELETED_MESSAGE,
-                              description: `El plano ${blueprint.fileName} ha sido eliminado correctamente`,
+                              description: BLUEPRINT_DELETED_DESCRIPTION(blueprint.fileName),
                             },
                           }),
                       },

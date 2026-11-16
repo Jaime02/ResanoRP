@@ -6,10 +6,15 @@ import { getMachineProductionOrderQueue } from "@/db/functions/machine-productio
 import { getProductionOrderById } from "@/db/functions/production-order";
 import { NOTES_LABEL } from "@/messages/common";
 import { PART_FEATURE_CHECKED_DELETE_ERROR_MESSAGE } from "@/messages/part";
+import {
+  PRODUCTION_ORDER_ASSIGNED_MESSAGE,
+  PRODUCTION_ORDER_EDITED_MESSAGE,
+  QUALITY_CHECK_SAVED_MESSAGE,
+} from "@/messages/production-order";
 import { ProductionOrderStatus } from "@/schemas/production-order";
 import { InputElementType, getFormInputByLabel } from "@/tests/utils/components/form";
 import { getTableRowByTestId } from "@/tests/utils/components/table";
-import { expectSingleToast } from "@/tests/utils/components/toast";
+import { expectSingleSuccessToast } from "@/tests/utils/components/toast";
 import { expectRejectedMutation } from "@/tests/utils/errors-log";
 import { test } from "@/tests/utils/fixtures";
 import { workflowCreatePartFeature, workflowDeletePartFeature } from "@/tests/workflows/part";
@@ -65,7 +70,7 @@ test("a machine that loses its active production order to an administrator picks
   )
     .getByTestId("button-start-production-order")
     .click();
-  await expectSingleToast(page);
+  await expectSingleSuccessToast(page, PRODUCTION_ORDER_ASSIGNED_MESSAGE);
   await expect(table.getByTestId("tr-no-data")).toBeVisible();
   await expect(buttonCreate).toBeDisabled();
   expect((await getMachineById(qualityControlMachine.id))?.activeProductionOrderId).toBe(
@@ -95,7 +100,7 @@ test("what a machine has filled in survives an administrator editing its active 
   const inputNotes = getFormInputByLabel(adminPage, NOTES_LABEL, InputElementType.Textarea);
   await inputNotes.fill(newNotes);
   await adminPage.getByTestId("button-submit").click();
-  await expectSingleToast(adminPage);
+  await expectSingleSuccessToast(adminPage, PRODUCTION_ORDER_EDITED_MESSAGE);
   expect((await getProductionOrderById(productionOrderId))?.notes).toBe(newNotes);
 
   await expect(
@@ -104,7 +109,7 @@ test("what a machine has filled in survives an administrator editing its active 
   await expect(inputQuantity).toHaveValue("7");
 
   await buttonConfirm.click();
-  await expectSingleToast(page);
+  await expectSingleSuccessToast(page, QUALITY_CHECK_SAVED_MESSAGE);
   const { checks } = await getDbQualityControl(productionOrderId);
   expect(checks.slice(-features.length).map(({ ok, partFeatureId }) => ({ ok, partFeatureId }))).toEqual(
     features.map((feature) => ({ ok: true, partFeatureId: feature.id })),
@@ -184,7 +189,7 @@ test("a machine keeps its table and its open dialog when another machine stops t
   // The open dialog hides the table from the accessibility tree, so it is checked once the check is saved
   await expect(inputQuantity).toHaveValue("4");
   await buttonConfirm.click();
-  await expectSingleToast(page);
+  await expectSingleSuccessToast(page, QUALITY_CHECK_SAVED_MESSAGE);
   await assertQualityControlTable(page, await getDbQualityControl(productionOrderId), { editable: true });
 });
 

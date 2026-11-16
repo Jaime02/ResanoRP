@@ -4,6 +4,7 @@ import type { Page } from "@playwright/test";
 import { getPartFeaturesOfPart } from "@/db/functions/part";
 import { getProductionOrderById } from "@/db/functions/production-order";
 import { getQualityChecksOfProductionOrder } from "@/db/functions/quality-check";
+import { QUALITY_CHECK_SAVED_MESSAGE } from "@/messages/production-order";
 import {
   mockMachineProductionOrderQueues,
   mockMachines,
@@ -12,7 +13,7 @@ import {
   mockQualityChecks,
 } from "@/tests/mock-data";
 import { getTableRowByTestId, getTableRows } from "@/tests/utils/components/table";
-import { expectSingleToast } from "@/tests/utils/components/toast";
+import { expectSingleSuccessOrErrorToast, expectSingleSuccessToast } from "@/tests/utils/components/toast";
 import type { BasePartFeature } from "@/types/part-feature";
 import type { BaseQualityCheck } from "@/types/quality-check";
 
@@ -135,7 +136,7 @@ export async function workflowSetQualityControl(page: Page, productionOrderId: n
   await checkbox.click();
   await expect(checkbox).toBeChecked({ checked: qualityControl });
   await buttonSubmit.click();
-  await expectSingleToast(page);
+  await expectSingleSuccessToast(page, QUALITY_CHECK_SAVED_MESSAGE);
   await expect(checkbox).toBeChecked({ checked: qualityControl });
   await expect(getQualityControlLocators(page).table).toHaveCount(qualityControl ? 1 : 0);
 }
@@ -175,7 +176,7 @@ export async function workflowCreateQualityCheck(
   const { buttonConfirm, dialogCreate } = getQualityControlLocators(page);
   await workflowFillQualityCheck(page, producedQuantity, input);
   await buttonConfirm.click();
-  await expectSingleToast(page, expectedErrorMessage);
+  await expectSingleSuccessOrErrorToast(page, QUALITY_CHECK_SAVED_MESSAGE, expectedErrorMessage);
   if (expectedErrorMessage === undefined) {
     await expect(dialogCreate).toHaveCount(0);
   }

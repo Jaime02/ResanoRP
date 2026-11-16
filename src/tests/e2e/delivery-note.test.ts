@@ -25,7 +25,14 @@ import {
   PART_LABEL,
   QUANTITY_LABEL,
 } from "@/messages/common";
-import { DELIVERY_NOTE_NUMBER_LABEL } from "@/messages/delivery-note";
+import {
+  DELIVERY_NOTE_NUMBER_LABEL,
+  DELIVERY_NOTE_LINE_CREATED_MESSAGE,
+  DELIVERY_NOTE_LINE_PRICE_EDITED_MESSAGE,
+  DELIVERY_NOTE_LINE_EDITED_MESSAGE,
+  DELIVERY_NOTE_LINE_VALIDATION_ERROR_MESSAGE,
+  DELIVERY_NOTE_CREATED_MESSAGE,
+} from "@/messages/delivery-note";
 import { CLIENT_REFERENCE_DESCRIPTION_LABEL } from "@/messages/part";
 import type { TTableDeliveryNoteState } from "@/schemas/delivery-note";
 import { updateDeliveryNoteLinePriceSchema, updateDeliveryNoteLineSchema } from "@/schemas/delivery-note-line";
@@ -67,7 +74,7 @@ import {
   getTableRows,
   getTableSubrowById,
 } from "@/tests/utils/components/table";
-import { expectSingleToast } from "@/tests/utils/components/toast";
+import { expectSingleToast, expectSingleSuccessToast } from "@/tests/utils/components/toast";
 import { clientErrorEvent, expectRejectedMutation, schemaErrorMessage } from "@/tests/utils/errors-log";
 import { TestAnnotations, expectErrorsLog, setUserMode, test } from "@/tests/utils/fixtures";
 import {
@@ -88,7 +95,7 @@ import {
   workflowOpenEditDeliveryNote,
 } from "@/tests/workflows/delivery-note";
 import { workflowPrintTag } from "@/tests/workflows/tag";
-import { ToastType } from "@/types";
+import { ToastType } from "@/types/toast";
 
 let tableDeliveryNotes: Locator;
 let dialogCreateEditDeliveryNote: Locator;
@@ -487,7 +494,7 @@ test("manage the delivery notes", { annotation: TestAnnotations.ResetTags }, asy
       ).pressSequentially("3");
       await dialogCreateDeliveryNoteLine.getByTestId("button-submit").click();
       await expect(dialogCreateDeliveryNoteLine).not.toBeVisible();
-      await expectSingleToast(page);
+      await expectSingleSuccessToast(page, DELIVERY_NOTE_LINE_CREATED_MESSAGE);
 
       const userDeliveryNoteLine = (await getDeliveryNoteLinesByDeliveryNoteId(deliveryNote.id)).find(
         (line) => !mockDeliveryNoteLines.some((mockLine) => mockLine.id === line.id),
@@ -599,7 +606,7 @@ test("manage the delivery notes", { annotation: TestAnnotations.ResetTags }, asy
         await inputLinkedUnitPrice.clear();
         await inputLinkedUnitPrice.pressSequentially(linkedUnitPrice);
         await inputLinkedUnitPrice.blur();
-        await expectSingleToast(page);
+        await expectSingleSuccessToast(page, DELIVERY_NOTE_LINE_PRICE_EDITED_MESSAGE);
         expect(await getDeliveryNoteLine({ id: linkedDeliveryNoteLine.id })).toMatchObject({
           sellOrderLineId: linkedSellOrderLine.id,
           unitPrice: linkedUnitPrice,
@@ -621,7 +628,7 @@ test("manage the delivery notes", { annotation: TestAnnotations.ResetTags }, asy
       await inputUnitPrice.pressSequentially(newUnitPrice);
       await inputUnitPrice.blur();
 
-      await expectSingleToast(page);
+      await expectSingleSuccessToast(page, DELIVERY_NOTE_LINE_PRICE_EDITED_MESSAGE);
       expect(Number((await getDeliveryNoteLine({ id: userDeliveryNoteLine.id }))?.unitPrice)).toBe(
         Number(newUnitPrice),
       );
@@ -629,13 +636,14 @@ test("manage the delivery notes", { annotation: TestAnnotations.ResetTags }, asy
       // Once set, a price can be changed but not removed
       await inputUnitPrice.clear();
       await inputUnitPrice.blur();
-      await expectSingleToast(page, { type: ToastType.Error });
+      const priceRemovalErrorMessage = schemaErrorMessage(updateDeliveryNoteLinePriceSchema, {
+        id: userDeliveryNoteLine.id,
+        unitPrice: null,
+      });
+      await expectSingleToast(page, priceRemovalErrorMessage);
       expectRejectedMutation({
         code: "BAD_REQUEST",
-        message: schemaErrorMessage(updateDeliveryNoteLinePriceSchema, {
-          id: userDeliveryNoteLine.id,
-          unitPrice: null,
-        }),
+        message: priceRemovalErrorMessage,
         procedurePath: "deliveryNoteLine.updatePrice",
         serverError: null,
       });
@@ -669,7 +677,7 @@ test("manage the delivery notes", { annotation: TestAnnotations.ResetTags }, asy
       await inputUnitPrice.pressSequentially(String(unitPrice));
       await inputUnitPrice.blur();
 
-      await expectSingleToast(page);
+      await expectSingleSuccessToast(page, DELIVERY_NOTE_LINE_PRICE_EDITED_MESSAGE);
       expect(Number((await getDeliveryNoteLine({ id: unpricedMockLine.id }))?.unitPrice)).toBe(unitPrice);
       expect(await getInvoiceById(invoicedDeliveryNote.invoiceId!)).toMatchObject({ accounted: false, sent: false });
     }
@@ -728,7 +736,7 @@ test("manage the delivery notes", { annotation: TestAnnotations.ResetTags }, asy
           Number(newPartQuantity),
         );
 
-        await expectSingleToast(page);
+        await expectSingleSuccessToast(page, DELIVERY_NOTE_LINE_EDITED_MESSAGE);
 
         let updatedDeliveryNoteLine = await getDeliveryNoteLine({ id: deliveryNoteLine.id });
         expect(updatedDeliveryNoteLine).toBeDefined();
@@ -738,7 +746,7 @@ test("manage the delivery notes", { annotation: TestAnnotations.ResetTags }, asy
         await inputQuantity.clear();
         await inputQuantity.blur();
 
-        await expectSingleToast(page, { type: ToastType.Error });
+        await expectSingleToast(page, { title: DELIVERY_NOTE_LINE_VALIDATION_ERROR_MESSAGE, type: ToastType.Error });
         expectErrorsLog(
           clientErrorEvent(
             schemaErrorMessage(updateDeliveryNoteLineSchema, {
@@ -862,7 +870,7 @@ test("manage the delivery notes", { annotation: TestAnnotations.ResetTags }, asy
         await dialogCreateDeliveryNoteLine.getByTestId("button-submit").click();
 
         await expect(dialogCreateDeliveryNoteLine).not.toBeVisible();
-        await expectSingleToast(page);
+        await expectSingleSuccessToast(page, DELIVERY_NOTE_LINE_CREATED_MESSAGE);
         const newDbLines = (await getDeliveryNoteLinesByDeliveryNoteId(deliveryNote.id)).filter(
           (line) => !existingDbLineIds.includes(line.id),
         );
@@ -1009,7 +1017,7 @@ test("manage the delivery notes", { annotation: TestAnnotations.ResetTags }, asy
       await inputUnitPrice.pressSequentially(customLine.unitPrice);
       await buttonSubmit.click();
       await expect(dialogCreateDeliveryNoteLine).not.toBeVisible();
-      await expectSingleToast(page);
+      await expectSingleSuccessToast(page, DELIVERY_NOTE_LINE_CREATED_MESSAGE);
 
       const newDbLines = (await getDeliveryNoteLinesByDeliveryNoteId(deliveryNote.id)).filter(
         (line) => !existingDbLineIds.includes(line.id),
@@ -1122,7 +1130,7 @@ test("manage the delivery notes", { annotation: TestAnnotations.ResetTags }, asy
       await expect(getDivDisabledMessage(cardTableDeliveryNoteLines)).not.toBeVisible();
       expect(await countGetDeliveryNoteByIdQueryErrors()).toBe(0);
 
-      await expectSingleToast(page);
+      await expectSingleSuccessToast(page, DELIVERY_NOTE_CREATED_MESSAGE);
 
       const dbDeliveryNote = await getDeliveryNote({ id: newDeliveryNoteId });
       expect(dbDeliveryNote).toBeDefined();

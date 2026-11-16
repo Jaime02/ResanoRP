@@ -6,6 +6,11 @@ import { getDeliveryNoteLinesByDeliveryNoteId } from "@/db/functions/delivery-no
 import { getSellOrderLineById } from "@/db/functions/sell-order-line";
 import { clampPendingQuantity } from "@/lib/sell-order-line";
 import { ADD_PART_LABEL, CLIENT_LABEL, DESCRIPTION_LABEL, PRICE_LABEL, QUANTITY_LABEL } from "@/messages/common";
+import {
+  DELIVERY_NOTE_DELETED_DESCRIPTION,
+  DELIVERY_NOTE_DELETED_MESSAGE,
+  LINES_ADDED_TO_DELIVERY_NOTE_MESSAGE,
+} from "@/messages/delivery-note";
 import { getTestId } from "@/tests/utils/components";
 import { openAndConfirmAlertDialog } from "@/tests/utils/components/alert-dialog";
 import {
@@ -16,7 +21,7 @@ import {
 } from "@/tests/utils/components/combobox";
 import { InputElementType, assertFormLoaded, getFormInputByLabel } from "@/tests/utils/components/form";
 import { getEditableCellById, getTableRowByTestId, getTableRows } from "@/tests/utils/components/table";
-import { expectSingleToast } from "@/tests/utils/components/toast";
+import { expectSingleSuccessOrErrorToast, expectSingleSuccessToast } from "@/tests/utils/components/toast";
 import type { BaseClient } from "@/types/client";
 
 export async function workflowDeleteDeliveryNote(page: Page, deliveryNoteId: number) {
@@ -30,7 +35,11 @@ export async function workflowDeleteDeliveryNote(page: Page, deliveryNoteId: num
   await openAndConfirmAlertDialog(page, rowDeliveryNote.getByTestId("button-delete"), "dialog-delete-model-content");
 
   await expect(rowDeliveryNote).not.toBeVisible();
-  await expectSingleToast(page);
+  await expectSingleSuccessToast(
+    page,
+    DELIVERY_NOTE_DELETED_MESSAGE,
+    DELIVERY_NOTE_DELETED_DESCRIPTION(deliveryNoteId),
+  );
   const dbDeletedDeliveryNote = await getDeliveryNote({ id: deliveryNoteId });
   expect(dbDeletedDeliveryNote).toBeUndefined();
 
@@ -144,5 +153,5 @@ export async function workflowAppendStagedLinesToDeliveryNote(
   await clickInComboboxOption(page, `Albarán ${deliveryNoteId} `);
   await assertComboboxValue(comboboxDeliveryNote, String(deliveryNoteId));
   await dialog.getByTestId("button-submit-add-lines-to-existing-delivery-note").click();
-  await expectSingleToast(page, expectedErrorMessage);
+  await expectSingleSuccessOrErrorToast(page, LINES_ADDED_TO_DELIVERY_NOTE_MESSAGE, expectedErrorMessage);
 }

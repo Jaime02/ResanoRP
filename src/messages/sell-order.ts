@@ -79,3 +79,4 @@ export const SHOW_PREPARED_LINES_LABEL = "Mostrar líneas preparadas";
 export const WITH_COLUMNS_LABEL = "Con columnas";
 export const WITHOUT_COLUMNS_LABEL = "Sin columnas";
 export const SELL_ORDER_REFERENCE_TAKEN_MESSAGE = "El Cliente ya tiene un Pedido de venta con esa referencia";
+export const SELL_ORDER_LINE_PENDING_QUANTITY_RANGE_MESSAGE = "La cantidad pendiente debe estar entre 0 y la cantidad";

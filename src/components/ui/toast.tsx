@@ -5,14 +5,7 @@ import { XIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { CLOSE_LABEL } from "@/messages/common";
-import type { ToastType } from "@/types";
-
-export interface TToast {
-  id: string;
-  type: ToastType;
-  title: React.ReactNode;
-  description?: React.ReactNode;
-}
+import type { TToast } from "@/types/toast";
 
 export type ToastFunction = (options: ToastManagerAddOptions<TToast>) => void;
 
@@ -40,7 +33,7 @@ export function ToastList() {
           >
             <Toast.Content className="flex flex-col gap-3 overflow-hidden text-white transition-opacity duration-250 data-behind:pointer-events-none data-behind:opacity-0 data-expanded:pointer-events-auto data-expanded:opacity-100">
               <div className="flex items-center gap-2">
-                <Toast.Title className="grow font-bold text-nowrap" />
+                <Toast.Title data-testid="toast-title" className="grow font-bold text-nowrap" />
                 <Toast.Close
                   render={(props) => (
                     <Button
