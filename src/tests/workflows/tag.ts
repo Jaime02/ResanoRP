@@ -50,12 +50,14 @@ export async function expectTagPrintedByBrowser(page: Page, buttonPrint: Locator
   const tagPdf = new Promise<Buffer>((resolve) => (resolveTagPdf = resolve));
   await page.route(routeUrl, async (route) => {
     const response = await route.fetch();
-    resolveTagPdf(await response.body());
     await route.fulfill({ response });
+    resolveTagPdf(await response.body());
   });
   await expectPrintedByBrowser(page, buttonPrint);
-  await page.unroute(routeUrl);
+  // Unrouting while the handler is still fetching lets the browser request the tag again, which the server has
+  // already deleted
   const tagsTexts = await readTagsTexts(await tagPdf);
+  await page.unroute(routeUrl);
   expect(fs.existsSync(tagFilePath)).toBe(false);
   return tagsTexts;
 }
