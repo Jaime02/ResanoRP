@@ -1,4 +1,4 @@
-import { and, eq, inArray, isNull, useLiveQuery, materialize, not } from "@tanstack/react-db";
+import { and, eq, isNull, useLiveQuery, materialize, not } from "@tanstack/react-db";
 import { useMemo } from "react";
 
 import blueprintCollection from "@/collections/blueprint";
@@ -7,48 +7,6 @@ import partReferenceCollection from "@/collections/part-reference";
 import sellOrderCollection from "@/collections/sell-order";
 import sellOrderLineCollection from "@/collections/sell-order-line";
 import { sortPendingSellOrderLines } from "@/lib/sell-order-line";
-import type { TStagedSellOrderLine } from "@/schemas/delivery-note";
-
-export function useQueryStagedSellOrderLines(stagedSellOrderLines?: Array<TStagedSellOrderLine>) {
-  const { data, ...rest } = useLiveQuery({
-    query: (q) =>
-      q
-        .from({ sellOrderLine: sellOrderLineCollection })
-        .where(({ sellOrderLine }) => inArray(sellOrderLine.id, stagedSellOrderLines?.map((line) => line.id) ?? []))
-        .select(({ sellOrderLine }) => ({
-          ...sellOrderLine,
-          partReference: materialize(
-            q
-              .from({ partReference: partReferenceCollection })
-              .where(({ partReference }) => eq(partReference.id, sellOrderLine.partReferenceId))
-              .select(({ partReference }) => ({
-                ...partReference,
-                part: materialize(
-                  q
-                    .from({ part: partCollection })
-                    .where(({ part }) => eq(part.id, partReference.partId))
-                    .findOne(),
-                ),
-              }))
-              .findOne(),
-          ),
-        })),
-  });
-
-  const stagedData = useMemo(
-    () =>
-      data.map((sellOrderLine) => ({
-        ...sellOrderLine,
-        quantity:
-          stagedSellOrderLines?.find((stagedSellOrderLine) => stagedSellOrderLine.id === sellOrderLine.id)?.quantity ??
-          sellOrderLine.quantity,
-      })),
-    [data, stagedSellOrderLines],
-  );
-
-  return { ...rest, data: stagedData };
-}
-export type TStagedSellOrderLineTableRow = NonNullable<ReturnType<typeof useQueryStagedSellOrderLines>["data"]>[number];
 
 export function useQueryPendingSellOrderLines({
   clientId,

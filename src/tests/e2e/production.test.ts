@@ -1,29 +1,39 @@
-import path from "node:path";
-
 import { expect } from "@playwright/test";
 import type { Locator } from "@playwright/test";
 
 import { getMachineById } from "@/db/functions/machine";
 import { getMachineProductionOrderQueue } from "@/db/functions/machine-production-order-queue";
 import { getProductionOrderById, getProductionOrderProducedQuantity } from "@/db/functions/production-order";
-import { CLIENT_LABEL, NOTES_LABEL } from "@/messages/common";
+import { getSellOrderById } from "@/db/functions/sell-order";
+import { getSellOrderLineById } from "@/db/functions/sell-order-line";
+import { dbTableProductionOrder } from "@/db/schema";
+import { formatDate } from "@/lib/formatters";
+import { CLIENT_LABEL, NOTES_LABEL, QUANTITY_LABEL } from "@/messages/common";
 import {
   PRODUCTION_ORDER_EDITED_MESSAGE,
   PRODUCTION_ORDER_PRIORITIZED_MESSAGE,
   PRODUCTION_ORDER_STOPPED_MESSAGE,
 } from "@/messages/production-order";
+import { DELIVERY_LABEL, SELL_ORDER_LABEL } from "@/messages/sell-order";
 import { ProductionOrderStatus } from "@/schemas/production-order";
-import { mockMachineProductionOrderQueues, mockMachines, mockProductionOrders } from "@/tests/mock-data";
+import {
+  MOCK_INITIAL_DATE,
+  mockMachineProductionOrderQueues,
+  mockMachines,
+  mockPartReferences,
+  mockParts,
+  mockProductionOrders,
+} from "@/tests/mock-data";
 import { getTestId } from "@/tests/utils/components";
 import { InputElementType, getFormInputByLabel } from "@/tests/utils/components/form";
 import { getTableRowByTestId, getTableRowByPosition, getTableRows } from "@/tests/utils/components/table";
 import { expectSingleSuccessToast } from "@/tests/utils/components/toast";
 import { TestAnnotations, test } from "@/tests/utils/fixtures";
 import {
+  getMockClientById,
   getMockProducedProductionOrderStatus,
   getMockUnstartedProductionOrdersWithoutQuantity,
 } from "@/tests/utils/mock-data-utils";
-import { expectPrintedByBrowser } from "@/tests/workflows/printer";
 import {
   assertProductionOrderStopped,
   getActiveProductionOrder,
@@ -33,11 +43,12 @@ import {
   workflowFillProducedQuantity,
   workflowOpenProduction,
   workflowOpenStopDialog,
+  workflowPrintStopProductionOrderTag,
   workflowRunProductionOrderOnMachines,
   workflowStartProductionOrderFromQueue,
   workflowStopActiveProductionOrder,
 } from "@/tests/workflows/production";
-import { assertTagFileGenerated } from "@/tests/workflows/tag";
+import { expectTagField, getTagSellOrderText } from "@/tests/workflows/tag";
 import type { BaseMachine } from "@/types/machine";
 
 const getMockQueue = (machine: BaseMachine) =>
@@ -217,12 +228,17 @@ test(
         const producedQuantity = (dbProductionOrder.quantity ?? 0) - producedQuantityBefore;
         await workflowFillProducedQuantity(page, producedQuantity);
 
-        const tagFilePath = path.join(process.env.TAGS_ROOT_PATH!, `production-order-${dbProductionOrder.id}.pdf`);
-        const printTagButton = dialogContentStopProductionOrder.getByTestId("button-print-tag-stop-production-order");
-        await expect(printTagButton).toBeEnabled();
-        // Without Impresoras for tags, the browser prints it
-        await expectPrintedByBrowser(page, printTagButton);
-        assertTagFileGenerated(tagFilePath);
+        // The tag of an Orden de producción of a Pedido names it and its Cliente
+        expect(dbProductionOrder.sellOrderLineId, "Wrong test set up: the order should be of a Pedido").not.toBeNull();
+        const sellOrderLine = (await getSellOrderLineById(dbProductionOrder.sellOrderLineId!))!;
+        const sellOrder = (await getSellOrderById(sellOrderLine.sellOrderId))!;
+        const [tag, ...otherTags] = await workflowPrintStopProductionOrderTag(page, dbProductionOrder.id);
+        expect(otherTags).toEqual([]);
+        expectTagField(tag, CLIENT_LABEL, await getProductionOrderClientName(dbProductionOrder));
+        expectTagField(tag, DELIVERY_LABEL, formatDate(sellOrderLine.requestedDeliveryDate));
+        expect(tag).toContain(
+          getTagSellOrderText(sellOrder.clientReference ?? String(sellOrder.id), producedQuantity, true),
+        );
 
         const confirmStopButton = dialogContentStopProductionOrder.getByTestId("button-confirm-stop-production-order");
         await expect(confirmStopButton).toBeVisible();
@@ -249,6 +265,64 @@ test(
           expectedStatus: getMockProducedProductionOrderStatus(dbProductionOrder.id),
           machine: userMachine,
           producedQuantity: ((dbProductionOrder.quantity ?? 0) - producedQuantityBefore) * 2,
+        });
+      });
+    }
+  },
+);
+
+test(
+  "the tag of a production order without a sell order names the client of the only reference of its part",
+  { annotation: TestAnnotations.ResetTags },
+  async ({ db, page }) => {
+    const machine = idleMachines.find((idleMachine) => getMockQueue(idleMachine).length === 0)!;
+    const getPartReferences = (partId: number) =>
+      mockPartReferences.filter((partReference) => partReference.partId === partId && partReference.deletedAt === null);
+    const activeParts = mockParts.filter((part) => part.deletedAt === null);
+    const partWithClientReference = activeParts.find((part) => {
+      const partReferences = getPartReferences(part.id);
+      return partReferences.length === 1 && partReferences[0].clientId !== null;
+    })!;
+    const partWithReferences = activeParts.find((part) => getPartReferences(part.id).length > 1)!;
+    expect(
+      [machine, partWithClientReference, partWithReferences],
+      "Wrong test set up: an idle Máquina, an Artículo with a single Referencia of a Cliente and an Artículo with " +
+        "several Referencias are needed",
+    ).not.toContain(undefined);
+    const producedQuantity = 4;
+
+    for (const { part, clientName } of [
+      {
+        clientName: getMockClientById(getPartReferences(partWithClientReference.id)[0].clientId!)!.name,
+        part: partWithClientReference,
+      },
+      // With several Referencias, the Cliente is not known
+      { clientName: undefined, part: partWithReferences },
+    ]) {
+      await test.step(`the tag of a production order of ${part.description}`, async () => {
+        const [productionOrder] = await db
+          .insert(dbTableProductionOrder)
+          .values({ createdAt: MOCK_INITIAL_DATE, partId: part.id, quantity: producedQuantity * 2 })
+          .returning();
+        await workflowRunProductionOrderOnMachines(page, productionOrder.id, [machine]);
+        await workflowOpenProduction(page, machine);
+        await workflowOpenStopDialog(page);
+        await workflowFillProducedQuantity(page, producedQuantity);
+
+        const [tag, ...otherTags] = await workflowPrintStopProductionOrderTag(page, productionOrder.id);
+        expect(otherTags).toEqual([]);
+        expectTagField(tag, CLIENT_LABEL, clientName);
+        expectTagField(tag, DELIVERY_LABEL, null);
+        expectTagField(tag, QUANTITY_LABEL, producedQuantity);
+        expect(tag).not.toContain(SELL_ORDER_LABEL);
+
+        await dialogContentStopProductionOrder.getByTestId("button-confirm-stop-production-order").click();
+        await assertProductionOrderStopped(page, {
+          expectedStatus: ProductionOrderStatus.Pending,
+          machine,
+          producedQuantity,
+          producedQuantityBefore: 0,
+          productionOrder,
         });
       });
     }

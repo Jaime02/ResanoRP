@@ -16,3 +16,40 @@ export function getPartTagName(source: PartTagSource, id: number) {
 export function getPartTagFileUrl(tagName: string) {
   return `/api/files/part-tag/${tagName}?generatedAt=${Date.now()}`;
 }
+
+export interface TTagSellOrder {
+  reference: string;
+  requestedDeliveryDate: Date | null;
+  quantity: number;
+}
+
+export function getTagSellOrder(
+  sellOrder: { id: number; clientReference: string | null },
+  requestedDeliveryDate: Date | null,
+  quantity: number,
+): TTagSellOrder {
+  return { quantity, reference: sellOrder.clientReference ?? String(sellOrder.id), requestedDeliveryDate };
+}
+
+// The tags take their units from the Pedidos in order, so a box holds the earliest Pedidos first, and the last Pedido
+// takes the units beyond the quantities given
+export function allocateTagSellOrders(partQuantities: Array<number>, sellOrders: Array<TTagSellOrder>) {
+  const remaining = sellOrders.map((sellOrder) => sellOrder.quantity);
+  let index = 0;
+  return partQuantities.map((partQuantity) => {
+    const tagSellOrders: Array<TTagSellOrder> = [];
+    let unallocated = partQuantity;
+    while (unallocated > 0 && index < sellOrders.length) {
+      const isLast = index === sellOrders.length - 1;
+      const taken = isLast ? unallocated : Math.min(unallocated, Math.max(remaining[index], 0));
+      // The lines of the same Pedido share one entry on the tag
+      const entry = tagSellOrders.find((tagSellOrder) => tagSellOrder.reference === sellOrders[index].reference);
+      if (taken > 0 && entry) entry.quantity += taken;
+      else if (taken > 0) tagSellOrders.push({ ...sellOrders[index], quantity: taken });
+      remaining[index] -= taken;
+      unallocated -= taken;
+      if (!isLast && remaining[index] <= 0) index++;
+    }
+    return tagSellOrders;
+  });
+}

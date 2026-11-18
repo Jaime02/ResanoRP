@@ -2,7 +2,7 @@ import { expect, test } from "@playwright/test";
 
 import { clampPendingQuantity, computeSellOrderLineStatus } from "@/lib/sell-order-line";
 import { buildStockLedger } from "@/queries/part-stock";
-import { createDeliveryNoteWithLinesSchema } from "@/schemas/delivery-note";
+import { appendLinesToDeliveryNoteSchema, createDeliveryNoteWithLinesSchema } from "@/schemas/delivery-note";
 import { createDeliveryNoteLineSchema, updateDeliveryNoteLineSchema } from "@/schemas/delivery-note-line";
 import { createSellOrderLineSchema, SellOrderLineStatus, updateSellOrderLineSchema } from "@/schemas/sell-order-line";
 
@@ -39,15 +39,23 @@ test("the returns library", async () => {
       false,
     );
 
-    const deliveryNote = { clientId: 1, deliveryMethodId: null };
-    expect(
-      createDeliveryNoteWithLinesSchema.safeParse({ ...deliveryNote, stagedSellOrderLines: [{ id: 1, quantity: -5 }] })
-        .success,
-    ).toBe(true);
-    expect(
-      createDeliveryNoteWithLinesSchema.safeParse({ ...deliveryNote, stagedSellOrderLines: [{ id: 1, quantity: 0 }] })
-        .success,
-    ).toBe(false);
+    // A staged line left at 0 by lowering the total of its part is not delivered, but something has to be
+    for (const [schema, deliveryNote] of [
+      [createDeliveryNoteWithLinesSchema, { clientId: 1, deliveryMethodId: null }],
+      [appendLinesToDeliveryNoteSchema, { deliveryNoteId: 1 }],
+    ] as const) {
+      const parse = (stagedSellOrderLines: Array<{ id: number; quantity: number }>) =>
+        schema.safeParse({ ...deliveryNote, stagedSellOrderLines });
+      expect(parse([{ id: 1, quantity: -5 }]).success).toBe(true);
+      expect(
+        parse([
+          { id: 1, quantity: 0 },
+          { id: 2, quantity: 5 },
+        ]).data?.stagedSellOrderLines,
+      ).toEqual([{ id: 2, quantity: 5 }]);
+      expect(parse([{ id: 1, quantity: 0 }]).success).toBe(false);
+      expect(parse([]).success).toBe(false);
+    }
   });
 
   await test.step("a line and its price can be negative, like a discount", () => {

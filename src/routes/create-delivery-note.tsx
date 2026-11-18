@@ -45,6 +45,7 @@ import { tableDeliveryNoteStateSchema } from "@/schemas/delivery-note";
 import { TableMode } from "@/types";
 
 const routeSearchSchema = z.object({
+  clientId: optionalIdSchema.catch(undefined),
   editDeliveryNoteId: optionalIdSchema.catch(undefined),
   printTagDeliveryNoteLineId: optionalIdSchema.catch(undefined),
   printTagSellOrderLineId: optionalIdSchema.catch(undefined),
@@ -60,7 +61,7 @@ export const Route = createFileRoute("/create-delivery-note")({
 });
 
 function RouteComponent() {
-  const { editDeliveryNoteId, printTagDeliveryNoteLineId, printTagSellOrderLineId } = Route.useSearch();
+  const { clientId, editDeliveryNoteId, printTagDeliveryNoteLineId, printTagSellOrderLineId } = Route.useSearch();
   const navigate = useNavigate();
 
   const [tableState, setTableState] = useState<TTableState | undefined>({ pagination: { pageSize: 6 } });
@@ -75,14 +76,16 @@ function RouteComponent() {
     pendingSellOrderLines,
     getPendingSellOrdersError,
     stagedSellOrderLines,
+    stagedPartRows,
+    hasEmptyStagedPart,
     stageSellOrderLinesFormMode,
     setStageSellOrderLinesFormMode,
     stageSellOrderLine,
-    unstageSellOrderLine,
-    updateStagedSellOrderLineQuantity,
+    unstageSellOrderLines,
+    updateStagedGroupQuantity,
     isLoading,
     validationSchema,
-  } = useStageSellOrderLinesForm();
+  } = useStageSellOrderLinesForm({ defaultClientId: clientId });
 
   const onAddLinesToExistingDeliveryNoteDialogOpenChange = useCallback(
     (open: boolean) => {
@@ -98,6 +101,15 @@ function RouteComponent() {
     [form, setStageSellOrderLinesFormMode],
   );
   const currentClientId = useSelector(form.store, (state) => state.values.clientId);
+
+  useEffect(() => {
+    if (currentClientId === (clientId ?? null)) return;
+    void navigate({
+      replace: true,
+      search: (prev) => ({ ...prev, clientId: currentClientId ?? undefined }),
+      to: ".",
+    });
+  }, [navigate, clientId, currentClientId]);
 
   const onDialogQueryErrorClose = useCallback(async () => {
     await navigate({ to: "/" });
@@ -125,26 +137,6 @@ function RouteComponent() {
   return (
     <>
       <FormContextProvider form={form as any} formMode={formMode} validationSchema={validationSchema}>
-        <div className="flex flex-row items-center justify-center gap-2">
-          <form.AppField
-            name="clientId"
-            children={(field) => (
-              <field.ClientCombobox
-                id="combobox-client-form-delivery-note"
-                nullable
-                onValueChange={(newValue) => {
-                  if (stagedSellOrderLines && stagedSellOrderLines.length > 0) {
-                    setIsOpenDialogConfirmationCancelDeliveryNote(true);
-                  } else {
-                    field.handleChange(newValue?.id ?? null);
-                    form.setFieldValue("stagedSellOrderLines", undefined);
-                  }
-                }}
-              />
-            )}
-          />
-        </div>
-        <Separator />
         <TablePendingSellOrderLines
           title={PENDING_SELL_ORDERS_TITLE}
           clientId={currentClientId}
@@ -153,14 +145,36 @@ function RouteComponent() {
           stageSellOrderLine={stageSellOrderLine}
           isLoading={isLoading}
           className="self-center"
+          headerExtraComponents={
+            <form.AppField
+              name="clientId"
+              children={(field) => (
+                <field.ClientCombobox
+                  testId="combobox-client"
+                  id="combobox-client-form-delivery-note"
+                  label={null}
+                  nullable
+                  onValueChange={(newValue) => {
+                    if (stagedSellOrderLines && stagedSellOrderLines.length > 0) {
+                      setIsOpenDialogConfirmationCancelDeliveryNote(true);
+                    } else {
+                      field.handleChange(newValue?.id ?? null);
+                      form.setFieldValue("stagedSellOrderLines", undefined);
+                    }
+                  }}
+                />
+              )}
+            />
+          }
         />
         <Separator />
         <TableStagedOrderLine
           title={PARTS_TO_SERVE_TITLE}
           isLoading={isLoading}
           stagedSellOrderLines={stagedSellOrderLines}
-          updateStagedSellOrderLineQuantity={updateStagedSellOrderLineQuantity}
-          unstageSellOrderLine={unstageSellOrderLine}
+          stagedPartRows={stagedPartRows}
+          updateStagedGroupQuantity={updateStagedGroupQuantity}
+          unstageSellOrderLines={unstageSellOrderLines}
           skeletonRowsCount={1}
           className="self-center"
           printTagSellOrderLineId={printTagSellOrderLineId}
@@ -188,7 +202,7 @@ function RouteComponent() {
               children={([isValid, isPristine]) => (
                 <AlertDialogTrigger
                   testId="button-add-lines-to-existing-delivery-note"
-                  disabled={!isValid || isPristine || isLoading}
+                  disabled={!isValid || isPristine || isLoading || hasEmptyStagedPart}
                   onClick={() => {
                     onAddLinesToExistingDeliveryNoteDialogOpenChange(true);
                   }}
@@ -221,11 +235,16 @@ function RouteComponent() {
                 <form.ButtonSubmit
                   testId="button-submit-add-lines-to-existing-delivery-note"
                   customText={ADD_LINES_LABEL}
+                  disabled={hasEmptyStagedPart}
                 />
               </AlertDialogFooter>
             </AlertDialogContent>
           </AlertDialog>
-          <form.ButtonSubmit testId="button-submit-form-delivery-note" customText={DELIVERY_NOTE_CREATE_TITLE} />
+          <form.ButtonSubmit
+            testId="button-submit-form-delivery-note"
+            customText={DELIVERY_NOTE_CREATE_TITLE}
+            disabled={hasEmptyStagedPart}
+          />
         </div>
         <AlertDialog
           open={isOpenDialogConfirmationCancelDeliveryNote}

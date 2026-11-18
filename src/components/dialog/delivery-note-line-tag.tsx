@@ -17,17 +17,18 @@ import {
   PRINT_LABELS_TITLE,
   UNITS_PER_LABEL_LABEL,
 } from "@/messages/delivery-note";
+import type { TPrintTagPartSellOrderLines } from "@/schemas/delivery-note-line";
 import { FormMode } from "@/types";
 
 interface DialogPartTagProps {
   printTagDeliveryNoteLineId?: number;
-  printTagSellOrderLineId?: number;
+  printTagSellOrderLines?: TPrintTagPartSellOrderLines;
   partQuantity?: number;
 }
 
 export default function DialogPartTag({
   printTagDeliveryNoteLineId,
-  printTagSellOrderLineId,
+  printTagSellOrderLines,
   partQuantity,
 }: DialogPartTagProps) {
   const navigate = useNavigate();
@@ -45,7 +46,7 @@ export default function DialogPartTag({
   const printControls = usePrintControls({ forTags: true });
   const { form, validationSchema } = usePartTagForm({
     deliveryNoteLineId: printTagDeliveryNoteLineId,
-    sellOrderLineId: printTagSellOrderLineId,
+    sellOrderLines: printTagSellOrderLines,
     defaultPartQuantity: partQuantity,
     printControls,
     onSubmit: onClose,
@@ -53,7 +54,7 @@ export default function DialogPartTag({
 
   return (
     <Dialog
-      open={printTagDeliveryNoteLineId !== undefined || printTagSellOrderLineId !== undefined}
+      open={printTagDeliveryNoteLineId !== undefined || printTagSellOrderLines !== undefined}
       onOpenChange={async (open) => !open && onClose()}
     >
       <DialogContent data-testid="dialog-tag-print-content">
@@ -82,6 +83,7 @@ export default function DialogPartTag({
                           <form.Field name={`tagGroups[${i}].partQuantity`}>
                             {(subField) => (
                               <NumberInput
+                                testId="input-tag-part-quantity"
                                 value={String(subField.state.value)}
                                 onChange={(e) => {
                                   subField.handleChange(Number(e.target.value));
@@ -126,6 +128,7 @@ export default function DialogPartTag({
                 </Table>
                 <div className="flex flex-row items-center gap-2">
                   <Button
+                    testId="button-add-tag-group"
                     variant="success"
                     onClick={() => {
                       field.pushValue({ partQuantity: 0, tagQuantity: 1 });

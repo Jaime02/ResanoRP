@@ -4,7 +4,9 @@ import path from "node:path";
 import { TRPCError } from "@trpc/server";
 import { and, eq, isNotNull } from "drizzle-orm";
 
+import { getClientById } from "@/db/functions/client";
 import { getCoatingById } from "@/db/functions/coating";
+import { getDeliveryNote } from "@/db/functions/delivery-note";
 import { getDeliveryNoteLine } from "@/db/functions/delivery-note-line";
 import { getActivePartSetsUsingPart, getPartById } from "@/db/functions/part";
 import { getPartReferenceById } from "@/db/functions/part-reference";
@@ -14,9 +16,9 @@ import { dbTableBlueprint, dbTablePart, dbTablePartReference } from "@/db/schema
 import { archiveBlueprintFiles } from "@/files/blueprint";
 import { removeOnRollback } from "@/files/functions";
 import { printTagPart } from "@/files/part-tag";
-import { formatDate } from "@/lib/formatters";
 import { handleMutationError } from "@/lib/handlers";
-import { getPartTagName, PartTagSource } from "@/lib/part-tag";
+import { getPartTagName, getTagSellOrder, PartTagSource } from "@/lib/part-tag";
+import type { TTagSellOrder } from "@/lib/part-tag";
 import { PART_IN_ACTIVE_SETS_ERROR_MESSAGE } from "@/messages/part";
 import { requiredIdObjectSchema } from "@/schemas";
 import { printTagPartSchema } from "@/schemas/delivery-note-line";
@@ -37,6 +39,7 @@ function createPartFolder(part: { id: number; description: string }, createdPath
   fs.mkdirSync(partFolder);
   createdPaths.push(partFolder);
 }
+
 export default router({
   createWithPartReference: adminProcedure.input(createPartFormDataSchema).mutation(async ({ ctx, input }) =>
     removeOnRollback(async (createdPaths) =>
@@ -144,9 +147,9 @@ export default router({
     let reference: string | undefined;
     let partReferenceId: number | null;
     // A Línea del Albarán added by hand belongs to no Pedido de venta, so the tag is printed without it
-    let sellOrderId: number | undefined;
-    let requestedDeliveryDate: Date | null | undefined;
+    const sellOrders: Array<TTagSellOrder> = [];
     let tagName: string;
+    let clientId: number | undefined;
 
     if (input.deliveryNoteLineId !== undefined) {
       const deliveryNoteLine = await getDeliveryNoteLine({ id: input.deliveryNoteLineId });
@@ -159,26 +162,81 @@ export default router({
 
       if (deliveryNoteLine.sellOrderLineId !== null) {
         const sellOrderLine = await getSellOrderLineById(deliveryNoteLine.sellOrderLineId);
-        sellOrderId = sellOrderLine?.sellOrderId;
-        requestedDeliveryDate = sellOrderLine?.requestedDeliveryDate;
+        const sellOrder = sellOrderLine && (await getSellOrderById(sellOrderLine.sellOrderId));
+        if (sellOrder) sellOrders.push(getTagSellOrder(sellOrder, sellOrderLine.requestedDeliveryDate, Infinity));
       }
 
+      clientId = (await getDeliveryNote({ id: deliveryNoteLine.deliveryNoteId }))?.clientId;
       reference = deliveryNoteLine.description;
       partReferenceId = deliveryNoteLine.partReferenceId;
       tagName = getPartTagName(PartTagSource.DeliveryNoteLine, deliveryNoteLine.id);
     } else {
-      const sellOrderLine = await getSellOrderLineById(input.sellOrderLineId);
-      if (!sellOrderLine) {
+      const sellOrderLines = await Promise.all(input.sellOrderLines.map(async ({ id }) => getSellOrderLineById(id)));
+      if (sellOrderLines.some((sellOrderLine) => sellOrderLine === undefined)) {
         throw new TRPCError({
           code: "NOT_FOUND",
           message: "Línea del Pedido de Venta no encontrada",
         });
       }
+      const definedSellOrderLines = sellOrderLines.filter((sellOrderLine) => sellOrderLine !== undefined);
 
+      // One tag can only hold a single part, a line without one is printed on its own
+      const partReferenceIds = [
+        ...new Set(definedSellOrderLines.map((sellOrderLine) => sellOrderLine.partReferenceId)),
+      ];
+      const partIdByReferenceId = new Map(
+        await Promise.all(
+          partReferenceIds.map(
+            async (id) => [id, id === null ? null : (await getPartReferenceById(id))?.partId] as const,
+          ),
+        ),
+      );
+      const partIds = new Set(partIdByReferenceId.values());
+      if (partIds.size !== 1 || (partIds.has(null) && definedSellOrderLines.length > 1)) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "Las líneas del Pedido de Venta no son del mismo artículo",
+        });
+      }
+
+      const sellOrderIds = [...new Set(definedSellOrderLines.map((sellOrderLine) => sellOrderLine.sellOrderId))];
+      const sellOrderById = new Map(
+        (await Promise.all(sellOrderIds.map(async (id) => getSellOrderById(id))))
+          .filter((sellOrder) => sellOrder !== undefined)
+          .map((sellOrder) => [sellOrder.id, sellOrder]),
+      );
+      if (sellOrderById.size !== sellOrderIds.length) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Pedido de Venta no encontrado",
+        });
+      }
+      const lineSellOrders = definedSellOrderLines.flatMap(
+        (sellOrderLine) => sellOrderById.get(sellOrderLine.sellOrderId) ?? [],
+      );
+      // A box is sent to a single Cliente
+      const clientIds = new Set(lineSellOrders.map((sellOrder) => sellOrder.clientId));
+      if (clientIds.size !== 1) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "Las líneas del Pedido de Venta no son del mismo cliente",
+        });
+      }
+      [clientId] = clientIds;
+
+      for (const [index, sellOrder] of lineSellOrders.entries()) {
+        sellOrders.push(
+          getTagSellOrder(
+            sellOrder,
+            definedSellOrderLines[index].requestedDeliveryDate,
+            input.sellOrderLines[index].quantity,
+          ),
+        );
+      }
+
+      const [sellOrderLine] = definedSellOrderLines;
       reference = sellOrderLine.description ?? undefined;
       partReferenceId = sellOrderLine.partReferenceId;
-      sellOrderId = sellOrderLine.sellOrderId;
-      requestedDeliveryDate = sellOrderLine.requestedDeliveryDate;
       tagName = getPartTagName(PartTagSource.SellOrderLine, sellOrderLine.id);
     }
 
@@ -216,15 +274,14 @@ export default router({
       });
     }
 
-    const sellOrder = sellOrderId !== undefined ? await getSellOrderById(sellOrderId) : undefined;
+    const client = clientId !== undefined ? await getClientById(clientId) : undefined;
 
     await printTagPart({
+      clientName: client?.name,
       coatingName: coating?.name,
       partDescription: part?.description,
       reference,
-      requestedDeliveryDate:
-        requestedDeliveryDate != null ? (formatDate(requestedDeliveryDate) ?? undefined) : undefined,
-      sellOrderReference: sellOrder !== undefined ? (sellOrder.clientReference ?? String(sellOrder.id)) : undefined,
+      sellOrders,
       labelSize: input.labelSize,
       tagGroups: input.tagGroups,
       tagName,

@@ -293,7 +293,7 @@ export default function TableProductionOrder({
         header: MACHINE_LABEL,
         id: "machineId",
         enableColumnFilter: true,
-        size: DEFAULT_MACHINE_COLUMN_SIZE,
+        size: DEFAULT_MACHINE_COLUMN_SIZE + 50,
         meta: {
           dataType: CellDataType.Combobox,
           renderFilter: ({ value, onChange }) => (

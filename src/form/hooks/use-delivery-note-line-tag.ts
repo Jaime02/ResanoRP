@@ -5,7 +5,7 @@ import { useAppContext } from "@/contexts/app-context";
 import { useAppForm } from "@/form";
 import useResetForm from "@/form/hooks/use-reset-form";
 import { getPartTagFileUrl, getPartTagName, PartTagSource } from "@/lib/part-tag";
-import type { TPrintTagPart } from "@/schemas/delivery-note-line";
+import type { TPrintTagPart, TPrintTagPartSellOrderLines } from "@/schemas/delivery-note-line";
 import { printTagPartSchema } from "@/schemas/delivery-note-line";
 import type { TTagLabelSize } from "@/schemas/printer";
 import trpc from "@/trpc/trpc-client";
@@ -22,12 +22,12 @@ const defaultPrintTagPartFormData = {
 function getTagName(printPartTag: TPrintTagPart) {
   return printPartTag.deliveryNoteLineId !== undefined
     ? getPartTagName(PartTagSource.DeliveryNoteLine, printPartTag.deliveryNoteLineId)
-    : getPartTagName(PartTagSource.SellOrderLine, printPartTag.sellOrderLineId);
+    : getPartTagName(PartTagSource.SellOrderLine, printPartTag.sellOrderLines[0].id);
 }
 
 interface UsePartTagFormProps {
   deliveryNoteLineId?: number;
-  sellOrderLineId?: number;
+  sellOrderLines?: TPrintTagPartSellOrderLines;
   defaultPartQuantity?: number;
   printControls: TPrintControls;
   onSubmit?: () => Promise<void>;
@@ -35,7 +35,7 @@ interface UsePartTagFormProps {
 
 export default function usePartTagForm({
   deliveryNoteLineId,
-  sellOrderLineId,
+  sellOrderLines,
   defaultPartQuantity,
   printControls,
   onSubmit,
@@ -46,7 +46,7 @@ export default function usePartTagForm({
     formId: "partTag",
     defaultValues: {
       ...(deliveryNoteLineId !== undefined ? { deliveryNoteLineId } : undefined),
-      ...(sellOrderLineId !== undefined ? { sellOrderLineId } : undefined),
+      ...(sellOrderLines !== undefined ? { sellOrderLines } : undefined),
       labelSize: null as TTagLabelSize,
       tagGroups: [
         {
@@ -72,7 +72,7 @@ export default function usePartTagForm({
 
   const isSubmitting = useSelector(form.store, (state) => state.isSubmitting);
 
-  useResetForm(form, deliveryNoteLineId, sellOrderLineId, defaultPartQuantity);
+  useResetForm(form, deliveryNoteLineId, sellOrderLines, defaultPartQuantity);
 
   return {
     form,

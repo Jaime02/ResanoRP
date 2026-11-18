@@ -28,22 +28,58 @@ interface TSortablePendingSellOrderLine {
   partReference?: { part?: { id: number } | null } | null;
 }
 
+function getSellOrderLineGroupKey(line: TSortablePendingSellOrderLine) {
+  return line.partReference?.part ? `part-${line.partReference.part.id}` : `line-${line.id}`;
+}
+
+// Fills the lines in order up to what is pending of each, and the last one takes the rest
+export function splitQuantityFifo(lines: Array<{ id: number; pendingQuantity: number }>, total: number) {
+  let remaining = total;
+  return lines.map((line, index) => {
+    const quantity =
+      index === lines.length - 1
+        ? remaining
+        : Math.sign(remaining) * Math.min(Math.abs(remaining), Math.abs(line.pendingQuantity));
+    remaining -= quantity;
+    return { id: line.id, quantity };
+  });
+}
+
+// The pending lines come sorted by delivery date, so the lines of each group keep the order they are served in, and the
+// group is identified by its earliest line. A return is grouped apart, so it never cancels out a delivery of the part
+export function groupStagedSellOrderLines<
+  TLine extends TSortablePendingSellOrderLine & { pendingQuantity: number; quantity: number },
+>(pendingLines: Array<TLine> | undefined, stagedLines: Array<{ id: number; quantity: number }> | undefined) {
+  const groups = new Map<string, Array<TLine>>();
+  for (const line of pendingLines ?? []) {
+    const stagedLine = stagedLines?.find((staged) => staged.id === line.id);
+    if (stagedLine === undefined) continue;
+    const key = `${getSellOrderLineGroupKey(line)}${line.pendingQuantity < 0 ? "-return" : ""}`;
+    groups.set(key, [...(groups.get(key) ?? []), { ...line, quantity: stagedLine.quantity }]);
+  }
+  return [...groups.values()].map((lines) => ({
+    id: lines[0].id,
+    lines,
+    quantity: lines.reduce((total, line) => total + line.quantity, 0),
+  }));
+}
+
 export function sortPendingSellOrderLines<TLine extends TSortablePendingSellOrderLine>(lines: Array<TLine>) {
-  const groupKey = (line: TLine) =>
-    line.partReference?.part ? `part-${line.partReference.part.id}` : `line-${line.id}`;
   const time = (line: TLine) => line.requestedDeliveryDate?.getTime() ?? Infinity;
 
   const groupFirstTime = new Map<string, number>();
   for (const line of lines) {
-    const key = groupKey(line);
+    const key = getSellOrderLineGroupKey(line);
     groupFirstTime.set(key, Math.min(groupFirstTime.get(key) ?? Infinity, time(line)));
   }
 
   return [...lines].sort(
     (a, b) =>
-      (groupFirstTime.get(groupKey(a)) ?? Infinity) - (groupFirstTime.get(groupKey(b)) ?? Infinity) ||
-      groupKey(a).localeCompare(groupKey(b)) ||
-      time(a) - time(b),
+      (groupFirstTime.get(getSellOrderLineGroupKey(a)) ?? Infinity) -
+        (groupFirstTime.get(getSellOrderLineGroupKey(b)) ?? Infinity) ||
+      getSellOrderLineGroupKey(a).localeCompare(getSellOrderLineGroupKey(b)) ||
+      time(a) - time(b) ||
+      a.id - b.id,
   );
 }
 

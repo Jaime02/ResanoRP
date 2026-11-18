@@ -91,9 +91,20 @@ interface AutoFitTextProps {
   wrap?: boolean;
   maxLines?: number;
   className?: string;
+  // Rendered in place of the value, which still sizes the text
+  children?: React.ReactNode;
 }
 
-export function AutoFitText({ value, maxPt, idealChars, minPt, wrap = true, maxLines, className }: AutoFitTextProps) {
+export function AutoFitText({
+  value,
+  maxPt,
+  idealChars,
+  minPt,
+  wrap = true,
+  maxLines,
+  className,
+  children,
+}: AutoFitTextProps) {
   const fontSize = fitFontSize(value, maxPt, idealChars, minPt);
   return (
     <span
@@ -106,10 +117,10 @@ export function AutoFitText({ value, maxPt, idealChars, minPt, wrap = true, maxL
           className="overflow-hidden"
           style={{ display: "-webkit-box", WebkitBoxOrient: "vertical", WebkitLineClamp: maxLines }}
         >
-          {value}
+          {children ?? value}
         </span>
       ) : (
-        value
+        (children ?? value)
       )}
     </span>
   );

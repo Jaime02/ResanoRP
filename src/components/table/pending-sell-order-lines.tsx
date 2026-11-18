@@ -5,7 +5,15 @@ import DialogBlueprintViewer from "@/components/dialog/blueprint-viewer";
 import DialogPrintPendingSellOrders from "@/components/dialog/print-pending-sell-orders";
 import type { PublicBaseTableProps } from "@/components/table/base-table";
 import BaseTable from "@/components/table/base-table";
-import { createTableColumnHelper } from "@/components/table/column-helper";
+import {
+  DEFAULT_DATE_COLUMN_SIZE,
+  DEFAULT_DESCRIPTION_COLUMN_SIZE,
+  DEFAULT_REFERENCE_COLUMN_SIZE,
+  DEFAULT_SELL_ORDER_COLUMN_SIZE,
+  DEFAULT_STATUS_COLUMN_SIZE,
+  TWO_BUTTONS_ACTIONS_COLUMN_SIZE,
+  createTableColumnHelper,
+} from "@/components/table/column-helper";
 import { TableCellSellOrderLineStatus } from "@/components/table/table-cell-sell-order-line-status";
 import { Button } from "@/components/ui/button";
 import ButtonCopy from "@/components/ui/button-copy";
@@ -41,13 +49,17 @@ import {
 } from "@/messages/sell-order";
 import { useQueryProductionOrderStatusesBySellOrderLineIds } from "@/queries/production-order";
 import type { TPendingSellOrderLine } from "@/queries/sell-order-line";
-import type { TTableSellOrderLineState } from "@/schemas/sell-order-line";
+import type { TTableState } from "@/schemas";
+import { PENDING_SELL_ORDER_LINES_PAGE_SIZE } from "@/types/sell-order-line";
 
-const DEFAULT_STATE: TTableSellOrderLineState = { sorts: [{ desc: false, id: "reference" }] };
+const INITIAL_STATE: TTableState = {
+  pagination: { pageSize: PENDING_SELL_ORDER_LINES_PAGE_SIZE },
+  sorts: [{ desc: false, id: "reference" }],
+};
 
 interface TablePendingSellOrderLinesProps
   extends
-    PublicBaseTableProps<TPendingSellOrderLine, TTableSellOrderLineState>,
+    PublicBaseTableProps<TPendingSellOrderLine>,
     Pick<
       ReturnType<typeof useStageSellOrderLinesForm>,
       "pendingSellOrderLines" | "stagedSellOrderLines" | "stageSellOrderLine"
@@ -118,10 +130,17 @@ export function TablePendingSellOrderLines({
   pendingSellOrderLines,
   stagedSellOrderLines,
   stageSellOrderLine,
+  headerExtraComponents,
   ...props
 }: TablePendingSellOrderLinesProps) {
   const { isAdmin } = useAppContext();
-  const [showStagedLines, setShowStagedLines] = useState(true);
+  const [showStagedLines, setShowStagedLines] = useState(false);
+  const [state, setState] = useState<TTableState | undefined>(INITIAL_STATE);
+  const [stateClientId, setStateClientId] = useState(clientId);
+  if (clientId !== stateClientId) {
+    setStateClientId(clientId);
+    setState(INITIAL_STATE);
+  }
   const visibleSellOrderLines = useMemo(
     () =>
       showStagedLines
@@ -150,6 +169,7 @@ export function TablePendingSellOrderLines({
         ),
         header: SELL_ORDER_LABEL,
         id: "clientReference",
+        size: DEFAULT_SELL_ORDER_COLUMN_SIZE,
       }),
       columnHelper.display({
         cell: ({ row }) => (
@@ -157,6 +177,7 @@ export function TablePendingSellOrderLines({
         ),
         header: STATUS_LABEL,
         id: "status",
+        size: DEFAULT_STATUS_COLUMN_SIZE,
       }),
       columnHelper.display({
         cell: ({ row }) =>
@@ -167,6 +188,7 @@ export function TablePendingSellOrderLines({
           ),
         header: REFERENCE_LABEL,
         id: "reference",
+        size: DEFAULT_REFERENCE_COLUMN_SIZE,
       }),
       columnHelper.accessor(
         (pendingSellOrderLine) =>
@@ -174,6 +196,7 @@ export function TablePendingSellOrderLines({
         {
           header: DESCRIPTION_LABEL,
           id: "description",
+          size: DEFAULT_DESCRIPTION_COLUMN_SIZE,
         },
       ),
       columnHelper.accessor("quantity", {
@@ -188,6 +211,7 @@ export function TablePendingSellOrderLines({
         cell: (info) => formatDate(info.getValue()),
         header: DELIVERY_DATE_COLUMN_LABEL,
         id: "requestedDeliveryDate",
+        size: DEFAULT_DATE_COLUMN_SIZE,
       }),
       ...(hasNotes
         ? [
@@ -229,6 +253,7 @@ export function TablePendingSellOrderLines({
         ),
         header: ACTIONS_LABEL,
         id: "actions",
+        size: TWO_BUTTONS_ACTIONS_COLUMN_SIZE,
       }),
     ],
     [hasNotes, stageSellOrderLine, stagedSellOrderLines],
@@ -239,12 +264,14 @@ export function TablePendingSellOrderLines({
       testId="table-pending-sell-orders"
       columns={columns}
       rows={visibleSellOrderLines}
-      defaultState={DEFAULT_STATE}
+      state={state}
+      onStateChange={setState}
       disabledMessage={clientId === null ? SELECT_CLIENT_FOR_PENDING_SELL_ORDERS_MESSAGE : undefined}
       noDataMessage={NO_PENDING_SELL_ORDERS_MESSAGE}
       skeletonRowsCount={3}
       headerExtraComponents={
         <>
+          {headerExtraComponents}
           <div className="flex items-center gap-2">
             <Checkbox
               id="checkbox-show-staged-lines"

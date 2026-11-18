@@ -72,19 +72,29 @@ const basePrintPartTagSchema = z.object({
 });
 
 // A bare z.undefined() also demands that the key is present, and JSON drops keys explicitly set to
-// undefined on the way to the server, so the excluded id has to allow an absent key as well.
-const excludedIdSchema = z
-  .undefined("Solo se puede indicar una línea de Albarán o una línea de Pedido de venta")
+// undefined on the way to the server, so the excluded field has to allow an absent key as well.
+const excludedSourceSchema = z
+  .undefined("Solo se puede indicar una línea de Albarán o líneas de Pedido de venta")
   .optional();
+
+// The staged lines of a part, in the order their units fill the tags
+const printTagPartSellOrderLinesSchema = z
+  .array(z.object({ id: requiredIdSchema, quantity: positiveQuantitySchema }))
+  .nonempty()
+  .refine(
+    (lines) => new Set(lines.map((line) => line.id)).size === lines.length,
+    "Una línea de Pedido de venta no se puede indicar más de una vez",
+  );
+export type TPrintTagPartSellOrderLines = z.infer<typeof printTagPartSellOrderLinesSchema>;
 
 export const printTagPartSchema = z.union([
   basePrintPartTagSchema.extend({
     deliveryNoteLineId: requiredIdSchema,
-    sellOrderLineId: excludedIdSchema,
+    sellOrderLines: excludedSourceSchema,
   }),
   basePrintPartTagSchema.extend({
-    deliveryNoteLineId: excludedIdSchema,
-    sellOrderLineId: requiredIdSchema,
+    deliveryNoteLineId: excludedSourceSchema,
+    sellOrderLines: printTagPartSellOrderLinesSchema,
   }),
 ]);
 export type TPrintTagPart = z.infer<typeof printTagPartSchema>;

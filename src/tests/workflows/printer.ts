@@ -139,9 +139,7 @@ export async function assertSelectedPrinter(dialog: Locator, name: string) {
 // Printing on a server Impresora shows a toast, so the browser printed it if none shows up and no job arrives
 export async function expectPrintedByBrowser(page: Page, buttonPrint: Locator) {
   const previousJobsCount = readPrintJobs().length;
-  const frameAttached = page.waitForEvent("frameattached");
-  await buttonPrint.click();
-  await frameAttached;
+  await Promise.all([page.waitForEvent("frameattached"), buttonPrint.click()]);
   await expect(getToasts(page)).toHaveCount(0);
   expect(readPrintJobs()).toHaveLength(previousJobsCount);
 }

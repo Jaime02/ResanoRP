@@ -5,6 +5,7 @@ import type { Locator } from "@playwright/test";
 import { eq } from "drizzle-orm";
 
 import { UserMode } from "@/contexts/app-context";
+import { getClientById } from "@/db/functions/client";
 import { getDeliveryNote } from "@/db/functions/delivery-note";
 import { getDeliveryNoteLine, getDeliveryNoteLinesByDeliveryNoteId } from "@/db/functions/delivery-note-line";
 import { getInvoiceById } from "@/db/functions/invoice";
@@ -34,6 +35,7 @@ import {
   DELIVERY_NOTE_CREATED_MESSAGE,
 } from "@/messages/delivery-note";
 import { CLIENT_REFERENCE_DESCRIPTION_LABEL } from "@/messages/part";
+import { DELIVERY_LABEL, SELL_ORDER_LABEL } from "@/messages/sell-order";
 import type { TTableDeliveryNoteState } from "@/schemas/delivery-note";
 import { updateDeliveryNoteLinePriceSchema, updateDeliveryNoteLineSchema } from "@/schemas/delivery-note-line";
 import {
@@ -99,7 +101,7 @@ import {
   workflowOpenCreateDeliveryNoteLine,
   workflowOpenEditDeliveryNote,
 } from "@/tests/workflows/delivery-note";
-import { workflowPrintTag } from "@/tests/workflows/tag";
+import { expectTagField, readTagsTexts, workflowPrintTag } from "@/tests/workflows/tag";
 import { ToastType } from "@/types/toast";
 
 let tableDeliveryNotes: Locator;
@@ -744,26 +746,30 @@ test("manage the delivery notes", { annotation: TestAnnotations.ResetTags }, asy
         expect(updatedDeliveryNoteLine).toBeDefined();
         expect(updatedDeliveryNoteLine!.quantity).toBe(Number(newPartQuantity));
 
-        // A Línea del Albarán always carries a quantity, so clearing it is rejected and the cell shows the saved one again
-        await inputQuantity.clear();
-        await inputQuantity.blur();
+        // A Línea del Albarán always carries a quantity other than 0, so clearing it or setting 0 is rejected and the
+        // cell shows the saved one again
+        for (const rejectedQuantity of [null, 0]) {
+          await inputQuantity.clear();
+          if (rejectedQuantity !== null) await inputQuantity.pressSequentially(String(rejectedQuantity));
+          await inputQuantity.blur();
 
-        await expectSingleToast(page, { title: DELIVERY_NOTE_LINE_VALIDATION_ERROR_MESSAGE, type: ToastType.Error });
-        expectErrorsLog(
-          clientErrorEvent(
-            schemaErrorMessage(updateDeliveryNoteLineSchema, {
-              description: updatedDeliveryNoteLine!.description,
-              id: deliveryNoteLine.id,
-              quantity: null,
-            }),
-            { message: LogMessages.deliveryNoteLineValidationFailed },
-          ),
-        );
-        await expect(inputQuantity).toHaveValue(newPartQuantity);
+          await expectSingleToast(page, { title: DELIVERY_NOTE_LINE_VALIDATION_ERROR_MESSAGE, type: ToastType.Error });
+          expectErrorsLog(
+            clientErrorEvent(
+              schemaErrorMessage(updateDeliveryNoteLineSchema, {
+                description: updatedDeliveryNoteLine!.description,
+                id: deliveryNoteLine.id,
+                quantity: rejectedQuantity,
+              }),
+              { message: LogMessages.deliveryNoteLineValidationFailed },
+            ),
+          );
+          await expect(inputQuantity).toHaveValue(newPartQuantity);
 
-        updatedDeliveryNoteLine = await getDeliveryNoteLine({ id: deliveryNoteLine.id });
-        expect(updatedDeliveryNoteLine).toBeDefined();
-        expect(updatedDeliveryNoteLine!.quantity).toBe(Number(newPartQuantity));
+          updatedDeliveryNoteLine = await getDeliveryNoteLine({ id: deliveryNoteLine.id });
+          expect(updatedDeliveryNoteLine).toBeDefined();
+          expect(updatedDeliveryNoteLine!.quantity).toBe(Number(newPartQuantity));
+        }
       }
     });
   }
@@ -1039,11 +1045,17 @@ test("manage the delivery notes", { annotation: TestAnnotations.ResetTags }, asy
       await expect(getEditableCellById(rowCustomLine, "unitPrice")).toBeVisible();
 
       // The tag of a line without Artículo is printed with its description
-      await workflowPrintTag(
-        page,
-        rowCustomLine,
-        path.join(process.env.TAGS_ROOT_PATH!, `delivery-note-line-${newDbLines[0].id}.pdf`),
-      );
+      const tagFilePath = path.join(process.env.TAGS_ROOT_PATH!, `delivery-note-line-${newDbLines[0].id}.pdf`);
+      await workflowPrintTag(page, rowCustomLine, tagFilePath);
+      const [tag, ...otherTags] = await readTagsTexts(tagFilePath);
+      expect(otherTags).toEqual([]);
+      expect(tag).toContain(customLine.description);
+      // Without a Pedido, the tag names the Cliente of the Albarán and holds only its quantity
+      const dbDeliveryNote = await getDeliveryNote({ id: deliveryNote.id });
+      expectTagField(tag, CLIENT_LABEL, (await getClientById(dbDeliveryNote!.clientId))!.name);
+      expectTagField(tag, QUANTITY_LABEL, customLine.quantity);
+      expectTagField(tag, DELIVERY_LABEL, null);
+      expect(tag).not.toContain(SELL_ORDER_LABEL);
     });
   }
 

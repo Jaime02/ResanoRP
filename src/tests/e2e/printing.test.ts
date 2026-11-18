@@ -103,6 +103,8 @@ async function workflowOpenPrintDeliveryNote(page: Page, isAdmin = true) {
   await page.getByTestId("button-print-delivery-note").click();
   if (isAdmin) {
     await page.getByTestId("button-print-delivery-note-without-prices").click();
+    // The closing prices dialog gives the focus back to the page, which would close a combobox opened meanwhile
+    await expect(page.getByTestId("dialog-delivery-note-prices-content")).toBeHidden();
   }
   const dialog = page.getByTestId("dialog-print-delivery-note-content");
   await expect(dialog).toBeVisible();

@@ -2,6 +2,7 @@ import { TRPCError } from "@trpc/server";
 import { and, eq, isNotNull } from "drizzle-orm";
 
 import type { TDatabase } from "@/db";
+import { getClientById } from "@/db/functions/client";
 import { getCoatingById } from "@/db/functions/coating";
 import { removeProductionOrdersFromMachines } from "@/db/functions/machine-production-order-queue";
 import { getPartById } from "@/db/functions/part";
@@ -11,9 +12,8 @@ import { getSellOrderById } from "@/db/functions/sell-order";
 import { getSellOrderLineById } from "@/db/functions/sell-order-line";
 import { dbTableProductionOrder } from "@/db/schema";
 import { printTagPart } from "@/files/part-tag";
-import { formatDate } from "@/lib/formatters";
 import { handleMutationError } from "@/lib/handlers";
-import { getPartTagName, PartTagSource } from "@/lib/part-tag";
+import { getPartTagName, getTagSellOrder, PartTagSource } from "@/lib/part-tag";
 import { SELL_ORDER_LINE_NOT_OF_PART_MESSAGE } from "@/messages/production-order";
 import { requiredIdObjectSchema } from "@/schemas";
 import {
@@ -177,7 +177,6 @@ export default router({
         ? await getSellOrderLineById(productionOrder.sellOrderLineId)
         : undefined;
     const sellOrder = sellOrderLine !== undefined ? await getSellOrderById(sellOrderLine.sellOrderId) : undefined;
-
     let partReference: BasePartReference | undefined;
     if (sellOrderLine?.partReferenceId != null) {
       partReference = await getPartReferenceById(sellOrderLine.partReferenceId);
@@ -188,16 +187,19 @@ export default router({
     }
 
     const coating = part.coatingId !== null ? await getCoatingById(part.coatingId) : undefined;
+    // Without a Pedido de venta, the Cliente is the one of the Referencia, if it has one
+    const clientId = sellOrder?.clientId ?? partReference?.clientId;
+    const client = clientId != null ? await getClientById(clientId) : undefined;
 
     await printTagPart({
+      clientName: client?.name,
       coatingName: coating?.name,
       partDescription: part.description,
       reference: partReference?.reference,
-      requestedDeliveryDate:
-        sellOrderLine?.requestedDeliveryDate != null
-          ? (formatDate(sellOrderLine.requestedDeliveryDate) ?? undefined)
-          : undefined,
-      sellOrderReference: sellOrder !== undefined ? (sellOrder.clientReference ?? String(sellOrder.id)) : undefined,
+      sellOrders:
+        sellOrder !== undefined
+          ? [getTagSellOrder(sellOrder, sellOrderLine?.requestedDeliveryDate ?? null, Infinity)]
+          : [],
       labelSize: input.labelSize,
       tagGroups: [{ partQuantity: input.partQuantity, tagQuantity: 1 }],
       tagName: getPartTagName(PartTagSource.ProductionOrder, productionOrder.id),

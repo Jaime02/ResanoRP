@@ -33,7 +33,10 @@ export function isCellEditable<TData extends RowData>(cell: Cell<typeof baseTabl
 export const DEFAULT_CLIENT_COLUMN_SIZE = 300;
 export const DEFAULT_DESCRIPTION_COLUMN_SIZE = 350;
 export const DEFAULT_REFERENCE_COLUMN_SIZE = 160;
-export const DEFAULT_SELL_ORDER_COLUMN_SIZE = 250;
+export const DEFAULT_SELL_ORDER_COLUMN_SIZE = 150;
 export const DEFAULT_DATE_COLUMN_SIZE = 100;
 export const DEFAULT_DATETIME_COLUMN_SIZE = 140;
-export const DEFAULT_MACHINE_COLUMN_SIZE = 220;
+export const DEFAULT_MACHINE_COLUMN_SIZE = 160;
+export const DEFAULT_STATUS_COLUMN_SIZE = 100;
+export const TWO_BUTTONS_ACTIONS_COLUMN_SIZE = 104;
+export const THREE_BUTTONS_ACTIONS_COLUMN_SIZE = 152;

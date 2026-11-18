@@ -13,11 +13,21 @@ import { getInvoiceById } from "@/db/functions/invoice";
 import { getLatestPartStockTransactionByPartId, getLatestPartStockTransactionsByIds } from "@/db/functions/part-stock";
 import { getSellOrders } from "@/db/functions/sell-order";
 import { getSellOrderLineById } from "@/db/functions/sell-order-line";
-import { dbTableDeliveryNote, dbTableDeliveryNoteLine, dbTableInvoice, dbTableSellOrderLine } from "@/db/schema";
+import {
+  dbTableDeliveryNote,
+  dbTableDeliveryNoteLine,
+  dbTableInvoice,
+  dbTablePart,
+  dbTablePartReference,
+  dbTableSellOrder,
+  dbTableSellOrderLine,
+} from "@/db/schema";
 import { formatDate, formatPrice } from "@/lib/formatters";
+import { getPartTagName, PartTagSource } from "@/lib/part-tag";
 import { formatCents, getLineTotalInCents } from "@/lib/prices";
+import { groupStagedSellOrderLines, sortPendingSellOrderLines } from "@/lib/sell-order-line";
 import { LogMessages } from "@/logging/types";
-import { CLOSE_LABEL, STATUS_PENDING_LABEL } from "@/messages/common";
+import { CLIENT_LABEL, CLOSE_LABEL, NEXT_PAGE_LABEL, STATUS_PENDING_LABEL, TOTAL_LABEL } from "@/messages/common";
 import {
   ACCOUNTED_DELIVERY_NOTE_MESSAGE,
   PENDING_QUANTITY_EXCEEDED_MESSAGE,
@@ -29,7 +39,7 @@ import {
   LINES_ADDED_TO_DELIVERY_NOTE_MESSAGE,
 } from "@/messages/delivery-note";
 import { INVOICE_CREATE_TITLE } from "@/messages/invoice";
-import { SHOW_PREPARED_LINES_LABEL } from "@/messages/sell-order";
+import { DELIVERY_LABEL, SHOW_PREPARED_LINES_LABEL } from "@/messages/sell-order";
 import { SellOrderStatus } from "@/schemas/sell-order";
 import { MOCK_INITIAL_DATE, mockClients, mockDeliveryNotes, mockInvoices, mockSellOrderLines } from "@/tests/mock-data";
 import { getTestId } from "@/tests/utils/components";
@@ -44,6 +54,7 @@ import {
   getDivDisabledMessage,
   getEditableCellById,
   getTableNoDataRow,
+  getTablePagerButton,
   getTableRowByTestId,
   getTableRows,
   getTableSubrowById,
@@ -74,10 +85,10 @@ import {
 } from "@/tests/workflows/delivery-note";
 import { workflowPickInvoiceClient } from "@/tests/workflows/invoice";
 import { assertPartStockConsumption } from "@/tests/workflows/part-stock";
-import { workflowPrintTag } from "@/tests/workflows/tag";
+import { expectTagField, getTagSellOrderText, readTagsTexts, workflowPrintTag } from "@/tests/workflows/tag";
 import type { BaseDeliveryNote } from "@/types/delivery-note";
 import type { BaseDeliveryNoteLine } from "@/types/delivery-note-line";
-import type { BaseSellOrderLine } from "@/types/sell-order-line";
+import { type BaseSellOrderLine, PENDING_SELL_ORDER_LINES_PAGE_SIZE } from "@/types/sell-order-line";
 import { ToastType } from "@/types/toast";
 
 let tablePendingSellOrderLines: Locator;
@@ -89,6 +100,19 @@ test.beforeEach(({ page }) => {
   tableStagedSellOrderLines = page.getByTestId("table-staged-sell-order-lines");
   buttonSubmitFormDeliveryNote = getButtonSubmitFormDeliveryNote(page);
 });
+
+// The rows of the staged table once every given pending line is staged with its whole pending quantity
+function getMockStagedPartRows(pendingSellOrderLines: Array<BaseSellOrderLine>) {
+  return groupStagedSellOrderLines(
+    sortPendingSellOrderLines(
+      pendingSellOrderLines.map((line) => ({
+        ...line,
+        partReference: { part: getMockPartByPartReferenceId(line.partReferenceId) },
+      })),
+    ),
+    pendingSellOrderLines.map((line) => ({ id: line.id, quantity: line.pendingQuantity })),
+  );
+}
 
 const activeClients = mockClients.filter((client) => client.deletedAt === null);
 const clientsWithPendingLines = mockClients.filter(
@@ -270,17 +294,21 @@ for (const selectedClient of clientsWithPendingLines) {
           await getTableRowByTestId(tablePendingSellOrderLines, sellOrderLine.id).getByTestId("button-success").click();
         }
 
+        // The lines of the same Artículo are staged as a single row with their total
         await expect(tableStagedSellOrderLines).toBeVisible();
-        const stagedSellOrderLinesRows = getTableRows(tableStagedSellOrderLines);
-        expect(await stagedSellOrderLinesRows.count()).toEqual(pendingSellOrderLines.length);
-        for (const row of await stagedSellOrderLinesRows.all()) {
-          expect(pendingSellOrderLinesIds.includes(await getTestId(row))).toBeTruthy();
+        const stagedPartRows = getMockStagedPartRows(pendingSellOrderLines);
+        await assertTableRowCount(tableStagedSellOrderLines, stagedPartRows.length);
+        for (const stagedPartRow of stagedPartRows) {
+          await expect(
+            getEditableCellById(getTableRowByTestId(tableStagedSellOrderLines, stagedPartRow.id), "quantity"),
+          ).toHaveValue(String(stagedPartRow.quantity));
         }
+        const nullClientReferenceRow = stagedPartRows.find((row) =>
+          row.lines.some((line) => line.id === nullClientReferenceSellOrderLine.id),
+        )!;
         await expect(
-          getTableRowByTestId(tableStagedSellOrderLines, nullClientReferenceSellOrderLine.id).getByTestId(
-            "part-reference",
-          ),
-        ).toHaveText(nullClientPartReference.reference);
+          getTableRowByTestId(tableStagedSellOrderLines, nullClientReferenceRow.id).getByTestId("part-reference"),
+        ).toContainText(nullClientPartReference.reference);
 
         await expect(buttonSubmitFormDeliveryNote).toBeVisible();
         await expect(buttonSubmitFormDeliveryNote).toBeEnabled();
@@ -648,6 +676,263 @@ for (const client of clientsWithPendingLines) {
 
 {
   const client = clientsWithPendingLines[0];
+  test(
+    `a part of ${client.name} pending in several sell orders is staged, served and tagged as one`,
+    { annotation: TestAnnotations.ResetTags },
+    async ({ db, page }) => {
+      const mockPendingSellOrderLines = await getMockPendingSellOrderLines(client.id);
+      const mockPartRow = getMockStagedPartRows(mockPendingSellOrderLines).find((row) => row.lines.length > 1)!;
+      expect(mockPartRow, "Some Artículo should be pending in more than one Línea").toBeDefined();
+      const [mockFirstLine, mockLastLine] = [mockPartRow.lines[0], mockPartRow.lines.at(-1)!];
+      const mockSellOrder = getMockSellOrderById(mockFirstLine.sellOrderId)!;
+      expect(
+        mockPartRow.lines.every(
+          (line) => line.sellOrderId === mockSellOrder.id && line.requestedDeliveryDate === null,
+        ) &&
+          mockFirstLine.pendingQuantity > mockLastLine.pendingQuantity &&
+          mockPartRow.quantity - mockFirstLine.pendingQuantity > 1 &&
+          mockSellOrder.clientReference !== null,
+        "Wrong test set up: the Líneas of the Artículo should share a Pedido with reference and have no delivery " +
+          "date, the first one pending more than the last one, and the ones after the first pending more than 1",
+      ).toBe(true);
+
+      // A Pedido without the reference of the Cliente is named by its number
+      const [noReferenceSellOrder] = await db
+        .insert(dbTableSellOrder)
+        .values({ clientId: client.id, receptionDate: MOCK_INITIAL_DATE })
+        .returning();
+      const partLine = { partPrice: "1", partReferenceId: mockFirstLine.partReferenceId };
+      const [earliestLine, returnLine] = await db
+        .insert(dbTableSellOrderLine)
+        .values([
+          {
+            ...partLine,
+            pendingQuantity: 7,
+            quantity: 7,
+            requestedDeliveryDate: MOCK_INITIAL_DATE,
+            sellOrderId: noReferenceSellOrder.id,
+          },
+          { ...partLine, pendingQuantity: -2, quantity: -2, sellOrderId: mockSellOrder.id },
+        ])
+        .returning();
+      // Dated after the earliest line, the first mock line is still served before the ones without date
+      const laterDeliveryDate = addDays(MOCK_INITIAL_DATE, 5);
+      await db
+        .update(dbTableSellOrderLine)
+        .set({ requestedDeliveryDate: laterDeliveryDate })
+        .where(eq(dbTableSellOrderLine.id, mockFirstLine.id));
+      // In the order they are served in
+      const partLines = [earliestLine, ...mockPartRow.lines];
+      const partTotal = earliestLine.pendingQuantity + mockPartRow.quantity;
+      const [otherReference, mockReference] = [String(noReferenceSellOrder.id), mockSellOrder.clientReference!];
+      const deliveryDate = formatDate(earliestLine.requestedDeliveryDate)!;
+      const partRow = getTableRowByTestId(tableStagedSellOrderLines, earliestLine.id);
+      const inputPartQuantity = getEditableCellById(partRow, "quantity");
+      const tagFilePath = path.join(
+        process.env.TAGS_ROOT_PATH!,
+        `${getPartTagName(PartTagSource.SellOrderLine, earliestLine.id)}.pdf`,
+      );
+      const getButtonStage = (line: BaseSellOrderLine) =>
+        getTableRowByTestId(tablePendingSellOrderLines, line.id).getByTestId("button-success");
+      const createDeliveryNote = async () => {
+        const previousDeliveryNoteIds = (await getDeliveryNotes()).map((deliveryNote) => deliveryNote.id);
+        await expect(buttonSubmitFormDeliveryNote).toBeEnabled();
+        await buttonSubmitFormDeliveryNote.click();
+        await expectSingleSuccessToast(page, DELIVERY_NOTE_CREATED_MESSAGE);
+        const createdDeliveryNote = (await getDeliveryNotes()).find(
+          (deliveryNote) => !previousDeliveryNoteIds.includes(deliveryNote.id),
+        )!;
+        return getDeliveryNoteLinesByDeliveryNoteId(createdDeliveryNote.id);
+      };
+
+      await test.step("the lines of a part make one row led by its earliest line, whatever order they are staged in", async () => {
+        await workflowOpenCreateDeliveryNoteForClient(page, client);
+        let stagedQuantity = 0;
+        // Each line staged is earlier than the ones already staged, so it takes the lead of the row
+        for (const line of [...partLines].reverse()) {
+          await getButtonStage(line).click();
+          stagedQuantity += line.pendingQuantity;
+          await assertTableRowCount(tableStagedSellOrderLines, 1);
+          const inputQuantity = getEditableCellById(
+            getTableRowByTestId(tableStagedSellOrderLines, line.id),
+            "quantity",
+          );
+          await expect(inputQuantity).toHaveValue(String(stagedQuantity));
+          await expect(inputQuantity).toBeFocused();
+        }
+        await expect(partRow.getByTestId("sell-orders").getByRole("link")).toHaveText([otherReference, mockReference]);
+        await expect(partRow.getByTestId("part-reference").getByRole("link")).toHaveText(
+          [...new Set(partLines.map((line) => line.partReferenceId))].map(
+            (partReferenceId) => getMockPartReferenceById(partReferenceId)!.reference,
+          ),
+        );
+
+        // A return of the part is staged apart, so it never cancels out a delivery of it
+        await getButtonStage(returnLine).click();
+        await assertTableRowCount(tableStagedSellOrderLines, 2);
+        const returnRow = getTableRowByTestId(tableStagedSellOrderLines, returnLine.id);
+        await expect(getEditableCellById(returnRow, "quantity")).toHaveValue(String(returnLine.pendingQuantity));
+        await expect(returnRow.getByTestId("button-print-tag")).toBeDisabled();
+        await expect(inputPartQuantity).toHaveValue(String(partTotal));
+        await returnRow.getByTestId("button-unstage").click();
+        await assertTableRowCount(tableStagedSellOrderLines, 1);
+      });
+
+      await test.step("the tags share the units among the Pedidos, the earliest first, with one entry per Pedido", async () => {
+        // The first tag ends a unit before the earliest Pedido does, the second one a unit after the first mock line
+        // does, so it holds both Pedidos and every date, and the third one only the lines without date
+        const firstTagQuantity = earliestLine.pendingQuantity - 1;
+        const secondTagQuantity = 1 + mockFirstLine.pendingQuantity + 1;
+        const thirdTagQuantity = partTotal - firstTagQuantity - secondTagQuantity;
+        await workflowPrintTag(page, partRow, tagFilePath, [firstTagQuantity, secondTagQuantity, thirdTagQuantity]);
+
+        const [firstTag, secondTag, thirdTag, ...otherTags] = await readTagsTexts(tagFilePath);
+        expect(otherTags).toEqual([]);
+        expectTagField(firstTag, CLIENT_LABEL, client.name);
+        expectTagField(firstTag, DELIVERY_LABEL, deliveryDate);
+        expect(firstTag).toContain(getTagSellOrderText(otherReference, firstTagQuantity, true));
+        expect(firstTag).not.toContain(mockReference);
+
+        expectTagField(secondTag, DELIVERY_LABEL, deliveryDate);
+        expect(secondTag).not.toContain(formatDate(laterDeliveryDate)!);
+        expect(secondTag).toContain(getTagSellOrderText(otherReference, 1, false));
+        expect(secondTag).toContain(getTagSellOrderText(mockReference, secondTagQuantity - 1, false));
+        expect(secondTag.split(mockReference)).toHaveLength(2);
+        expectTagField(secondTag, TOTAL_LABEL, secondTagQuantity);
+
+        expectTagField(thirdTag, DELIVERY_LABEL, null);
+        expect(thirdTag).toContain(getTagSellOrderText(mockReference, thirdTagQuantity, true));
+      });
+
+      await test.step("unstaging the part unstages all of its lines", async () => {
+        await partRow.getByTestId("button-unstage").click();
+        await expect(getDivDisabledMessage(tableStagedSellOrderLines)).toBeVisible();
+      });
+
+      const lowerTotal = earliestLine.pendingQuantity + 1;
+      const servedOfMockFirstLine = lowerTotal - earliestLine.pendingQuantity + mockLastLine.pendingQuantity;
+      let deliveryNoteLines: Array<BaseDeliveryNoteLine> = [];
+      await test.step("the total of a part fills its earliest lines first, also when a line joins it", async () => {
+        await getButtonStage(earliestLine).click();
+        await getButtonStage(mockFirstLine).click();
+        await inputPartQuantity.clear();
+        await inputPartQuantity.pressSequentially(String(lowerTotal));
+        await expect(inputPartQuantity).toHaveValue(String(lowerTotal));
+
+        // The units of the joining line go to the earlier line that was not filled, so the joining one is left at 0
+        await getButtonStage(mockLastLine).click();
+        const total = lowerTotal + mockLastLine.pendingQuantity;
+        await expect(inputPartQuantity).toHaveValue(String(total));
+
+        // Nothing to serve blocks both Albaranes and the tags, also while another part still has units to serve. An
+        // empty total and a lone minus sign leave nothing to serve either
+        await getButtonStage(returnLine).click();
+        for (const typedTotal of ["", "-", "0"]) {
+          await inputPartQuantity.clear();
+          await inputPartQuantity.pressSequentially(typedTotal);
+          await expect(inputPartQuantity).toHaveValue(typedTotal);
+          await expect(buttonSubmitFormDeliveryNote).toBeDisabled();
+          await expect(page.getByTestId("button-add-lines-to-existing-delivery-note")).toBeDisabled();
+          await expect(partRow.getByTestId("button-print-tag")).toBeDisabled();
+        }
+        await getTableRowByTestId(tableStagedSellOrderLines, returnLine.id).getByTestId("button-unstage").click();
+        await expect(buttonSubmitFormDeliveryNote).toBeDisabled();
+        await inputPartQuantity.clear();
+        await inputPartQuantity.pressSequentially(String(total));
+        await expect(inputPartQuantity).toHaveValue(String(total));
+
+        // The lines left at 0 are left out of the tag, which holds the whole total by default
+        await workflowPrintTag(page, partRow, tagFilePath);
+        const [tag, ...otherTags] = await readTagsTexts(tagFilePath);
+        expect(otherTags).toEqual([]);
+        expect(tag).toContain(getTagSellOrderText(otherReference, earliestLine.pendingQuantity, false));
+        expect(tag).toContain(getTagSellOrderText(mockReference, servedOfMockFirstLine, false));
+        expectTagField(tag, TOTAL_LABEL, total);
+
+        deliveryNoteLines = await createDeliveryNote();
+        expect(deliveryNoteLines).toHaveLength(2);
+        expect(deliveryNoteLines).toEqual(
+          expect.arrayContaining([
+            expect.objectContaining({ quantity: earliestLine.pendingQuantity, sellOrderLineId: earliestLine.id }),
+            expect.objectContaining({ quantity: servedOfMockFirstLine, sellOrderLineId: mockFirstLine.id }),
+          ]),
+        );
+        await expect(getTableRowByTestId(tablePendingSellOrderLines, earliestLine.id)).toHaveCount(0);
+        await expect(
+          getTableRowByTestId(tablePendingSellOrderLines, mockFirstLine.id).getByTestId("pendingQuantity"),
+        ).toHaveText(String(mockFirstLine.pendingQuantity - servedOfMockFirstLine));
+        await expect(
+          getTableRowByTestId(tablePendingSellOrderLines, mockLastLine.id).getByTestId("pendingQuantity"),
+        ).toHaveText(String(mockLastLine.pendingQuantity));
+      });
+
+      await test.step("the tag of a served line lists its Pedido", async () => {
+        const deliveryNoteLine = deliveryNoteLines.find((line) => line.sellOrderLineId === earliestLine.id)!;
+        const dialogEditDeliveryNote = await workflowOpenEditDeliveryNote(page, deliveryNoteLine.deliveryNoteId);
+        const deliveryNoteLineTagFilePath = path.join(
+          process.env.TAGS_ROOT_PATH!,
+          `${getPartTagName(PartTagSource.DeliveryNoteLine, deliveryNoteLine.id)}.pdf`,
+        );
+        await workflowPrintTag(
+          page,
+          getTableRowByTestId(dialogEditDeliveryNote.getByTestId("table-delivery-note-line"), deliveryNoteLine.id),
+          deliveryNoteLineTagFilePath,
+        );
+        const [tag, ...otherTags] = await readTagsTexts(deliveryNoteLineTagFilePath);
+        expect(otherTags).toEqual([]);
+        expectTagField(tag, CLIENT_LABEL, client.name);
+        expectTagField(tag, DELIVERY_LABEL, deliveryDate);
+        expect(tag).toContain(getTagSellOrderText(otherReference, deliveryNoteLine.quantity, true));
+        expect(tag).not.toContain(mockReference);
+      });
+
+      await test.step("the latest line of a part keeps the units beyond what is pending when another Albarán serves the earliest one", async () => {
+        const extraUnits = 5;
+        const pendingOfMockFirstLine = mockFirstLine.pendingQuantity - servedOfMockFirstLine;
+        await workflowOpenCreateDeliveryNoteForClient(page, client);
+        await getButtonStage(mockFirstLine).click();
+        await getButtonStage(mockLastLine).click();
+        const inputQuantity = getEditableCellById(
+          getTableRowByTestId(tableStagedSellOrderLines, mockFirstLine.id),
+          "quantity",
+        );
+        const total = pendingOfMockFirstLine + mockLastLine.pendingQuantity + extraUnits;
+        await expect(inputQuantity).toHaveValue(String(total - extraUnits));
+        await inputQuantity.clear();
+        await inputQuantity.pressSequentially(String(total));
+        await expect(inputQuantity).toHaveValue(String(total));
+
+        await inAnotherTab(page, async (anotherPage) => {
+          await workflowOpenCreateDeliveryNoteForClient(anotherPage, client);
+          await workflowStageSingleSellOrderLine(anotherPage, mockFirstLine.id);
+          await getButtonSubmitFormDeliveryNote(anotherPage).click();
+          await expectSingleSuccessToast(anotherPage, DELIVERY_NOTE_CREATED_MESSAGE);
+        });
+
+        // The row is now led by the next line, with only its own units
+        await assertTableRowCount(tableStagedSellOrderLines, 1);
+        await expect(
+          getEditableCellById(getTableRowByTestId(tableStagedSellOrderLines, mockLastLine.id), "quantity"),
+        ).toHaveValue(String(mockLastLine.pendingQuantity + extraUnits));
+
+        const lines = await createDeliveryNote();
+        expect(lines).toEqual([
+          expect.objectContaining({
+            quantity: mockLastLine.pendingQuantity + extraUnits,
+            sellOrderLineId: mockLastLine.id,
+          }),
+        ]);
+        for (const line of [mockFirstLine, mockLastLine]) {
+          await expect(getTableRowByTestId(tablePendingSellOrderLines, line.id)).toHaveCount(0);
+          expect((await getSellOrderLineById(line.id))?.pendingQuantity).toBe(0);
+        }
+      });
+    },
+  );
+}
+
+{
+  const client = clientsWithPendingLines[0];
   test(`two delivery notes of ${client.name} sent at the same time cannot deliver the same pending parts twice`, async ({
     db,
     page,
@@ -785,26 +1070,101 @@ for (const client of clientsWithPendingLines) {
     const otherLineRow = getTableRowByTestId(tablePendingSellOrderLines, otherLine.id);
 
     await workflowOpenCreateDeliveryNoteForClient(page, client);
-    await expect(checkboxShowStagedLines).toBeChecked();
+    await expect(checkboxShowStagedLines).not.toBeChecked();
     await workflowStageSingleSellOrderLine(page, stagedLine.id);
 
-    await expect(stagedLineRow).toBeVisible();
-    await expect(otherLineRow).toBeVisible();
-
-    await checkboxShowStagedLines.click();
-    await expect(checkboxShowStagedLines).not.toBeChecked();
     await expect(stagedLineRow).toHaveCount(0);
     await expect(otherLineRow).toBeVisible();
 
-    await page.getByText(SHOW_PREPARED_LINES_LABEL).click();
+    await checkboxShowStagedLines.click();
     await expect(checkboxShowStagedLines).toBeChecked();
     await expect(stagedLineRow).toBeVisible();
+    await expect(otherLineRow).toBeVisible();
 
-    await checkboxShowStagedLines.click();
+    await page.getByText(SHOW_PREPARED_LINES_LABEL).click();
+    await expect(checkboxShowStagedLines).not.toBeChecked();
     await expect(stagedLineRow).toHaveCount(0);
     await getTableRowByTestId(tableStagedSellOrderLines, stagedLine.id).getByTestId("button-unstage").click();
     await expect(stagedLineRow).toBeVisible();
     await expect(otherLineRow).toBeVisible();
+  });
+}
+
+{
+  const client = clientsWithPendingLines[0];
+  test(`the pending and staged lines of ${client.name} are paged without changing the url`, async ({ db, page }) => {
+    // Each line is of its own part, so every one of them is also a row of its own once staged
+    const parts = await db
+      .insert(dbTablePart)
+      .values(
+        Array.from({ length: PENDING_SELL_ORDER_LINES_PAGE_SIZE + 1 }, (_, index) => ({
+          description: `Paged ${index}`,
+        })),
+      )
+      .returning();
+    const partReferences = await db
+      .insert(dbTablePartReference)
+      .values(
+        parts.map((part) => ({
+          clientDescription: part.description,
+          clientId: client.id,
+          partId: part.id,
+          reference: `PAGED-${part.id}`,
+        })),
+      )
+      .returning();
+    const [sellOrder] = await db
+      .insert(dbTableSellOrder)
+      .values({ clientId: client.id, receptionDate: MOCK_INITIAL_DATE })
+      .returning();
+    const pagedLines = await db
+      .insert(dbTableSellOrderLine)
+      .values(
+        partReferences.map((partReference) => ({
+          partPrice: "1",
+          partReferenceId: partReference.id,
+          pendingQuantity: 1,
+          quantity: 1,
+          sellOrderId: sellOrder.id,
+        })),
+      )
+      .returning();
+    const mockPendingSellOrderLines = await getMockPendingSellOrderLines(client.id);
+    const pendingCount = mockPendingSellOrderLines.length + pagedLines.length;
+    const stagedRowsCount = getMockStagedPartRows(mockPendingSellOrderLines).length + pagedLines.length;
+    const pendingRows = getTableRows(tablePendingSellOrderLines);
+
+    await workflowOpenCreateDeliveryNoteForClient(page, client);
+
+    await test.step("the selected client is kept in the url", async () => {
+      await page.reload();
+      await assertComboboxValue(page.getByTestId("combobox-client"), String(client.id));
+      await assertTableRowCount(tablePendingSellOrderLines, pendingCount);
+    });
+    const url = page.url();
+
+    await test.step("the pending lines are paged", async () => {
+      await assertTableRowCount(tablePendingSellOrderLines, pendingCount);
+      await expect(pendingRows).toHaveCount(PENDING_SELL_ORDER_LINES_PAGE_SIZE);
+      const firstPageRow = getTableRowByTestId(tablePendingSellOrderLines, await getTestId(pendingRows.first()));
+
+      await getTablePagerButton(tablePendingSellOrderLines, NEXT_PAGE_LABEL).click();
+      await expect(firstPageRow).toHaveCount(0);
+      await expect(pendingRows).toHaveCount(
+        Math.min(PENDING_SELL_ORDER_LINES_PAGE_SIZE, pendingCount - PENDING_SELL_ORDER_LINES_PAGE_SIZE),
+      );
+      await expect(page).toHaveURL(url);
+    });
+
+    await test.step("every line is staged across the pages, and all the staged rows are shown at once", async () => {
+      for (let remaining = pendingCount; remaining > 0; remaining--) {
+        await pendingRows.first().getByTestId("button-success").click();
+        await assertTableRowCount(tablePendingSellOrderLines, remaining - 1);
+      }
+      await assertTableRowCount(tableStagedSellOrderLines, stagedRowsCount);
+      await expect(getTableRows(tableStagedSellOrderLines)).toHaveCount(stagedRowsCount);
+      await expect(page).toHaveURL(url);
+    });
   });
 }
 

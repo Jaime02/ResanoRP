@@ -9,7 +9,7 @@ import DialogSellOrderFile from "@/components/dialog/sell-order-file";
 import PopoverPartPickerFilter from "@/components/popover/part-picker-filter";
 import type { PublicBaseTableProps, TBaseTableFeatures } from "@/components/table/base-table";
 import BaseTable from "@/components/table/base-table";
-import { createTableColumnHelper } from "@/components/table/column-helper";
+import { DEFAULT_REFERENCE_COLUMN_SIZE, createTableColumnHelper } from "@/components/table/column-helper";
 import TooltipSellOrderStatus from "@/components/tooltip/sell-order-status";
 import ButtonLink from "@/components/ui/button-link";
 import { ModelActions } from "@/components/ui/model-actions";
@@ -21,6 +21,7 @@ import { formatDate } from "@/lib/formatters";
 import { serializeSellOrder } from "@/lib/serializers";
 import { ACTIONS_LABEL, CLIENT_LABEL, DATE_LABEL, NUMBER_LABEL, STATUS_LABEL } from "@/messages/common";
 import {
+  CLIENT_REFERENCE_COLUMN_LABEL,
   SELL_ORDER_DELETE_MESSAGE,
   SELL_ORDER_DELETE_TITLE,
   SELL_ORDER_DELETED_MESSAGE,
@@ -98,6 +99,10 @@ export default function TableSellOrder({ testId = "table-sell-order", state, ...
         id: "clientName",
         meta: { dataType: CellDataType.String, filterFieldName: "clientName" },
         size: 400,
+      }),
+      columnHelper.accessor("clientReference", {
+        header: CLIENT_REFERENCE_COLUMN_LABEL,
+        size: DEFAULT_REFERENCE_COLUMN_SIZE,
       }),
       columnHelper.accessor("sellOrderLines", {
         cell: (info) => info.getValue().length,

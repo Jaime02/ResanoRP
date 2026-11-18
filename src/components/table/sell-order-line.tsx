@@ -7,7 +7,11 @@ import DialogBlueprintViewer from "@/components/dialog/blueprint-viewer";
 import CreateSellOrderLineDialog from "@/components/dialog/create-sell-order-line";
 import PickerPartPrice from "@/components/picker/picker-part-price";
 import BaseTable from "@/components/table/base-table";
-import { DEFAULT_DESCRIPTION_COLUMN_SIZE, createTableColumnHelper } from "@/components/table/column-helper";
+import {
+  DEFAULT_DESCRIPTION_COLUMN_SIZE,
+  DEFAULT_STATUS_COLUMN_SIZE,
+  createTableColumnHelper,
+} from "@/components/table/column-helper";
 import TooltipSellOrderLineStatus from "@/components/tooltip/sell-order-line-status";
 import { ButtonCopyLayout } from "@/components/ui/button-copy";
 import ButtonLink from "@/components/ui/button-link";
@@ -132,6 +136,7 @@ export default function TableSellOrderLine({
     () => [
       columnHelper.display({
         id: "status",
+        size: DEFAULT_STATUS_COLUMN_SIZE,
         header: STATUS_LABEL,
         cell: ({ row }) =>
           isProductionOrdersReady && (

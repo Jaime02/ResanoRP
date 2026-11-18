@@ -3,6 +3,7 @@ import { z } from "zod";
 import {
   nullableIdSchema,
   nonZeroQuantitySchema,
+  quantitySchema,
   requiredDateSchema,
   requiredIdSchema,
   tableStateSchema,
@@ -40,7 +41,11 @@ const createDeliveryNoteLineSchema = z.object({
   quantity: nonZeroQuantitySchema,
 });
 
-const stagedSellOrderLinesSchema = z.array(createDeliveryNoteLineSchema).nonempty();
+// Lowering the total of a part staged from several Pedidos leaves the latest of its lines at 0, which are not delivered
+const stagedSellOrderLinesSchema = z
+  .array(createDeliveryNoteLineSchema.extend({ quantity: quantitySchema }))
+  .transform((lines) => lines.filter((line) => line.quantity !== 0))
+  .pipe(z.array(createDeliveryNoteLineSchema).nonempty());
 export type TStagedSellOrderLine = z.infer<typeof createDeliveryNoteLineSchema>;
 
 export const createDeliveryNoteWithLinesSchema = z.object({

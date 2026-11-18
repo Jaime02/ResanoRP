@@ -1,3 +1,5 @@
+import path from "node:path";
+
 import { expect } from "@playwright/test";
 import type { Page } from "@playwright/test";
 
@@ -13,6 +15,7 @@ import {
 } from "@/db/functions/production-order";
 import { getSellOrderById } from "@/db/functions/sell-order";
 import { getSellOrderLineById } from "@/db/functions/sell-order-line";
+import { getPartTagName, PartTagSource } from "@/lib/part-tag";
 import { isProductionFinished } from "@/lib/production-order";
 import { PART_LABEL } from "@/messages/common";
 import {
@@ -35,6 +38,8 @@ import { openPartPicker } from "@/tests/utils/components/picker";
 import { getTableRowByTestId } from "@/tests/utils/components/table";
 import { expectSingleSuccessOrErrorToast, expectSingleSuccessToast } from "@/tests/utils/components/toast";
 import { pickActiveMachine, setUserMode } from "@/tests/utils/fixtures";
+import { expectPrintedByBrowser } from "@/tests/workflows/printer";
+import { assertTagFileGenerated, readTagsTexts } from "@/tests/workflows/tag";
 import type { BaseMachine } from "@/types/machine";
 import type { BasePart } from "@/types/part";
 import type { BaseProductionOrder } from "@/types/production-order";
@@ -343,4 +348,18 @@ export async function workflowCreateProductionOrder(
   } else {
     await expect(page).toHaveURL(/\/create-production-order/);
   }
+}
+
+// The stop dialog has to be open with the produced quantity filled in. Without Impresoras for tags, the browser prints it
+export async function workflowPrintStopProductionOrderTag(page: Page, productionOrderId: number) {
+  const { dialogContentStopProductionOrder } = getProductionLocators(page);
+  const tagFilePath = path.join(
+    process.env.TAGS_ROOT_PATH!,
+    `${getPartTagName(PartTagSource.ProductionOrder, productionOrderId)}.pdf`,
+  );
+  const printTagButton = dialogContentStopProductionOrder.getByTestId("button-print-tag-stop-production-order");
+  await expect(printTagButton).toBeEnabled();
+  await expectPrintedByBrowser(page, printTagButton);
+  assertTagFileGenerated(tagFilePath);
+  return readTagsTexts(tagFilePath);
 }

@@ -5,7 +5,7 @@ import { getDeliveryNote, getSellOrderLinesByDeliveryNoteId } from "@/db/functio
 import { getDeliveryNoteLinesByDeliveryNoteId } from "@/db/functions/delivery-note-line";
 import { getSellOrderLineById } from "@/db/functions/sell-order-line";
 import { clampPendingQuantity } from "@/lib/sell-order-line";
-import { ADD_PART_LABEL, CLIENT_LABEL, DESCRIPTION_LABEL, PRICE_LABEL, QUANTITY_LABEL } from "@/messages/common";
+import { ADD_PART_LABEL, DESCRIPTION_LABEL, PRICE_LABEL, QUANTITY_LABEL } from "@/messages/common";
 import {
   DELIVERY_NOTE_DELETED_DESCRIPTION,
   DELIVERY_NOTE_DELETED_MESSAGE,
@@ -90,12 +90,7 @@ export async function workflowOpenCreateDeliveryNoteLine(page: Page) {
 
 export async function workflowOpenCreateDeliveryNoteForClient(page: Page, client: BaseClient) {
   await page.goto("/create-delivery-note");
-  await selectComboboxOption(
-    page,
-    getFormInputByLabel(page, CLIENT_LABEL, InputElementType.Combobox),
-    client.name,
-    String(client.id),
-  );
+  await selectComboboxOption(page, page.getByTestId("combobox-client"), client.name, String(client.id));
   await expect(page.getByTestId("table-pending-sell-orders")).toBeVisible();
 }
 

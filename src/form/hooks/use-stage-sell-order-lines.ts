@@ -3,6 +3,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { useAppContext } from "@/contexts/app-context";
 import { useAppForm } from "@/form";
+import { groupStagedSellOrderLines, splitQuantityFifo } from "@/lib/sell-order-line";
 import log from "@/logging/log";
 import { LogMessages, LoggerLevels } from "@/logging/types";
 import { DELIVERY_NOTE_CREATED_MESSAGE, LINES_ADDED_TO_DELIVERY_NOTE_MESSAGE } from "@/messages/delivery-note";
@@ -23,10 +24,11 @@ export enum StageSellOrderLinesFormMode {
 }
 
 interface UseStageSellOrderLinesFormProps {
+  defaultClientId?: number;
   onSubmit?: () => Promise<void>;
 }
 
-export function useStageSellOrderLinesForm({ onSubmit }: UseStageSellOrderLinesFormProps = {}) {
+export function useStageSellOrderLinesForm({ defaultClientId, onSubmit }: UseStageSellOrderLinesFormProps = {}) {
   const { showToastOnTRPCMutation } = useAppContext();
 
   const [stageSellOrderLinesFormMode, setStageSellOrderLinesFormMode] = useState(
@@ -43,7 +45,7 @@ export function useStageSellOrderLinesForm({ onSubmit }: UseStageSellOrderLinesF
   const form = useAppForm({
     formId: "stageSellOrderLines",
     defaultValues: {
-      clientId: null as number | null,
+      clientId: defaultClientId ?? (null as number | null),
       deliveryMethodId: null as number | null,
       deliveryNoteId: null as number | null,
       stagedSellOrderLines: undefined as Array<TStagedSellOrderLine> | undefined,
@@ -109,6 +111,13 @@ export function useStageSellOrderLinesForm({ onSubmit }: UseStageSellOrderLinesF
     isCrashed,
   } = useQueryPendingSellOrderLines({ clientId });
 
+  const stagedPartRows = useMemo(
+    () => groupStagedSellOrderLines(pendingSellOrderLines, stagedSellOrderLines),
+    [pendingSellOrderLines, stagedSellOrderLines],
+  );
+  // The schema leaves out the lines at 0 of a part, so it would silently skip a whole part set to 0
+  const hasEmptyStagedPart = stagedPartRows.some((row) => row.quantity === 0);
+
   const { data: defaultDeliveryMethodOfClient, isLoading: isLoadingDefaultDeliveryMethod } =
     useQueryClientDefaultDeliveryMethod(clientId);
 
@@ -126,86 +135,70 @@ export function useStageSellOrderLinesForm({ onSubmit }: UseStageSellOrderLinesF
         await log(LoggerLevels.warning, LogMessages.stageNotPendingSellOrderLine);
         return;
       }
-      const stagedSellOrderLine = { ...sellOrderLine, quantity: stagedQuantity };
-      if (!stagedSellOrderLines) {
-        // No staged lines yet, create the array with the new line
-        form.setFieldValue("stagedSellOrderLines", [stagedSellOrderLine]);
-        return;
-      }
-      const existingLineIndex = stagedSellOrderLines.findIndex((line) => line.id === stagedSellOrderLineId);
-      if (existingLineIndex !== -1) {
-        const updatedLines = [...stagedSellOrderLines];
-        updatedLines[existingLineIndex] = stagedSellOrderLine;
-        form.setFieldValue("stagedSellOrderLines", updatedLines);
-      } else {
-        form.setFieldValue("stagedSellOrderLines", [...stagedSellOrderLines, stagedSellOrderLine]);
-      }
+      const updatedLines = [
+        ...(stagedSellOrderLines ?? []).filter((line) => line.id !== stagedSellOrderLineId),
+        { id: stagedSellOrderLineId, quantity: stagedQuantity },
+      ];
+      // The part keeps a single total, so a line joining it is filled in the order the lines are served in
+      const partRow = groupStagedSellOrderLines(pendingSellOrderLines, updatedLines).find((row) =>
+        row.lines.some((line) => line.id === stagedSellOrderLineId),
+      );
+      const splitQuantities = partRow ? splitQuantityFifo(partRow.lines, partRow.quantity) : [];
+      form.setFieldValue(
+        "stagedSellOrderLines",
+        updatedLines.map((line) => splitQuantities.find((split) => split.id === line.id) ?? line),
+      );
     },
     [form, pendingSellOrderLines, stagedSellOrderLines],
   );
 
-  const unstageSellOrderLine = useCallback(
-    async (sellOrderLineId: number) => {
+  const unstageSellOrderLines = useCallback(
+    async (sellOrderLineIds: Array<number>) => {
       if (!stagedSellOrderLines) {
         await log(LoggerLevels.warning, LogMessages.unstageWithoutStagedLines);
         return;
       }
-      const updatedLines = stagedSellOrderLines.filter((line) => line.id !== sellOrderLineId);
+      const updatedLines = stagedSellOrderLines.filter((line) => !sellOrderLineIds.includes(line.id));
       form.setFieldValue("stagedSellOrderLines", updatedLines);
     },
     [form, stagedSellOrderLines],
   );
 
-  const updateStagedSellOrderLineQuantity = useCallback(
-    async (sellOrderLineId: number, quantity: number) => {
+  // The lines of a part are given in the order they are served in, so the total fills the earliest ones first
+  const updateStagedGroupQuantity = useCallback(
+    async (sellOrderLineIds: Array<number>, total: number) => {
       if (!stagedSellOrderLines) {
         await log(LoggerLevels.warning, LogMessages.updateWithoutStagedLines);
         return;
       }
-      const lineIndex = stagedSellOrderLines.findIndex((line) => line.id === sellOrderLineId);
-      if (lineIndex === -1) {
+      const groupLines = sellOrderLineIds
+        .map((id) => pendingSellOrderLines?.find((line) => line.id === id))
+        .filter((line) => line !== undefined);
+      if (groupLines.length !== sellOrderLineIds.length) {
         await log(LoggerLevels.warning, LogMessages.updateNotStagedSellOrderLine);
         return;
       }
-      const updatedLines = [...stagedSellOrderLines];
-      updatedLines[lineIndex] = {
-        ...updatedLines[lineIndex],
-        quantity,
-      };
-      form.setFieldValue("stagedSellOrderLines", updatedLines);
+      const splitQuantities = splitQuantityFifo(groupLines, total);
+      form.setFieldValue(
+        "stagedSellOrderLines",
+        stagedSellOrderLines.map((line) => splitQuantities.find((split) => split.id === line.id) ?? line),
+      );
     },
-    [form, stagedSellOrderLines],
+    [form, pendingSellOrderLines, stagedSellOrderLines],
   );
 
   useEffect(() => {
     if (pendingSellOrderLines === undefined || stagedSellOrderLines === undefined) {
       return;
     }
-    // Whenever the pendingOrdersChange, check that the staged lines are still submitable
+    // A staged line that is no longer pending can not be served anymore
     const validStagedSellOrderLines = stagedSellOrderLines.filter((stagedSellOrderLine) =>
       pendingSellOrderLines.some((sellOrderLine) => sellOrderLine.id === stagedSellOrderLine.id),
     );
-
-    // All the staged sell order lines are still valid, no need to update
-    if (validStagedSellOrderLines.length === stagedSellOrderLines.length) {
-      return;
+    if (validStagedSellOrderLines.length !== stagedSellOrderLines.length) {
+      form.setFieldValue("stagedSellOrderLines", validStagedSellOrderLines);
     }
-
-    const deletedSellOrderLines = stagedSellOrderLines.filter(
-      (stagedSellOrderLine) =>
-        !pendingSellOrderLines.some((sellOrderLine) => sellOrderLine.id === stagedSellOrderLine.id),
-    );
-    if (deletedSellOrderLines.length === 0) {
-      void log(LoggerLevels.warning, LogMessages.stagedSellOrderLinesInvalid);
-      return;
-    }
-
-    for (const deletedSellOrderLine of deletedSellOrderLines) {
-      void unstageSellOrderLine(deletedSellOrderLine.id);
-    }
-
-    form.setFieldValue("stagedSellOrderLines", validStagedSellOrderLines);
-  }, [pendingSellOrderLines, stagedSellOrderLines, form, unstageSellOrderLine]);
+  }, [pendingSellOrderLines, stagedSellOrderLines, form]);
 
   useEffect(() => {
     // Set the delivery method if the user has not changed it
@@ -229,12 +222,14 @@ export function useStageSellOrderLinesForm({ onSubmit }: UseStageSellOrderLinesF
     getPendingSellOrdersError:
       isLoadingError || isCrashed || (!isLoadingPendingSellOrders && pendingSellOrderLines === undefined),
     isLoading,
+    hasEmptyStagedPart,
     pendingSellOrderLines,
+    stagedPartRows,
     stageSellOrderLinesFormMode,
     setStageSellOrderLinesFormMode,
     stageSellOrderLine,
     stagedSellOrderLines,
-    unstageSellOrderLine,
-    updateStagedSellOrderLineQuantity,
+    unstageSellOrderLines,
+    updateStagedGroupQuantity,
   };
 }
