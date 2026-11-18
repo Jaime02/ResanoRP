@@ -153,6 +153,7 @@ function RouteComponent() {
                   testId="combobox-client"
                   id="combobox-client-form-delivery-note"
                   label={null}
+                  hideError
                   nullable
                   onValueChange={(newValue) => {
                     if (stagedSellOrderLines && stagedSellOrderLines.length > 0) {

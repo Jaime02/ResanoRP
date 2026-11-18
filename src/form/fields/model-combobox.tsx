@@ -16,6 +16,7 @@ export default function FieldModelCombobox({
   id,
   label,
   tooltipContent,
+  hideError,
   layoutClassName,
   ...props
 }: FieldModelComboboxProps & { Combobox: React.ComponentType<ComboboxModelProps<TBaseModel>> }) {
@@ -29,6 +30,7 @@ export default function FieldModelCombobox({
       label={label}
       required={isFieldRequired(field.name, validationSchema) && !readOnly}
       tooltipContent={tooltipContent}
+      hideError={hideError}
       className={layoutClassName}
     >
       <Combobox

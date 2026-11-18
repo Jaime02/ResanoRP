@@ -49,6 +49,7 @@ export function TableStagedOrderLine({
 }: TableStagedOrderLineProps) {
   const navigate = useNavigate();
 
+  const hasRows = stagedPartRows.length > 0;
   const printTagRow = stagedPartRows.find((row) => row.id === printTagSellOrderLineId);
   const printTagSellOrderLines = useMemo(() => {
     const lines = printTagRow?.lines
@@ -59,10 +60,14 @@ export function TableStagedOrderLine({
 
   const columns = useMemo(
     () => [
-      columnHelper.display({
-        cell: (info) => info.row.index + 1,
-        id: "id",
-      }),
+      ...(hasRows
+        ? [
+            columnHelper.display({
+              cell: (info) => info.row.index + 1,
+              id: "id",
+            }),
+          ]
+        : []),
       columnHelper.display({
         cell: ({ row }) => (
           <div className="flex flex-row flex-wrap gap-1">
@@ -159,7 +164,7 @@ export function TableStagedOrderLine({
         size: THREE_BUTTONS_ACTIONS_COLUMN_SIZE,
       }),
     ],
-    [isLoading, unstageSellOrderLines, navigate],
+    [hasRows, isLoading, unstageSellOrderLines, navigate],
   );
 
   const previousStagedSellOrderLinesIds = useRef(new Set<number>());

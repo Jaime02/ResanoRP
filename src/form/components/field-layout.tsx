@@ -10,6 +10,7 @@ export interface FieldLayoutProps {
   tooltipContent?: React.ReactNode;
   labelFor?: string;
   required?: boolean;
+  hideError?: boolean;
   className?: string;
   children: React.ReactNode;
 }
@@ -20,6 +21,7 @@ export default function FieldLayout({
   tooltipContent,
   labelFor,
   required = false,
+  hideError = false,
   className,
   children,
 }: FieldLayoutProps) {
@@ -36,7 +38,7 @@ export default function FieldLayout({
       {labelPosition === "start" && labelElement}
       {children}
       {labelPosition === "end" && labelElement}
-      {field.state.meta.isTouched && typeof field.state.meta.errors.at(0)?.message === "string" && (
+      {!hideError && field.state.meta.isTouched && typeof field.state.meta.errors.at(0)?.message === "string" && (
         <span className="mt-1 flex flex-row gap-1 font-bold text-red-500">
           <TriangleAlertIcon />
           {field.state.meta.errors.at(0).message}

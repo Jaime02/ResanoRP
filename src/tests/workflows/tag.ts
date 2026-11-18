@@ -44,11 +44,18 @@ export function getTagSellOrderText(reference: string, quantity: number, isSingl
 // on disk has to be gone
 export async function expectTagPrintedByBrowser(page: Page, buttonPrint: Locator, tagFilePath: string) {
   const tagUrl = getPartTagFileUrl(path.basename(tagFilePath, ".pdf")).split("?")[0];
-  const [response] = await Promise.all([
-    page.waitForResponse((tagResponse) => tagResponse.url().includes(tagUrl)),
-    expectPrintedByBrowser(page, buttonPrint),
-  ]);
-  const tagsTexts = await readTagsTexts(await response.body());
+  // The iframe is removed right after printing, which discards the body of its response, so it is read on its way
+  const routeUrl = (url: URL) => url.href.includes(tagUrl);
+  let resolveTagPdf: (tagPdf: Buffer) => void = () => {};
+  const tagPdf = new Promise<Buffer>((resolve) => (resolveTagPdf = resolve));
+  await page.route(routeUrl, async (route) => {
+    const response = await route.fetch();
+    resolveTagPdf(await response.body());
+    await route.fulfill({ response });
+  });
+  await expectPrintedByBrowser(page, buttonPrint);
+  await page.unroute(routeUrl);
+  const tagsTexts = await readTagsTexts(await tagPdf);
   expect(fs.existsSync(tagFilePath)).toBe(false);
   return tagsTexts;
 }
