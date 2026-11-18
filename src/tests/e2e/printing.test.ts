@@ -103,8 +103,6 @@ async function workflowOpenPrintDeliveryNote(page: Page, isAdmin = true) {
   await page.getByTestId("button-print-delivery-note").click();
   if (isAdmin) {
     await page.getByTestId("button-print-delivery-note-without-prices").click();
-    // The closing prices dialog gives the focus back to the page, which would close a combobox opened meanwhile
-    await expect(page.getByTestId("dialog-delivery-note-prices-content")).toBeHidden();
   }
   const dialog = page.getByTestId("dialog-print-delivery-note-content");
   await expect(dialog).toBeVisible();
@@ -161,7 +159,7 @@ test("print the documents on the Impresoras of the server or with the browser", 
     await assertSelectedPrinter(dialog, BROWSER_PRINTER_LABEL);
     await openCombobox(getComboboxPrinter(dialog));
     await assertComboboxOptionsCount(page, 1);
-    await page.keyboard.press("Escape");
+    await dialog.getByRole("heading").click();
     await expectPrintedByBrowser(page, dialog.getByTestId("button-print-delivery-note-once"));
   });
 
@@ -176,7 +174,7 @@ test("print the documents on the Impresoras of the server or with the browser", 
       PRINTERS.rejecting.name,
       BROWSER_PRINTER_LABEL,
     ]);
-    await page.keyboard.press("Escape");
+    await dialog.getByRole("heading").click();
   });
 
   await test.step("the Albarán is sent to the Impresora once or twice, and the dialog waits for it", async () => {

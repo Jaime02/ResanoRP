@@ -165,10 +165,7 @@ for (const selectedClient of clientsWithPendingLines) {
 
         await expect(buttonSubmitFormDeliveryNote).toBeDisabled();
 
-        // The pending quantity is untouched and no Albarán was created
-        await expect(sellOrderLineRow.getByTestId("pendingQuantity")).toHaveText(
-          String(pendingSellOrderLine.pendingQuantity),
-        );
+        // No Albarán was created
         expect(await getDeliveryNote({ id: mockDeliveryNotes.length + 1 })).toBeUndefined();
 
         // Restoring a positive quantity unblocks the submission

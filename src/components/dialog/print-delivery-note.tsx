@@ -1,5 +1,5 @@
 import { DownloadIcon, PrinterIcon } from "lucide-react";
-import { useCallback, useState } from "react";
+import { useRef, useState } from "react";
 
 import PDFViewer from "@/components/pdf/pdf-viewer";
 import PrintControls from "@/components/print/print-controls";
@@ -41,36 +41,28 @@ export default function DialogPrintDeliveryNote({ deliveryNoteId, iconOnly = fal
   const { isAdmin, showToastOnTRPCMutation } = useAppContext();
 
   const [isAskingForPrices, setIsAskingForPrices] = useState(false);
+  // The preview takes the focus, and giving it back to the trigger meanwhile would close a combobox opened in it
+  const isOpeningPreviewRef = useRef(false);
   const [withPrices, setWithPrices] = useState(false);
   const [previewUrl, setPreviewUrl] = useState<string>();
   const [isLoading, setIsLoading] = useState(false);
 
-  const generate = useCallback(
-    async (printWithPrices: boolean, copies: number) => {
-      setIsLoading(true);
-      await showToastOnTRPCMutation({
-        mutation: trpc.deliveryNote.print.mutate({ copies, id: deliveryNoteId, withPrices: printWithPrices }),
-      });
-      setIsLoading(false);
-      return getDeliveryNoteFileUrl(deliveryNoteId, copies);
-    },
-    [deliveryNoteId, showToastOnTRPCMutation],
-  );
+  async function generate(printWithPrices: boolean, copies: number) {
+    setIsLoading(true);
+    await showToastOnTRPCMutation({
+      mutation: trpc.deliveryNote.print.mutate({ copies, id: deliveryNoteId, withPrices: printWithPrices }),
+    });
+    setIsLoading(false);
+    return getDeliveryNoteFileUrl(deliveryNoteId, copies);
+  }
 
-  const openPreview = useCallback(
-    async (printWithPrices: boolean) => {
-      setIsAskingForPrices(false);
-      const url = await generate(printWithPrices, 1);
-      setWithPrices(printWithPrices);
-      setPreviewUrl(url);
-    },
-    [generate],
-  );
-
-  const getPrintUrl = useCallback(
-    async (copies: number) => (copies === 1 ? previewUrl : generate(withPrices, copies)),
-    [generate, previewUrl, withPrices],
-  );
+  async function openPreview(printWithPrices: boolean) {
+    isOpeningPreviewRef.current = true;
+    setIsAskingForPrices(false);
+    const url = await generate(printWithPrices, 1);
+    setWithPrices(printWithPrices);
+    setPreviewUrl(url);
+  }
 
   return (
     <>
@@ -78,18 +70,19 @@ export default function DialogPrintDeliveryNote({ deliveryNoteId, iconOnly = fal
         testId="button-print-delivery-note"
         size={iconOnly ? "icon" : undefined}
         onClick={() => {
-          if (isAdmin) {
-            setIsAskingForPrices(true);
-            return;
-          }
-          void openPreview(false);
+          if (!isAdmin) return void openPreview(false);
+          isOpeningPreviewRef.current = false;
+          setIsAskingForPrices(true);
         }}
       >
         <PrinterIcon />
         {!iconOnly && PRINT_DELIVERY_NOTE_TITLE}
       </Button>
       <AlertDialog open={isAskingForPrices} onOpenChange={setIsAskingForPrices}>
-        <AlertDialogContent data-testid="dialog-delivery-note-prices-content">
+        <AlertDialogContent
+          data-testid="dialog-delivery-note-prices-content"
+          finalFocus={() => !isOpeningPreviewRef.current}
+        >
           <AlertDialogTitle>{PRINT_DELIVERY_NOTE_TITLE}</AlertDialogTitle>
           <AlertDialogDescription>{PRINT_DELIVERY_NOTE_MESSAGE}</AlertDialogDescription>
           <AlertDialogFooter>
@@ -110,14 +103,7 @@ export default function DialogPrintDeliveryNote({ deliveryNoteId, iconOnly = fal
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-      <Dialog
-        open={previewUrl !== undefined}
-        onOpenChange={(open) => {
-          if (!open) {
-            setPreviewUrl(undefined);
-          }
-        }}
-      >
+      <Dialog open={previewUrl !== undefined} onOpenChange={(open) => !open && setPreviewUrl(undefined)}>
         <DialogContent data-testid="dialog-print-delivery-note-content" isLoading={isLoading}>
           <DialogHeader>
             <DialogTitle>Albarán {deliveryNoteId}</DialogTitle>
@@ -127,10 +113,7 @@ export default function DialogPrintDeliveryNote({ deliveryNoteId, iconOnly = fal
             <Button
               testId="button-download-delivery-note"
               variant="secondary"
-              onClick={() => {
-                if (previewUrl === undefined) return;
-                downloadUrl(previewUrl, `albaran-${deliveryNoteId}.pdf`);
-              }}
+              onClick={() => previewUrl !== undefined && downloadUrl(previewUrl, `albaran-${deliveryNoteId}.pdf`)}
             >
               <DownloadIcon />
               {DOWNLOAD_LABEL}
@@ -142,7 +125,7 @@ export default function DialogPrintDeliveryNote({ deliveryNoteId, iconOnly = fal
                   <Button
                     testId="button-print-delivery-note-once"
                     disabled={isPrinting}
-                    onClick={async () => printPdf(await getPrintUrl(1))}
+                    onClick={() => void printPdf(previewUrl)}
                   >
                     <PrinterIcon />
                     {PRINT_LABEL}
@@ -150,7 +133,7 @@ export default function DialogPrintDeliveryNote({ deliveryNoteId, iconOnly = fal
                   <Button
                     testId="button-print-delivery-note-twice"
                     disabled={isPrinting}
-                    onClick={async () => printPdf(await getPrintUrl(2))}
+                    onClick={async () => printPdf(await generate(withPrices, 2))}
                   >
                     <PrinterIcon />
                     {PRINT_TWICE_LABEL}

@@ -66,7 +66,7 @@ export default function usePartTagForm({
       });
     },
     validators: {
-      onSubmit: printTagPartSchema,
+      onChange: printTagPartSchema,
     },
   });
 
