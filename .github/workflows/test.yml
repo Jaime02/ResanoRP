@@ -36,7 +36,7 @@ jobs:
 
       - run: bun --env-file=./envs/.env.test ./src/scripts/wait-for-url.ts
 
-      - run: node --env-file=./envs/.env.test ./node_modules/@playwright/test/cli.js test --shard=${{ matrix.shard }}/3
+      - run: node --env-file=./envs/.env.test ./node_modules/@playwright/test/cli.js test --shard=${{ matrix.shard }}/3 --trace retain-on-failure
 
       - if: failure()
         uses: actions/upload-artifact@v4
@@ -45,4 +45,4 @@ jobs:
           path: test-results/
 
       - if: failure()
-        run: docker compose -p resanorp-test --project-directory . -f docker/docker-compose.base.yml -f docker/docker-compose.test.yml -f docker/docker-compose.test-production.yml --env-file ./envs/.env.test --profile test logs app-test
+        run: docker compose -p resanorp-test --project-directory . -f docker/docker-compose.base.yml -f docker/docker-compose.test.yml -f docker/docker-compose.test-production.yml --env-file ./envs/.env.test --profile test logs app-test powersync
