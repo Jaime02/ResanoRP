@@ -2,6 +2,7 @@ import { DownloadIcon, PrinterIcon } from "lucide-react";
 import { useCallback, useState } from "react";
 
 import PDFViewer from "@/components/pdf/pdf-viewer";
+import PrintControls from "@/components/print/print-controls";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -12,8 +13,9 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Separator } from "@/components/ui/separator";
 import { useAppContext } from "@/contexts/app-context";
-import { downloadUrl, printPdfUrl } from "@/lib/print";
+import { downloadUrl } from "@/lib/print";
 import { DOWNLOAD_LABEL, PRINT_LABEL } from "@/messages/common";
 import {
   PRINT_DELIVERY_NOTE_MESSAGE,
@@ -65,12 +67,8 @@ export default function DialogPrintDeliveryNote({ deliveryNoteId, iconOnly = fal
     [generate],
   );
 
-  const print = useCallback(
-    async (copies: number) => {
-      const url = copies === 1 ? previewUrl : await generate(withPrices, copies);
-      if (url == null) return;
-      printPdfUrl(url);
-    },
+  const getPrintUrl = useCallback(
+    async (copies: number) => (copies === 1 ? previewUrl : generate(withPrices, copies)),
     [generate, previewUrl, withPrices],
   );
 
@@ -137,14 +135,29 @@ export default function DialogPrintDeliveryNote({ deliveryNoteId, iconOnly = fal
               <DownloadIcon />
               {DOWNLOAD_LABEL}
             </Button>
-            <Button testId="button-print-delivery-note-once" onClick={() => void print(1)}>
-              <PrinterIcon />
-              {PRINT_LABEL}
-            </Button>
-            <Button testId="button-print-delivery-note-twice" onClick={() => void print(2)}>
-              <PrinterIcon />
-              {PRINT_TWICE_LABEL}
-            </Button>
+            <Separator orientation="vertical" />
+            <PrintControls>
+              {(printPdf, isPrinting) => (
+                <>
+                  <Button
+                    testId="button-print-delivery-note-once"
+                    disabled={isPrinting}
+                    onClick={async () => printPdf(await getPrintUrl(1))}
+                  >
+                    <PrinterIcon />
+                    {PRINT_LABEL}
+                  </Button>
+                  <Button
+                    testId="button-print-delivery-note-twice"
+                    disabled={isPrinting}
+                    onClick={async () => printPdf(await getPrintUrl(2))}
+                  >
+                    <PrinterIcon />
+                    {PRINT_TWICE_LABEL}
+                  </Button>
+                </>
+              )}
+            </PrintControls>
           </DialogFooter>
         </DialogContent>
       </Dialog>

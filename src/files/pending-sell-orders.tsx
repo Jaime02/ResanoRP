@@ -44,23 +44,23 @@ interface PendingSellOrdersDocumentProps {
 }
 
 function EmptyCheckbox() {
-  return <span className="mx-auto block size-4 rounded-sm border border-black" />;
+  return <span className="mx-auto block size-3 rounded-sm border border-black" />;
 }
 
 function PendingSellOrdersDocument({ clientName, date, lines, withCheckboxes }: PendingSellOrdersDocumentProps) {
   return (
-    <div className="flex flex-col gap-3 p-1">
+    <div className="flex flex-col gap-2 p-1">
       <div className="flex flex-row items-center justify-between gap-4">
-        <ResanoLogo className="h-14" />
-        <div className="flex flex-1 flex-col items-center gap-2 text-center">
-          <span className="text-3xl font-bold tracking-wider uppercase">{PENDING_SELL_ORDERS_TITLE}</span>
-          <span className="text-2xl font-bold">{clientName}</span>
+        <ResanoLogo className="h-8" />
+        <div className="flex flex-1 flex-col items-center gap-0.5 text-center">
+          <span className="text-xl font-bold tracking-wider uppercase">{PENDING_SELL_ORDERS_TITLE}</span>
+          <span className="text-lg font-bold">{clientName}</span>
         </div>
         <FieldBox fields={[{ label: DATE_LABEL, value: date }]} />
       </div>
       <Table
         className="overflow-visible rounded-none border-0 text-sm"
-        tableClassName="border-collapse border border-border [&_td]:border [&_td]:border-border [&_th]:border-y [&_th]:border-border [&_th]:align-middle"
+        tableClassName="border-collapse border border-border [&_td]:border [&_td]:border-border [&_th]:border-y [&_th]:border-border [&_th]:align-middle [&_td]:p-1 [&_th]:p-1 [&_td]:leading-tight"
       >
         <TableHead className="table-header-group">
           <TableRow>
@@ -87,14 +87,14 @@ function PendingSellOrdersDocument({ clientName, date, lines, withCheckboxes }: 
             return (
               <Fragment key={line.id}>
                 <TableRow style={{ breakAfter: hasNotes ? "avoid" : undefined, breakInside: "avoid" }}>
-                  <TableCell className="w-px text-right">{index + 1}</TableCell>
-                  <TableCell className="whitespace-nowrap">{line.sellOrderReference}</TableCell>
-                  <TableCell className={cn("w-px font-bold", statusClassName)}>{statusText}</TableCell>
-                  <TableCell className="text-lg font-bold">{line.reference ?? ""}</TableCell>
+                  <TableCell className="w-px text-right text-xs">{index + 1}</TableCell>
+                  <TableCell className="text-xs whitespace-nowrap">{line.sellOrderReference}</TableCell>
+                  <TableCell className={cn("w-px", statusClassName)}>{statusText}</TableCell>
+                  <TableCell className="font-bold">{line.reference ?? ""}</TableCell>
                   <TableCell className={cn(WRAPPING_CELL_CLASS_NAME, "text-xs")}>{line.description ?? ""}</TableCell>
                   <TableCell className="w-px text-right">{line.quantity}</TableCell>
                   <TableCell className="w-px text-right">{line.pendingQuantity}</TableCell>
-                  <TableCell>{line.requestedDeliveryDate ?? ""}</TableCell>
+                  <TableCell className="w-px">{line.requestedDeliveryDate ?? ""}</TableCell>
                   {withCheckboxes && (
                     <>
                       <TableCell>
@@ -132,7 +132,7 @@ export async function renderPendingSellOrders({ path, saveHtml, ...props }: Rend
   return renderPdf({
     document: <PendingSellOrdersDocument {...props} />,
     path,
-    margin: "1cm",
+    margin: "0.8cm",
     format: "A4",
     landscape: true,
     saveHtml,

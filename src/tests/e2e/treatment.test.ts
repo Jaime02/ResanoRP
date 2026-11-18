@@ -224,7 +224,6 @@ test("list the parts pending to send and the batches out and back", async ({ pag
       for (const shipment of batch.treatmentShipments) {
         const row = getTableRowByTestId(tableBatch, shipment.id);
         await expect(row.getByTestId("quantity")).toHaveText(String(shipment.quantity));
-        await expect(row.getByTestId("receivedQuantity")).toHaveText(String(shipment.receivedQuantity));
         await expect(row.getByTestId("pendingQuantity")).toHaveText(String(shipment.pendingQuantity));
         for (const reception of shipment.treatmentReceptions) {
           await expect(row.getByTestId(`div-treatment-reception-${reception.id}`)).toContainText(
@@ -400,7 +399,6 @@ test("receive a batch in several times, then it moves to the history", async ({ 
     await expect(firstRow.getByTestId("receiveQuantity").getByTestId("editable-cell-input")).toHaveCount(0);
     await expect(firstRow.getByTestId("button-receive-all-pending")).toHaveCount(0);
     const secondRow = getTableRowByTestId(tableBatch, secondShipment.id);
-    await expect(secondRow.getByTestId("receivedQuantity")).toHaveText(String(secondShipment.receivedQuantity + 1));
     await expect(secondRow.getByTestId("pendingQuantity")).toHaveText(String(secondShipment.pendingQuantity - 1));
     await expect(secondRow.getByTestId(`div-treatment-reception-${newReceptions[1].id}`)).toBeVisible();
     // Once some parts came back, the shipment can not be deleted
@@ -455,7 +453,6 @@ test("undo a shipment and a reception", async ({ page, db }) => {
       await workflowDeleteTreatmentReception(page, batchOut.sentAt, reception.id);
       await expect(row.getByTestId(`div-treatment-reception-${reception.id}`)).toHaveCount(0);
     }
-    await expect(row.getByTestId("receivedQuantity")).toHaveText("0");
     await expect(row.getByTestId("pendingQuantity")).toHaveText(String(shipmentWithReceptions.quantity));
     await expect(row.getByTestId("button-delete")).toBeVisible();
   });

@@ -16,6 +16,7 @@ import { removeOnRollback } from "@/files/functions";
 import { printTagPart } from "@/files/part-tag";
 import { formatDate } from "@/lib/formatters";
 import { handleMutationError } from "@/lib/handlers";
+import { getPartTagName, PartTagSource } from "@/lib/part-tag";
 import { PART_IN_ACTIVE_SETS_ERROR_MESSAGE } from "@/messages/part";
 import { requiredIdObjectSchema } from "@/schemas";
 import { printTagPartSchema } from "@/schemas/delivery-note-line";
@@ -164,7 +165,7 @@ export default router({
 
       reference = deliveryNoteLine.description;
       partReferenceId = deliveryNoteLine.partReferenceId;
-      tagName = `delivery-note-line-${deliveryNoteLine.id}`;
+      tagName = getPartTagName(PartTagSource.DeliveryNoteLine, deliveryNoteLine.id);
     } else {
       const sellOrderLine = await getSellOrderLineById(input.sellOrderLineId);
       if (!sellOrderLine) {
@@ -178,7 +179,7 @@ export default router({
       partReferenceId = sellOrderLine.partReferenceId;
       sellOrderId = sellOrderLine.sellOrderId;
       requestedDeliveryDate = sellOrderLine.requestedDeliveryDate;
-      tagName = `sell-order-line-${sellOrderLine.id}`;
+      tagName = getPartTagName(PartTagSource.SellOrderLine, sellOrderLine.id);
     }
 
     let partReference: BasePartReference | undefined;
@@ -224,6 +225,7 @@ export default router({
       requestedDeliveryDate:
         requestedDeliveryDate != null ? (formatDate(requestedDeliveryDate) ?? undefined) : undefined,
       sellOrderReference: sellOrder !== undefined ? (sellOrder.clientReference ?? String(sellOrder.id)) : undefined,
+      labelSize: input.labelSize,
       tagGroups: input.tagGroups,
       tagName,
     });

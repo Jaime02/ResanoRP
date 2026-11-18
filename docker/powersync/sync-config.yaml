@@ -41,6 +41,11 @@ streams:
     query: SELECT *, CAST(id AS TEXT) AS id FROM part_stock
   payment_method:
     query: SELECT *, CAST(id AS TEXT) AS id FROM payment_method
+  # Every column but the password, which only the server reads to print
+  printer:
+    query: >-
+      SELECT name, kind, address, "shareName", username, "labelWidthMm", "labelLengthMm", "forTags", CAST(id AS TEXT) AS id
+      FROM printer
   production_order:
     query: SELECT *, CAST(id AS TEXT) AS id FROM production_order
   quality_check:

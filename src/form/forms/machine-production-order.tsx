@@ -5,6 +5,8 @@ import { useCallback, useState } from "react";
 import DialogMachineProductionOrderQueue from "@/components/dialog/machine-queue";
 import StopIcon from "@/components/images/StopIcon";
 import LayoutBlueprintViewer from "@/components/pdf/layout-blueprint-viewer";
+import { ComboboxPrinter } from "@/components/print/print-controls";
+import { usePrintControls } from "@/components/print/use-print-controls";
 import TableQualityControl from "@/components/table/quality-control";
 import {
   AlertDialog,
@@ -30,11 +32,11 @@ import FieldLayoutContainer from "@/form/components/field-layout-container";
 import PartFields from "@/form/components/part-fields";
 import ProductionOrderFields from "@/form/components/production-order-fields";
 import type useMachineProductionOrderForm from "@/form/hooks/use-machine-production-order";
+import usePrintProductionOrderTag from "@/form/hooks/use-print-production-order-tag";
 import { BLUEPRINTS_TITLE } from "@/messages/blueprint";
 import { NOTES_LABEL, PART_LABEL } from "@/messages/common";
 import {
   LABEL_NOT_PRINTED_TITLE,
-  LABEL_PRINTED_MESSAGE,
   STOP_PRODUCTION_ORDER_TITLE,
   UNITS_PRODUCED_LABEL,
   NO_LABEL_PRINTED_MESSAGE,
@@ -43,7 +45,6 @@ import {
 } from "@/messages/production-order";
 import type { TMachineProductionOrderQueueItem } from "@/queries/machine";
 import { useQueryProductionOrderProducedQuantity, type TActiveProductionOrder } from "@/queries/production-order";
-import trpc from "@/trpc/trpc-client";
 import { FormMode } from "@/types";
 
 interface FormMachineProductionOrderProps extends Pick<
@@ -71,25 +72,20 @@ export default function FormMachineProductionOrder({
   dialogStopProductionOrderOpen,
   dialogMachineProductionOrderQueueOpen,
 }: FormMachineProductionOrderProps) {
-  const { userModeMachine, showToastOnTRPCMutation } = useAppContext();
+  const { userModeMachine } = useAppContext();
   const navigate = useNavigate();
   const { data: producedQuantity } = useQueryProductionOrderProducedQuantity(activeProductionOrder?.id);
   const [isTagPrinted, setIsTagPrinted] = useState(false);
-  const [isPrintingTag, setIsPrintingTag] = useState(false);
   const [isDialogNoTagPrintedOpen, setIsDialogNoTagPrintedOpen] = useState(false);
+  const printControls = usePrintControls({ forTags: true });
+  const { isPrintingTag, printTag: printProductionOrderTag } = usePrintProductionOrderTag(printControls);
 
   const printTag = useCallback(
     async (partQuantity: number) => {
       if (!activeProductionOrder) return;
-      setIsPrintingTag(true);
-      await showToastOnTRPCMutation({
-        mutation: trpc.productionOrder.printTag.mutate({ partQuantity, productionOrderId: activeProductionOrder.id }),
-        onSuccess: { title: LABEL_PRINTED_MESSAGE },
-        onSubmit: async () => setIsTagPrinted(true),
-      });
-      setIsPrintingTag(false);
+      if (await printProductionOrderTag(activeProductionOrder.id, partQuantity)) setIsTagPrinted(true);
     },
-    [activeProductionOrder, showToastOnTRPCMutation],
+    [activeProductionOrder, printProductionOrderTag],
   );
 
   return (
@@ -194,10 +190,17 @@ export default function FormMachineProductionOrder({
                     selector={(state) => state.values.producedQuantity}
                     children={(producedQuantity) => (
                       <AlertDialogFooter>
+                        <ComboboxPrinter printControls={printControls} />
                         <Button
                           testId="button-print-tag-stop-production-order"
                           variant="secondary"
-                          disabled={isLoading || isPrintingTag || producedQuantity === null || producedQuantity <= 0}
+                          disabled={
+                            isLoading ||
+                            isPrintingTag ||
+                            printControls.isBusy ||
+                            producedQuantity === null ||
+                            producedQuantity <= 0
+                          }
                           onClick={() => {
                             if (producedQuantity === null) return;
                             void printTag(producedQuantity);

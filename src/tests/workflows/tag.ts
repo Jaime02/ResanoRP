@@ -3,8 +3,7 @@ import fs from "node:fs";
 import { expect } from "@playwright/test";
 import type { Locator, Page } from "@playwright/test";
 
-import { LABEL_PRINTED_MESSAGE } from "@/messages/production-order";
-import { expectSingleSuccessToast } from "@/tests/utils/components/toast";
+import { expectPrintedByBrowser } from "@/tests/workflows/printer";
 
 // Only the existence of the generated PDF is asserted, not its content
 export function assertTagFileGenerated(tagFilePath: string) {
@@ -12,15 +11,14 @@ export function assertTagFileGenerated(tagFilePath: string) {
   expect(fs.statSync(tagFilePath).size).toBeGreaterThan(0);
 }
 
-// The dialog fills in by default a single group of one tag holding the whole quantity of the row
+// The dialog fills in by default a single group of one tag holding the whole quantity of the row. Without Impresoras
+// for tags, the browser prints it
 export async function workflowPrintTag(page: Page, row: Locator, tagFilePath: string) {
   await row.getByTestId("button-print-tag").click();
 
   const dialogPrintTag = page.getByTestId("dialog-tag-print-content");
   await expect(dialogPrintTag).toBeVisible();
-  await dialogPrintTag.getByTestId("button-submit").click();
-
-  await expectSingleSuccessToast(page, LABEL_PRINTED_MESSAGE);
+  await expectPrintedByBrowser(page, dialogPrintTag.getByTestId("button-submit"));
 
   await expect(dialogPrintTag).not.toBeVisible();
   assertTagFileGenerated(tagFilePath);

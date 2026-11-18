@@ -2,6 +2,8 @@ import { useNavigate } from "@tanstack/react-router";
 import { PlusIcon, PrinterIcon, Trash2Icon } from "lucide-react";
 import { useCallback } from "react";
 
+import { ComboboxPrinter } from "@/components/print/print-controls";
+import { usePrintControls } from "@/components/print/use-print-controls";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import NumberInput from "@/components/ui/number-input";
@@ -40,10 +42,12 @@ export default function DialogPartTag({
     [navigate],
   );
 
+  const printControls = usePrintControls({ forTags: true });
   const { form, validationSchema } = usePartTagForm({
     deliveryNoteLineId: printTagDeliveryNoteLineId,
     sellOrderLineId: printTagSellOrderLineId,
     defaultPartQuantity: partQuantity,
+    printControls,
     onSubmit: onClose,
   });
 
@@ -145,7 +149,13 @@ export default function DialogPartTag({
             )}
           />
           <DialogFooter>
-            <form.ButtonSubmit icon={<PrinterIcon />} customText={PRINT_LABEL} disableIfPristine={false} />
+            <ComboboxPrinter printControls={printControls} />
+            <form.ButtonSubmit
+              icon={<PrinterIcon />}
+              customText={PRINT_LABEL}
+              disableIfPristine={false}
+              disabled={printControls.isBusy}
+            />
           </DialogFooter>
         </FormContextProvider>
       </DialogContent>

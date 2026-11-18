@@ -57,6 +57,7 @@ const tableRowVariants = cva(
     variants: {
       variant: {
         default: "bg-tr-background [tbody>&:nth-child(odd_of_[data-row-type=row])]:bg-blue-100/80",
+        plain: "bg-transparent",
         subrow: "bg-tr-subrow-background",
         urgent: "bg-red-200 dark:bg-red-950",
       },

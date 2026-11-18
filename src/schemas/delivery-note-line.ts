@@ -11,6 +11,7 @@ import {
   stringSchema,
   vatPercentageSchema,
 } from "@/schemas";
+import { tagLabelSizeSchema } from "@/schemas/printer";
 
 const baseDeliveryNoteLineSchema = z.object({
   description: stringSchema({ nullable: false }),
@@ -66,6 +67,7 @@ const deliveryNoteTagGroupSchema = z.array(
 export type TDeliveryNoteLineTagGroup = z.infer<typeof deliveryNoteTagGroupSchema>;
 
 const basePrintPartTagSchema = z.object({
+  labelSize: tagLabelSizeSchema,
   tagGroups: deliveryNoteTagGroupSchema,
 });
 

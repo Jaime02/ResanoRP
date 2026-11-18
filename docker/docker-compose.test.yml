@@ -21,3 +21,47 @@ services:
     volumes:
       - ./envs/test:/env
     command: sh -c "umask 0000 && bun run ./src/scripts/run-reset-env.ts && bunx vite dev"
+  # Stands in for the network printers, see src/tests/mock-printer.ts. It only needs the sources it imports, so it runs
+  # them from the host instead of the app image, and a change to the mock needs no rebuild
+  mock-printer:
+    image: oven/bun:1.4.3
+    profiles: ["test"]
+    restart: unless-stopped
+    init: true
+    working_dir: /app
+    command: bun ./src/tests/mock-printer.ts
+    environment:
+      - PRINTER_JOBS_PATH=/jobs
+    volumes:
+      - ./src:/app/src:ro
+      - ./tsconfig.json:/app/tsconfig.json:ro
+      - ${PRINTER_JOBS_PATH}:/jobs
+    networks:
+      frontend:
+        # The hosts the tests give their Impresoras, see src/tests/utils/mock-printer.ts
+        aliases:
+          - mock-printer
+          - mock-printer-rejecting
+  # Stands in for a Windows computer sharing its USB printers, see src/tests/mock-printer-share/. It saves every job
+  # it gets in PRINTER_JOBS_PATH, as Windows passes them to a RAW printer
+  mock-printer-share:
+    build:
+      dockerfile_inline: |
+        FROM debian:bookworm-slim
+        RUN apt-get update && apt-get install -y --no-install-recommends samba && rm -rf /var/lib/apt/lists/*
+    image: resanorp-mock-printer-share:local
+    profiles: ["test"]
+    restart: unless-stopped
+    init: true
+    command: sh /start.sh
+    environment:
+      - SHARE_USERNAME=${MOCK_PRINTER_SHARE_USERNAME}
+      - SHARE_PASSWORD=${MOCK_PRINTER_SHARE_PASSWORD}
+    volumes:
+      - ./src/tests/mock-printer-share/smb.conf:/etc/samba/mock-printer-share.conf:ro
+      - ./src/tests/mock-printer-share/start.sh:/start.sh:ro
+      - ${PRINTER_JOBS_PATH}:/jobs
+    networks:
+      frontend:
+        aliases:
+          - mock-printer-share

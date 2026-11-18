@@ -179,7 +179,7 @@ export function SalesDocumentLinesTable({ lines, withPrices }: SalesDocumentLine
       tableClassName="border-collapse border border-border [&_td]:border [&_td]:border-border [&_th]:border-y [&_th]:border-border"
     >
       <TableHead className="table-header-group">
-        <TableRow>
+        <TableRow variant="plain">
           <TableHeader className="w-px text-center">#</TableHeader>
           <TableHeader>{PART_LABEL}</TableHeader>
           <TableHeader>{DESCRIPTION_LABEL}</TableHeader>
@@ -195,9 +195,9 @@ export function SalesDocumentLinesTable({ lines, withPrices }: SalesDocumentLine
       </TableHead>
       <TableBody>
         {lines.map((line, index) => (
-          <TableRow key={line.id} style={{ breakInside: "avoid" }}>
+          <TableRow key={line.id} variant="plain" style={{ breakInside: "avoid" }}>
             <TableCell className="w-px text-right">{index + 1}</TableCell>
-            <TableCell>{line.reference ?? ""}</TableCell>
+            <TableCell className="font-bold">{line.reference ?? ""}</TableCell>
             <TableCell className={WRAPPING_CELL_CLASS_NAME}>{line.description}</TableCell>
             <TableCell>{line.sellOrderReference ?? ""}</TableCell>
             <TableCell className="text-right">{line.quantity}</TableCell>

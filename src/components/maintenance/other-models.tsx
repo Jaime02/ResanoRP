@@ -7,6 +7,7 @@ import TableMaintenanceDeliveryMethod from "@/components/maintenance/table-deliv
 import TableMaintenanceMachine from "@/components/maintenance/table-machine";
 import TableMaintenanceMaterial from "@/components/maintenance/table-material";
 import TableMaintenancePaymentMethod from "@/components/maintenance/table-payment-method";
+import TableMaintenancePrinter from "@/components/maintenance/table-printer";
 import TableMaintenanceRawMaterial from "@/components/maintenance/table-raw-material";
 import TableClient from "@/components/table/client";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -17,6 +18,7 @@ import {
   DELIVERY_METHODS_LABEL,
   MACHINES_LABEL,
   PAYMENT_METHODS_LABEL,
+  PRINTERS_LABEL,
   RAW_MATERIALS_LABEL,
 } from "@/messages/maintenance";
 import { MATERIALS_LABEL } from "@/messages/material";
@@ -31,12 +33,15 @@ export default function OtherModels() {
     "table-machine": tableMachineState,
     "table-material": tableMaterialState,
     "table-payment-method": tablePaymentMethodState,
+    "table-printer": tablePrinterState,
     "table-raw-material": tableRawMaterialState,
     createClient,
     "table-client": tableClientState,
     createDeliveryMethod,
     editPaymentMethodId,
     createPaymentMethod,
+    editPrinterId,
+    createPrinter,
     createMachine,
     editCoatingId,
     createCoating,
@@ -70,6 +75,7 @@ export default function OtherModels() {
         <TabsTrigger value="coating">{COATINGS_LABEL}</TabsTrigger>
         <TabsTrigger value="material">{MATERIALS_LABEL}</TabsTrigger>
         <TabsTrigger value="rawMaterial">{RAW_MATERIALS_LABEL}</TabsTrigger>
+        <TabsTrigger value="printer">{PRINTERS_LABEL}</TabsTrigger>
         <TabsTrigger value="configuration">{CONFIGURATION_LABEL}</TabsTrigger>
       </TabsList>
       <TabsContent value="client">
@@ -107,6 +113,13 @@ export default function OtherModels() {
           editRawMaterialId={editRawMaterialId}
           createRawMaterial={createRawMaterial}
           state={tableRawMaterialState}
+        />
+      </TabsContent>
+      <TabsContent value="printer">
+        <TableMaintenancePrinter
+          editPrinterId={editPrinterId}
+          createPrinter={createPrinter}
+          state={tablePrinterState}
         />
       </TabsContent>
       <TabsContent value="configuration">

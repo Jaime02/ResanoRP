@@ -23,7 +23,7 @@ interface TInvoiceDocumentLine extends TSalesDocumentLine {
   vatPercentage: number;
 }
 
-interface TInvoiceDocumentDeliveryNote {
+export interface TInvoiceDocumentDeliveryNote {
   id: number;
   deliveryDate: string | null;
   lines: Array<TInvoiceDocumentLine>;

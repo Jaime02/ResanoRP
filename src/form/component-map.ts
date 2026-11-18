@@ -10,6 +10,7 @@ import FieldNumberInput from "@/form/fields/number-input";
 import FieldPaymentMethodCombobox from "@/form/fields/payment-method-combobox";
 import FieldPickerPart from "@/form/fields/picker-part";
 import FieldPriceInput from "@/form/fields/price-input";
+import FieldPrinterKindCombobox from "@/form/fields/printer-kind-combobox";
 import FieldRawMaterialCombobox from "@/form/fields/raw-material-combobox";
 import FieldShapeCombobox from "@/form/fields/shape-combobox";
 import FieldTextInput from "@/form/fields/text-input";
@@ -28,6 +29,7 @@ export const fieldComponents = {
   PaymentMethodCombobox: FieldPaymentMethodCombobox,
   PickerPart: FieldPickerPart,
   PriceInput: FieldPriceInput,
+  PrinterKindCombobox: FieldPrinterKindCombobox,
   ShapeCombobox: FieldShapeCombobox,
   RawMaterialCombobox: FieldRawMaterialCombobox,
   TextInput: FieldTextInput,

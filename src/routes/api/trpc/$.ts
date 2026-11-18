@@ -26,6 +26,7 @@ import partPriceEstimatorRouter from "@/trpc/part-price-estimator";
 import partReferenceRouter from "@/trpc/part-reference";
 import partStockRouter from "@/trpc/part-stock";
 import paymentMethodRouter from "@/trpc/payment-method";
+import printerRouter from "@/trpc/printer";
 import productionOrderRouter from "@/trpc/production-order";
 import qualityCheckRouter from "@/trpc/quality-check";
 import rawMaterialRouter from "@/trpc/raw-material";
@@ -54,6 +55,7 @@ const appRouter = router({
   partReference: partReferenceRouter,
   partStock: partStockRouter,
   paymentMethod: paymentMethodRouter,
+  printer: printerRouter,
   qualityCheck: qualityCheckRouter,
   rawMaterial: rawMaterialRouter,
   sellOrder: sellOrderRouter,
@@ -72,6 +74,7 @@ async function serve({ request }: { request: Request }) {
     router: appRouter,
     createContext: async () => ({
       db,
+      cookie: request.headers.get("cookie"),
       isAdmin: isAdminSession(getCookie(ADMIN_SESSION_COOKIE_NAME)),
     }),
   });

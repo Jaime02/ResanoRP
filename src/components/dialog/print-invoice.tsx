@@ -2,10 +2,12 @@ import { DownloadIcon, PrinterIcon } from "lucide-react";
 import { useCallback, useState } from "react";
 
 import PDFViewer from "@/components/pdf/pdf-viewer";
+import PrintControls from "@/components/print/print-controls";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Separator } from "@/components/ui/separator";
 import { useAppContext } from "@/contexts/app-context";
-import { downloadUrl, printPdfUrl } from "@/lib/print";
+import { downloadUrl } from "@/lib/print";
 import { DOWNLOAD_LABEL, PRINT_LABEL } from "@/messages/common";
 import trpc from "@/trpc/trpc-client";
 
@@ -62,16 +64,19 @@ export default function DialogPrintInvoice({ invoiceId }: DialogPrintInvoiceProp
               <DownloadIcon />
               {DOWNLOAD_LABEL}
             </Button>
-            <Button
-              testId="button-print-invoice-once"
-              onClick={() => {
-                if (previewUrl === undefined) return;
-                printPdfUrl(previewUrl);
-              }}
-            >
-              <PrinterIcon />
-              {PRINT_LABEL}
-            </Button>
+            <Separator orientation="vertical" />
+            <PrintControls>
+              {(printPdf, isPrinting) => (
+                <Button
+                  testId="button-print-invoice-once"
+                  disabled={isPrinting}
+                  onClick={async () => printPdf(previewUrl)}
+                >
+                  <PrinterIcon />
+                  {PRINT_LABEL}
+                </Button>
+              )}
+            </PrintControls>
           </DialogFooter>
         </DialogContent>
       </Dialog>

@@ -11,6 +11,7 @@ import { tableDeliveryMethodStateSchema } from "@/schemas/delivery-method";
 import { tableMachineStateSchema } from "@/schemas/machine";
 import { tableMaterialStateSchema } from "@/schemas/material";
 import { tablePaymentMethodStateSchema } from "@/schemas/payment-method";
+import { tablePrinterStateSchema } from "@/schemas/printer";
 import { tableRawMaterialStateSchema } from "@/schemas/raw-material";
 
 const routeSearchSchema = z.object({
@@ -20,10 +21,12 @@ const routeSearchSchema = z.object({
   createDeliveryMethod: z.boolean().optional().catch(undefined),
   createMachine: z.boolean().optional().catch(undefined),
   createPaymentMethod: z.boolean().optional().catch(undefined),
+  createPrinter: z.boolean().optional().catch(undefined),
   createRawMaterial: z.boolean().optional().catch(undefined),
   editCoatingId: optionalIdSchema.catch(undefined),
   editDeliveryMethodId: optionalIdSchema.catch(undefined),
   editPaymentMethodId: optionalIdSchema.catch(undefined),
+  editPrinterId: optionalIdSchema.catch(undefined),
   editRawMaterialId: optionalIdSchema.catch(undefined),
   "table-client": tableClientStateSchema.optional().catch(undefined),
   "table-coating": tableCoatingStateSchema.optional().catch(undefined),
@@ -31,6 +34,7 @@ const routeSearchSchema = z.object({
   "table-machine": tableMachineStateSchema.optional().catch(undefined),
   "table-material": tableMaterialStateSchema.optional().catch(undefined),
   "table-payment-method": tablePaymentMethodStateSchema.optional().catch(undefined),
+  "table-printer": tablePrinterStateSchema.optional().catch(undefined),
   "table-raw-material": tableRawMaterialStateSchema.optional().catch(undefined),
   tab: z.string().optional().catch(undefined),
 });

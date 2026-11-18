@@ -22,7 +22,14 @@ FROM base AS browsers
 COPY --from=playwright-version /playwright-version /tmp/playwright-version
 RUN bunx playwright@$(cat /tmp/playwright-version) install --with-deps chromium
 
-FROM browsers AS prerelease
+# Printing converts the PDF to the language of the printer and sends it to a Windows share for the ones attached to
+# another computer (src/files/printer.ts).
+FROM browsers AS ghostscript
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends ghostscript smbclient printer-driver-brlaser \
+    && rm -rf /var/lib/apt/lists/*
+
+FROM ghostscript AS prerelease
 COPY --from=install /app/node_modules node_modules
 
 # Source is baked in so the container boots with a complete tree on a native

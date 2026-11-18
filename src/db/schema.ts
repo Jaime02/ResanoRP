@@ -13,6 +13,8 @@ import {
 } from "drizzle-orm/pg-core";
 import type { PgColumn } from "drizzle-orm/pg-core";
 
+import { PrinterKind } from "@/types/printer";
+
 // With time zone so PowerSync sends the offset, otherwise browsers parse the UTC values as local time
 const datetimeType = (colName: string) => timestamp(colName, { withTimezone: true });
 const deletedAtType = datetimeType("deletedAt");
@@ -162,6 +164,22 @@ export const dbTableDeliveryMethod = pgTable(
   },
   (table) => [uniqueIndexByName(table, "delivery_method")],
 );
+
+export const dbTablePrinter = pgTable("printer", {
+  address: text("address").notNull(),
+  // Part tags are only offered the printers for tags, and every other document the rest
+  forTags: boolean("forTags").notNull().default(false),
+  id: idType,
+  kind: text("kind").$type<PrinterKind>().notNull().default(PrinterKind.Ipp),
+  // The labels a label printer has loaded. It feeds them along their length
+  labelLengthMm: integer("labelLengthMm"),
+  labelWidthMm: integer("labelWidthMm"),
+  name: text("name").notNull(),
+  // Only read by the server: the sync stream of the table leaves it out, so it never reaches a browser
+  password: text("password"),
+  shareName: text("shareName"),
+  username: text("username"),
+});
 
 export const dbTableClient = pgTable(
   "client",

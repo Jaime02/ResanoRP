@@ -10,6 +10,7 @@ import {
   tableStateSchema,
   nullableDateSchema,
 } from "@/schemas";
+import { tagLabelSizeSchema } from "@/schemas/printer";
 
 const baseProductionOrderSchema = z.object({
   notes: stringSchema({ nullable: true }),
@@ -50,6 +51,7 @@ export const updateProductionOrderSchema = baseProductionOrderSchema.extend(requ
 export type TUpdateProductionOrder = z.infer<typeof updateProductionOrderSchema>;
 
 export const printTagPartProductionSchema = z.object({
+  labelSize: tagLabelSizeSchema,
   partQuantity: positiveQuantitySchema,
   productionOrderId: requiredIdSchema,
 });

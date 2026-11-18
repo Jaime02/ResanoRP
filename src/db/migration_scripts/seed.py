@@ -1,7 +1,7 @@
 from . import OldRefToNewId
 from .connections import fetch_id, get_postgres_cursor
 from .models import Material
-from .secrets import CONFIGURATION, DELIVERY_METHODS, MATERIAL_WIDTHS, RENAMED_RAW_MATERIALS, SHAPES
+from .secrets import CONFIGURATION, DELIVERY_METHODS, MATERIAL_WIDTHS, PRINTERS, RENAMED_RAW_MATERIALS, SHAPES
 
 
 def seed_configuration():
@@ -26,6 +26,26 @@ def seed_delivery_methods():
             cursor.execute(
                 'INSERT INTO delivery_method ("name") VALUES (%s)',
                 (delivery_method.name,),
+            )
+
+
+def seed_printers():
+    with get_postgres_cursor() as cursor:
+        for printer in PRINTERS:
+            cursor.execute(
+                'INSERT INTO printer ("name", "address", "kind", "shareName", "username", "password", '
+                '"labelWidthMm", "labelLengthMm", "forTags") VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)',
+                (
+                    printer.name,
+                    printer.address,
+                    printer.kind,
+                    printer.share_name,
+                    printer.username,
+                    printer.password,
+                    printer.label_width_mm,
+                    printer.label_length_mm,
+                    printer.for_tags,
+                ),
             )
 
 

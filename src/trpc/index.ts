@@ -8,6 +8,8 @@ import { formatZodError } from "@/schemas/utils";
 export type Context = {
   db: TDatabase;
   isAdmin: boolean;
+  // The cookies of the caller, which the server sends back to itself to read the files it prints, as some need a session
+  cookie: string | null;
 };
 const t = initTRPC.context<Context>().create({
   errorFormatter({ shape, error }) {

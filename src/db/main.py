@@ -24,7 +24,13 @@ from migration_scripts.raio_migrate import (
     raio_migrate_machines_production_orders,
 )
 from migration_scripts.ofertas_migrate import migrate_ofertas
-from migration_scripts.seed import seed_configuration, seed_shapes, seed_delivery_methods, seed_materials
+from migration_scripts.seed import (
+    seed_configuration,
+    seed_shapes,
+    seed_delivery_methods,
+    seed_materials,
+    seed_printers,
+)
 
 
 def main():
@@ -37,6 +43,7 @@ def main():
     seed_configuration()
     seed_shapes()
     seed_delivery_methods()
+    seed_printers()
 
     raw_materials = raio_migrate_raw_materials()
     materials = seed_materials(raw_materials)

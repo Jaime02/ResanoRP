@@ -1,5 +1,5 @@
 import type { TSellOrderForm, TSellOrderLineForm } from "@/form/hooks/use-sell-order";
-import { formatDate, formatPrice, formatPricePerKilo } from "@/lib/formatters";
+import { formatDate, formatPrice, formatPricePerKilo, formatPrinterAddress } from "@/lib/formatters";
 import { formatCents } from "@/lib/prices";
 import { BLUEPRINT_CREATION_DATE_LABEL } from "@/messages/blueprint";
 import { INVOICE_EMAIL_LABEL } from "@/messages/client";
@@ -27,6 +27,7 @@ import { MACHINE_MAX_DIAMETER_LABEL, MACHINE_MIN_DIAMETER_LABEL } from "@/messag
 import { RAW_MATERIAL_DENSITY_LABEL, RAW_MATERIAL_LABEL } from "@/messages/material";
 import { PART_FEATURE_LABEL, CLIENT_DESCRIPTION_LABEL, CLIENT_REFERENCE_DESCRIPTION_LABEL } from "@/messages/part";
 import { BASE_LABEL, PENDING_PRICE_LABEL } from "@/messages/part-price";
+import { PRINTER_ADDRESS_LABEL, PRINTER_KIND_LABEL, PRINTER_KIND_LABELS } from "@/messages/printer";
 import { QUANTITY_TO_PRODUCE_LABEL } from "@/messages/production-order";
 import {
   CLIENT_REFERENCE_COLUMN_LABEL,
@@ -227,6 +228,16 @@ export function serializeCoating(coating: { name: string }): TSerializeOutput {
 export function serializeDeliveryMethod(deliveryMethod: { name: string }): TSerializeOutput {
   return serialize({
     [NAME_LABEL]: deliveryMethod.name,
+  });
+}
+
+export function serializePrinter(
+  printer: Parameters<typeof formatPrinterAddress>[0] & { name: string },
+): TSerializeOutput {
+  return serialize({
+    [NAME_LABEL]: printer.name,
+    [PRINTER_KIND_LABEL]: PRINTER_KIND_LABELS[printer.kind],
+    [PRINTER_ADDRESS_LABEL]: formatPrinterAddress(printer),
   });
 }
 

@@ -1,3 +1,29 @@
+import { BROWSER_PRINTER_LABEL } from "@/messages/printer";
+import type { TPublicPrinter } from "@/types/printer";
+
+export type TPrinterOption = Pick<TPublicPrinter, "id" | "name" | "labelWidthMm" | "labelLengthMm">;
+
+// Printer ids start at 1, so 0 never collides with a stored one
+export const BROWSER_PRINTER: TPrinterOption = {
+  id: 0,
+  labelLengthMm: null,
+  labelWidthMm: null,
+  name: BROWSER_PRINTER_LABEL,
+};
+
+// The browser is the last option, so it is only the default without printers. While they load the default is unknown, so
+// there is none, and nothing is printed on the browser instead of the printer that was about to show up. Looked up by
+// id, so a printer renamed in another tab keeps its new name, and one deleted falls back to the first
+export function getSelectedPrinter(
+  printers: Array<TPrinterOption>,
+  isLoading: boolean,
+  selectedPrinterId: number | undefined,
+) {
+  if (isLoading) return null;
+  const printerOptions = [...printers, BROWSER_PRINTER];
+  return printerOptions.find((printerOption) => printerOption.id === selectedPrinterId) ?? printerOptions[0];
+}
+
 // A PDF served into a hidden iframe is printed by the browser itself, so the number of copies has to
 // come baked into the document: the print dialog is the user's, not ours to configure.
 export function printPdfUrl(url: string) {

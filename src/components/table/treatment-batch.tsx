@@ -33,7 +33,6 @@ import {
   DELETE_SHIPMENT_MESSAGE,
   DELETE_SHIPMENT_TITLE,
   PARTS_RECEIVED_FROM_TREATMENT_MESSAGE,
-  RECEIVED_QUANTITY_LABEL,
   RECEPTION_DELETED_MESSAGE,
   SENT_QUANTITY_LABEL,
   SHIPMENT_DELETED_MESSAGE,
@@ -120,7 +119,6 @@ export default function TableTreatmentBatch({ batch }: { batch: TTreatmentBatch 
         id: "coating",
       }),
       columnHelper.accessor("quantity", { header: SENT_QUANTITY_LABEL, id: "quantity" }),
-      columnHelper.accessor("receivedQuantity", { header: RECEIVED_QUANTITY_LABEL, id: "receivedQuantity" }),
       columnHelper.accessor("pendingQuantity", { header: PENDING_LABEL, id: "pendingQuantity" }),
       columnHelper.display({
         cell: ({ row }) => (

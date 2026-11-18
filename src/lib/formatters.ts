@@ -2,6 +2,8 @@ import { APP_TIME_ZONE } from "@/lib/dates";
 import log from "@/logging/log";
 import { LogMessages, LoggerLevels } from "@/logging/types";
 import { INACTIVE_MATERIAL_DELETED_MESSAGE, INACTIVE_RAW_MATERIAL_DELETED_MESSAGE } from "@/messages/material";
+import { isSharePrinterKind } from "@/types/printer";
+import type { PrinterKind } from "@/types/printer";
 
 const priceFormatters = new Map<number, Intl.NumberFormat>();
 
@@ -111,4 +113,9 @@ export function formatClientError(error: unknown): Record<string, unknown> {
   }
 
   return { message: String(error) };
+}
+
+// A share is written as Windows writes it, \\address\share
+export function formatPrinterAddress(printer: { kind: PrinterKind; address: string; shareName: string | null }) {
+  return isSharePrinterKind(printer.kind) ? `\\\\${printer.address}\\${printer.shareName ?? ""}` : printer.address;
 }

@@ -11,7 +11,6 @@ import {
   PRODUCTION_ORDER_EDITED_MESSAGE,
   PRODUCTION_ORDER_PRIORITIZED_MESSAGE,
   PRODUCTION_ORDER_STOPPED_MESSAGE,
-  LABEL_PRINTED_MESSAGE,
 } from "@/messages/production-order";
 import { ProductionOrderStatus } from "@/schemas/production-order";
 import { mockMachineProductionOrderQueues, mockMachines, mockProductionOrders } from "@/tests/mock-data";
@@ -24,6 +23,7 @@ import {
   getMockProducedProductionOrderStatus,
   getMockUnstartedProductionOrdersWithoutQuantity,
 } from "@/tests/utils/mock-data-utils";
+import { expectPrintedByBrowser } from "@/tests/workflows/printer";
 import {
   assertProductionOrderStopped,
   getActiveProductionOrder,
@@ -220,10 +220,8 @@ test(
         const tagFilePath = path.join(process.env.TAGS_ROOT_PATH!, `production-order-${dbProductionOrder.id}.pdf`);
         const printTagButton = dialogContentStopProductionOrder.getByTestId("button-print-tag-stop-production-order");
         await expect(printTagButton).toBeEnabled();
-        await printTagButton.click();
-
-        await expectSingleSuccessToast(page, LABEL_PRINTED_MESSAGE);
-
+        // Without Impresoras for tags, the browser prints it
+        await expectPrintedByBrowser(page, printTagButton);
         assertTagFileGenerated(tagFilePath);
 
         const confirmStopButton = dialogContentStopProductionOrder.getByTestId("button-confirm-stop-production-order");

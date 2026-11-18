@@ -25,7 +25,6 @@ export const UNITS_TO_PRODUCE_LABEL = "Unidades a fabricar";
 export const QUANTITY_TO_PRODUCE_LABEL = "Cantidad a fabricar";
 export const UNITS_PRODUCED_LABEL = "Unidades fabricadas";
 export const STOP_PRODUCTION_ORDER_TITLE = "Detener Orden de producción";
-export const LABEL_PRINTED_MESSAGE = "Etiqueta impresa";
 export const LABEL_NOT_PRINTED_TITLE = "Etiqueta no impresa";
 export const MACHINE_ASSIGNED_MESSAGE = "Máquina asignada";
 export const MACHINE_UNASSIGNED_MESSAGE = "Máquina desasignada";

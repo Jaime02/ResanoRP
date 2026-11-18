@@ -13,6 +13,7 @@ import { dbTableProductionOrder } from "@/db/schema";
 import { printTagPart } from "@/files/part-tag";
 import { formatDate } from "@/lib/formatters";
 import { handleMutationError } from "@/lib/handlers";
+import { getPartTagName, PartTagSource } from "@/lib/part-tag";
 import { SELL_ORDER_LINE_NOT_OF_PART_MESSAGE } from "@/messages/production-order";
 import { requiredIdObjectSchema } from "@/schemas";
 import {
@@ -197,8 +198,9 @@ export default router({
           ? (formatDate(sellOrderLine.requestedDeliveryDate) ?? undefined)
           : undefined,
       sellOrderReference: sellOrder !== undefined ? (sellOrder.clientReference ?? String(sellOrder.id)) : undefined,
+      labelSize: input.labelSize,
       tagGroups: [{ partQuantity: input.partQuantity, tagQuantity: 1 }],
-      tagName: `production-order-${productionOrder.id}`,
+      tagName: getPartTagName(PartTagSource.ProductionOrder, productionOrder.id),
     });
   }),
 });

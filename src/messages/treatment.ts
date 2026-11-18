@@ -11,7 +11,6 @@ export const PARTS_SENT_TO_TREATMENT_MESSAGE = "Piezas enviadas al tratamiento";
 export const PARTS_RECEIVED_FROM_TREATMENT_MESSAGE = "Piezas recibidas del tratamiento";
 export const PRODUCED_QUANTITY_LABEL = "Fabricadas";
 export const SENT_QUANTITY_LABEL = "Enviadas";
-export const RECEIVED_QUANTITY_LABEL = "Recibidas";
 export const WITHOUT_ORDER_LABEL = "Sin orden";
 export const RECEPTIONS_LABEL = "Recepciones";
 export const RECEIVE_LABEL = "Recibir";
