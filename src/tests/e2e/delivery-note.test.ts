@@ -101,7 +101,7 @@ import {
   workflowOpenCreateDeliveryNoteLine,
   workflowOpenEditDeliveryNote,
 } from "@/tests/workflows/delivery-note";
-import { expectTagField, readTagsTexts, workflowPrintTag } from "@/tests/workflows/tag";
+import { expectTagField, workflowPrintTag } from "@/tests/workflows/tag";
 import { ToastType } from "@/types/toast";
 
 let tableDeliveryNotes: Locator;
@@ -1046,8 +1046,7 @@ test("manage the delivery notes", { annotation: TestAnnotations.ResetTags }, asy
 
       // The tag of a line without Artículo is printed with its description
       const tagFilePath = path.join(process.env.TAGS_ROOT_PATH!, `delivery-note-line-${newDbLines[0].id}.pdf`);
-      await workflowPrintTag(page, rowCustomLine, tagFilePath);
-      const [tag, ...otherTags] = await readTagsTexts(tagFilePath);
+      const [tag, ...otherTags] = await workflowPrintTag(page, rowCustomLine, tagFilePath);
       expect(otherTags).toEqual([]);
       expect(tag).toContain(customLine.description);
       // Without a Pedido, the tag names the Cliente of the Albarán and holds only its quantity

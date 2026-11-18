@@ -1,3 +1,6 @@
+import fs from "node:fs";
+import path from "node:path";
+
 import { expect } from "@playwright/test";
 import type { Locator, Page } from "@playwright/test";
 import { eq } from "drizzle-orm";
@@ -16,6 +19,7 @@ import {
   RASTER_BITS_PER_COLOR,
   RASTER_DPI,
 } from "@/files/printer";
+import { getPartTagName, PartTagSource } from "@/lib/part-tag";
 import { LoggerLevels, LogMessages } from "@/logging/types";
 import { BROWSER_PRINTER_LABEL, PRINTER_UNREACHABLE_MESSAGE, SENT_TO_PRINTER_MESSAGE } from "@/messages/printer";
 import { mockClients, mockDeliveryNotes, mockInvoices, mockSellOrders } from "@/tests/mock-data";
@@ -418,6 +422,11 @@ test("print the documents on the Impresoras of the server or with the browser", 
     await expect.poll(() => readRawJobs().length, { timeout: TAG_RENDER_TIMEOUT_MS }).toBe(previousRawJobsCount + 1);
     await expectSingleSuccessToast(page, SENT_TO_PRINTER_MESSAGE(tagPrinter.name));
     await expect(dialogTag).not.toBeVisible();
+    const tagFilePath = path.join(
+      process.env.TAGS_ROOT_PATH!,
+      `${getPartTagName(PartTagSource.DeliveryNoteLine, deliveryNoteLine.id)}.pdf`,
+    );
+    expect(fs.existsSync(tagFilePath)).toBe(false);
 
     // The tag fills the label exactly, so the printer gets it at its size without scaling it
     expect(parseTsplJob(readRawJobs().at(-1)!)).toEqual([

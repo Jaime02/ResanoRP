@@ -85,7 +85,7 @@ import {
 } from "@/tests/workflows/delivery-note";
 import { workflowPickInvoiceClient } from "@/tests/workflows/invoice";
 import { assertPartStockConsumption } from "@/tests/workflows/part-stock";
-import { expectTagField, getTagSellOrderText, readTagsTexts, workflowPrintTag } from "@/tests/workflows/tag";
+import { expectTagField, getTagSellOrderText, workflowPrintTag } from "@/tests/workflows/tag";
 import type { BaseDeliveryNote } from "@/types/delivery-note";
 import type { BaseDeliveryNoteLine } from "@/types/delivery-note-line";
 import { type BaseSellOrderLine, PENDING_SELL_ORDER_LINES_PAGE_SIZE } from "@/types/sell-order-line";
@@ -781,9 +781,11 @@ for (const client of clientsWithPendingLines) {
         const firstTagQuantity = earliestLine.pendingQuantity - 1;
         const secondTagQuantity = 1 + mockFirstLine.pendingQuantity + 1;
         const thirdTagQuantity = partTotal - firstTagQuantity - secondTagQuantity;
-        await workflowPrintTag(page, partRow, tagFilePath, [firstTagQuantity, secondTagQuantity, thirdTagQuantity]);
-
-        const [firstTag, secondTag, thirdTag, ...otherTags] = await readTagsTexts(tagFilePath);
+        const [firstTag, secondTag, thirdTag, ...otherTags] = await workflowPrintTag(page, partRow, tagFilePath, [
+          firstTagQuantity,
+          secondTagQuantity,
+          thirdTagQuantity,
+        ]);
         expect(otherTags).toEqual([]);
         expectTagField(firstTag, CLIENT_LABEL, client.name);
         expectTagField(firstTag, DELIVERY_LABEL, deliveryDate);
@@ -839,8 +841,7 @@ for (const client of clientsWithPendingLines) {
         await expect(inputPartQuantity).toHaveValue(String(total));
 
         // The lines left at 0 are left out of the tag, which holds the whole total by default
-        await workflowPrintTag(page, partRow, tagFilePath);
-        const [tag, ...otherTags] = await readTagsTexts(tagFilePath);
+        const [tag, ...otherTags] = await workflowPrintTag(page, partRow, tagFilePath);
         expect(otherTags).toEqual([]);
         expect(tag).toContain(getTagSellOrderText(otherReference, earliestLine.pendingQuantity, false));
         expect(tag).toContain(getTagSellOrderText(mockReference, servedOfMockFirstLine, false));
@@ -870,12 +871,11 @@ for (const client of clientsWithPendingLines) {
           process.env.TAGS_ROOT_PATH!,
           `${getPartTagName(PartTagSource.DeliveryNoteLine, deliveryNoteLine.id)}.pdf`,
         );
-        await workflowPrintTag(
+        const [tag, ...otherTags] = await workflowPrintTag(
           page,
           getTableRowByTestId(dialogEditDeliveryNote.getByTestId("table-delivery-note-line"), deliveryNoteLine.id),
           deliveryNoteLineTagFilePath,
         );
-        const [tag, ...otherTags] = await readTagsTexts(deliveryNoteLineTagFilePath);
         expect(otherTags).toEqual([]);
         expectTagField(tag, CLIENT_LABEL, client.name);
         expectTagField(tag, DELIVERY_LABEL, deliveryDate);

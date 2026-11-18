@@ -53,6 +53,7 @@ export const LogMessages = {
   notFoundRendered: "NotFound component rendered. This should not happen in production.",
   partFolderNotFound: "Part folder does not exist",
   partTagReadFailed: "Error reading Part Tag file",
+  partTagRemoveFailed: "Error removing Part Tag file",
   pdfLoadFailed: "Failed to load PDF",
   pendingSellOrdersGenerationFailed: "Error generating Pending Sell Orders file",
   powerSyncSyncFailed: "Failed to sync with PowerSync",

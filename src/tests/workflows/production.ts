@@ -38,8 +38,7 @@ import { openPartPicker } from "@/tests/utils/components/picker";
 import { getTableRowByTestId } from "@/tests/utils/components/table";
 import { expectSingleSuccessOrErrorToast, expectSingleSuccessToast } from "@/tests/utils/components/toast";
 import { pickActiveMachine, setUserMode } from "@/tests/utils/fixtures";
-import { expectPrintedByBrowser } from "@/tests/workflows/printer";
-import { assertTagFileGenerated, readTagsTexts } from "@/tests/workflows/tag";
+import { expectTagPrintedByBrowser } from "@/tests/workflows/tag";
 import type { BaseMachine } from "@/types/machine";
 import type { BasePart } from "@/types/part";
 import type { BaseProductionOrder } from "@/types/production-order";
@@ -359,7 +358,5 @@ export async function workflowPrintStopProductionOrderTag(page: Page, production
   );
   const printTagButton = dialogContentStopProductionOrder.getByTestId("button-print-tag-stop-production-order");
   await expect(printTagButton).toBeEnabled();
-  await expectPrintedByBrowser(page, printTagButton);
-  assertTagFileGenerated(tagFilePath);
-  return readTagsTexts(tagFilePath);
+  return expectTagPrintedByBrowser(page, printTagButton, tagFilePath);
 }

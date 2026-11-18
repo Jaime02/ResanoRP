@@ -19,7 +19,7 @@ Tags are printed from three places, all with the same selector:
 - the header of the production history table of a machine, used by the print button of every row,
 - the stop production dialog of a machine.
 
-Printing a tag first renders it (`part.printTag` or `productionOrder.printTag`) into `TAGS_ROOT_PATH`, served at `/api/files/part-tag/<name>`, and then prints that file like any document. There is no preview.
+Printing a tag first renders it (`part.printTag` or `productionOrder.printTag`) into `TAGS_ROOT_PATH`, served at `/api/files/part-tag/<name>`, and then prints that file like any document. There is no preview. A tag is deleted when it is served, so it can be served only once; printing a tag again renders it again. A tag that is rendered but never served stays until it is rendered again.
 
 The tag is rendered at the **label size of the selected printer** (`labelSize` in the input, `null` for printers without labels and for Otra, which get the 6 × 4 in tag). The page is landscape, its longer side across, so 100 × 70 mm stays 100 × 70 and 52 × 107 mm becomes 107 × 52 (the Intermec encoder turns it onto the label). The 6 × 4 in layout is scaled to the side that fits and stretches along the other, so it fills the label (`getTagPage` in `src/files/part-tag.tsx`). Names and URLs of the tag files are in `src/lib/part-tag.ts`.
 

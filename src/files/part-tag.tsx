@@ -10,7 +10,7 @@ import { formatDate, formatPartUnits } from "@/lib/formatters";
 import { allocateTagSellOrders } from "@/lib/part-tag";
 import type { TTagSellOrder } from "@/lib/part-tag";
 import { cn } from "@/lib/utils";
-import { CLIENT_LABEL, COATING_LABEL, QUANTITY_LABEL, TOTAL_LABEL } from "@/messages/common";
+import { CLIENT_LABEL, COATING_LABEL, PART_LABEL, QUANTITY_LABEL, TOTAL_LABEL } from "@/messages/common";
 import { DELIVERY_LABEL, SELL_ORDER_LABEL } from "@/messages/sell-order";
 import type { TDeliveryNoteLineTagGroup } from "@/schemas/delivery-note-line";
 import type { TTagLabelSize } from "@/schemas/printer";
@@ -53,7 +53,7 @@ interface TagPartProps {
   coatingName?: string;
 }
 
-function TagPart({ reference, partDescription, coatingName }: TagPartProps) {
+function TagPart({ reference, partDescription, coatingName, hasLabel }: TagPartProps & { hasLabel: boolean }) {
   const heading = reference ?? partDescription;
   const description = reference !== undefined ? partDescription : undefined;
   const coating = coatingName !== undefined ? `${COATING_LABEL}: ${coatingName}` : undefined;
@@ -61,6 +61,7 @@ function TagPart({ reference, partDescription, coatingName }: TagPartProps) {
   return (
     // Safe, so a part too long for the tag is cut at the bottom and its label stays
     <div className="flex min-h-0 flex-1 flex-col justify-center-safe gap-1 overflow-hidden">
+      {hasLabel && <TagLabel>{PART_LABEL}:</TagLabel>}
       {heading !== undefined && (
         <AutoFitText
           className="leading-none font-extrabold"
@@ -144,7 +145,7 @@ function TagSellOrders({ sellOrders, partQuantity }: TagSellOrdersProps) {
         <>
           <Separator className="bg-black" orientation="vertical" thickness="thin" />
           <div className="ml-auto flex shrink-0 flex-col items-end gap-1">
-            <TagLabel>{TOTAL_LABEL}</TagLabel>
+            <TagLabel className="text-[16pt]"> {TOTAL_LABEL}</TagLabel>
             <AutoFitText
               className="leading-none font-extrabold"
               value={partQuantity}
@@ -158,18 +159,45 @@ function TagSellOrders({ sellOrders, partQuantity }: TagSellOrdersProps) {
   );
 }
 
-function TagLabel({ children }: { children: React.ReactNode }) {
-  return <span className="shrink-0 text-[14pt] leading-none font-semibold tracking-wider uppercase">{children}</span>;
+function TagLabel({ children, className }: { children: React.ReactNode; className?: string }) {
+  return (
+    <span className={cn("shrink-0 text-[14pt] leading-none font-semibold tracking-wider uppercase", className)}>
+      {children}
+    </span>
+  );
 }
 
 // A value too long for one line takes a second one in a slightly smaller font
 const TAG_HEADER_VALUE_SIZE = { idealChars: 30, maxPt: 18, minPt: 16 };
 
-function TagHeaderField({ label, value, className }: { label: string; value: string; className?: string }) {
+const TAG_CLIENT_VALUE_SIZE = {
+  ...TAG_HEADER_VALUE_SIZE,
+  maxPt: TAG_HEADER_VALUE_SIZE.maxPt + 4,
+  minPt: TAG_HEADER_VALUE_SIZE.minPt + 4,
+};
+
+// With more Pedidos the box has no room left for the label of the part
+const TAG_PART_LABEL_MAX_SELL_ORDERS = 3;
+
+interface TagHeaderFieldProps {
+  label: string;
+  value: string;
+  className?: string;
+  size?: typeof TAG_HEADER_VALUE_SIZE;
+  valueClassName?: string;
+}
+
+function TagHeaderField({
+  label,
+  value,
+  className,
+  size = TAG_HEADER_VALUE_SIZE,
+  valueClassName = "leading-tight",
+}: TagHeaderFieldProps) {
   return (
     <div className={cn("flex min-w-0 flex-col items-end gap-1 text-right", className)}>
       <TagLabel>{label}</TagLabel>
-      <AutoFitText className="leading-tight font-bold" maxLines={2} value={value} {...TAG_HEADER_VALUE_SIZE} />
+      <AutoFitText className={cn("font-bold", valueClassName)} maxLines={2} value={value} {...size} />
     </div>
   );
 }
@@ -200,15 +228,23 @@ function PartTagTemplate({ clientName, sellOrders, partQuantity, isLast, page, .
         zoom: page.scale,
       }}
     >
-      <div className="flex items-stretch justify-between gap-5">
+      <div className="flex items-stretch justify-between gap-4">
         <ResanoLogo className="h-12 shrink-0 [&_g:first-child]:fill-black" />
-        {clientName !== undefined && <TagHeaderField className="grow" label={CLIENT_LABEL} value={clientName} />}
+        {clientName !== undefined && (
+          <TagHeaderField
+            className="grow"
+            label={CLIENT_LABEL}
+            size={TAG_CLIENT_VALUE_SIZE}
+            value={clientName}
+            valueClassName="leading-none"
+          />
+        )}
         {requestedDeliveryDate !== null && (
           <TagHeaderField className="shrink-0" label={DELIVERY_LABEL} value={requestedDeliveryDate} />
         )}
       </div>
       <Separator className="bg-black" orientation="horizontal" thickness="thin" />
-      <TagPart {...partProps} />
+      <TagPart hasLabel={sellOrders.length < TAG_PART_LABEL_MAX_SELL_ORDERS} {...partProps} />
       <Separator className="bg-black" orientation="horizontal" thickness="thin" />
       {sellOrders.length > 0 ? (
         <TagSellOrders sellOrders={sellOrders} partQuantity={partQuantity} />

@@ -19,10 +19,15 @@ export const Route = createFileRoute("/api/files/part-tag/$name")({
         }
 
         try {
-          const fileBuffer = await fs.readFile(getPartTagPath(params.name));
+          const tagPath = getPartTagPath(params.name);
+          const fileBuffer = await fs.readFile(tagPath);
+          // A tag is only read to be printed, and printing it again renders it again. A tag that stays is no reason
+          // to fail a print that was read
+          await fs
+            .rm(tagPath, { force: true })
+            .catch((error: unknown) => logger.error(LogMessages.partTagRemoveFailed, { error, name: params.name }));
           return new Response(new Uint8Array(fileBuffer), {
             headers: {
-              "Accept-Ranges": "bytes",
               "Content-Disposition": `inline; filename="etiqueta-${params.name}.pdf"`,
               "Content-Type": "application/pdf",
             },

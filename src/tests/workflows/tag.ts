@@ -1,22 +1,19 @@
 import fs from "node:fs";
+import path from "node:path";
 
 import { expect } from "@playwright/test";
 import type { Locator, Page } from "@playwright/test";
 import { getDocument } from "pdfjs-dist/legacy/build/pdf.mjs";
 
 import { formatPartUnits } from "@/lib/formatters";
+import { getPartTagFileUrl } from "@/lib/part-tag";
 import { SELL_ORDER_LABEL } from "@/messages/sell-order";
 import { expectPrintedByBrowser } from "@/tests/workflows/printer";
 
-export function assertTagFileGenerated(tagFilePath: string) {
-  expect(fs.existsSync(tagFilePath)).toBe(true);
-  expect(fs.statSync(tagFilePath).size).toBeGreaterThan(0);
-}
-
 // The text of each tag, which is a page of its PDF. A value wrapped onto several lines or split into several runs is
 // joined back, and the fields are separated by a single space
-export async function readTagsTexts(tagFilePath: string) {
-  const pdf = await getDocument({ data: new Uint8Array(fs.readFileSync(tagFilePath)) }).promise;
+async function readTagsTexts(tagPdf: Buffer) {
+  const pdf = await getDocument({ data: new Uint8Array(tagPdf) }).promise;
   return Promise.all(
     Array.from({ length: pdf.numPages }, async (_, index) =>
       (await (await pdf.getPage(index + 1)).getTextContent()).items
@@ -43,6 +40,19 @@ export function getTagSellOrderText(reference: string, quantity: number, isSingl
   return `${isSingle ? `${SELL_ORDER_LABEL}: ` : ""}${reference} ${formatPartUnits(quantity)}`;
 }
 
+// The server deletes a tag once it is served, so its text is read from the response of the browser print and the file
+// on disk has to be gone
+export async function expectTagPrintedByBrowser(page: Page, buttonPrint: Locator, tagFilePath: string) {
+  const tagUrl = getPartTagFileUrl(path.basename(tagFilePath, ".pdf")).split("?")[0];
+  const [response] = await Promise.all([
+    page.waitForResponse((tagResponse) => tagResponse.url().includes(tagUrl)),
+    expectPrintedByBrowser(page, buttonPrint),
+  ]);
+  const tagsTexts = await readTagsTexts(await response.body());
+  expect(fs.existsSync(tagFilePath)).toBe(false);
+  return tagsTexts;
+}
+
 // The dialog fills in by default a single group of one tag holding the whole quantity of the row. Given the units of
 // each tag, it prints one tag per group instead. Without Impresoras for tags, the browser prints it
 export async function workflowPrintTag(
@@ -67,8 +77,8 @@ export async function workflowPrintTag(
     await inputPartQuantity.fill(String(partQuantity));
     await expect(inputPartQuantity).toHaveValue(String(partQuantity));
   }
-  await expectPrintedByBrowser(page, buttonSubmit);
+  const tagsTexts = await expectTagPrintedByBrowser(page, buttonSubmit, tagFilePath);
 
   await expect(dialogPrintTag).not.toBeVisible();
-  assertTagFileGenerated(tagFilePath);
+  return tagsTexts;
 }
