@@ -1,6 +1,6 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useSelector } from "@tanstack/react-store";
-import { PlusIcon } from "lucide-react";
+import { PlusIcon, TriangleAlertIcon } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { z } from "zod";
 
@@ -18,6 +18,8 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
+import { InfoPopoverTrigger } from "@/components/ui/info-popover";
+import { Popover, PopoverContent } from "@/components/ui/popover";
 import { Separator } from "@/components/ui/separator";
 import { UserMode, useAppContext } from "@/contexts/app-context";
 import { FormContextProvider } from "@/form";
@@ -30,6 +32,7 @@ import {
   ADD_TO_DELIVERY_NOTE_LABEL,
   CANCEL_DELIVERY_NOTE_CREATION_MESSAGE,
   CANCEL_DELIVERY_NOTE_CREATION_TITLE,
+  CLIENT_SPLITS_SELL_ORDERS_MESSAGE,
   DELIVERY_NOTE_CREATE_TITLE,
   LAST_DELIVERY_NOTES_TITLE,
   PARTS_TO_SERVE_TITLE,
@@ -43,6 +46,7 @@ import { optionalIdSchema } from "@/schemas";
 import type { TTableState } from "@/schemas";
 import { tableDeliveryNoteStateSchema } from "@/schemas/delivery-note";
 import { TableMode } from "@/types";
+import { CLIENT_SPLIT_SELL_ORDERS_TOOLTIP_TEST_ID } from "@/types/client";
 
 const routeSearchSchema = z.object({
   clientId: optionalIdSchema.catch(undefined),
@@ -81,6 +85,8 @@ function RouteComponent() {
     stageSellOrderLinesFormMode,
     setStageSellOrderLinesFormMode,
     stageSellOrderLine,
+    canStageSellOrderLine,
+    splitSellOrdersInDeliveryNotes,
     unstageSellOrderLines,
     updateStagedGroupQuantity,
     isLoading,
@@ -143,29 +149,42 @@ function RouteComponent() {
           pendingSellOrderLines={pendingSellOrderLines}
           stagedSellOrderLines={stagedSellOrderLines}
           stageSellOrderLine={stageSellOrderLine}
+          canStageSellOrderLine={canStageSellOrderLine}
           isLoading={isLoading}
           className="self-center"
           headerExtraComponents={
-            <form.AppField
-              name="clientId"
-              children={(field) => (
-                <field.ClientCombobox
-                  testId="combobox-client"
-                  id="combobox-client-form-delivery-note"
-                  label={null}
-                  hideError
-                  nullable
-                  onValueChange={(newValue) => {
-                    if (stagedSellOrderLines && stagedSellOrderLines.length > 0) {
-                      setIsOpenDialogConfirmationCancelDeliveryNote(true);
-                    } else {
-                      field.handleChange(newValue?.id ?? null);
-                      form.setFieldValue("stagedSellOrderLines", undefined);
-                    }
-                  }}
-                />
+            <>
+              <form.AppField
+                name="clientId"
+                children={(field) => (
+                  <field.ClientCombobox
+                    testId="combobox-client"
+                    id="combobox-client-form-delivery-note"
+                    label={null}
+                    hideError
+                    nullable
+                    onValueChange={(newValue) => {
+                      if (stagedSellOrderLines && stagedSellOrderLines.length > 0) {
+                        setIsOpenDialogConfirmationCancelDeliveryNote(true);
+                      } else {
+                        field.handleChange(newValue?.id ?? null);
+                        form.setFieldValue("stagedSellOrderLines", undefined);
+                      }
+                    }}
+                  />
+                )}
+              />
+              {splitSellOrdersInDeliveryNotes && (
+                <Popover>
+                  <InfoPopoverTrigger
+                    data-testid={CLIENT_SPLIT_SELL_ORDERS_TOOLTIP_TEST_ID}
+                    Icon={TriangleAlertIcon}
+                    className="text-amber-500"
+                  />
+                  <PopoverContent>{CLIENT_SPLITS_SELL_ORDERS_MESSAGE}</PopoverContent>
+                </Popover>
               )}
-            />
+            </>
           }
         />
         <Separator />

@@ -89,7 +89,7 @@ export default defineConfig(({ command }) => {
       strictPort: true,
       watch: {
         // Chokidar matches against absolute paths, so relative globs never match. envs/*/ keeps envs/.env.* watched.
-        ignored: ["**/envs/*/**", "**/ignore/**", "**/routeTree.gen.ts", "**/public/styles.css"],
+        ignored: ["**/envs/*/**", "**/ignore/**", "**/benchmark/**", "**/routeTree.gen.ts", "**/public/styles.css"],
       },
       allowedHosts: [".resanorp"],
     },

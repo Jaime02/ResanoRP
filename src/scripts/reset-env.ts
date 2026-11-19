@@ -63,7 +63,8 @@ export default async function resetEnv() {
   });
 
   try {
-    execSync("bunx drizzle-kit push --force", { stdio: "inherit" });
+    // Not bunx: without the local binary it downloads the latest stable drizzle-kit, which fails on drizzle-orm's rc
+    execSync("bun run drizzle-kit push --force", { stdio: "inherit" });
   } catch (err) {
     logger.crit("Failed to reset the database", err);
     process.exit(1);

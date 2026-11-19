@@ -22,6 +22,8 @@ export interface TPrinterConnection {
   labelLengthMm: number | null;
 }
 
+const IS_WINDOWS = process.platform === "win32";
+const GHOSTSCRIPT_COMMAND = IS_WINDOWS ? "gswin64c" : "gs";
 const GHOSTSCRIPT_ARGUMENTS = ["-q", "-dBATCH", "-dNOPAUSE", "-dSAFER"];
 
 // The network printers only accept raster, and only 8-bit gray ("sgray_8" is CUPS_CSPACE_SW, 18) at 600 dpi
@@ -112,7 +114,7 @@ async function withTemporaryDirectory<T>(run: (directory: string) => Promise<T>)
 
 async function pdfToPwgRaster(pdf: Buffer) {
   return runProcess(
-    "gs",
+    GHOSTSCRIPT_COMMAND,
     [
       ...GHOSTSCRIPT_ARGUMENTS,
       "-sDEVICE=pwgraster",
@@ -149,7 +151,7 @@ async function pdfToLabelImages(printer: TPrinterConnection, pdf: Buffer, device
   const { labelWidthMm, labelLengthMm } = getLabelSize(printer);
   return withTemporaryDirectory(async (directory) => {
     await runProcess(
-      "gs",
+      GHOSTSCRIPT_COMMAND,
       [
         ...GHOSTSCRIPT_ARGUMENTS,
         `-sDEVICE=${device}`,
@@ -210,7 +212,7 @@ async function sendToRawPort(address: string, job: Buffer, timeoutMs: number) {
 
 async function pdfToBrotherLaser(pdf: Buffer) {
   const raster = await runProcess(
-    "gs",
+    GHOSTSCRIPT_COMMAND,
     [
       ...GHOSTSCRIPT_ARGUMENTS,
       "-sDEVICE=cups",
@@ -247,7 +249,107 @@ async function runSmbClient(printer: TPrinterConnection, command: string, timeou
   );
 }
 
+function getWindowsSharePath(printer: TPrinterConnection) {
+  if (printer.shareName === null) throw new Error("The printer has no share name");
+  return `\\\\${printer.address}\\${printer.shareName}`;
+}
+
+// Windows allows one user per server name in a logon session, and every job shares the session of the service, so
+// the jobs of a server go one at a time and none drops the connection another one is printing through
+const windowsServerQueues = new Map<string, Promise<unknown>>();
+
+async function queueOnWindowsServer<T>(printer: TPrinterConnection, run: (sharePath: string) => Promise<T>) {
+  const key = printer.address.toLowerCase();
+  const job = (windowsServerQueues.get(key) ?? Promise.resolve()).then(async () => run(getWindowsSharePath(printer)));
+  windowsServerQueues.set(
+    key,
+    job.catch(() => undefined),
+  );
+  return job;
+}
+
+// With *, net reads the password from its input, so it never shows up in the arguments of the process
+async function runNetUse(printer: TPrinterConnection, sharePath: string) {
+  return runProcess(
+    "net",
+    [
+      "use",
+      sharePath,
+      ...(printer.password === null ? [] : ["*"]),
+      ...(printer.username === null ? [] : [`/user:${printer.username}`]),
+    ],
+    {
+      input: printer.password === null ? undefined : Buffer.from(`${printer.password}\r\n`),
+      timeoutMs: PING_TIMEOUT_MS,
+    },
+  );
+}
+
+// Win32_NetworkConnection lists the connections without a drive letter too, and unlike Get-SmbConnection it needs no
+// administrator. The output of net use is translated and cuts the share names with spaces
+async function disconnectWindowsServer(address: string) {
+  const output = await runProcess(
+    "powershell",
+    [
+      "-NoProfile",
+      "-NonInteractive",
+      "-Command",
+      "[Console]::OutputEncoding = [Text.Encoding]::UTF8; (Get-CimInstance Win32_NetworkConnection).RemoteName",
+    ],
+    { timeoutMs: PING_TIMEOUT_MS },
+  );
+  const serverPrefix = `\\\\${address}\\`.toLowerCase();
+  const connections = output
+    .toString()
+    .split(/\r?\n/)
+    .map((connection) => connection.trim())
+    .filter((connection) => connection.toLowerCase().startsWith(serverPrefix));
+  for (const connection of connections) {
+    await runProcess("net", ["use", connection, "/delete", "/y"], { timeoutMs: PING_TIMEOUT_MS });
+  }
+  return connections.length;
+}
+
+// net use succeeds on a share already connected with the same user, and fails with error 1219 if the server has a
+// connection with another one, like one left by an earlier run with the old credentials of the printer
+async function connectToWindowsShare(printer: TPrinterConnection, sharePath: string) {
+  try {
+    await runNetUse(printer, sharePath);
+  } catch (error) {
+    if ((await disconnectWindowsServer(printer.address)) === 0) throw error;
+    await runNetUse(printer, sharePath);
+  }
+}
+
+async function printOnWindowsShare(printer: TPrinterConnection, job: Buffer) {
+  await withTemporaryDirectory(async (directory) => {
+    const jobPath = path.join(directory, SHARE_JOB_FILE_NAME);
+    await fs.writeFile(jobPath, job);
+    await queueOnWindowsServer(printer, async (sharePath) => {
+      await connectToWindowsShare(printer, sharePath);
+      await runProcess("cmd", ["/c", "copy", "/b", jobPath, sharePath]);
+    });
+  });
+}
+
+// brlaser is a CUPS filter and does not exist on Windows, so the page goes through the driver Windows has for the
+// printer instead of being made into its language here
+async function printOnWindowsDriver(printer: TPrinterConnection, pdf: Buffer) {
+  await queueOnWindowsServer(printer, async (sharePath) => {
+    await connectToWindowsShare(printer, sharePath);
+    await runProcess(
+      GHOSTSCRIPT_COMMAND,
+      [...GHOSTSCRIPT_ARGUMENTS, "-sDEVICE=mswinpr2", "-dNoCancel", `-sOutputFile=%printer%${sharePath}`, "-"],
+      { input: pdf },
+    );
+  });
+}
+
 async function printOnShare(printer: TPrinterConnection, job: Buffer) {
+  if (IS_WINDOWS) {
+    await printOnWindowsShare(printer, job);
+    return;
+  }
   await withTemporaryDirectory(async (directory) => {
     await fs.writeFile(path.join(directory, SHARE_JOB_FILE_NAME), job);
     await runSmbClient(printer, `print ${SHARE_JOB_FILE_NAME}`, PRINT_TIMEOUT_MS, directory);
@@ -315,6 +417,10 @@ export async function printPdfOnPrinter(printer: TPrinterConnection, pdf: Buffer
       await printOnShare(printer, await pdfToIntermecDirectProtocol(printer, pdf));
       return;
     case PrinterKind.BrotherShare:
+      if (IS_WINDOWS) {
+        await printOnWindowsDriver(printer, pdf);
+        return;
+      }
       await printOnShare(printer, await pdfToBrotherLaser(pdf));
       return;
     case PrinterKind.TscRaw:
@@ -343,6 +449,10 @@ export async function pingPrinter(printer: TPrinterConnection) {
   }
   if (printer.kind === PrinterKind.TscRaw) {
     await sendToRawPort(printer.address, Buffer.alloc(0), PING_TIMEOUT_MS);
+    return;
+  }
+  if (IS_WINDOWS) {
+    await queueOnWindowsServer(printer, async (sharePath) => connectToWindowsShare(printer, sharePath));
     return;
   }
   await runSmbClient(printer, "queue", PING_TIMEOUT_MS);

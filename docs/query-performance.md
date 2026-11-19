@@ -119,7 +119,7 @@ lines, clients, machines) take 1–60 ms on the same data and were left as they 
 
 Old and new builds of every branch ran side by side in one run, then the images were swapped between the stacks and the
 two runs averaged, since the same build ran ~8% slower on the second stack. Each cell is the median of 5 loads. Row
-counts matched on every target. Data: `ignore/benchmark/results/21-final-query-fixes.txt` and
+counts matched on every target. Data: `benchmark/results/21-final-query-fixes.txt` and
 `22-final-query-fixes-stacks-swapped.txt`.
 
 | Page, mode                           | master (old → new) | powersync-lite (old → new) |
@@ -146,14 +146,14 @@ This is deliberate and is why the two columns above differ.
 
 ## 6. How it was checked
 
-- **Same rows.** `ignore/benchmark/tools/query-bench/` loads the benchmark database into memory, mocks the collections,
+- **Same rows.** `benchmark/tools/query-bench/` loads the benchmark database into memory, mocks the collections,
   and runs the committed query file (`old/`) against the new one for 66 states (28 production orders, 18 sell orders,
   9 delivery notes, 11 parts: filters, statuses, pagination, sorts, count and rows queries). The output must be identical
   (`$collectionId` and `$key` are ignored, as they differ per run). `ONLY=<text>`, `TABLE=` and `QUERY=` narrow it.
-- **Same pages.** `ignore/benchmark/tools/compare-tables.ts` loads 26 URL states (production orders by status, part,
+- **Same pages.** `benchmark/tools/compare-tables.ts` loads 26 URL states (production orders by status, part,
   client name, page 3, sell orders by client name, part pages, ...) on the old and new builds and compares the text of
   the tables. Every state is identical on every branch, with no console errors.
-- **Same performance claim.** The benchmark above, interleaved and with swapped images (`ignore/benchmark/README.md`).
+- **Same performance claim.** The benchmark above, interleaved and with swapped images (`benchmark/README.md`).
 - **Not run:** the e2e `production-order.test.ts` that covers the status filters. It needs `bun run test:restart`, and
   should run before this is merged.
 

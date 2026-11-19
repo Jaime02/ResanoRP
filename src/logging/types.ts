@@ -67,6 +67,8 @@ export const LogMessages = {
   sellOrderNotFound: "Sell Order not found",
   sellOrderPathNotFound: "Sell Order path not found",
   stageNotPendingSellOrderLine: "Logic error: Trying to stage a sell order line that is not pending",
+  stageSellOrderLineOfAnotherSellOrder:
+    "Logic error: Trying to stage a sell order line of another sell order for a client that splits them",
   unstageWithoutStagedLines: "Logic error: Trying to unstage a sell order line but no staged lines exist",
   updateNotStagedSellOrderLine:
     "Logic error: Trying to update quantity of a staged sell order line but the line is not staged",

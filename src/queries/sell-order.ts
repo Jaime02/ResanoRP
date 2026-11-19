@@ -54,6 +54,10 @@ function buildFilteredSellOrders(q: InitialQueryBuilder, filters?: TSellOrderFil
     const endDate = endOfAppDay(receptionDate.endDate);
     query = query.where(({ sellOrder }) => lte(sellOrder.receptionDate, endDate));
   }
+  const clientReference = getFilterValue(filters, "clientReference");
+  if (clientReference != null) {
+    query = query.fn.where(({ sellOrder }) => includesIgnoringAccents(sellOrder.clientReference, clientReference));
+  }
   const partId = getFilterValue(filters, "partId");
   if (partId != null) {
     // Grouped so that an order with several lines of the part does not fan out into repeated rows

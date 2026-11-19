@@ -17,7 +17,7 @@ Stack: Bun, TanStack Start / Router / DB, tRPC, Drizzle ORM, PostgreSQL + PowerS
 bun install
 ```
 
-The environment files live in `envs/` (`.env.development`, `.env.test`, `.env.prisma`, `.env.production`, `.env.blank`). Only `.env.test` and `.env.development` are committed. Each one needs `POWERSYNC_JWT_SECRET`, 32 random bytes as base64url: `bun -e "console.log(crypto.getRandomValues(Buffer.alloc(32)).toString('base64url'))"`.
+The environment files live in `envs/` (`.env.development`, `.env.test`, `.env.prisma`, `.env.production`, `.env.blank`). Only `.env.test` and `.env.development` are committed. Each one needs `POWERSYNC_JWT_SECRET`, 32 random bytes as base64url: `bun -e "console.log(crypto.getRandomValues(Buffer.alloc(32)).toString('base64url'))"`. `.env.production` also needs `BACKUP_LOCAL_PATH`, the folder `envs/production/backup.cmd` backs up to every night.
 
 Once per machine, map the dev host to localhost by adding `127.0.0.1 dev.resanorp` to `C:\Windows\System32\drivers\etc\hosts` (`/etc/hosts` on macOS and Linux). It needs administrator rights.
 
@@ -48,7 +48,7 @@ bun run start        # runs it with envs/.env.production
 bun run build:start  # both
 ```
 
-`bun run prepare-production` and `bun run bundle-production` package the build for deployment (output in `envs/production`).
+The production server runs without Docker. Building the bundle, installing it, deploying, the client PCs, backups and restore are in [docs/production-deploy.md](docs/production-deploy.md).
 
 ## Tests
 

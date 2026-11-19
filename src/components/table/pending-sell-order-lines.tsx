@@ -62,7 +62,7 @@ interface TablePendingSellOrderLinesProps
     PublicBaseTableProps<TPendingSellOrderLine>,
     Pick<
       ReturnType<typeof useStageSellOrderLinesForm>,
-      "pendingSellOrderLines" | "stagedSellOrderLines" | "stageSellOrderLine"
+      "pendingSellOrderLines" | "stagedSellOrderLines" | "stageSellOrderLine" | "canStageSellOrderLine"
     > {
   clientId: number | null;
 }
@@ -130,6 +130,7 @@ export function TablePendingSellOrderLines({
   pendingSellOrderLines,
   stagedSellOrderLines,
   stageSellOrderLine,
+  canStageSellOrderLine,
   headerExtraComponents,
   ...props
 }: TablePendingSellOrderLinesProps) {
@@ -237,6 +238,7 @@ export function TablePendingSellOrderLines({
                   variant="success"
                   size="icon"
                   clickable={stagedSellOrderLines && !stagedSellOrderLines.some((line) => line.id === row.original.id)}
+                  disabled={!canStageSellOrderLine(row.original)}
                   onClick={async () => {
                     await stageSellOrderLine(row.original.id, row.original.pendingQuantity);
                   }}
@@ -256,7 +258,7 @@ export function TablePendingSellOrderLines({
         size: TWO_BUTTONS_ACTIONS_COLUMN_SIZE,
       }),
     ],
-    [hasNotes, stageSellOrderLine, stagedSellOrderLines],
+    [hasNotes, stageSellOrderLine, stagedSellOrderLines, canStageSellOrderLine],
   );
 
   return (

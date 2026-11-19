@@ -7,6 +7,7 @@ import { addDays } from "date-fns";
 import { eq, inArray, sql } from "drizzle-orm";
 
 import { UserMode } from "@/contexts/app-context";
+import { getClientById } from "@/db/functions/client";
 import { getDeliveryNote, getDeliveryNotes } from "@/db/functions/delivery-note";
 import { getDeliveryNoteLine, getDeliveryNoteLinesByDeliveryNoteId } from "@/db/functions/delivery-note-line";
 import { getInvoiceById } from "@/db/functions/invoice";
@@ -14,6 +15,7 @@ import { getLatestPartStockTransactionByPartId, getLatestPartStockTransactionsBy
 import { getSellOrders } from "@/db/functions/sell-order";
 import { getSellOrderLineById } from "@/db/functions/sell-order-line";
 import {
+  dbTableClient,
   dbTableDeliveryNote,
   dbTableDeliveryNoteLine,
   dbTableInvoice,
@@ -23,13 +25,15 @@ import {
   dbTableSellOrderLine,
 } from "@/db/schema";
 import { formatDate, formatPrice } from "@/lib/formatters";
-import { getPartTagName, PartTagSource } from "@/lib/part-tag";
+import { getPartTagName, getTagClientText, PartTagSource } from "@/lib/part-tag";
 import { formatCents, getLineTotalInCents } from "@/lib/prices";
 import { groupStagedSellOrderLines, sortPendingSellOrderLines } from "@/lib/sell-order-line";
 import { LogMessages } from "@/logging/types";
-import { CLIENT_LABEL, CLOSE_LABEL, NEXT_PAGE_LABEL, STATUS_PENDING_LABEL, TOTAL_LABEL } from "@/messages/common";
+import { CLIENT_EDITED_MESSAGE } from "@/messages/client";
+import { CLOSE_LABEL, NEXT_PAGE_LABEL, STATUS_PENDING_LABEL, TOTAL_LABEL } from "@/messages/common";
 import {
   ACCOUNTED_DELIVERY_NOTE_MESSAGE,
+  CLIENT_SPLITS_SELL_ORDERS_MESSAGE,
   PENDING_QUANTITY_EXCEEDED_MESSAGE,
   SELL_ORDER_LINE_ALREADY_DELIVERED_MESSAGE,
   SELL_ORDER_LINE_NOT_OF_CLIENT_MESSAGE,
@@ -49,6 +53,7 @@ import {
   getClearComboboxButton,
   openCombobox,
 } from "@/tests/utils/components/combobox";
+import { assertFormLoaded } from "@/tests/utils/components/form";
 import {
   assertTableRowCount,
   getDivDisabledMessage,
@@ -86,6 +91,7 @@ import {
 import { workflowPickInvoiceClient } from "@/tests/workflows/invoice";
 import { assertPartStockConsumption } from "@/tests/workflows/part-stock";
 import { expectTagField, getTagSellOrderText, workflowPrintTag } from "@/tests/workflows/tag";
+import { CLIENT_SPLIT_SELL_ORDERS_CHECKBOX_ID, CLIENT_SPLIT_SELL_ORDERS_TOOLTIP_TEST_ID } from "@/types/client";
 import type { BaseDeliveryNote } from "@/types/delivery-note";
 import type { BaseDeliveryNoteLine } from "@/types/delivery-note-line";
 import { type BaseSellOrderLine, PENDING_SELL_ORDER_LINES_PAGE_SIZE } from "@/types/sell-order-line";
@@ -787,7 +793,7 @@ for (const client of clientsWithPendingLines) {
           thirdTagQuantity,
         ]);
         expect(otherTags).toEqual([]);
-        expectTagField(firstTag, CLIENT_LABEL, client.name);
+        expect(firstTag).toContain(getTagClientText(client.name));
         expectTagField(firstTag, DELIVERY_LABEL, deliveryDate);
         expect(firstTag).toContain(getTagSellOrderText(otherReference, firstTagQuantity, true));
         expect(firstTag).not.toContain(mockReference);
@@ -877,7 +883,7 @@ for (const client of clientsWithPendingLines) {
           deliveryNoteLineTagFilePath,
         );
         expect(otherTags).toEqual([]);
-        expectTagField(tag, CLIENT_LABEL, client.name);
+        expect(tag).toContain(getTagClientText(client.name));
         expectTagField(tag, DELIVERY_LABEL, deliveryDate);
         expect(tag).toContain(getTagSellOrderText(otherReference, deliveryNoteLine.quantity, true));
         expect(tag).not.toContain(mockReference);
@@ -1502,3 +1508,73 @@ for (const client of clientsWithPendingLines) {
     });
   });
 }
+
+test("a client that splits its sell orders gets a delivery note per sell order", async ({ db, page }) => {
+  const [client] = await db
+    .insert(dbTableClient)
+    .values({
+      address: "Calle Mayor 2",
+      city: "Pamplona",
+      legalName: "Cliente Pedidos Separados S.L.",
+      name: "Cliente Pedidos Separados",
+      postalCode: "31002",
+      taxId: "B31000001",
+    })
+    .returning();
+  const sellOrders = await db
+    .insert(dbTableSellOrder)
+    .values([
+      { clientId: client.id, receptionDate: new Date() },
+      { clientId: client.id, receptionDate: new Date() },
+    ])
+    .returning();
+  const [firstSellOrderLine, secondSellOrderLine] = await db
+    .insert(dbTableSellOrderLine)
+    .values(
+      sellOrders.map((sellOrder) => ({
+        description: "Portes",
+        partPrice: "12.5",
+        pendingQuantity: 3,
+        quantity: 3,
+        sellOrderId: sellOrder.id,
+      })),
+    )
+    .returning();
+  const getButtonStage = (sellOrderLine: BaseSellOrderLine) =>
+    getTableRowByTestId(tablePendingSellOrderLines, sellOrderLine.id).getByTestId("button-success");
+  let deliveryNoteId: number;
+
+  await test.step("mark the client as splitting its sell orders in delivery notes", async () => {
+    await page.goto(`/client/${client.id}`);
+    const formClient = page.getByTestId("form-client");
+    await assertFormLoaded(formClient);
+    await formClient.getByTestId(CLIENT_SPLIT_SELL_ORDERS_CHECKBOX_ID).click();
+    await formClient.getByTestId("button-submit").click();
+    await expectSingleSuccessToast(page, CLIENT_EDITED_MESSAGE);
+    expect((await getClientById(client.id))?.splitSellOrdersInDeliveryNotes).toBe(true);
+  });
+
+  await test.step("once a line is staged, the lines of other sell orders can not be staged", async () => {
+    await workflowOpenCreateDeliveryNoteForClient(page, client);
+    await expect(page.getByTestId(CLIENT_SPLIT_SELL_ORDERS_TOOLTIP_TEST_ID)).toBeVisible();
+    await expect(getButtonStage(secondSellOrderLine)).toBeEnabled();
+    await workflowStageSingleSellOrderLine(page, firstSellOrderLine.id);
+    await expect(getButtonStage(secondSellOrderLine)).toBeDisabled();
+    await buttonSubmitFormDeliveryNote.click();
+    await expectSingleSuccessToast(page, DELIVERY_NOTE_CREATED_MESSAGE);
+    deliveryNoteId = (await db.query.dbTableDeliveryNoteLine.findFirst({
+      where: { sellOrderLineId: firstSellOrderLine.id },
+    }))!.deliveryNoteId;
+  });
+
+  await test.step("a line of another sell order can not be added to the delivery note", async () => {
+    await workflowStageSingleSellOrderLine(page, secondSellOrderLine.id);
+    await workflowAppendStagedLinesToDeliveryNote(page, deliveryNoteId, CLIENT_SPLITS_SELL_ORDERS_MESSAGE);
+    expectRejectedMutation({
+      code: "BAD_REQUEST",
+      message: CLIENT_SPLITS_SELL_ORDERS_MESSAGE,
+      procedurePath: "deliveryNote.appendLines",
+    });
+    expect(await getDeliveryNoteLinesByDeliveryNoteId(deliveryNoteId)).toHaveLength(1);
+  });
+});

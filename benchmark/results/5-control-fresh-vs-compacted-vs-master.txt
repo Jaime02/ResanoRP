@@ -1,0 +1,22 @@
+┌────┬─────────────┬────────────┬───────────┬─────────┬───────────┬─────────────┬─────────┬──────────────┬────────────┐
+│    │ page        │ mode       │ target    │ data ms │ min-max   │ hydrated ms │ sent KB │ page heap MB │ row counts │
+├────┼─────────────┼────────────┼───────────┼─────────┼───────────┼─────────────┼─────────┼──────────────┼────────────┤
+│  0 │ sell orders │ cold       │ fresh     │ 2457    │ 2419-2465 │ 316         │ 4397    │ 85           │ 13022      │
+│  1 │ sell orders │ cold       │ compacted │ 2612    │ 2508-2639 │ 336         │ 4406    │ 85           │ 13022      │
+│  2 │ sell orders │ cold       │ master    │ 1455    │ 1396-1503 │ 347         │ 6954    │ 36           │ 13022      │
+│  3 │ sell orders │ warm       │ fresh     │ 2515    │ 2430-2768 │ 208         │ 2345    │ 85           │ 13022      │
+│  4 │ sell orders │ warm       │ compacted │ 2711    │ 2492-2713 │ 233         │ 2357    │ 85           │ 13022      │
+│  5 │ sell orders │ warm       │ master    │ 1532    │ 1518-1695 │ 277         │ 4843    │ 36           │ 13022      │
+│  6 │ sell orders │ navigation │ fresh     │ 2226    │ 2187-2228 │ -           │ 2437    │ 85           │ 13022      │
+│  7 │ sell orders │ navigation │ compacted │ 2285    │ 2234-2337 │ -           │ 2449    │ 85           │ 13022      │
+│  8 │ sell orders │ navigation │ master    │ 1679    │ 1674-1734 │ -           │ 4600    │ 37           │ 13022      │
+│  9 │ sell order  │ cold       │ fresh     │ 2374    │ 2304-2472 │ 350         │ 4875    │ 93           │ 1          │
+│ 10 │ sell order  │ cold       │ compacted │ 2397    │ 2317-2403 │ 340         │ 4891    │ 93           │ 1          │
+│ 11 │ sell order  │ cold       │ master    │ 649     │ 637-650   │ 364         │ 2518    │ 15           │ 1          │
+│ 12 │ sell order  │ warm       │ fresh     │ 2363    │ 2315-2500 │ 257         │ 2832    │ 93           │ 1          │
+│ 13 │ sell order  │ warm       │ compacted │ 2478    │ 2292-2614 │ 249         │ 2845    │ 93           │ 1          │
+│ 14 │ sell order  │ warm       │ master    │ 583     │ 576-772   │ 277         │ 407     │ 15           │ 1          │
+│ 15 │ sell order  │ navigation │ fresh     │ 201     │ 175-222   │ -           │ 491     │ 80           │ 1          │
+│ 16 │ sell order  │ navigation │ compacted │ 207     │ 193-253   │ -           │ 491     │ 80           │ 1          │
+│ 17 │ sell order  │ navigation │ master    │ 295     │ 291-296   │ -           │ 78      │ 25           │ 1          │
+└────┴─────────────┴────────────┴───────────┴─────────┴───────────┴─────────────┴─────────┴──────────────┴────────────┘

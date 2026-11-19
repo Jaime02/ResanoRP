@@ -26,6 +26,7 @@ const defaultClientFormData = {
   postalCode: null,
   prismaAccountingAccountId: null,
   province: null,
+  splitSellOrdersInDeliveryNotes: false,
   taxId: null,
 };
 
@@ -74,6 +75,10 @@ export default function useClientForm({ requestedFormMode, editClientId, onSubmi
         ? defaultClientFormData.prismaAccountingAccountId
         : (client?.prismaAccountingAccountId ?? null),
     province: formMode === FormMode.Create ? defaultClientFormData.province : (client?.province ?? null),
+    splitSellOrdersInDeliveryNotes:
+      formMode === FormMode.Create
+        ? defaultClientFormData.splitSellOrdersInDeliveryNotes
+        : (client?.splitSellOrdersInDeliveryNotes ?? defaultClientFormData.splitSellOrdersInDeliveryNotes),
     taxId: formMode === FormMode.Create ? defaultClientFormData.taxId : (client?.taxId ?? null),
   };
 

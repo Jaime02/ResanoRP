@@ -62,6 +62,7 @@ const sellOrderFiltersSchema = z.array(
   z.discriminatedUnion("id", [
     z.object({ id: z.literal("clientId"), value: z.number().nullable() }),
     z.object({ id: z.literal("clientName"), value: z.string().nullable() }),
+    z.object({ id: z.literal("clientReference"), value: z.string().nullable() }),
     z.object({ id: z.literal("id"), value: z.number().nullable() }),
     z.object({ id: z.literal("partId"), value: z.number().nullable() }),
     z.object({ id: z.literal("receptionDate"), value: dateRangeFilterSchema.nullable() }),

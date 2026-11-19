@@ -20,7 +20,7 @@ import {
   NO_INVOICE_EMAILS_MESSAGE,
 } from "@/messages/client";
 import { FormMode } from "@/types";
-import { CLIENT_FIELD_LABELS } from "@/types/client";
+import { CLIENT_FIELD_LABELS, CLIENT_SPLIT_SELL_ORDERS_CHECKBOX_ID } from "@/types/client";
 
 interface FormClientProps extends Pick<
   ReturnType<typeof useClientForm>,
@@ -99,6 +99,15 @@ export default function FormClient({
               id="form-client-delivery-method"
               label={CLIENT_FIELD_LABELS.defaultDeliveryMethodId}
               nullable
+            />
+          )}
+        />
+        <form.AppField
+          name="splitSellOrdersInDeliveryNotes"
+          children={(field) => (
+            <field.Checkbox
+              id={CLIENT_SPLIT_SELL_ORDERS_CHECKBOX_ID}
+              label={CLIENT_FIELD_LABELS.splitSellOrdersInDeliveryNotes}
             />
           )}
         />

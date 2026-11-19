@@ -1,0 +1,79 @@
+sell orders: done
+delivery notes: done
+parts: done
+production orders: done
+invoicing: done
+treatment: done
+create delivery note: done
+sell order: done
+delivery note: done
+part: done
+navigation run 1: done
+navigation run 2: done
+navigation run 3: done
+navigation run 4: done
+navigation run 5: done
+┌────┬──────────────────────┬────────────┬────────────┬─────────┬───────────┬─────────────┬─────────┬──────────────┬────────────┐
+│    │ page                 │ mode       │ target     │ data ms │ min-max   │ hydrated ms │ sent KB │ page heap MB │ row counts │
+├────┼──────────────────────┼────────────┼────────────┼─────────┼───────────┼─────────────┼─────────┼──────────────┼────────────┤
+│  0 │ sell orders          │ cold       │ lite       │ 2067    │ 1887-2735 │ 239         │ 4391    │ 85           │ 13022      │
+│  1 │ sell orders          │ cold       │ early-sync │ 2225    │ 1900-2473 │ 277         │ 4391    │ 85           │ 13022      │
+│  2 │ sell orders          │ warm       │ lite       │ 2036    │ 1926-2392 │ 163         │ 2344    │ 85           │ 13022      │
+│  3 │ sell orders          │ warm       │ early-sync │ 2039    │ 1865-2234 │ 199         │ 2346    │ 85           │ 13022      │
+│  4 │ sell orders          │ navigation │ lite       │ 1925    │ 1909-2169 │ -           │ 2437    │ 85           │ 13022      │
+│  5 │ sell orders          │ navigation │ early-sync │ 2038    │ 1958-2087 │ -           │ 2437    │ 85           │ 13022      │
+│  6 │ delivery notes       │ cold       │ lite       │ 2827    │ 2658-2957 │ 283         │ 6281    │ 126          │ 8342       │
+│  7 │ delivery notes       │ cold       │ early-sync │ 2938    │ 2253-3219 │ 265         │ 6282    │ 126          │ 8342       │
+│  8 │ delivery notes       │ warm       │ lite       │ 2707    │ 2635-3057 │ 181         │ 4263    │ 126          │ 8342       │
+│  9 │ delivery notes       │ warm       │ early-sync │ 2881    │ 2642-2926 │ 197         │ 4263    │ 126          │ 8342       │
+│ 10 │ delivery notes       │ navigation │ lite       │ 1586    │ 1536-1723 │ -           │ 2004    │ 122          │ 8342       │
+│ 11 │ delivery notes       │ navigation │ early-sync │ 1632    │ 1573-1730 │ -           │ 2003    │ 122          │ 8342       │
+│ 12 │ parts                │ cold       │ lite       │ 3370    │ 2933-3478 │ 247         │ 6941    │ 145          │ 3647       │
+│ 13 │ parts                │ cold       │ early-sync │ 3486    │ 3456-3856 │ 290         │ 6940    │ 145          │ 3647       │
+│ 14 │ parts                │ warm       │ lite       │ 3205    │ 3028-3453 │ 163         │ 4915    │ 144          │ 3647       │
+│ 15 │ parts                │ warm       │ early-sync │ 3311    │ 2516-3665 │ 186         │ 4915    │ 145          │ 3647       │
+│ 16 │ parts                │ navigation │ lite       │ 699     │ 596-729   │ -           │ 690     │ 130          │ 3647       │
+│ 17 │ parts                │ navigation │ early-sync │ 642     │ 632-665   │ -           │ 690     │ 130          │ 3647       │
+│ 18 │ production orders    │ cold       │ lite       │ 3202    │ 2997-3470 │ 254         │ 4711    │ 137          │ 48         │
+│ 19 │ production orders    │ cold       │ early-sync │ 3372    │ 3141-3466 │ 296         │ 4713    │ 137          │ 48         │
+│ 20 │ production orders    │ warm       │ lite       │ 3268    │ 3119-3462 │ 207         │ 2640    │ 137          │ 48         │
+│ 21 │ production orders    │ warm       │ early-sync │ 3335    │ 3255-3471 │ 212         │ 2641    │ 137          │ 48         │
+│ 22 │ production orders    │ navigation │ lite       │ 1805    │ 1536-1885 │ -           │ 147     │ 161          │ 48         │
+│ 23 │ production orders    │ navigation │ early-sync │ 1819    │ 1772-1964 │ -           │ 147     │ 161          │ 48         │
+│ 24 │ invoicing            │ cold       │ lite       │ 2936    │ 2143-3075 │ 236         │ 6240    │ 130          │ 4698       │
+│ 25 │ invoicing            │ cold       │ early-sync │ 2987    │ 2833-3548 │ 259         │ 6239    │ 130          │ 4698       │
+│ 26 │ invoicing            │ warm       │ lite       │ 3018    │ 2805-3074 │ 163         │ 4263    │ 130          │ 4698       │
+│ 27 │ invoicing            │ warm       │ early-sync │ 2916    │ 2688-2992 │ 210         │ 4264    │ 130          │ 4698       │
+│ 28 │ invoicing            │ navigation │ lite       │ 455     │ 422-490   │ -           │ 230     │ 142          │ 4698       │
+│ 29 │ invoicing            │ navigation │ early-sync │ 411     │ 387-485   │ -           │ 231     │ 141          │ 4698       │
+│ 30 │ treatment            │ cold       │ lite       │ 2522    │ 2439-2684 │ 253         │ 4612    │ 118          │ 0,3        │
+│ 31 │ treatment            │ cold       │ early-sync │ 2656    │ 2471-2778 │ 264         │ 4613    │ 118          │ 0,3        │
+│ 32 │ treatment            │ warm       │ lite       │ 2686    │ 2458-2913 │ 185         │ 2635    │ 118          │ 0,3        │
+│ 33 │ treatment            │ warm       │ early-sync │ 2628    │ 2493-2657 │ 210         │ 2636    │ 118          │ 0,3        │
+│ 34 │ treatment            │ navigation │ lite       │ 410     │ 350-488   │ -           │ 23      │ 156          │ 0,3        │
+│ 35 │ treatment            │ navigation │ early-sync │ 421     │ 393-450   │ -           │ 24      │ 156          │ 0,3        │
+│ 36 │ create delivery note │ cold       │ lite       │ 3095    │ 2594-3416 │ 343         │ 6631    │ 137          │ 0,0,8342   │
+│ 37 │ create delivery note │ cold       │ early-sync │ 3366    │ 2656-3553 │ 291         │ 6630    │ 137          │ 0,0,8342   │
+│ 38 │ create delivery note │ warm       │ lite       │ 2969    │ 2517-3151 │ 201         │ 4545    │ 137          │ 0,0,8342   │
+│ 39 │ create delivery note │ warm       │ early-sync │ 3042    │ 2454-3366 │ 224         │ 4547    │ 137          │ 0,0,8342   │
+│ 40 │ create delivery note │ navigation │ lite       │ 185     │ 181-188   │ -           │ 28      │ 144          │ 0,0,8342   │
+│ 41 │ create delivery note │ navigation │ early-sync │ 196     │ 187-276   │ -           │ 27      │ 144          │ 0,0,8342   │
+│ 42 │ sell order           │ cold       │ lite       │ 1702    │ 1593-1736 │ 226         │ 4863    │ 92           │ 1          │
+│ 43 │ sell order           │ cold       │ early-sync │ 1767    │ 1674-1860 │ 236         │ 4863    │ 92           │ 1          │
+│ 44 │ sell order           │ warm       │ lite       │ 1716    │ 1690-1898 │ 154         │ 2821    │ 92           │ 1          │
+│ 45 │ sell order           │ warm       │ early-sync │ 1673    │ 1647-1763 │ 166         │ 2823    │ 92           │ 1          │
+│ 46 │ sell order           │ navigation │ lite       │ 131     │ 121-150   │ -           │ 4       │ 141          │ 1          │
+│ 47 │ sell order           │ navigation │ early-sync │ 133     │ 128-140   │ -           │ 4       │ 140          │ 1          │
+│ 48 │ delivery note        │ cold       │ lite       │ 1968    │ 1889-2047 │ 220         │ 6269    │ 117          │ 1          │
+│ 49 │ delivery note        │ cold       │ early-sync │ 2094    │ 2040-2171 │ 218         │ 6271    │ 117          │ 1          │
+│ 50 │ delivery note        │ warm       │ lite       │ 2019    │ 1885-2186 │ 147         │ 4263    │ 117          │ 1          │
+│ 51 │ delivery note        │ warm       │ early-sync │ 1975    │ 1957-2028 │ 155         │ 4264    │ 117          │ 1          │
+│ 52 │ delivery note        │ navigation │ lite       │ 60      │ 55-66     │ -           │ 9       │ 140          │ 1          │
+│ 53 │ delivery note        │ navigation │ early-sync │ 62      │ 55-68     │ -           │ 9       │ 139          │ 1          │
+│ 54 │ part                 │ cold       │ lite       │ 3358    │ 2325-3795 │ 279         │ 6943    │ 138          │ 1          │
+│ 55 │ part                 │ cold       │ early-sync │ 3425    │ 3232-3965 │ 288         │ 6945    │ 138          │ 1          │
+│ 56 │ part                 │ warm       │ lite       │ 3145    │ 2462-3340 │ 197         │ 4915    │ 137          │ 1          │
+│ 57 │ part                 │ warm       │ early-sync │ 3368    │ 3038-3755 │ 226         │ 4915    │ 137          │ 1          │
+│ 58 │ part                 │ navigation │ lite       │ 54      │ 52-71     │ -           │ 3       │ 140          │ 1          │
+│ 59 │ part                 │ navigation │ early-sync │ 56      │ 54-74     │ -           │ 3       │ 140          │ 1          │
+└────┴──────────────────────┴────────────┴────────────┴─────────┴───────────┴─────────────┴─────────┴──────────────┴────────────┘

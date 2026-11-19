@@ -13,6 +13,7 @@ import { getSellOrderLineById } from "@/db/functions/sell-order-line";
 import { dbTableDeliveryNote, dbTableDeliveryNoteLine, dbTableInvoice, dbTableSellOrderLine } from "@/db/schema";
 import { isSameAppDay } from "@/lib/dates";
 import { formatDate, formatPrice } from "@/lib/formatters";
+import { getTagClientText } from "@/lib/part-tag";
 import { formatCents, getLineTotalInCents, getLinesTotalInCents } from "@/lib/prices";
 import { LogMessages } from "@/logging/types";
 import { SELECT_PART_PLACEHOLDER } from "@/messages/combobox";
@@ -1051,7 +1052,7 @@ test("manage the delivery notes", { annotation: TestAnnotations.ResetTags }, asy
       expect(tag).toContain(customLine.description);
       // Without a Pedido, the tag names the Cliente of the Albarán and holds only its quantity
       const dbDeliveryNote = await getDeliveryNote({ id: deliveryNote.id });
-      expectTagField(tag, CLIENT_LABEL, (await getClientById(dbDeliveryNote!.clientId))!.name);
+      expect(tag).toContain(getTagClientText((await getClientById(dbDeliveryNote!.clientId))!.name));
       expectTagField(tag, QUANTITY_LABEL, customLine.quantity);
       expectTagField(tag, DELIVERY_LABEL, null);
       expect(tag).not.toContain(SELL_ORDER_LABEL);

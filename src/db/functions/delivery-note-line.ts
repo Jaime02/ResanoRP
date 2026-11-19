@@ -4,7 +4,11 @@ import { and, eq, ne, sql } from "drizzle-orm";
 import type { TDatabase } from "@/db";
 import db from "@/db";
 import { dbTableDeliveryNoteLine, dbTableSellOrderLine } from "@/db/schema";
-import { PENDING_QUANTITY_EXCEEDED_MESSAGE, SELL_ORDER_LINE_ALREADY_DELIVERED_MESSAGE } from "@/messages/delivery-note";
+import {
+  CLIENT_SPLITS_SELL_ORDERS_MESSAGE,
+  PENDING_QUANTITY_EXCEEDED_MESSAGE,
+  SELL_ORDER_LINE_ALREADY_DELIVERED_MESSAGE,
+} from "@/messages/delivery-note";
 import type { BaseDeliveryNoteLine } from "@/types/delivery-note-line";
 
 interface TDeleteDeliveryNoteLineResult {
@@ -57,6 +61,30 @@ export function assertSellOrderLineNotDelivered(sellOrderLine: { id: number; pen
     throw new TRPCError({
       code: "BAD_REQUEST",
       message: SELL_ORDER_LINE_ALREADY_DELIVERED_MESSAGE(sellOrderLine.id),
+    });
+  }
+}
+
+export async function assertDeliveryNoteHasNoOtherSellOrder(
+  deliveryNoteId: number,
+  sellOrderId: number,
+  dbConnection: TDatabase = db,
+) {
+  const lineOfOtherSellOrder = await dbConnection
+    .select({ id: dbTableDeliveryNoteLine.id })
+    .from(dbTableDeliveryNoteLine)
+    .innerJoin(dbTableSellOrderLine, eq(dbTableDeliveryNoteLine.sellOrderLineId, dbTableSellOrderLine.id))
+    .where(
+      and(
+        eq(dbTableDeliveryNoteLine.deliveryNoteId, deliveryNoteId),
+        ne(dbTableSellOrderLine.sellOrderId, sellOrderId),
+      ),
+    )
+    .limit(1);
+  if (lineOfOtherSellOrder.length > 0) {
+    throw new TRPCError({
+      code: "BAD_REQUEST",
+      message: CLIENT_SPLITS_SELL_ORDERS_MESSAGE,
     });
   }
 }

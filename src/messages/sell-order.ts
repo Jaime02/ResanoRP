@@ -14,7 +14,7 @@ export const SELL_ORDER_RESTORED_MESSAGE = "Pedido de venta restaurado";
 export const SELL_ORDER_LINES_LABEL = "Líneas";
 export const RECEPTION_DATE_LABEL = "Fecha de recepción";
 export const CLIENT_REFERENCE_LABEL = "Referencia del Cliente";
-export const CLIENT_REFERENCE_COLUMN_LABEL = "Referencia del cliente";
+export const CLIENT_REFERENCE_COLUMN_LABEL = "Referencia";
 export const ADD_LINES_REQUIRES_SELL_ORDER_MESSAGE =
   "Para añadir líneas al Pedido de venta, primero debes crear el Pedido de venta";
 export const VIEW_FILE_LABEL = "Ver Archivo";

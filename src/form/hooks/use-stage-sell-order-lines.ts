@@ -7,8 +7,9 @@ import { groupStagedSellOrderLines, splitQuantityFifo } from "@/lib/sell-order-l
 import log from "@/logging/log";
 import { LogMessages, LoggerLevels } from "@/logging/types";
 import { DELIVERY_NOTE_CREATED_MESSAGE, LINES_ADDED_TO_DELIVERY_NOTE_MESSAGE } from "@/messages/delivery-note";
-import { useQueryClientDefaultDeliveryMethod } from "@/queries/client";
+import { useQueryClientDefaultDeliveryMethod, useQueryClientSplitSellOrdersInDeliveryNotes } from "@/queries/client";
 import { useQueryPendingSellOrderLines } from "@/queries/sell-order-line";
+import type { TPendingSellOrderLine } from "@/queries/sell-order-line";
 import { appendLinesToDeliveryNoteSchema, createDeliveryNoteWithLinesSchema } from "@/schemas/delivery-note";
 import type {
   TAppendLinesToDeliveryNote,
@@ -128,11 +129,30 @@ export function useStageSellOrderLinesForm({ defaultClientId, onSubmit }: UseSta
     return defaultDeliveryMethodOfClient.id;
   }, [clientId, defaultDeliveryMethodOfClient]);
 
+  const { data: clientSplitSellOrders, isLoading: isLoadingClientSplitSellOrders } =
+    useQueryClientSplitSellOrdersInDeliveryNotes(clientId);
+  const splitSellOrdersInDeliveryNotes = clientSplitSellOrders?.splitSellOrdersInDeliveryNotes === true;
+
+  const stagedSellOrderId = splitSellOrdersInDeliveryNotes
+    ? pendingSellOrderLines?.find((line) => stagedSellOrderLines?.some((staged) => staged.id === line.id) === true)
+        ?.sellOrderId
+    : undefined;
+
+  const canStageSellOrderLine = useCallback(
+    (sellOrderLine: Pick<TPendingSellOrderLine, "sellOrderId">) =>
+      stagedSellOrderId === undefined || sellOrderLine.sellOrderId === stagedSellOrderId,
+    [stagedSellOrderId],
+  );
+
   const stageSellOrderLine = useCallback(
     async (stagedSellOrderLineId: number, stagedQuantity: number) => {
       const sellOrderLine = pendingSellOrderLines?.find((sellOrderLine) => sellOrderLine.id === stagedSellOrderLineId);
       if (!sellOrderLine) {
         await log(LoggerLevels.warning, LogMessages.stageNotPendingSellOrderLine);
+        return;
+      }
+      if (!canStageSellOrderLine(sellOrderLine)) {
+        await log(LoggerLevels.warning, LogMessages.stageSellOrderLineOfAnotherSellOrder);
         return;
       }
       const updatedLines = [
@@ -149,7 +169,7 @@ export function useStageSellOrderLinesForm({ defaultClientId, onSubmit }: UseSta
         updatedLines.map((line) => splitQuantities.find((split) => split.id === line.id) ?? line),
       );
     },
-    [form, pendingSellOrderLines, stagedSellOrderLines],
+    [form, pendingSellOrderLines, stagedSellOrderLines, canStageSellOrderLine],
   );
 
   const unstageSellOrderLines = useCallback(
@@ -213,7 +233,8 @@ export function useStageSellOrderLinesForm({ defaultClientId, onSubmit }: UseSta
 
   const isSubmitting = useSelector(form.store, (state) => state.isSubmitting);
 
-  const isLoading = isLoadingPendingSellOrders || isLoadingDefaultDeliveryMethod || isSubmitting;
+  const isLoading =
+    isLoadingPendingSellOrders || isLoadingDefaultDeliveryMethod || isLoadingClientSplitSellOrders || isSubmitting;
 
   return {
     form,
@@ -228,6 +249,8 @@ export function useStageSellOrderLinesForm({ defaultClientId, onSubmit }: UseSta
     stageSellOrderLinesFormMode,
     setStageSellOrderLinesFormMode,
     stageSellOrderLine,
+    canStageSellOrderLine,
+    splitSellOrdersInDeliveryNotes,
     stagedSellOrderLines,
     unstageSellOrderLines,
     updateStagedGroupQuantity,

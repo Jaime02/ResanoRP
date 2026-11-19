@@ -1,0 +1,21 @@
+production orders: done
+navigation run 1: done
+navigation run 2: done
+navigation run 3: done
+navigation run 4: done
+navigation run 5: done
+navigation run 6: done
+navigation run 7: done
+┌───┬───────────────────┬────────────┬─────────┬─────────┬───────────┬─────────────┬─────────┬──────────────┬────────────┐
+│   │ page              │ mode       │ target  │ data ms │ min-max   │ hydrated ms │ sent KB │ page heap MB │ row counts │
+├───┼───────────────────┼────────────┼─────────┼─────────┼───────────┼─────────────┼─────────┼──────────────┼────────────┤
+│ 0 │ production orders │ cold       │ master  │ 2629    │ 2443-2717 │ 230         │ 15483   │ 68           │ 48         │
+│ 1 │ production orders │ cold       │ master2 │ 2433    │ 2244-3081 │ 237         │ 19667   │ 62           │ 48         │
+│ 2 │ production orders │ cold       │ master3 │ 2195    │ 2155-2503 │ 237         │ 15783   │ 61           │ 48         │
+│ 3 │ production orders │ warm       │ master  │ 3064    │ 2554-3893 │ 185         │ 13326   │ 68           │ 48         │
+│ 4 │ production orders │ warm       │ master2 │ 2847    │ 2687-3619 │ 204         │ 17511   │ 62           │ 48         │
+│ 5 │ production orders │ warm       │ master3 │ 2482    │ 1996-3039 │ 197         │ 13642   │ 61           │ 48         │
+│ 6 │ production orders │ navigation │ master  │ 2450    │ 2316-2541 │ -           │ 13105   │ 68           │ 48         │
+│ 7 │ production orders │ navigation │ master2 │ 2262    │ 2066-2372 │ -           │ 17305   │ 62           │ 48         │
+│ 8 │ production orders │ navigation │ master3 │ 2063    │ 2030-2123 │ -           │ 13421   │ 61           │ 48         │
+└───┴───────────────────┴────────────┴─────────┴─────────┴───────────┴─────────────┴─────────┴──────────────┴────────────┘

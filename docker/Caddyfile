@@ -14,7 +14,7 @@
 	# sync/checkpoint-request), the rest of the service's API stays internal
 	handle /powersync/sync/* {
 		uri strip_prefix /powersync
-		reverse_proxy powersync:8080 {
+		reverse_proxy {$POWERSYNC_UPSTREAM:powersync:8080} {
 			# Sync is one long streamed response
 			flush_interval -1
 		}

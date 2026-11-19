@@ -75,6 +75,21 @@ export function useQueryClientDefaultDeliveryMethod(id: number | null) {
   });
 }
 
+export function useQueryClientSplitSellOrdersInDeliveryNotes(id: number | null) {
+  return useLiveQuery((q) => {
+    if (id === null) {
+      return undefined;
+    }
+    return q
+      .from({ client: clientCollection })
+      .where(({ client }) => eq(client.id, id))
+      .select(({ client }) => ({
+        splitSellOrdersInDeliveryNotes: client.splitSellOrdersInDeliveryNotes,
+      }))
+      .findOne();
+  });
+}
+
 export function useQueryClientDefaultPaymentMethod(id: number | null) {
   return useLiveQuery((q) => {
     if (id === null) {

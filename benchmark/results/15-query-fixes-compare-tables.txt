@@ -1,0 +1,26 @@
+production orders: default                 same [master 48 | master2 48]  same [lite 48 | lite2 48 | ps2 48]  all groups same
+production orders: page 3                  same [master 48 | master2 48]  same [lite 48 | lite2 48 | ps2 48]  all groups same
+production orders: by delivery date        same [master 48 | master2 48]  same [lite 48 | lite2 48 | ps2 48]  all groups same
+production orders: no status               same [master 2761 | master2 2761]  same [lite 2761 | lite2 2761 | ps2 2761]  all groups same
+production orders: completed               same [master 2710 | master2 2710]  same [lite 2710 | lite2 2710 | ps2 2710]  all groups same
+production orders: in production           same [master 15 | master2 15]  same [lite 15 | lite2 15 | ps2 15]  all groups same
+production orders: in treatment            same [master 3 | master2 3]  same [lite 3 | lite2 3 | ps2 3]  all groups same
+production orders: every status            same [master 2761 | master2 2761]  same [lite 2761 | lite2 2761 | ps2 2761]  all groups same
+production orders: pending + deleted       same [master 33 | master2 33]  same [lite 33 | lite2 33 | ps2 33]  all groups same
+production orders: part                    same [master 14 | master2 14]  same [lite 14 | lite2 14 | ps2 14]  all groups same
+production orders: part + pending          same [master 0 | master2 0]  same [lite 0 | lite2 0 | ps2 0]  all groups same
+production orders: client name + pending   same [master 45 | master2 45]  same [lite 45 | lite2 45 | ps2 45]  all groups same
+production orders: description + pending   same [master 46 | master2 46]  same [lite 46 | lite2 46 | ps2 46]  all groups same
+sell orders: default                       same [master 13022 | master2 13022]  same [lite 13022 | lite2 13022 | ps2 13022]  all groups same
+sell orders: page 3                        same [master 13022 | master2 13022]  same [lite 13022 | lite2 13022 | ps2 13022]  all groups same
+sell orders: by client name                same [master 13022 | master2 13022]  same [lite 13022 | lite2 13022 | ps2 13022]  all groups same
+sell orders: by client name desc           same [master 13022 | master2 13022]  same [lite 13022 | lite2 13022 | ps2 13022]  all groups same
+sell orders: pending                       same [master 141 | master2 141]  same [lite 141 | lite2 141 | ps2 141]  all groups same
+sell orders: completed                     same [master 12881 | master2 12881]  same [lite 12881 | lite2 12881 | ps2 12881]  all groups same
+sell orders: pending, by client name       same [master 141 | master2 141]  same [lite 141 | lite2 141 | ps2 141]  all groups same
+sell orders: client name                   same [master 11943 | master2 11943]  same [lite 11943 | lite2 11943 | ps2 11943]  all groups same
+sell orders: client name, by client name   same [master 11943 | master2 11943]  same [lite 11943 | lite2 11943 | ps2 11943]  all groups same
+sell orders: part                          same [master 241 | master2 241]  same [lite 241 | lite2 241 | ps2 241]  all groups same
+sell orders: part + completed              same [master 238 | master2 238]  same [lite 238 | lite2 238 | ps2 238]  all groups same
+part with the most production orders       same [master 1 | master2 1]  same [lite 1 | lite2 1 | ps2 1]  all groups same
+latest part                                same [master 1 | master2 1]  same [lite 1 | lite2 1 | ps2 1]  all groups same

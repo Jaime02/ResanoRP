@@ -1,0 +1,31 @@
+# Added to the branch's own docker/docker-compose.base.yml by stack.sh: its production image, run as production does
+services:
+  # benchmark-load.ts reads the detail page ids from it; branches after 5b4025e no longer publish it in the base file
+  db:
+    ports:
+      - "${POSTGRES_PORT}:5432"
+  caddy:
+    profiles: ["bench"]
+    depends_on:
+      app-bench:
+        condition: service_healthy
+  app-bench:
+    extends:
+      service: app
+      file: docker/docker-compose.base.yml
+    build:
+      context: .
+      target: production
+    image: ${BENCH_IMAGE}
+    pull_policy: never
+    profiles: ["bench"]
+    env_file: "${BENCH_ENV_FILE}"
+    networks:
+      frontend:
+        aliases:
+          - app
+    volumes:
+      - ${ENV_PATH}:/env
+    environment:
+      - PORT=5173
+    command: bun run .output/server/index.mjs

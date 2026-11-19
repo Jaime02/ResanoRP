@@ -191,7 +191,7 @@ SQLite write would have stalled sync).
 
 ## 10. Benchmark (2026-11-13)
 
-`ignore/benchmark/benchmark-load.ts` (not versioned; how to rerun in `ignore/benchmark/README.md`) drives the UI as Administrador and times each page until its
+`benchmark/benchmark-load.ts` (how to rerun in `benchmark/README.md`) drives the UI as Administrador and times each page until its
 tables show data that stays unchanged for 1.5 s, timed from the start of the navigation, so a server-rendered table
 counts from its first frame.
 
@@ -233,7 +233,7 @@ Seconds until data (master / powersync / lite). `cold`: new browser profile. `wa
   between runs, so only compare targets measured in the same run.
 
 Rerun after the sell order line status fix (below) and the TanStack DB rc.1.5 update, both committed on every branch
-(master `d8e3060`, powersync `83b60e4`, powersync-lite `4e55aab`; `ignore/benchmark/results/6-branches-after-fixes.txt`):
+(master `d8e3060`, powersync `83b60e4`, powersync-lite `4e55aab`; `benchmark/results/6-branches-after-fixes.txt`):
 same row counts on every page and the same bytes as the first run. The machine was less loaded, so navigation got
 faster on every branch; the ratios held. Whole session 7.8 / 21.5 / 6.2 s (Lite 0.80 of master, 0.79 before). Cold
 loads: master 0.39–2.90 s, Lite 1.90–2.89 s, powersync 15.0–18.4 s. Lite's sell order page went from 1.60 to 1.92 s
@@ -250,7 +250,7 @@ Rejected: syncing every stream from the moment the router is created, which save
 component reads. First loads got slower (sell order 1.6 → 2.9 s, sell orders 1.7 → 2.8 s); only navigation got faster.
 
 Second sync request on the sell order page (measured 2026-11-13 on the prisma stack, a dev build, with
-`ignore/benchmark/tools/sync-requests.ts`): the form's query needs 8 tables, so the first request asks for those. The
+`benchmark/tools/sync-requests.ts`): the form's query needs 8 tables, so the first request asks for those. The
 line rows only render once that request's checkpoint is processed, and each row then mounts the status cell and the
 production order button, both running `useQueryProductionOrderStatusesBySellOrderLineIds` (`production_order`,
 `part_production`, `machine`, `treatment_shipment`, `treatment_reception`), and the price picker (`part_price`).
@@ -328,20 +328,22 @@ stream leased at ~230, token server function 5–8 ms, sync request from ~240 to
 
 ## 12. Benchmark history and final comparison (2026-11-13 to 2026-11-15)
 
-Raw outputs in `ignore/benchmark/results/` (not versioned; `README.md` there has the rerun steps). Same method as §10:
+Raw outputs in `benchmark/results/` (`benchmark/README.md` has the rerun steps). Same method as §10:
 production builds, one `pg_dump` (101,239 rows), targets interleaved, medians of 5, same row counts on every target.
 "10 pages" is the sum of the page medians. Compare targets only within one file: machine load moved absolute times by
 up to 40% between runs.
 
-| Runs   | What                                                                                       | Result                                                                             |
-| ------ | ------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------- |
-| 1, 6   | master, powersync (SQLite), lite; 6 is after the line status fix and rc.1.5                | cold 10 pages 9.8 / 168.7 / 24.3 s; session 7.8 / 21.5 / 6.2 s (run 6)             |
-| 2-5    | compaction on lite (§10)                                                                   | 8.1-8.8 s uncompacted, 2.4-2.6 s compacted = fresh                                 |
-| 7, 8   | early sync request, builds swapped (§11)                                                   | reloads 3.2% sooner, first loads and navigation within noise; removed              |
-| 9-12   | one graph run per checkpoint (§11)                                                         | production orders 2.60 → 1.93 s cold, other pages within ±5%; kept                 |
-| 13, 14 | progressive collections PoC                                                                | cold detail pages 0.27-0.37 s; production orders +27%, treatment +22%; not merged  |
-| 15-22  | query fixes (`docs/query-performance.md`); 15 compares 27 query variants, all counts equal | see below                                                                          |
-| 23-26  | PoC rebased on the query fixes                                                             | cold 10 pages 11.2 s (master 8.0, lite 19.0); session 2.9 s (master 6.1, lite 4.2) |
+| Runs   | What                                                                                       | Result                                                                                    |
+| ------ | ------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------- |
+| 1, 6   | master, powersync (SQLite), lite; 6 is after the line status fix and rc.1.5                | cold 10 pages 9.8 / 168.7 / 24.3 s; session 7.8 / 21.5 / 6.2 s (run 6)                    |
+| 2-5    | compaction on lite (§10)                                                                   | 8.1-8.8 s uncompacted, 2.3-2.7 s compacted = fresh                                        |
+| 7, 8   | early sync request, builds swapped (§11)                                                   | reloads 3.2% sooner, first loads and navigation within noise; removed                     |
+| 9-12   | one graph run per checkpoint (§11)                                                         | production orders 2.64 → 2.06 s cold (11, 12), other pages -10% to +8%; kept              |
+| 13, 14 | progressive collections PoC                                                                | cold detail pages 0.27-0.37 s; production orders +27%, treatment +22% vs lite; not merged |
+| 15-22  | query fixes (`docs/query-performance.md`); 15 compares 27 query variants, all counts equal | see below                                                                                 |
+| 23, 24 | PoC rebased on the query fixes (busy machine: master's times 30% higher)                   | cold 10 pages 11.6 s (master 10.4, lite 23.7); session 3.6 s (master 7.8, lite 5.2)       |
+| 25, 26 | branch `progressive-collections`, the PoC rewritten on the query fixes                     | cold 10 pages 11.2 s (master 8.0, lite 19.0); session 2.9 s (master 6.1, lite 4.2)        |
+| 27     | vendored client against `@powersync/standalone-client`                                     | no difference                                                                             |
 
 PowerSync with SQLite was left out of the runs after 6: ~17 s on every first load while it fills SQLite.
 

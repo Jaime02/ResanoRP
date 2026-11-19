@@ -28,6 +28,7 @@ const baseClientSchema = z.object({
     .nullable()
     .transform((value) => (value === "" ? null : value)),
   province: stringSchema({ nullable: true }),
+  splitSellOrdersInDeliveryNotes: z.boolean(),
   taxId: stringSchema({ nullable: false }),
 });
 

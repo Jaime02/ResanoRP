@@ -1,3 +1,5 @@
+import { CLIENT_LABEL } from "@/messages/common";
+
 // What a part tag is printed for, which names its file, so the server writes it and the browser asks for it by the
 // same name
 export enum PartTagSource {
@@ -52,4 +54,8 @@ export function allocateTagSellOrders(partQuantities: Array<number>, sellOrders:
     }
     return tagSellOrders;
   });
+}
+
+export function getTagClientText(clientName: string) {
+  return `${CLIENT_LABEL}: ${clientName}`;
 }

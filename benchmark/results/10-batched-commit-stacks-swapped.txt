@@ -1,0 +1,79 @@
+sell orders: done
+delivery notes: done
+parts: done
+production orders: done
+invoicing: done
+treatment: done
+create delivery note: done
+sell order: done
+delivery note: done
+part: done
+navigation run 1: done
+navigation run 2: done
+navigation run 3: done
+navigation run 4: done
+navigation run 5: done
+┌────┬──────────────────────┬────────────┬─────────┬─────────┬───────────┬─────────────┬─────────┬──────────────┬────────────┐
+│    │ page                 │ mode       │ target  │ data ms │ min-max   │ hydrated ms │ sent KB │ page heap MB │ row counts │
+├────┼──────────────────────┼────────────┼─────────┼─────────┼───────────┼─────────────┼─────────┼──────────────┼────────────┤
+│  0 │ sell orders          │ cold       │ batched │ 2029    │ 1807-2134 │ 238         │ 4388    │ 85           │ 13022      │
+│  1 │ sell orders          │ cold       │ lite    │ 2121    │ 2018-2271 │ 244         │ 4391    │ 85           │ 13022      │
+│  2 │ sell orders          │ warm       │ batched │ 1998    │ 1818-2191 │ 165         │ 2344    │ 85           │ 13022      │
+│  3 │ sell orders          │ warm       │ lite    │ 2021    │ 1908-2119 │ 148         │ 2345    │ 85           │ 13022      │
+│  4 │ sell orders          │ navigation │ batched │ 1710    │ 1564-2099 │ -           │ 2437    │ 85           │ 13022      │
+│  5 │ sell orders          │ navigation │ lite    │ 1642    │ 1561-2341 │ -           │ 2437    │ 85           │ 13022      │
+│  6 │ delivery notes       │ cold       │ batched │ 2691    │ 2601-2855 │ 258         │ 6282    │ 125          │ 8342       │
+│  7 │ delivery notes       │ cold       │ lite    │ 2650    │ 2570-3248 │ 248         │ 6281    │ 126          │ 8342       │
+│  8 │ delivery notes       │ warm       │ batched │ 2785    │ 2540-2804 │ 188         │ 4262    │ 125          │ 8342       │
+│  9 │ delivery notes       │ warm       │ lite    │ 2723    │ 2334-3054 │ 188         │ 4263    │ 126          │ 8342       │
+│ 10 │ delivery notes       │ navigation │ batched │ 1432    │ 1286-1741 │ -           │ 2004    │ 122          │ 8342       │
+│ 11 │ delivery notes       │ navigation │ lite    │ 1369    │ 1232-1810 │ -           │ 2003    │ 122          │ 8342       │
+│ 12 │ parts                │ cold       │ batched │ 3121    │ 3035-3906 │ 244         │ 6942    │ 143          │ 3647       │
+│ 13 │ parts                │ cold       │ lite    │ 3250    │ 3054-3643 │ 246         │ 6940    │ 146          │ 3647       │
+│ 14 │ parts                │ warm       │ batched │ 3271    │ 3001-3620 │ 195         │ 4915    │ 143          │ 3647       │
+│ 15 │ parts                │ warm       │ lite    │ 3268    │ 3022-3383 │ 172         │ 4914    │ 144          │ 3647       │
+│ 16 │ parts                │ navigation │ batched │ 583     │ 500-728   │ -           │ 690     │ 130          │ 3647       │
+│ 17 │ parts                │ navigation │ lite    │ 505     │ 502-632   │ -           │ 690     │ 130          │ 3647       │
+│ 18 │ production orders    │ cold       │ batched │ 2182    │ 1711-2601 │ 251         │ 4712    │ 130          │ 48         │
+│ 19 │ production orders    │ cold       │ lite    │ 2756    │ 2403-3246 │ 260         │ 4713    │ 137          │ 48         │
+│ 20 │ production orders    │ warm       │ batched │ 1961    │ 1840-2539 │ 158         │ 2639    │ 130          │ 48         │
+│ 21 │ production orders    │ warm       │ lite    │ 2881    │ 2507-3364 │ 174         │ 2640    │ 137          │ 48         │
+│ 22 │ production orders    │ navigation │ batched │ 1771    │ 1614-2049 │ -           │ 148     │ 160          │ 48         │
+│ 23 │ production orders    │ navigation │ lite    │ 1797    │ 1603-2015 │ -           │ 147     │ 161          │ 48         │
+│ 24 │ invoicing            │ cold       │ batched │ 2150    │ 2129-2345 │ 213         │ 6240    │ 130          │ 4698       │
+│ 25 │ invoicing            │ cold       │ lite    │ 2212    │ 2205-2305 │ 219         │ 6242    │ 130          │ 4698       │
+│ 26 │ invoicing            │ warm       │ batched │ 2256    │ 2228-2367 │ 150         │ 4263    │ 130          │ 4698       │
+│ 27 │ invoicing            │ warm       │ lite    │ 2279    │ 2243-2353 │ 148         │ 4263    │ 130          │ 4698       │
+│ 28 │ invoicing            │ navigation │ batched │ 366     │ 331-585   │ -           │ 231     │ 141          │ 4698       │
+│ 29 │ invoicing            │ navigation │ lite    │ 351     │ 334-517   │ -           │ 231     │ 141          │ 4698       │
+│ 30 │ treatment            │ cold       │ batched │ 1772    │ 1717-1793 │ 221         │ 4613    │ 117          │ 0,3        │
+│ 31 │ treatment            │ cold       │ lite    │ 1917    │ 1896-1965 │ 221         │ 4616    │ 118          │ 0,3        │
+│ 32 │ treatment            │ warm       │ batched │ 1807    │ 1777-1907 │ 156         │ 2635    │ 117          │ 0,3        │
+│ 33 │ treatment            │ warm       │ lite    │ 2097    │ 2048-2155 │ 152         │ 2636    │ 118          │ 0,3        │
+│ 34 │ treatment            │ navigation │ batched │ 389     │ 348-475   │ -           │ 23      │ 156          │ 0,3        │
+│ 35 │ treatment            │ navigation │ lite    │ 404     │ 355-495   │ -           │ 24      │ 156          │ 0,3        │
+│ 36 │ create delivery note │ cold       │ batched │ 2395    │ 2359-3215 │ 262         │ 6632    │ 136          │ 0,0,8342   │
+│ 37 │ create delivery note │ cold       │ lite    │ 2431    │ 2329-3174 │ 251         │ 6630    │ 137          │ 0,0,8342   │
+│ 38 │ create delivery note │ warm       │ batched │ 2533    │ 2453-3352 │ 223         │ 4545    │ 136          │ 0,0,8342   │
+│ 39 │ create delivery note │ warm       │ lite    │ 2655    │ 2473-3222 │ 190         │ 4546    │ 137          │ 0,0,8342   │
+│ 40 │ create delivery note │ navigation │ batched │ 186     │ 175-197   │ -           │ 27      │ 144          │ 0,0,8342   │
+│ 41 │ create delivery note │ navigation │ lite    │ 191     │ 178-218   │ -           │ 27      │ 144          │ 0,0,8342   │
+│ 42 │ sell order           │ cold       │ batched │ 2142    │ 2051-2177 │ 264         │ 4866    │ 91           │ 1          │
+│ 43 │ sell order           │ cold       │ lite    │ 2173    │ 2024-2219 │ 265         │ 4864    │ 92           │ 1          │
+│ 44 │ sell order           │ warm       │ batched │ 2151    │ 2001-2226 │ 183         │ 2822    │ 91           │ 1          │
+│ 45 │ sell order           │ warm       │ lite    │ 2176    │ 2133-2470 │ 204         │ 2823    │ 92           │ 1          │
+│ 46 │ sell order           │ navigation │ batched │ 121     │ 113-144   │ -           │ 4       │ 140          │ 1          │
+│ 47 │ sell order           │ navigation │ lite    │ 121     │ 113-147   │ -           │ 4       │ 140          │ 1          │
+│ 48 │ delivery note        │ cold       │ batched │ 2511    │ 1967-2538 │ 244         │ 6269    │ 116          │ 1          │
+│ 49 │ delivery note        │ cold       │ lite    │ 2500    │ 2469-2741 │ 251         │ 6272    │ 117          │ 1          │
+│ 50 │ delivery note        │ warm       │ batched │ 2409    │ 2043-2439 │ 159         │ 4263    │ 116          │ 1          │
+│ 51 │ delivery note        │ warm       │ lite    │ 2549    │ 2376-2803 │ 176         │ 4263    │ 117          │ 1          │
+│ 52 │ delivery note        │ navigation │ batched │ 56      │ 52-70     │ -           │ 9       │ 139          │ 1          │
+│ 53 │ delivery note        │ navigation │ lite    │ 52      │ 51-58     │ -           │ 9       │ 139          │ 1          │
+│ 54 │ part                 │ cold       │ batched │ 3012    │ 2245-3117 │ 259         │ 6944    │ 136          │ 1          │
+│ 55 │ part                 │ cold       │ lite    │ 3085    │ 3010-3171 │ 263         │ 6943    │ 138          │ 1          │
+│ 56 │ part                 │ warm       │ batched │ 3018    │ 2415-3028 │ 186         │ 4916    │ 136          │ 1          │
+│ 57 │ part                 │ warm       │ lite    │ 3014    │ 2862-3284 │ 175         │ 4914    │ 138          │ 1          │
+│ 58 │ part                 │ navigation │ batched │ 51      │ 43-60     │ -           │ 3       │ 139          │ 1          │
+│ 59 │ part                 │ navigation │ lite    │ 47      │ 45-66     │ -           │ 3       │ 140          │ 1          │
+└────┴──────────────────────┴────────────┴─────────┴─────────┴───────────┴─────────────┴─────────┴──────────────┴────────────┘

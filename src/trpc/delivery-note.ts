@@ -6,6 +6,7 @@ import { getConfiguration, getConfigurationVatPercentage } from "@/db/functions/
 import { getDeliveryNoteWithLinesForDocument, getNextDeliveryNoteId } from "@/db/functions/delivery-note";
 import {
   addSellOrderLinePendingQuantity,
+  assertDeliveryNoteHasNoOtherSellOrder,
   assertPendingQuantityWithinQuantity,
   assertSellOrderLineNotDelivered,
   deleteDeliveryNoteLine,
@@ -38,6 +39,7 @@ async function insertStagedSellOrderLines(
   tx: TDatabase,
 ): Promise<void> {
   const vatPercentage = await getConfigurationVatPercentage(tx);
+  const client = await tx.query.dbTableClient.findFirst({ where: { id: deliveryNote.clientId } });
 
   for (const stagedSellOrderLine of stagedSellOrderLines) {
     const sellOrderLine = await getSellOrderLineForUpdate(stagedSellOrderLine.id, tx);
@@ -55,6 +57,9 @@ async function insertStagedSellOrderLines(
     }
     assertPendingQuantityWithinQuantity(sellOrderLine, -stagedSellOrderLine.quantity);
     assertSellOrderLineNotDelivered(sellOrderLine);
+    if (client?.splitSellOrdersInDeliveryNotes === true) {
+      await assertDeliveryNoteHasNoOtherSellOrder(deliveryNote.id, sellOrderLine.sellOrderId, tx);
+    }
 
     let description = sellOrderLine.description;
     if (sellOrderLine.partReferenceId !== null) {

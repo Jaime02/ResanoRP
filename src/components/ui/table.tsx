@@ -105,7 +105,10 @@ function TableCell({ testId, className, ...props }: React.ComponentProps<"td"> &
   return (
     <td
       data-testid={testId}
-      className={cn("overflow-hidden border-r border-border p-2 text-nowrap text-ellipsis last:border-r-0", className)}
+      className={cn(
+        "overflow-hidden border-r border-border px-1.5 py-1 text-nowrap text-ellipsis last:border-r-0",
+        className,
+      )}
       {...props}
     />
   );

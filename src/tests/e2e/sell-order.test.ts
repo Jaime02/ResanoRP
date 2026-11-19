@@ -1419,6 +1419,21 @@ test("filter the sell orders by part", async ({ page }) => {
     await popoverFilters.getByTestId("popover-trigger").click();
     await expect(pickerPart).toHaveAttribute("data-value", String(part!.id));
   });
+
+  await test.step("filter by the client reference of each sell order", async () => {
+    await page.goto("/sell-order");
+    const inputFilterClientReference = tableSellOrder.getByTestId("input-filter-clientReference");
+    for (const sellOrder of mockSellOrders.filter((mockSellOrder) => mockSellOrder.clientReference !== null)) {
+      await inputFilterClientReference.fill(sellOrder.clientReference!);
+      const expectedSellOrders = mockSellOrders.filter((mockSellOrder) =>
+        (mockSellOrder.clientReference ?? "").includes(sellOrder.clientReference!),
+      );
+      await assertTableRowCount(tableSellOrder, expectedSellOrders.length);
+      for (const expectedSellOrder of expectedSellOrders) {
+        await expect(getTableRowByTestId(tableSellOrder, expectedSellOrder.id)).toBeVisible();
+      }
+    }
+  });
 });
 
 // Not sample.pdf, as the files of the mock sell orders are copies of it and an upload must change the file

@@ -16,6 +16,7 @@ export const IBAN_LABEL = "IBAN";
 export const DEFAULT_PAYMENT_METHOD_LABEL = "Forma de pago predeterminada";
 export const DEFAULT_DELIVERY_METHOD_LABEL = "Transporte predeterminado";
 export const PRISMA_ACCOUNTING_ACCOUNT_LABEL = "Cuenta contable Prisma";
+export const SPLIT_SELL_ORDERS_IN_DELIVERY_NOTES_LABEL = "Un Pedido por Albarán";
 export const CLIENT_INVOICE_EMAILS_TITLE = "Correos de facturación";
 export const ADD_INVOICE_EMAIL_PLACEHOLDER = "Añadir correo de facturación";
 export const NO_INVOICE_EMAILS_MESSAGE = "No se han encontrado correos de facturación asociados a este cliente";

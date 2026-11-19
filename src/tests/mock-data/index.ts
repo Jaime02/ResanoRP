@@ -59,6 +59,7 @@ export const mockClients: Array<BaseClient> = [
     postalCode: "12345",
     prismaAccountingAccountId: "4300001",
     province: "Province 1",
+    splitSellOrdersInDeliveryNotes: false,
     taxId: "A12345678",
   },
   {
@@ -76,6 +77,7 @@ export const mockClients: Array<BaseClient> = [
     postalCode: "67890",
     prismaAccountingAccountId: "430000002",
     province: "Province 2",
+    splitSellOrdersInDeliveryNotes: false,
     taxId: "B87654321",
   },
 ];

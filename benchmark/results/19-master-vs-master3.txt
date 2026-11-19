@@ -1,0 +1,79 @@
+sell orders: done
+delivery notes: done
+parts: done
+production orders: done
+invoicing: done
+treatment: done
+create delivery note: done
+sell order: done
+delivery note: done
+part: done
+navigation run 1: done
+navigation run 2: done
+navigation run 3: done
+navigation run 4: done
+navigation run 5: done
+┌────┬──────────────────────┬────────────┬─────────┬─────────┬───────────┬─────────────┬─────────┬──────────────┬────────────┐
+│    │ page                 │ mode       │ target  │ data ms │ min-max   │ hydrated ms │ sent KB │ page heap MB │ row counts │
+├────┼──────────────────────┼────────────┼─────────┼─────────┼───────────┼─────────────┼─────────┼──────────────┼────────────┤
+│  0 │ sell orders          │ cold       │ master  │ 884     │ 847-895   │ 203         │ 6965    │ 37           │ 13022      │
+│  1 │ sell orders          │ cold       │ master3 │ 690     │ 671-719   │ 203         │ 6671    │ 26           │ 13022      │
+│  2 │ sell orders          │ warm       │ master  │ 984     │ 915-1014  │ 159         │ 4853    │ 37           │ 13022      │
+│  3 │ sell orders          │ warm       │ master3 │ 740     │ 732-831   │ 174         │ 4554    │ 26           │ 13022      │
+│  4 │ sell orders          │ navigation │ master  │ 1014    │ 1010-1078 │ -           │ 4602    │ 37           │ 13022      │
+│  5 │ sell orders          │ navigation │ master3 │ 556     │ 524-636   │ -           │ 4328    │ 27           │ 13022      │
+│  6 │ delivery notes       │ cold       │ master  │ 624     │ 598-661   │ 208         │ 5042    │ 29           │ 8342       │
+│  7 │ delivery notes       │ cold       │ master3 │ 613     │ 610-638   │ 215         │ 5041    │ 28           │ 8342       │
+│  8 │ delivery notes       │ warm       │ master  │ 696     │ 682-779   │ 169         │ 2956    │ 29           │ 8342       │
+│  9 │ delivery notes       │ warm       │ master3 │ 706     │ 640-732   │ 172         │ 2951    │ 29           │ 8342       │
+│ 10 │ delivery notes       │ navigation │ master  │ 651     │ 632-670   │ -           │ 2655    │ 39           │ 8342       │
+│ 11 │ delivery notes       │ navigation │ master3 │ 542     │ 538-638   │ -           │ 2656    │ 38           │ 8342       │
+│ 12 │ parts                │ cold       │ master  │ 294     │ 289-323   │ 454         │ 3769    │ 24           │ 3647       │
+│ 13 │ parts                │ cold       │ master3 │ 307     │ 270-328   │ 456         │ 3771    │ 24           │ 3647       │
+│ 14 │ parts                │ warm       │ master  │ 304     │ 276-352   │ 442         │ 1671    │ 24           │ 3647       │
+│ 15 │ parts                │ warm       │ master3 │ 289     │ 254-456   │ 425         │ 1670    │ 24           │ 3647       │
+│ 16 │ parts                │ navigation │ master  │ 507     │ 490-532   │ -           │ 1847    │ 40           │ 3647       │
+│ 17 │ parts                │ navigation │ master3 │ 510     │ 484-516   │ -           │ 1846    │ 39           │ 3647       │
+│ 18 │ production orders    │ cold       │ master  │ 2542    │ 2503-2599 │ 221         │ 15477   │ 68           │ 48         │
+│ 19 │ production orders    │ cold       │ master3 │ 2182    │ 2135-2245 │ 223         │ 15788   │ 61           │ 48         │
+│ 20 │ production orders    │ warm       │ master  │ 3180    │ 3073-3315 │ 185         │ 13331   │ 68           │ 48         │
+│ 21 │ production orders    │ warm       │ master3 │ 2714    │ 2455-2780 │ 188         │ 13639   │ 61           │ 48         │
+│ 22 │ production orders    │ navigation │ master  │ 2757    │ 2699-2879 │ -           │ 10212   │ 78           │ 48         │
+│ 23 │ production orders    │ navigation │ master3 │ 4129    │ 2255-4277 │ -           │ 11740   │ 77           │ 48         │
+│ 24 │ invoicing            │ cold       │ master  │ 562     │ 533-571   │ 207         │ 4070    │ 21           │ 4698       │
+│ 25 │ invoicing            │ cold       │ master3 │ 528     │ 517-543   │ 200         │ 4069    │ 21           │ 4698       │
+│ 26 │ invoicing            │ warm       │ master  │ 570     │ 557-674   │ 178         │ 2019    │ 21           │ 4698       │
+│ 27 │ invoicing            │ warm       │ master3 │ 562     │ 545-667   │ 164         │ 2020    │ 21           │ 4698       │
+│ 28 │ invoicing            │ navigation │ master  │ 358     │ 333-386   │ -           │ 1670    │ 55           │ 4698       │
+│ 29 │ invoicing            │ navigation │ master3 │ 367     │ 350-395   │ -           │ 1658    │ 59           │ 4698       │
+│ 30 │ treatment            │ cold       │ master  │ 1491    │ 1438-1615 │ 225         │ 5000    │ 41           │ 0,3        │
+│ 31 │ treatment            │ cold       │ master3 │ 1518    │ 1469-1562 │ 221         │ 5009    │ 41           │ 0,3        │
+│ 32 │ treatment            │ warm       │ master  │ 1789    │ 1776-1846 │ 188         │ 2943    │ 41           │ 0,3        │
+│ 33 │ treatment            │ warm       │ master3 │ 1772    │ 1695-1840 │ 177         │ 2950    │ 41           │ 0,3        │
+│ 34 │ treatment            │ navigation │ master  │ 1095    │ 1057-1262 │ -           │ 3389    │ 73           │ 0,3        │
+│ 35 │ treatment            │ navigation │ master3 │ 1130    │ 1075-1167 │ -           │ 3245    │ 77           │ 0,3        │
+│ 36 │ create delivery note │ cold       │ master  │ 696     │ 689-711   │ 258         │ 5089    │ 29           │ 0,0,8342   │
+│ 37 │ create delivery note │ cold       │ master3 │ 707     │ 686-745   │ 270         │ 5093    │ 29           │ 0,0,8342   │
+│ 38 │ create delivery note │ warm       │ master  │ 745     │ 710-849   │ 243         │ 2930    │ 29           │ 0,0,8342   │
+│ 39 │ create delivery note │ warm       │ master3 │ 749     │ 697-835   │ 229         │ 2936    │ 29           │ 0,0,8342   │
+│ 40 │ create delivery note │ navigation │ master  │ 235     │ 221-243   │ -           │ 268     │ 59           │ 0,0,8342   │
+│ 41 │ create delivery note │ navigation │ master3 │ 238     │ 224-242   │ -           │ 286     │ 63           │ 0,0,8342   │
+│ 42 │ sell order           │ cold       │ master  │ 479     │ 453-523   │ 219         │ 2513    │ 15           │ 1          │
+│ 43 │ sell order           │ cold       │ master3 │ 463     │ 460-600   │ 212         │ 2515    │ 15           │ 1          │
+│ 44 │ sell order           │ warm       │ master  │ 440     │ 428-514   │ 175         │ 405     │ 15           │ 1          │
+│ 45 │ sell order           │ warm       │ master3 │ 458     │ 436-552   │ 181         │ 400     │ 15           │ 1          │
+│ 46 │ sell order           │ navigation │ master  │ 263     │ 260-278   │ -           │ 267     │ 56           │ 1          │
+│ 47 │ sell order           │ navigation │ master3 │ 257     │ 252-273   │ -           │ 248     │ 60           │ 1          │
+│ 48 │ delivery note        │ cold       │ master  │ 364     │ 352-373   │ 206         │ 2430    │ 13           │ 1          │
+│ 49 │ delivery note        │ cold       │ master3 │ 377     │ 342-423   │ 224         │ 2432    │ 13           │ 1          │
+│ 50 │ delivery note        │ warm       │ master  │ 339     │ 322-393   │ 172         │ 351     │ 13           │ 1          │
+│ 51 │ delivery note        │ warm       │ master3 │ 337     │ 324-386   │ 175         │ 352     │ 13           │ 1          │
+│ 52 │ delivery note        │ navigation │ master  │ 85      │ 76-97     │ -           │ 37      │ 55           │ 1          │
+│ 53 │ delivery note        │ navigation │ master3 │ 83      │ 81-93     │ -           │ 36      │ 59           │ 1          │
+│ 54 │ part                 │ cold       │ master  │ 351     │ 330-359   │ 217         │ 2476    │ 13           │ 1          │
+│ 55 │ part                 │ cold       │ master3 │ 352     │ 333-362   │ 224         │ 2475    │ 13           │ 1          │
+│ 56 │ part                 │ warm       │ master  │ 319     │ 313-410   │ 193         │ 375     │ 13           │ 1          │
+│ 57 │ part                 │ warm       │ master3 │ 330     │ 296-411   │ 194         │ 376     │ 13           │ 1          │
+│ 58 │ part                 │ navigation │ master  │ 97      │ 94-117    │ -           │ 60      │ 55           │ 1          │
+│ 59 │ part                 │ navigation │ master3 │ 100     │ 95-103    │ -           │ 60      │ 59           │ 1          │
+└────┴──────────────────────┴────────────┴─────────┴─────────┴───────────┴─────────────┴─────────┴──────────────┴────────────┘

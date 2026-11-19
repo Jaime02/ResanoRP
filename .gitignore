@@ -1,4 +1,8 @@
 ignore/
+# Private shop data and per-stack secrets and keys
+benchmark/bench.dump
+benchmark/stacks/
+*.cpuprofile
 routeTree.gen.ts
 html/
 env/
@@ -75,7 +79,11 @@ public/styles.css
 !envs/production/
 envs/production/*
 !envs/production/start.cmd
-!envs/production/docker-compose.yml
+!envs/production/backup.cmd
+!envs/production/cleanup-backups.ps1
+!envs/production/restore.cmd
+!envs/production/install.cmd
+!envs/production/resanorp-service.xml
 !envs/production/client/
 envs/production/client/*
 !envs/production/client/setup.cmd

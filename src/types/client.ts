@@ -8,6 +8,7 @@ import {
   IBAN_LABEL,
   PHONE_LABEL,
   PRISMA_ACCOUNTING_ACCOUNT_LABEL,
+  SPLIT_SELL_ORDERS_IN_DELIVERY_NOTES_LABEL,
 } from "@/messages/client";
 import {
   ADDRESS_LABEL,
@@ -37,4 +38,8 @@ export const CLIENT_FIELD_LABELS = {
   defaultPaymentMethodId: DEFAULT_PAYMENT_METHOD_LABEL,
   defaultDeliveryMethodId: DEFAULT_DELIVERY_METHOD_LABEL,
   prismaAccountingAccountId: PRISMA_ACCOUNTING_ACCOUNT_LABEL,
+  splitSellOrdersInDeliveryNotes: SPLIT_SELL_ORDERS_IN_DELIVERY_NOTES_LABEL,
 } as const satisfies TFormFieldLabel<BaseClient>;
+
+export const CLIENT_SPLIT_SELL_ORDERS_CHECKBOX_ID = "form-client-split-sell-orders-in-delivery-notes";
+export const CLIENT_SPLIT_SELL_ORDERS_TOOLTIP_TEST_ID = "tooltip-split-sell-orders";

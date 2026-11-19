@@ -101,7 +101,9 @@ export default function TableSellOrder({ testId = "table-sell-order", state, ...
         size: 400,
       }),
       columnHelper.accessor("clientReference", {
+        enableColumnFilter: true,
         header: CLIENT_REFERENCE_COLUMN_LABEL,
+        meta: { dataType: CellDataType.String, filterFieldName: "clientReference" },
         size: DEFAULT_REFERENCE_COLUMN_SIZE,
       }),
       columnHelper.accessor("sellOrderLines", {

@@ -87,6 +87,7 @@ export async function getSellOrders(
 
   const clientId = getFilterValue(filters, "clientId");
   const clientName = getFilterValue(filters, "clientName");
+  const clientReference = getFilterValue(filters, "clientReference");
   const id = getFilterValue(filters, "id");
   const partId = getFilterValue(filters, "partId");
   const receptionDate = getFilterValue(filters, "receptionDate");
@@ -102,6 +103,9 @@ export async function getSellOrders(
   }
   if (clientName != null) {
     whereClauses.push(searchInStringColumnIgnoreDiacritics(dbTableClient.name, clientName));
+  }
+  if (clientReference != null) {
+    whereClauses.push(searchInStringColumnIgnoreDiacritics(dbTableSellOrder.clientReference, clientReference));
   }
   if (id != null) {
     whereClauses.push(eq(dbTableSellOrder.id, id));

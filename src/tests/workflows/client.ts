@@ -10,7 +10,7 @@ import { assertComboboxValue } from "@/tests/utils/components/combobox";
 import { InputElementType, assertFormLoaded, getFormInputByLabel } from "@/tests/utils/components/form";
 import { filterByExactText, findTableRow, getTableRowByTestId } from "@/tests/utils/components/table";
 import { expectSingleSuccessToast } from "@/tests/utils/components/toast";
-import { CLIENT_FIELD_LABELS } from "@/types/client";
+import { CLIENT_FIELD_LABELS, CLIENT_SPLIT_SELL_ORDERS_CHECKBOX_ID } from "@/types/client";
 import type { BaseClient } from "@/types/client";
 
 async function assertModelComboboxValue(
@@ -36,6 +36,7 @@ export async function workflowAssertClientFormData(formClient: Locator, client: 
   const {
     defaultPaymentMethodId: paymentMethodLabel,
     defaultDeliveryMethodId: deliveryMethodLabel,
+    splitSellOrdersInDeliveryNotes: _splitSellOrdersLabel,
     ...textFieldLabels
   } = CLIENT_FIELD_LABELS;
 
@@ -47,6 +48,9 @@ export async function workflowAssertClientFormData(formClient: Locator, client: 
 
   await assertModelComboboxValue(formClient, paymentMethodLabel, client.defaultPaymentMethodId, mockPaymentMethods);
   await assertModelComboboxValue(formClient, deliveryMethodLabel, client.defaultDeliveryMethodId, mockDeliveryMethods);
+  await expect(formClient.getByTestId(CLIENT_SPLIT_SELL_ORDERS_CHECKBOX_ID)).toBeChecked({
+    checked: client.splitSellOrdersInDeliveryNotes,
+  });
 
   const buttonDeleteClient = formClient.getByRole("button", { name: CLIENT_DELETE_TITLE });
   const buttonRestoreClient = formClient.getByTestId("button-restore");

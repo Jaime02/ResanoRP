@@ -198,6 +198,7 @@ export const dbTableClient = pgTable(
     postalCode: text("postalCode").notNull(),
     prismaAccountingAccountId: text("prismaAccountingAccountId"),
     province: text("province"),
+    splitSellOrdersInDeliveryNotes: boolean("splitSellOrdersInDeliveryNotes").notNull().default(false),
     taxId: text("taxId").notNull(),
   },
   (table) => [uniqueIndexByName(table, "client")],

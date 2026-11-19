@@ -1,0 +1,109 @@
+sell orders: done
+delivery notes: done
+parts: done
+production orders: done
+invoicing: done
+treatment: done
+create delivery note: done
+sell order: done
+delivery note: done
+part: done
+navigation run 1: done
+navigation run 2: done
+navigation run 3: done
+navigation run 4: done
+navigation run 5: done
+┌────┬──────────────────────┬────────────┬────────┬─────────┬───────────┬─────────────┬─────────┬──────────────┬────────────┐
+│    │ page                 │ mode       │ target │ data ms │ min-max   │ hydrated ms │ sent KB │ page heap MB │ row counts │
+├────┼──────────────────────┼────────────┼────────┼─────────┼───────────┼─────────────┼─────────┼──────────────┼────────────┤
+│  0 │ sell orders          │ cold       │ master │ 688     │ 682-717   │ 196         │ 6672    │ 26           │ 13022      │
+│  1 │ sell orders          │ cold       │ lite   │ 1301    │ 1275-1324 │ 191         │ 4392    │ 75           │ 13022      │
+│  2 │ sell orders          │ cold       │ prog   │ 660     │ 639-668   │ 194         │ 8421    │ 77           │ 13022      │
+│  3 │ sell orders          │ warm       │ master │ 744     │ 699-1021  │ 148         │ 4556    │ 26           │ 13022      │
+│  4 │ sell orders          │ warm       │ lite   │ 1302    │ 1287-1363 │ 129         │ 2345    │ 75           │ 13022      │
+│  5 │ sell orders          │ warm       │ prog   │ 669     │ 657-732   │ 123         │ 6371    │ 78           │ 13022      │
+│  6 │ sell orders          │ navigation │ master │ 552     │ 528-572   │ -           │ 4328    │ 27           │ 13022      │
+│  7 │ sell orders          │ navigation │ lite   │ 1283    │ 1241-1315 │ -           │ 2438    │ 75           │ 13022      │
+│  8 │ sell orders          │ navigation │ prog   │ 571     │ 541-627   │ -           │ 6467    │ 77           │ 13022      │
+│  9 │ delivery notes       │ cold       │ master │ 754     │ 635-780   │ 272         │ 5040    │ 28           │ 8342       │
+│ 10 │ delivery notes       │ cold       │ lite   │ 2448    │ 2302-3033 │ 260         │ 6283    │ 126          │ 8342       │
+│ 11 │ delivery notes       │ cold       │ prog   │ 2152    │ 2127-2310 │ 249         │ 8753    │ 128          │ 8342       │
+│ 12 │ delivery notes       │ warm       │ master │ 1022    │ 731-1053  │ 271         │ 2958    │ 29           │ 8342       │
+│ 13 │ delivery notes       │ warm       │ lite   │ 2793    │ 2773-2954 │ 226         │ 4263    │ 126          │ 8342       │
+│ 14 │ delivery notes       │ warm       │ prog   │ 2392    │ 2369-2740 │ 228         │ 6732    │ 128          │ 8342       │
+│ 15 │ delivery notes       │ navigation │ master │ 580     │ 572-618   │ -           │ 2657    │ 38           │ 8342       │
+│ 16 │ delivery notes       │ navigation │ lite   │ 1206    │ 1185-1210 │ -           │ 2003    │ 122          │ 8342       │
+│ 17 │ delivery notes       │ navigation │ prog   │ 595     │ 577-608   │ -           │ 4312    │ 122          │ 8342       │
+│ 18 │ parts                │ cold       │ master │ 371     │ 320-416   │ 577         │ 3769    │ 24           │ 3647       │
+│ 19 │ parts                │ cold       │ lite   │ 2833    │ 2215-2949 │ 283         │ 6944    │ 144          │ 3647       │
+│ 20 │ parts                │ cold       │ prog   │ 734     │ 537-751   │ 301         │ 8054    │ 144          │ 3647       │
+│ 21 │ parts                │ warm       │ master │ 366     │ 351-394   │ 565         │ 1670    │ 24           │ 3647       │
+│ 22 │ parts                │ warm       │ lite   │ 2723    │ 2524-3230 │ 171         │ 4914    │ 144          │ 3647       │
+│ 23 │ parts                │ warm       │ prog   │ 527     │ 475-693   │ 161         │ 6026    │ 143          │ 3647       │
+│ 24 │ parts                │ navigation │ master │ 491     │ 476-498   │ -           │ 1844    │ 39           │ 3647       │
+│ 25 │ parts                │ navigation │ lite   │ 440     │ 427-451   │ -           │ 691     │ 130          │ 3647       │
+│ 26 │ parts                │ navigation │ prog   │ 231     │ 224-246   │ -           │ 727     │ 129          │ 3647       │
+│ 27 │ production orders    │ cold       │ master │ 2593    │ 2570-2907 │ 243         │ 15484   │ 68           │ 48         │
+│ 28 │ production orders    │ cold       │ lite   │ 1984    │ 1664-2422 │ 260         │ 4712    │ 128          │ 48         │
+│ 29 │ production orders    │ cold       │ prog   │ 2734    │ 2507-3436 │ 240         │ 7248    │ 139          │ 48         │
+│ 30 │ production orders    │ warm       │ master │ 3038    │ 2908-3600 │ 183         │ 13332   │ 68           │ 48         │
+│ 31 │ production orders    │ warm       │ lite   │ 1812    │ 1716-2531 │ 163         │ 2640    │ 127          │ 48         │
+│ 32 │ production orders    │ warm       │ prog   │ 2919    │ 2813-3444 │ 161         │ 5095    │ 139          │ 48         │
+│ 33 │ production orders    │ navigation │ master │ 2728    │ 2650-3045 │ -           │ 10209   │ 82           │ 48         │
+│ 34 │ production orders    │ navigation │ lite   │ 647     │ 615-675   │ -           │ 147     │ 146          │ 48         │
+│ 35 │ production orders    │ navigation │ prog   │ 655     │ 629-667   │ -           │ 232     │ 145          │ 48         │
+│ 36 │ invoicing            │ cold       │ master │ 556     │ 538-649   │ 212         │ 4071    │ 21           │ 4698       │
+│ 37 │ invoicing            │ cold       │ lite   │ 2024    │ 2021-2047 │ 197         │ 6239    │ 130          │ 4698       │
+│ 38 │ invoicing            │ cold       │ prog   │ 492     │ 457-513   │ 202         │ 7771    │ 132          │ 4698       │
+│ 39 │ invoicing            │ warm       │ master │ 546     │ 529-629   │ 163         │ 2019    │ 21           │ 4698       │
+│ 40 │ invoicing            │ warm       │ lite   │ 2093    │ 2060-2167 │ 139         │ 4263    │ 130          │ 4698       │
+│ 41 │ invoicing            │ warm       │ prog   │ 428     │ 415-515   │ 135         │ 5790    │ 132          │ 4698       │
+│ 42 │ invoicing            │ navigation │ master │ 349     │ 328-365   │ -           │ 1658    │ 59           │ 4698       │
+│ 43 │ invoicing            │ navigation │ lite   │ 305     │ 285-320   │ -           │ 231     │ 139          │ 4698       │
+│ 44 │ invoicing            │ navigation │ prog   │ 281     │ 253-317   │ -           │ 1580    │ 140          │ 4698       │
+│ 45 │ treatment            │ cold       │ master │ 1532    │ 1508-1578 │ 215         │ 4994    │ 41           │ 0,3        │
+│ 46 │ treatment            │ cold       │ lite   │ 1810    │ 1776-1909 │ 212         │ 4615    │ 118          │ 0,3        │
+│ 47 │ treatment            │ cold       │ prog   │ 1959    │ 1941-1997 │ 210         │ 5127    │ 121          │ 0,3        │
+│ 48 │ treatment            │ warm       │ master │ 1709    │ 1613-1855 │ 169         │ 2944    │ 41           │ 0,3        │
+│ 49 │ treatment            │ warm       │ lite   │ 1865    │ 1842-1932 │ 134         │ 2636    │ 118          │ 0,3        │
+│ 50 │ treatment            │ warm       │ prog   │ 2003    │ 1899-2079 │ 143         │ 3145    │ 121          │ 0,3        │
+│ 51 │ treatment            │ navigation │ master │ 1059    │ 1033-1096 │ -           │ 3381    │ 77           │ 0,3        │
+│ 52 │ treatment            │ navigation │ lite   │ 319     │ 314-337   │ -           │ 24      │ 154          │ 0,3        │
+│ 53 │ treatment            │ navigation │ prog   │ 327     │ 318-338   │ -           │ 24      │ 153          │ 0,3        │
+│ 54 │ create delivery note │ cold       │ master │ 703     │ 673-710   │ 266         │ 5093    │ 29           │ 0,0,8342   │
+│ 55 │ create delivery note │ cold       │ lite   │ 2273    │ 2242-2310 │ 245         │ 6636    │ 137          │ 0,0,8342   │
+│ 56 │ create delivery note │ cold       │ prog   │ 2193    │ 2075-2239 │ 262         │ 9078    │ 139          │ 0,0,8342   │
+│ 57 │ create delivery note │ warm       │ master │ 747     │ 694-816   │ 231         │ 2936    │ 30           │ 0,0,8342   │
+│ 58 │ create delivery note │ warm       │ lite   │ 2335    │ 2301-2392 │ 165         │ 4545    │ 137          │ 0,0,8342   │
+│ 59 │ create delivery note │ warm       │ prog   │ 2068    │ 2052-2114 │ 174         │ 6988    │ 139          │ 0,0,8342   │
+│ 60 │ create delivery note │ navigation │ master │ 232     │ 219-246   │ -           │ 269     │ 63           │ 0,0,8342   │
+│ 61 │ create delivery note │ navigation │ lite   │ 148     │ 140-156   │ -           │ 28      │ 142          │ 0,0,8342   │
+│ 62 │ create delivery note │ navigation │ prog   │ 153     │ 151-170   │ -           │ 28      │ 142          │ 0,0,8342   │
+│ 63 │ sell order           │ cold       │ master │ 480     │ 464-508   │ 232         │ 2511    │ 15           │ 1          │
+│ 64 │ sell order           │ cold       │ lite   │ 1592    │ 1541-1691 │ 223         │ 4867    │ 91           │ 1          │
+│ 65 │ sell order           │ cold       │ prog   │ 407     │ 400-420   │ 228         │ 5118    │ 139          │ 1          │
+│ 66 │ sell order           │ warm       │ master │ 442     │ 424-517   │ 174         │ 400     │ 15           │ 1          │
+│ 67 │ sell order           │ warm       │ lite   │ 1605    │ 1571-1652 │ 152         │ 2822    │ 91           │ 1          │
+│ 68 │ sell order           │ warm       │ prog   │ 368     │ 356-472   │ 158         │ 3098    │ 138          │ 1          │
+│ 69 │ sell order           │ navigation │ master │ 270     │ 264-302   │ -           │ 265     │ 60           │ 1          │
+│ 70 │ sell order           │ navigation │ lite   │ 99      │ 94-101    │ -           │ 4       │ 138          │ 1          │
+│ 71 │ sell order           │ navigation │ prog   │ 121     │ 111-126   │ -           │ 5       │ 139          │ 1          │
+│ 72 │ delivery note        │ cold       │ master │ 353     │ 332-373   │ 206         │ 2434    │ 13           │ 1          │
+│ 73 │ delivery note        │ cold       │ lite   │ 1848    │ 1779-1895 │ 198         │ 6271    │ 117          │ 1          │
+│ 74 │ delivery note        │ cold       │ prog   │ 340     │ 327-348   │ 215         │ 6389    │ 119          │ 1          │
+│ 75 │ delivery note        │ warm       │ master │ 334     │ 311-382   │ 166         │ 352     │ 13           │ 1          │
+│ 76 │ delivery note        │ warm       │ lite   │ 1869    │ 1780-1890 │ 136         │ 4263    │ 117          │ 1          │
+│ 77 │ delivery note        │ warm       │ prog   │ 253     │ 240-346   │ 135         │ 4380    │ 119          │ 1          │
+│ 78 │ delivery note        │ navigation │ master │ 81      │ 80-85     │ -           │ 36      │ 59           │ 1          │
+│ 79 │ delivery note        │ navigation │ lite   │ 41      │ 39-43     │ -           │ 10      │ 137          │ 1          │
+│ 80 │ delivery note        │ navigation │ prog   │ 54      │ 51-57     │ -           │ 12      │ 138          │ 1          │
+│ 81 │ part                 │ cold       │ master │ 349     │ 345-352   │ 227         │ 2478    │ 13           │ 1          │
+│ 82 │ part                 │ cold       │ lite   │ 2175    │ 2162-2248 │ 215         │ 6945    │ 137          │ 1          │
+│ 83 │ part                 │ cold       │ prog   │ 303     │ 288-312   │ 231         │ 6990    │ 138          │ 1          │
+│ 84 │ part                 │ warm       │ master │ 329     │ 300-397   │ 204         │ 374     │ 13           │ 1          │
+│ 85 │ part                 │ warm       │ lite   │ 2251    │ 2235-2321 │ 150         │ 4914    │ 138          │ 1          │
+│ 86 │ part                 │ warm       │ prog   │ 220     │ 218-295   │ 157         │ 4957    │ 138          │ 1          │
+│ 87 │ part                 │ navigation │ master │ 96      │ 90-100    │ -           │ 60      │ 59           │ 1          │
+│ 88 │ part                 │ navigation │ lite   │ 40      │ 39-44     │ -           │ 3       │ 137          │ 1          │
+│ 89 │ part                 │ navigation │ prog   │ 55      │ 53-61     │ -           │ 3       │ 139          │ 1          │
+└────┴──────────────────────┴────────────┴────────┴─────────┴───────────┴─────────────┴─────────┴──────────────┴────────────┘

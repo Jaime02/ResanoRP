@@ -10,6 +10,8 @@ Use Bash always, even on Windows. Use PowerShell only when necessary. Use `bunx`
 
 Do not run the tests unless explicitly required.
 
+Every time you change app behavior, labels or UI, update or add the tests that cover it in the same change, even if the user does not mention tests. Check `src/tests/` for tests, workflows and mock data that reference what you changed.
+
 When writing tests:
 
 - Drive them through the user UI. Do not send custom HTTP or tRPC requests (`page.request`), force clicks or use similar hacks to reach states the UI cannot reach.

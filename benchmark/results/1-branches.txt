@@ -1,0 +1,111 @@
+02:09:16
+sell orders: done
+delivery notes: done
+parts: done
+production orders: done
+invoicing: done
+treatment: done
+create delivery note: done
+sell order: done
+delivery note: done
+part: done
+navigation run 1: done
+navigation run 2: done
+navigation run 3: done
+navigation run 4: done
+navigation run 5: done
+┌────┬──────────────────────┬────────────┬───────────┬─────────┬─────────────┬─────────────┬─────────┬──────────────┬────────────┐
+│    │ page                 │ mode       │ target    │ data ms │ min-max     │ hydrated ms │ sent KB │ page heap MB │ row counts │
+├────┼──────────────────────┼────────────┼───────────┼─────────┼─────────────┼─────────────┼─────────┼──────────────┼────────────┤
+│  0 │ sell orders          │ cold       │ master    │ 1025    │ 914-1282    │ 289         │ 6956    │ 36           │ 13022      │
+│  1 │ sell orders          │ cold       │ powersync │ 17055   │ 16759-17104 │ 256         │ 9117    │ 52           │ 13022      │
+│  2 │ sell orders          │ cold       │ lite      │ 1750    │ 1731-1837   │ 214         │ 4393    │ 85           │ 13022      │
+│  3 │ sell orders          │ warm       │ master    │ 1041    │ 993-1160    │ 228         │ 4840    │ 36           │ 13022      │
+│  4 │ sell orders          │ warm       │ powersync │ 3423    │ 3302-3448   │ 193         │ 1377    │ 52           │ 13022      │
+│  5 │ sell orders          │ warm       │ lite      │ 1744    │ 1598-2154   │ 196         │ 2345    │ 85           │ 13022      │
+│  6 │ sell orders          │ navigation │ master    │ 1674    │ 1623-1714   │ -           │ 4616    │ 37           │ 13022      │
+│  7 │ sell orders          │ navigation │ powersync │ 22889   │ 22645-32983 │ -           │ 7027    │ 53           │ 13022      │
+│  8 │ sell orders          │ navigation │ lite      │ 2384    │ 2322-2411   │ -           │ 2436    │ 85           │ 13022      │
+│  9 │ delivery notes       │ cold       │ master    │ 701     │ 681-772     │ 265         │ 5040    │ 28           │ 8342       │
+│ 10 │ delivery notes       │ cold       │ powersync │ 16876   │ 16526-17182 │ 318         │ 9086    │ 67           │ 8342       │
+│ 11 │ delivery notes       │ cold       │ lite      │ 2276    │ 2248-2295   │ 261         │ 6281    │ 126          │ 8342       │
+│ 12 │ delivery notes       │ warm       │ master    │ 760     │ 714-911     │ 226         │ 2959    │ 29           │ 8342       │
+│ 13 │ delivery notes       │ warm       │ powersync │ 3907    │ 3794-3949   │ 212         │ 1378    │ 67           │ 8342       │
+│ 14 │ delivery notes       │ warm       │ lite      │ 2336    │ 2239-2464   │ 171         │ 4262    │ 126          │ 8342       │
+│ 15 │ delivery notes       │ navigation │ master    │ 1099    │ 992-1150    │ -           │ 2655    │ 39           │ 8342       │
+│ 16 │ delivery notes       │ navigation │ powersync │ 1424    │ 1391-1466   │ -           │ 44      │ 63           │ 8342       │
+│ 17 │ delivery notes       │ navigation │ lite      │ 1906    │ 1862-2022   │ -           │ 2002    │ 122          │ 8342       │
+│ 18 │ parts                │ cold       │ master    │ 441     │ 358-516     │ 667         │ 3769    │ 24           │ 3647       │
+│ 19 │ parts                │ cold       │ powersync │ 17254   │ 16943-17542 │ 261         │ 9099    │ 74           │ 3647       │
+│ 20 │ parts                │ cold       │ lite      │ 2561    │ 2483-2595   │ 229         │ 6945    │ 144          │ 3647       │
+│ 21 │ parts                │ warm       │ master    │ 364     │ 319-434     │ 509         │ 1669    │ 24           │ 3647       │
+│ 22 │ parts                │ warm       │ powersync │ 4908    │ 4863-4944   │ 181         │ 1376    │ 74           │ 3647       │
+│ 23 │ parts                │ warm       │ lite      │ 2642    │ 2526-2688   │ 160         │ 4914    │ 144          │ 3647       │
+│ 24 │ parts                │ navigation │ master    │ 828     │ 763-929     │ -           │ 1844    │ 40           │ 3647       │
+│ 25 │ parts                │ navigation │ powersync │ 959     │ 940-1041    │ -           │ 59      │ 63           │ 3647       │
+│ 26 │ parts                │ navigation │ lite      │ 766     │ 724-800     │ -           │ 690     │ 130          │ 3647       │
+│ 27 │ production orders    │ cold       │ master    │ 2761    │ 2716-2859   │ 255         │ 15458   │ 68           │ 48         │
+│ 28 │ production orders    │ cold       │ powersync │ 18038   │ 17393-18540 │ 245         │ 9141    │ 99           │ 48         │
+│ 29 │ production orders    │ cold       │ lite      │ 2538    │ 2408-2652   │ 233         │ 4713    │ 137          │ 48         │
+│ 30 │ production orders    │ warm       │ master    │ 3165    │ 3037-3266   │ 199         │ 13319   │ 68           │ 48         │
+│ 31 │ production orders    │ warm       │ powersync │ 4472    │ 4439-4843   │ 168         │ 1378    │ 99           │ 48         │
+│ 32 │ production orders    │ warm       │ lite      │ 2622    │ 2542-2656   │ 162         │ 2639    │ 137          │ 48         │
+│ 33 │ production orders    │ navigation │ master    │ 4509    │ 4388-5355   │ -           │ 10164   │ 82           │ 48         │
+│ 34 │ production orders    │ navigation │ powersync │ 2420    │ 2384-2751   │ -           │ 95      │ 93           │ 48         │
+│ 35 │ production orders    │ navigation │ lite      │ 2297    │ 2243-2481   │ -           │ 147     │ 161          │ 48         │
+│ 36 │ invoicing            │ cold       │ master    │ 592     │ 577-707     │ 242         │ 4069    │ 21           │ 4698       │
+│ 37 │ invoicing            │ cold       │ powersync │ 16697   │ 16508-17015 │ 233         │ 9045    │ 70           │ 4698       │
+│ 38 │ invoicing            │ cold       │ lite      │ 2278    │ 2216-2402   │ 218         │ 6241    │ 130          │ 4698       │
+│ 39 │ invoicing            │ warm       │ master    │ 631     │ 594-710     │ 218         │ 2022    │ 21           │ 4698       │
+│ 40 │ invoicing            │ warm       │ powersync │ 3847    │ 3732-3914   │ 146         │ 1377    │ 70           │ 4698       │
+│ 41 │ invoicing            │ warm       │ lite      │ 2287    │ 2229-2368   │ 184         │ 4262    │ 131          │ 4698       │
+│ 42 │ invoicing            │ navigation │ master    │ 533     │ 525-555     │ -           │ 1675    │ 59           │ 4698       │
+│ 43 │ invoicing            │ navigation │ powersync │ 519     │ 495-620     │ -           │ 26      │ 70           │ 4698       │
+│ 44 │ invoicing            │ navigation │ lite      │ 500     │ 477-529     │ -           │ 230     │ 142          │ 4698       │
+│ 45 │ treatment            │ cold       │ master    │ 1668    │ 1621-1723   │ 280         │ 4992    │ 41           │ 0,3        │
+│ 46 │ treatment            │ cold       │ powersync │ 18734   │ 18232-19004 │ 256         │ 9047    │ 85           │ 0,3        │
+│ 47 │ treatment            │ cold       │ lite      │ 2099    │ 1968-2139   │ 231         │ 4615    │ 118          │ 0,3        │
+│ 48 │ treatment            │ warm       │ master    │ 1800    │ 1660-2366   │ 250         │ 2942    │ 41           │ 0,3        │
+│ 49 │ treatment            │ warm       │ powersync │ 5609    │ 5556-6182   │ 194         │ 1377    │ 85           │ 0,3        │
+│ 50 │ treatment            │ warm       │ lite      │ 2124    │ 1937-2506   │ 209         │ 2635    │ 118          │ 0,3        │
+│ 51 │ treatment            │ navigation │ master    │ 1833    │ 1728-1844   │ -           │ 3385    │ 77           │ 0,3        │
+│ 52 │ treatment            │ navigation │ powersync │ 477     │ 459-540     │ -           │ 24      │ 84           │ 0,3        │
+│ 53 │ treatment            │ navigation │ lite      │ 545     │ 507-650     │ -           │ 24      │ 156          │ 0,3        │
+│ 54 │ create delivery note │ cold       │ master    │ 739     │ 691-750     │ 294         │ 5094    │ 29           │ 0,0,8342   │
+│ 55 │ create delivery note │ cold       │ powersync │ 17058   │ 16811-17538 │ 274         │ 9156    │ 74           │ 0,0,8342   │
+│ 56 │ create delivery note │ cold       │ lite      │ 2509    │ 2435-2617   │ 267         │ 6634    │ 137          │ 0,0,8342   │
+│ 57 │ create delivery note │ warm       │ master    │ 753     │ 738-868     │ 240         │ 2928    │ 29           │ 0,0,8342   │
+│ 58 │ create delivery note │ warm       │ powersync │ 4324    │ 4293-4531   │ 190         │ 1379    │ 74           │ 0,0,8342   │
+│ 59 │ create delivery note │ warm       │ lite      │ 2470    │ 2441-2627   │ 187         │ 4545    │ 137          │ 0,0,8342   │
+│ 60 │ create delivery note │ navigation │ master    │ 351     │ 346-360     │ -           │ 269     │ 63           │ 0,0,8342   │
+│ 61 │ create delivery note │ navigation │ powersync │ 266     │ 235-360     │ -           │ 27      │ 73           │ 0,0,8342   │
+│ 62 │ create delivery note │ navigation │ lite      │ 248     │ 234-325     │ -           │ 27      │ 144          │ 0,0,8342   │
+│ 63 │ sell order           │ cold       │ master    │ 450     │ 438-478     │ 240         │ 2515    │ 15           │ 1          │
+│ 64 │ sell order           │ cold       │ powersync │ 16903   │ 16676-16988 │ 288         │ 9112    │ 74           │ 1          │
+│ 65 │ sell order           │ cold       │ lite      │ 1602    │ 1560-1626   │ 231         │ 4875    │ 93           │ 1          │
+│ 66 │ sell order           │ warm       │ master    │ 501     │ 449-539     │ 263         │ 403     │ 15           │ 1          │
+│ 67 │ sell order           │ warm       │ powersync │ 3443    │ 3289-3585   │ 171         │ 1378    │ 74           │ 1          │
+│ 68 │ sell order           │ warm       │ lite      │ 1578    │ 1463-1956   │ 184         │ 2832    │ 93           │ 1          │
+│ 69 │ sell order           │ navigation │ master    │ 301     │ 294-334     │ -           │ 422     │ 61           │ 1          │
+│ 70 │ sell order           │ navigation │ powersync │ 183     │ 164-190     │ -           │ 4       │ 70           │ 1          │
+│ 71 │ sell order           │ navigation │ lite      │ 162     │ 158-167     │ -           │ 4       │ 141          │ 1          │
+│ 72 │ delivery note        │ cold       │ master    │ 385     │ 369-459     │ 229         │ 2431    │ 13           │ 1          │
+│ 73 │ delivery note        │ cold       │ powersync │ 16532   │ 16338-16572 │ 247         │ 9079    │ 58           │ 1          │
+│ 74 │ delivery note        │ cold       │ lite      │ 2082    │ 1989-2121   │ 238         │ 6272    │ 117          │ 1          │
+│ 75 │ delivery note        │ warm       │ master    │ 504     │ 385-555     │ 234         │ 352     │ 13           │ 1          │
+│ 76 │ delivery note        │ warm       │ powersync │ 3346    │ 3289-3469   │ 168         │ 1377    │ 58           │ 1          │
+│ 77 │ delivery note        │ warm       │ lite      │ 2117    │ 2086-2173   │ 191         │ 4262    │ 117          │ 1          │
+│ 78 │ delivery note        │ navigation │ master    │ 135     │ 130-207     │ -           │ 37      │ 59           │ 1          │
+│ 79 │ delivery note        │ navigation │ powersync │ 66      │ 62-108      │ -           │ 3       │ 68           │ 1          │
+│ 80 │ delivery note        │ navigation │ lite      │ 79      │ 63-122      │ -           │ 9       │ 140          │ 1          │
+│ 81 │ part                 │ cold       │ master    │ 563     │ 382-600     │ 378         │ 2479    │ 13           │ 1          │
+│ 82 │ part                 │ cold       │ powersync │ 20574   │ 15469-20680 │ 364         │ 9100    │ 62           │ 1          │
+│ 83 │ part                 │ cold       │ lite      │ 3748    │ 2431-3927   │ 351         │ 6944    │ 138          │ 1          │
+│ 84 │ part                 │ warm       │ master    │ 500     │ 473-541     │ 316         │ 374     │ 13           │ 1          │
+│ 85 │ part                 │ warm       │ powersync │ 2217    │ 1749-2288   │ 283         │ 1377    │ 41           │ 1          │
+│ 86 │ part                 │ warm       │ lite      │ 3625    │ 2437-3729   │ 244         │ 4914    │ 137          │ 1          │
+│ 87 │ part                 │ navigation │ master    │ 148     │ 130-215     │ -           │ 60      │ 59           │ 1          │
+│ 88 │ part                 │ navigation │ powersync │ 64      │ 62-95       │ -           │ 3       │ 68           │ 1          │
+│ 89 │ part                 │ navigation │ lite      │ 72      │ 66-111      │ -           │ 3       │ 140          │ 1          │
+└────┴──────────────────────┴────────────┴───────────┴─────────┴─────────────┴─────────────┴─────────┴──────────────┴────────────┘
+exit=0 02:58:51

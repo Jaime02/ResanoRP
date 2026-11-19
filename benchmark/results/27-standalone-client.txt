@@ -1,0 +1,79 @@
+sell orders: done
+delivery notes: done
+parts: done
+production orders: done
+invoicing: done
+treatment: done
+create delivery note: done
+sell order: done
+delivery note: done
+part: done
+navigation run 1: done
+navigation run 2: done
+navigation run 3: done
+navigation run 4: done
+navigation run 5: done
+┌────┬──────────────────────┬────────────┬────────┬─────────┬───────────┬─────────────┬─────────┬──────────────┬────────────┐
+│    │ page                 │ mode       │ target │ data ms │ min-max   │ hydrated ms │ sent KB │ page heap MB │ row counts │
+├────┼──────────────────────┼────────────┼────────┼─────────┼───────────┼─────────────┼─────────┼──────────────┼────────────┤
+│  0 │ sell orders          │ cold       │ old    │ 1729    │ 1453-1878 │ 216         │ 4391    │ 75           │ 13022      │
+│  1 │ sell orders          │ cold       │ new    │ 1810    │ 1404-2065 │ 246         │ 4392    │ 75           │ 13022      │
+│  2 │ sell orders          │ warm       │ old    │ 1732    │ 1459-2063 │ 152         │ 2345    │ 75           │ 13022      │
+│  3 │ sell orders          │ warm       │ new    │ 1775    │ 1158-1803 │ 151         │ 2345    │ 75           │ 13022      │
+│  4 │ sell orders          │ navigation │ old    │ 1266    │ 1229-1295 │ -           │ 2438    │ 75           │ 13022      │
+│  5 │ sell orders          │ navigation │ new    │ 1264    │ 1244-1299 │ -           │ 2438    │ 76           │ 13022      │
+│  6 │ delivery notes       │ cold       │ old    │ 2778    │ 2603-3047 │ 263         │ 6283    │ 125          │ 8342       │
+│  7 │ delivery notes       │ cold       │ new    │ 2764    │ 2669-2818 │ 256         │ 6282    │ 125          │ 8342       │
+│  8 │ delivery notes       │ warm       │ old    │ 2792    │ 2607-2915 │ 177         │ 4263    │ 125          │ 8342       │
+│  9 │ delivery notes       │ warm       │ new    │ 2737    │ 2552-2917 │ 178         │ 4262    │ 125          │ 8342       │
+│ 10 │ delivery notes       │ navigation │ old    │ 1211    │ 1175-1217 │ -           │ 2003    │ 121          │ 8342       │
+│ 11 │ delivery notes       │ navigation │ new    │ 1200    │ 1189-1230 │ -           │ 2003    │ 122          │ 8342       │
+│ 12 │ parts                │ cold       │ old    │ 3090    │ 3028-3439 │ 243         │ 6940    │ 143          │ 3647       │
+│ 13 │ parts                │ cold       │ new    │ 3344    │ 2917-3558 │ 245         │ 6946    │ 143          │ 3647       │
+│ 14 │ parts                │ warm       │ old    │ 3180    │ 2970-3313 │ 169         │ 4915    │ 143          │ 3647       │
+│ 15 │ parts                │ warm       │ new    │ 3144    │ 2953-3320 │ 169         │ 4914    │ 143          │ 3647       │
+│ 16 │ parts                │ navigation │ old    │ 481     │ 463-495   │ -           │ 690     │ 130          │ 3647       │
+│ 17 │ parts                │ navigation │ new    │ 474     │ 456-518   │ -           │ 691     │ 130          │ 3647       │
+│ 18 │ production orders    │ cold       │ old    │ 2322    │ 2269-2402 │ 262         │ 4711    │ 126          │ 48         │
+│ 19 │ production orders    │ cold       │ new    │ 2241    │ 2194-2486 │ 256         │ 4715    │ 126          │ 48         │
+│ 20 │ production orders    │ warm       │ old    │ 2309    │ 2243-2703 │ 196         │ 2640    │ 126          │ 48         │
+│ 21 │ production orders    │ warm       │ new    │ 2310    │ 2137-2603 │ 174         │ 2640    │ 126          │ 48         │
+│ 22 │ production orders    │ navigation │ old    │ 666     │ 658-680   │ -           │ 147     │ 146          │ 48         │
+│ 23 │ production orders    │ navigation │ new    │ 677     │ 664-708   │ -           │ 147     │ 146          │ 48         │
+│ 24 │ invoicing            │ cold       │ old    │ 2050    │ 2022-2237 │ 210         │ 6242    │ 130          │ 4698       │
+│ 25 │ invoicing            │ cold       │ new    │ 2056    │ 1980-2081 │ 209         │ 6243    │ 130          │ 4698       │
+│ 26 │ invoicing            │ warm       │ old    │ 2112    │ 2069-2211 │ 137         │ 4263    │ 129          │ 4698       │
+│ 27 │ invoicing            │ warm       │ new    │ 2075    │ 2063-2319 │ 136         │ 4263    │ 129          │ 4698       │
+│ 28 │ invoicing            │ navigation │ old    │ 316     │ 308-335   │ -           │ 231     │ 140          │ 4698       │
+│ 29 │ invoicing            │ navigation │ new    │ 316     │ 299-332   │ -           │ 231     │ 140          │ 4698       │
+│ 30 │ treatment            │ cold       │ old    │ 1675    │ 1667-1723 │ 224         │ 4616    │ 117          │ 0,3        │
+│ 31 │ treatment            │ cold       │ new    │ 1667    │ 1631-1689 │ 217         │ 4614    │ 117          │ 0,3        │
+│ 32 │ treatment            │ warm       │ old    │ 1735    │ 1716-1869 │ 153         │ 2635    │ 117          │ 0,3        │
+│ 33 │ treatment            │ warm       │ new    │ 1775    │ 1736-2043 │ 144         │ 2635    │ 117          │ 0,3        │
+│ 34 │ treatment            │ navigation │ old    │ 351     │ 344-362   │ -           │ 24      │ 154          │ 0,3        │
+│ 35 │ treatment            │ navigation │ new    │ 351     │ 342-362   │ -           │ 23      │ 154          │ 0,3        │
+│ 36 │ create delivery note │ cold       │ old    │ 2238    │ 2186-2267 │ 238         │ 6632    │ 136          │ 0,0,8342   │
+│ 37 │ create delivery note │ cold       │ new    │ 2266    │ 2225-2319 │ 245         │ 6634    │ 136          │ 0,0,8342   │
+│ 38 │ create delivery note │ warm       │ old    │ 2301    │ 2196-2454 │ 184         │ 4545    │ 136          │ 0,0,8342   │
+│ 39 │ create delivery note │ warm       │ new    │ 2291    │ 2265-2415 │ 172         │ 4545    │ 136          │ 0,0,8342   │
+│ 40 │ create delivery note │ navigation │ old    │ 168     │ 155-179   │ -           │ 27      │ 142          │ 0,0,8342   │
+│ 41 │ create delivery note │ navigation │ new    │ 158     │ 154-160   │ -           │ 28      │ 142          │ 0,0,8342   │
+│ 42 │ sell order           │ cold       │ old    │ 1573    │ 1556-1671 │ 235         │ 4866    │ 91           │ 1          │
+│ 43 │ sell order           │ cold       │ new    │ 1571    │ 1461-1592 │ 219         │ 4869    │ 91           │ 1          │
+│ 44 │ sell order           │ warm       │ old    │ 1666    │ 1567-1758 │ 149         │ 2822    │ 91           │ 1          │
+│ 45 │ sell order           │ warm       │ new    │ 1616    │ 1579-1754 │ 151         │ 2822    │ 91           │ 1          │
+│ 46 │ sell order           │ navigation │ old    │ 103     │ 100-111   │ -           │ 4       │ 139          │ 1          │
+│ 47 │ sell order           │ navigation │ new    │ 110     │ 105-111   │ -           │ 4       │ 139          │ 1          │
+│ 48 │ delivery note        │ cold       │ old    │ 1960    │ 1809-1978 │ 208         │ 6271    │ 116          │ 1          │
+│ 49 │ delivery note        │ cold       │ new    │ 1919    │ 1852-2070 │ 208         │ 6272    │ 116          │ 1          │
+│ 50 │ delivery note        │ warm       │ old    │ 1901    │ 1853-1982 │ 138         │ 4263    │ 116          │ 1          │
+│ 51 │ delivery note        │ warm       │ new    │ 1929    │ 1898-1945 │ 134         │ 4263    │ 116          │ 1          │
+│ 52 │ delivery note        │ navigation │ old    │ 44      │ 42-46     │ -           │ 10      │ 137          │ 1          │
+│ 53 │ delivery note        │ navigation │ new    │ 44      │ 42-46     │ -           │ 10      │ 138          │ 1          │
+│ 54 │ part                 │ cold       │ old    │ 2190    │ 2138-2265 │ 227         │ 6944    │ 136          │ 1          │
+│ 55 │ part                 │ cold       │ new    │ 2214    │ 2159-2286 │ 226         │ 6947    │ 136          │ 1          │
+│ 56 │ part                 │ warm       │ old    │ 2240    │ 2221-2294 │ 154         │ 4914    │ 136          │ 1          │
+│ 57 │ part                 │ warm       │ new    │ 2207    │ 2171-2275 │ 155         │ 4914    │ 136          │ 1          │
+│ 58 │ part                 │ navigation │ old    │ 44      │ 42-61     │ -           │ 3       │ 138          │ 1          │
+│ 59 │ part                 │ navigation │ new    │ 45      │ 42-47     │ -           │ 3       │ 138          │ 1          │
+└────┴──────────────────────┴────────────┴────────┴─────────┴───────────┴─────────────┴─────────┴──────────────┴────────────┘

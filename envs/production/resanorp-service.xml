@@ -1,0 +1,17 @@
+<service>
+  <id>ResanoRP</id>
+  <name>ResanoRP</name>
+  <description>PowerSync, the app and Caddy of ResanoRP, restarted by supervisor.ts if one of them stops</description>
+  <executable>%BASE%\bin\bun.exe</executable>
+  <arguments>run supervisor.ts</arguments>
+  <workingdirectory>%BASE%</workingdirectory>
+  <depend>ResanoRP-db</depend>
+  <startmode>Automatic</startmode>
+  <onfailure action="restart" delay="10 sec" />
+  <stoptimeout>15 sec</stoptimeout>
+  <logpath>%BASE%\service-logs</logpath>
+  <log mode="roll-by-size">
+    <sizeThreshold>10240</sizeThreshold>
+    <keepFiles>5</keepFiles>
+  </log>
+</service>
