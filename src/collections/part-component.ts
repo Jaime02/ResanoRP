@@ -17,11 +17,6 @@ const partComponentCollection = powerSyncCollection("part_component", (baseOptio
     ...baseOptions,
     schema: partComponentSchema,
     getKey: getPartComponentKey,
-    onInsert: async ({ transaction }) => {
-      const { modified: newPartComponent } = transaction.mutations[0];
-      await trpc.partComponent.create.mutate(newPartComponent);
-      await awaitSynced();
-    },
     onUpdate: async ({ transaction }) => {
       const { modified: updatedPartComponent } = transaction.mutations[0];
       await trpc.partComponent.update.mutate(updatedPartComponent);

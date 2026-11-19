@@ -7,16 +7,6 @@ const coatingCollection = powerSyncCollection("coating", (baseOptions) =>
     ...baseOptions,
     schema: coatingSchema,
     getKey: (item) => item.id,
-    onInsert: async ({ transaction }) => {
-      const { modified: newCoating } = transaction.mutations[0];
-      await trpc.coating.create.mutate(newCoating);
-      await awaitSynced();
-    },
-    onUpdate: async ({ transaction }) => {
-      const { modified: updatedCoating } = transaction.mutations[0];
-      await trpc.coating.update.mutate(updatedCoating);
-      await awaitSynced();
-    },
     onDelete: async ({ transaction }) => {
       const { original: deletedCoating } = transaction.mutations[0];
       await trpc.coating.delete.mutate({

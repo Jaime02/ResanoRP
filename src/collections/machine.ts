@@ -7,16 +7,6 @@ const machineCollection = powerSyncCollection("machine", (baseOptions) =>
     ...baseOptions,
     schema: machineSchema,
     getKey: (item) => item.id,
-    onInsert: async ({ transaction }) => {
-      const { modified: newMachine } = transaction.mutations[0];
-      await trpc.machine.create.mutate(newMachine);
-      await awaitSynced();
-    },
-    onUpdate: async ({ transaction }) => {
-      const { modified: updatedMachine } = transaction.mutations[0];
-      await trpc.machine.update.mutate(updatedMachine);
-      await awaitSynced();
-    },
     onDelete: async ({ transaction }) => {
       const { original: deletedMachine } = transaction.mutations[0];
       await trpc.machine.delete.mutate({

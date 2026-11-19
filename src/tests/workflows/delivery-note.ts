@@ -2,7 +2,10 @@ import { expect } from "@playwright/test";
 import type { Page } from "@playwright/test";
 
 import { getDeliveryNote, getSellOrderLinesByDeliveryNoteId } from "@/db/functions/delivery-note";
-import { getDeliveryNoteLinesByDeliveryNoteId } from "@/db/functions/delivery-note-line";
+import {
+  getDeliveryNoteLinesByDeliveryNoteId,
+  getSellOrderLineDeliveredQuantity,
+} from "@/db/functions/delivery-note-line";
 import { getSellOrderLineById } from "@/db/functions/sell-order-line";
 import { clampPendingQuantity } from "@/lib/sell-order-line";
 import { ADD_PART_LABEL, DESCRIPTION_LABEL, PRICE_LABEL, QUANTITY_LABEL } from "@/messages/common";
@@ -45,14 +48,19 @@ export async function workflowDeleteDeliveryNote(page: Page, deliveryNoteId: num
 
   expect((await getDeliveryNoteLinesByDeliveryNoteId(deliveryNoteId)).length).toBe(0);
 
-  // The sell order lines get back what every line of the delivery note delivered of them, within their quantity
+  // The sell order lines get back what every line of the delivery note delivered of them, within what is still not
+  // delivered by the other delivery notes
   for (const sellOrderLine of affectedSellOrderLines) {
     const deliveredQuantity = deliveryNoteLines
       .filter((deliveryNoteLine) => deliveryNoteLine.sellOrderLineId === sellOrderLine.id)
       .reduce((total, deliveryNoteLine) => total + deliveryNoteLine.quantity, 0);
     const dbSellOrderLine = await getSellOrderLineById(sellOrderLine.id);
     expect(dbSellOrderLine?.pendingQuantity).toBe(
-      clampPendingQuantity(sellOrderLine.pendingQuantity + deliveredQuantity, sellOrderLine.quantity),
+      clampPendingQuantity(
+        sellOrderLine.pendingQuantity + deliveredQuantity,
+        sellOrderLine.quantity,
+        await getSellOrderLineDeliveredQuantity(sellOrderLine.id),
+      ),
     );
   }
 }

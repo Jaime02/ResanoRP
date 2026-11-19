@@ -7,16 +7,6 @@ const rawMaterialCollection = powerSyncCollection("raw_material", (baseOptions) 
     ...baseOptions,
     schema: rawMaterialSchema,
     getKey: (item) => item.id,
-    onInsert: async ({ transaction }) => {
-      const { modified: newRawMaterial } = transaction.mutations[0];
-      await trpc.rawMaterial.create.mutate(newRawMaterial);
-      await awaitSynced();
-    },
-    onUpdate: async ({ transaction }) => {
-      const { modified: updatedRawMaterial } = transaction.mutations[0];
-      await trpc.rawMaterial.update.mutate(updatedRawMaterial);
-      await awaitSynced();
-    },
     onDelete: async ({ transaction }) => {
       const { original: deletedRawMaterial } = transaction.mutations[0];
       await trpc.rawMaterial.delete.mutate({

@@ -37,7 +37,12 @@ export const partFeatureSchema = basePartFeatureSchema
 export const createPartFeatureSchema = basePartFeatureSchema.refine(isPartFeatureRangeValid, rangeRefinement);
 export type TCreatePartFeature = z.infer<typeof createPartFeatureSchema>;
 
-export const updatePartFeatureSchema = partFeatureSchema;
+// A cell edit only sends the field it changed, so the server checks the range on the stored row it merges the edit into.
+// A Característica stays in its Artículo
+export const updatePartFeatureSchema = basePartFeatureSchema
+  .omit({ partId: true })
+  .partial()
+  .extend(requiredIdObjectSchema.shape);
 
 const partFeatureFiltersSchema = z.array(
   z.discriminatedUnion("id", [

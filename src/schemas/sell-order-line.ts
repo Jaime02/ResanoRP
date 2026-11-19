@@ -1,6 +1,5 @@
 import { z } from "zod";
 
-import { SELL_ORDER_LINE_PENDING_QUANTITY_RANGE_MESSAGE } from "@/messages/sell-order";
 import {
   nonZeroQuantitySchema,
   nullableIdSchema,
@@ -35,19 +34,13 @@ export const createCustomSellOrderLineSchema = baseSellOrderLineSchema.extend({
 export const createSellOrderLineSchema = z.union([createPartSellOrderLineSchema, createCustomSellOrderLineSchema]);
 export type TCreateSellOrderLine = z.infer<typeof createSellOrderLineSchema>;
 
-const sellOrderLineFieldsSchema = baseSellOrderLineSchema.extend({
+// A cell edit only sends the field it changed, so a stale copy of the others can not overwrite them. The pending
+// quantity is not edited: the server keeps it in step with the quantity and the Albaranes
+export const updateSellOrderLineSchema = baseSellOrderLineSchema.partial().extend({ id: requiredIdSchema });
+
+export const sellOrderLineSchema = baseSellOrderLineSchema.extend({
   id: requiredIdSchema,
   pendingQuantity: quantitySchema,
-});
-
-export const updateSellOrderLineSchema = sellOrderLineFieldsSchema.refine(
-  ({ pendingQuantity, quantity }) =>
-    pendingQuantity >= Math.min(quantity, 0) && pendingQuantity <= Math.max(quantity, 0),
-  { message: SELL_ORDER_LINE_PENDING_QUANTITY_RANGE_MESSAGE, path: ["pendingQuantity"] },
-);
-export type TUpdateSellOrderLine = z.infer<typeof updateSellOrderLineSchema>;
-
-export const sellOrderLineSchema = sellOrderLineFieldsSchema.extend({
   description: z.string().nullable(),
   partReferenceId: nullableIdSchema,
   sellOrderId: requiredIdSchema,

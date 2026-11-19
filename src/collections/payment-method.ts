@@ -7,16 +7,6 @@ const paymentMethodCollection = powerSyncCollection("payment_method", (baseOptio
     ...baseOptions,
     schema: paymentMethodSchema,
     getKey: (item) => item.id,
-    onInsert: async ({ transaction }) => {
-      const { modified: newPaymentMethod } = transaction.mutations[0];
-      await trpc.paymentMethod.create.mutate(newPaymentMethod);
-      await awaitSynced();
-    },
-    onUpdate: async ({ transaction }) => {
-      const { modified: updatedPaymentMethod } = transaction.mutations[0];
-      await trpc.paymentMethod.update.mutate(updatedPaymentMethod);
-      await awaitSynced();
-    },
     onDelete: async ({ transaction }) => {
       const { original: deletedPaymentMethod } = transaction.mutations[0];
       await trpc.paymentMethod.delete.mutate({

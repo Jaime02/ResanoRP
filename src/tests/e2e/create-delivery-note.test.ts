@@ -7,6 +7,7 @@ import { addDays } from "date-fns";
 import { eq, inArray, sql } from "drizzle-orm";
 
 import { UserMode } from "@/contexts/app-context";
+import type { TDatabase } from "@/db";
 import { getClientById } from "@/db/functions/client";
 import { getDeliveryNote, getDeliveryNotes } from "@/db/functions/delivery-note";
 import { getDeliveryNoteLine, getDeliveryNoteLinesByDeliveryNoteId } from "@/db/functions/delivery-note-line";
@@ -43,7 +44,7 @@ import {
   LINES_ADDED_TO_DELIVERY_NOTE_MESSAGE,
 } from "@/messages/delivery-note";
 import { INVOICE_CREATE_TITLE } from "@/messages/invoice";
-import { DELIVERY_LABEL, SHOW_PREPARED_LINES_LABEL } from "@/messages/sell-order";
+import { DELIVERY_LABEL, SELL_ORDER_LINE_EDITED_MESSAGE, SHOW_PREPARED_LINES_LABEL } from "@/messages/sell-order";
 import { SellOrderStatus } from "@/schemas/sell-order";
 import {
   MOCK_INITIAL_DATE,
@@ -98,6 +99,7 @@ import {
 } from "@/tests/workflows/delivery-note";
 import { workflowPickInvoiceClient } from "@/tests/workflows/invoice";
 import { assertPartStockConsumption } from "@/tests/workflows/part-stock";
+import { workflowOpenSellOrder } from "@/tests/workflows/sell-order";
 import { expectTagField, getTagSellOrderText, workflowPrintTag } from "@/tests/workflows/tag";
 import { CLIENT_SPLIT_SELL_ORDERS_CHECKBOX_ID, CLIENT_SPLIT_SELL_ORDERS_TOOLTIP_TEST_ID } from "@/types/client";
 import type { BaseDeliveryNote } from "@/types/delivery-note";
@@ -114,6 +116,14 @@ test.beforeEach(({ page }) => {
   tableStagedSellOrderLines = page.getByTestId("table-staged-sell-order-lines");
   buttonSubmitFormDeliveryNote = getButtonSubmitFormDeliveryNote(page);
 });
+
+// Waiting for a lock, either the one of the test or the one of another request
+async function countBlockedTransactions(db: TDatabase) {
+  const result: { rows: Array<{ count: number }> } = await db.execute(
+    sql`SELECT count(*)::int AS count FROM pg_stat_activity WHERE datname = current_database() AND cardinality(pg_blocking_pids(pid)) > 0`,
+  );
+  return result.rows[0].count;
+}
 
 // The rows of the staged table once every given pending line is staged with its whole pending quantity
 function getMockStagedPartRows(pendingSellOrderLines: Array<BaseSellOrderLine>) {
@@ -526,7 +536,7 @@ for (const client of clientsWithPendingLines) {
     )!;
     expect(partSellOrderLine, "Wrong test set up: the client should have a pending line with part").toBeDefined();
     const partId = getMockPartByPartReferenceId(partSellOrderLine.partReferenceId)!.id;
-    const [returnSellOrderLine, orderedSellOrderLine] = await db
+    const [returnSellOrderLine, orderedSellOrderLine, overDeliveredSellOrderLine] = await db
       .insert(dbTableSellOrderLine)
       .values([
         {
@@ -541,6 +551,13 @@ for (const client of clientsWithPendingLines) {
           partReferenceId: partSellOrderLine.partReferenceId,
           pendingQuantity: 40,
           quantity: 100,
+          sellOrderId: partSellOrderLine.sellOrderId,
+        },
+        {
+          partPrice: "1.5",
+          partReferenceId: partSellOrderLine.partReferenceId,
+          pendingQuantity: 10,
+          quantity: 10,
           sellOrderId: partSellOrderLine.sellOrderId,
         },
       ])
@@ -672,6 +689,20 @@ for (const client of clientsWithPendingLines) {
       await expect(inputQuantity).toHaveValue("-30");
       expect((await getDeliveryNoteLine({ id: firstReturnLine.id }))?.quantity).toBe(-30);
       expect(await getPendingQuantity(orderedSellOrderLine.id)).toBe(70);
+    });
+
+    await test.step("after an over-delivery, editing or deleting an Albarán does not ask for delivered parts", async () => {
+      const [firstLine] = await createDeliveryNote([[overDeliveredSellOrderLine, 6]]);
+      const [secondLine] = await createDeliveryNote([[overDeliveredSellOrderLine, 8]]);
+      expect(await getPendingQuantity(overDeliveredSellOrderLine.id)).toBe(0);
+
+      await workflowOpenEditDeliveryNote(page, secondLine.deliveryNoteId);
+      await workflowEditDeliveryNoteLineQuantity(page, secondLine.id, 6);
+      await expectSingleSuccessToast(page, DELIVERY_NOTE_LINE_EDITED_MESSAGE);
+      expect(await getPendingQuantity(overDeliveredSellOrderLine.id)).toBe(0);
+
+      await workflowDeleteDeliveryNote(page, firstLine.deliveryNoteId);
+      expect(await getPendingQuantity(overDeliveredSellOrderLine.id)).toBe(4);
     });
 
     await test.step("a staged quantity of 0 is rejected", async () => {
@@ -963,13 +994,6 @@ for (const client of clientsWithPendingLines) {
       })
       .returning();
     const previousDeliveryNoteIds = (await getDeliveryNotes()).map((deliveryNote) => deliveryNote.id);
-    // Waiting for a lock, either the one of the test or the one of the other request
-    const countBlockedTransactions = async () => {
-      const result: { rows: Array<{ count: number }> } = await db.execute(
-        sql`SELECT count(*)::int AS count FROM pg_stat_activity WHERE datname = current_database() AND cardinality(pg_blocking_pids(pid)) > 0`,
-      );
-      return result.rows[0].count;
-    };
 
     await inAnotherTab(page, async (anotherPage) => {
       const pages = [page, anotherPage];
@@ -986,7 +1010,7 @@ for (const client of clientsWithPendingLines) {
         for (const tabPage of pages) {
           await getButtonSubmitFormDeliveryNote(tabPage).click();
         }
-        await expect.poll(countBlockedTransactions).toBe(pages.length);
+        await expect.poll(async () => countBlockedTransactions(db)).toBe(pages.length);
       });
 
       const toastTypes = await Promise.all(
@@ -1010,6 +1034,130 @@ for (const client of clientsWithPendingLines) {
       (await getDeliveryNoteLinesByDeliveryNoteId(createdDeliveryNotes[0].id)).map((line) => line.quantity),
     ).toEqual([sellOrderLine.pendingQuantity]);
     expect((await getSellOrderLineById(sellOrderLine.id))?.pendingQuantity).toBe(0);
+  });
+}
+
+{
+  const client = clientsWithPendingLines[0];
+  test(`the pending quantity of a line of ${client.name} follows its deliveries and its quantity`, async ({
+    db,
+    page,
+  }) => {
+    const partSellOrderLine = (await getMockPendingSellOrderLines(client.id)).find(
+      (line) => line.partReferenceId !== null,
+    )!;
+    expect(partSellOrderLine, "Wrong test set up: the client should have a pending line with part").toBeDefined();
+    const [sellOrderLine] = await db
+      .insert(dbTableSellOrderLine)
+      .values({
+        partPrice: "1.5",
+        partReferenceId: partSellOrderLine.partReferenceId,
+        pendingQuantity: 10,
+        quantity: 10,
+        sellOrderId: partSellOrderLine.sellOrderId,
+      })
+      .returning();
+    const deliveredQuantity = 4;
+    const previousDeliveryNoteIds = (await getDeliveryNotes()).map((deliveryNote) => deliveryNote.id);
+
+    await test.step("an edit of the sell order line keeps the parts delivered while it was sent", async () => {
+      const newPartPrice = "2.5";
+      await workflowOpenSellOrder(page, sellOrderLine.sellOrderId);
+      const inputPartPrice = getTableRowByTestId(page.getByTestId("table-sell-order-line"), sellOrderLine.id)
+        .getByTestId("partPrice")
+        .getByTestId("input-part-price");
+      await inputPartPrice.clear();
+      await inputPartPrice.pressSequentially(newPartPrice);
+
+      // The page sends the price with the row it had before the Albarán, as if another computer delivered meanwhile
+      await holdRequestWhile({
+        page,
+        procedurePath: "sellOrderLine.update",
+        send: async () => inputPartPrice.press("Enter"),
+        meanwhile: async () =>
+          inAnotherTab(page, async (anotherPage) => {
+            await workflowOpenCreateDeliveryNoteForClient(anotherPage, client);
+            const inputStagedQuantity = getEditableCellById(
+              await workflowStageSingleSellOrderLine(anotherPage, sellOrderLine.id),
+              "quantity",
+            );
+            await inputStagedQuantity.clear();
+            await inputStagedQuantity.pressSequentially(String(deliveredQuantity));
+            await expect(inputStagedQuantity).toHaveValue(String(deliveredQuantity));
+            await getButtonSubmitFormDeliveryNote(anotherPage).click();
+            await expectSingleSuccessToast(anotherPage, DELIVERY_NOTE_CREATED_MESSAGE);
+          }),
+      });
+
+      await expectSingleSuccessToast(page, SELL_ORDER_LINE_EDITED_MESSAGE);
+      expect(await getSellOrderLineById(sellOrderLine.id)).toMatchObject({
+        partPrice: newPartPrice,
+        pendingQuantity: sellOrderLine.quantity - deliveredQuantity,
+      });
+    });
+
+    const deliveredAfterEdits =
+      await test.step("two edits of the quantity of its delivery note line at the same time both count", async () => {
+        const createdDeliveryNote = (await getDeliveryNotes()).find(
+          (deliveryNote) => !previousDeliveryNoteIds.includes(deliveryNote.id),
+        )!;
+        const [deliveryNoteLine] = await getDeliveryNoteLinesByDeliveryNoteId(createdDeliveryNote.id);
+        expect(deliveryNoteLine.quantity).toBe(deliveredQuantity);
+        const editedQuantities = [5, 7];
+
+        await inAnotherTab(page, async (anotherPage) => {
+          const pages = [page, anotherPage];
+          for (const tabPage of pages) {
+            await workflowOpenEditDeliveryNote(tabPage, createdDeliveryNote.id);
+          }
+
+          // Holding the line until both edits wait for it makes them reach it before either one is committed, which is
+          // how two edits at the same time race
+          await db.transaction(async (tx) => {
+            await tx
+              .select()
+              .from(dbTableDeliveryNoteLine)
+              .where(eq(dbTableDeliveryNoteLine.id, deliveryNoteLine.id))
+              .for("update");
+            for (const [index, tabPage] of pages.entries()) {
+              await workflowEditDeliveryNoteLineQuantity(tabPage, deliveryNoteLine.id, editedQuantities[index]);
+            }
+            await expect.poll(async () => countBlockedTransactions(db)).toBe(pages.length);
+          });
+
+          for (const tabPage of pages) {
+            await expectSingleSuccessToast(tabPage, DELIVERY_NOTE_LINE_EDITED_MESSAGE);
+          }
+        });
+
+        // The last edit wins, and the pending quantity follows whichever it was
+        const editedQuantity = (await getDeliveryNoteLine({ id: deliveryNoteLine.id }))!.quantity;
+        expect(editedQuantities).toContain(editedQuantity);
+        expect((await getSellOrderLineById(sellOrderLine.id))?.pendingQuantity).toBe(
+          sellOrderLine.quantity - editedQuantity,
+        );
+        return editedQuantity;
+      });
+
+    await test.step("lowering the quantity to what was delivered completes the line, raising it adds the difference", async () => {
+      await workflowOpenSellOrder(page, sellOrderLine.sellOrderId);
+      const inputQuantity = getEditableCellById(
+        getTableRowByTestId(page.getByTestId("table-sell-order-line"), sellOrderLine.id),
+        "quantity",
+      );
+      // Below what was delivered nothing is pending either, and nothing is given back from it when raised again
+      for (const [quantity, pendingQuantity] of [
+        [deliveredAfterEdits - 2, 0],
+        [deliveredAfterEdits, 0],
+        [deliveredAfterEdits + 2, 2],
+      ]) {
+        await inputQuantity.clear();
+        await inputQuantity.pressSequentially(String(quantity));
+        await inputQuantity.press("Enter");
+        await expectSingleSuccessToast(page, SELL_ORDER_LINE_EDITED_MESSAGE);
+        expect(await getSellOrderLineById(sellOrderLine.id)).toMatchObject({ pendingQuantity, quantity });
+      }
+    });
   });
 }
 

@@ -757,11 +757,7 @@ test("manage the delivery notes", { annotation: TestAnnotations.ResetTags }, asy
           await expectSingleToast(page, { title: DELIVERY_NOTE_LINE_VALIDATION_ERROR_MESSAGE, type: ToastType.Error });
           expectErrorsLog(
             clientErrorEvent(
-              schemaErrorMessage(updateDeliveryNoteLineSchema, {
-                description: updatedDeliveryNoteLine!.description,
-                id: deliveryNoteLine.id,
-                quantity: rejectedQuantity,
-              }),
+              schemaErrorMessage(updateDeliveryNoteLineSchema, { id: deliveryNoteLine.id, quantity: rejectedQuantity }),
               { message: LogMessages.deliveryNoteLineValidationFailed },
             ),
           );

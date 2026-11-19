@@ -37,7 +37,7 @@ import {
 } from "@/messages/delivery-note";
 import { SELL_ORDER_LABEL } from "@/messages/sell-order";
 import type { TDeliveryNoteLine } from "@/queries/delivery-note";
-import type { TUpdateDeliveryNoteLine, TUpdateDeliveryNoteLinePrice } from "@/schemas/delivery-note-line";
+import type { TUpdateDeliveryNoteLinePrice } from "@/schemas/delivery-note-line";
 import { updateDeliveryNoteLineSchema } from "@/schemas/delivery-note-line";
 import trpc from "@/trpc/trpc-client";
 import { CellDataType, TableMode } from "@/types";
@@ -204,13 +204,10 @@ export default function TableDeliveryNoteLine({
             });
             return;
           }
-          const input: TUpdateDeliveryNoteLine = {
+          const mutationValidationResult = updateDeliveryNoteLineSchema.safeParse({
             id: row.original.id,
-            quantity: row.original.quantity,
-            description: row.original.description,
             [cell.column.id]: value,
-          };
-          const mutationValidationResult = updateDeliveryNoteLineSchema.safeParse(input);
+          });
           if (!mutationValidationResult.success) {
             toaster.error({ title: DELIVERY_NOTE_LINE_VALIDATION_ERROR_MESSAGE });
             await log(LoggerLevels.error, LogMessages.deliveryNoteLineValidationFailed, {
@@ -218,11 +215,11 @@ export default function TableDeliveryNoteLine({
             });
             return;
           }
+          const { id, ...changes } = mutationValidationResult.data;
           await showToastOnTransaction({
             transaction: () =>
-              dbClient.collection(deliveryNoteLineCollection).update(input.id, (draft) => {
-                draft.quantity = input.quantity;
-                draft.description = input.description;
+              dbClient.collection(deliveryNoteLineCollection).update(id, (draft) => {
+                Object.assign(draft, changes);
               }),
             onSuccess: { title: DELIVERY_NOTE_LINE_EDITED_MESSAGE },
           });

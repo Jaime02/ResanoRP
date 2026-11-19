@@ -7,16 +7,6 @@ const sellOrderCollection = powerSyncCollection("sell_order", (baseOptions) =>
     ...baseOptions,
     schema: sellOrderSchema,
     getKey: (item) => item.id,
-    onInsert: async ({ transaction }) => {
-      const { modified: newSellOrder } = transaction.mutations[0];
-      await trpc.sellOrder.create.mutate(newSellOrder);
-      await awaitSynced();
-    },
-    onUpdate: async ({ transaction }) => {
-      const { modified: updatedSellOrder } = transaction.mutations[0];
-      await trpc.sellOrder.update.mutate(updatedSellOrder);
-      await awaitSynced();
-    },
     onDelete: async ({ transaction }) => {
       const { original: deletedSellOrder } = transaction.mutations[0];
       await trpc.sellOrder.delete.mutate({

@@ -1,5 +1,7 @@
 # ResanoRP
 
+Always ask with the AskUserQuestion tool, one question at a time. Never answer a question for the user. Stop and wait for their reply.
+
 Always check @package.json for dependencies and available scripts
 
 Always try to follow the existing code style and patterns. If you are unsure about a pattern, check other files in the project for examples.

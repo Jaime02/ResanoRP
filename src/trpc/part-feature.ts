@@ -5,7 +5,12 @@ import { PART_FEATURE_CONSTRAINT, dbTablePartFeature } from "@/db/schema";
 import { handleMutationError } from "@/lib/handlers";
 import { PART_FEATURE_CHECKED_DELETE_ERROR_MESSAGE, PART_FEATURE_CHECKED_RANGE_ERROR_MESSAGE } from "@/messages/part";
 import { requiredIdObjectSchema } from "@/schemas";
-import { createPartFeatureSchema, updatePartFeatureSchema } from "@/schemas/part-feature";
+import {
+  createPartFeatureSchema,
+  isPartFeatureRangeValid,
+  PART_FEATURE_RANGE_ERROR_MESSAGE,
+  updatePartFeatureSchema,
+} from "@/schemas/part-feature";
 import { router } from "@/trpc";
 import { adminProcedure } from "@/trpc";
 
@@ -36,15 +41,26 @@ export default router({
   update: adminProcedure.input(updatePartFeatureSchema).mutation(async ({ ctx, input }) =>
     ctx.db.transaction(async (tx) => {
       try {
-        const currentPartFeature = await tx.query.dbTablePartFeature.findFirst({ where: { id: input.id } });
-        const rangeChanged =
-          currentPartFeature !== undefined &&
-          [
-            [currentPartFeature.minValue, input.minValue],
-            [currentPartFeature.maxValue, input.maxValue],
-          ].some(([current, next]) =>
-            current === null ? next !== null : next === null || Number(current) !== Number(next),
-          );
+        // Locked, as the range is checked on the stored row the edited cell is merged into
+        const currentPartFeature = (
+          await tx.select().from(dbTablePartFeature).where(eq(dbTablePartFeature.id, input.id)).for("update")
+        ).at(0);
+        if (currentPartFeature === undefined) {
+          throw new TRPCError({
+            code: "NOT_FOUND",
+            message: `Característica del Artículo con ID ${input.id} no encontrada`,
+          });
+        }
+        const editedPartFeature = { ...currentPartFeature, ...input };
+        if (!isPartFeatureRangeValid(editedPartFeature)) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: PART_FEATURE_RANGE_ERROR_MESSAGE });
+        }
+        const rangeChanged = [
+          [currentPartFeature.minValue, editedPartFeature.minValue],
+          [currentPartFeature.maxValue, editedPartFeature.maxValue],
+        ].some(([current, next]) =>
+          current === null ? next !== null : next === null || Number(current) !== Number(next),
+        );
         if (rangeChanged) {
           const qualityCheck = await tx.query.dbTableQualityCheck.findFirst({ where: { partFeatureId: input.id } });
           if (qualityCheck) {
@@ -54,15 +70,11 @@ export default router({
             });
           }
         }
-        const updatedPartFeature = (
-          await tx.update(dbTablePartFeature).set(input).where(eq(dbTablePartFeature.id, input.id)).returning()
-        ).at(0);
-        if (!updatedPartFeature) {
-          throw new TRPCError({
-            code: "NOT_FOUND",
-            message: `Característica del Artículo con ID ${input.id} no encontrada`,
-          });
-        }
+        const [updatedPartFeature] = await tx
+          .update(dbTablePartFeature)
+          .set(input)
+          .where(eq(dbTablePartFeature.id, input.id))
+          .returning();
         return { item: updatedPartFeature };
       } catch (error) {
         handleMutationError({ error, uniqueConstraints });

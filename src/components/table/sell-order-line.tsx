@@ -22,7 +22,7 @@ import type { TSellOrderForm } from "@/form/hooks/use-sell-order";
 import type { TSellOrderLineForm, TUseSellOrderStatusProps } from "@/form/hooks/use-sell-order";
 import { formatDate, formatPrice } from "@/lib/formatters";
 import { formatCents, getLineTotalInCents, getLinesTotalInCents } from "@/lib/prices";
-import { clampPendingQuantity, computeSellOrderLineStatus } from "@/lib/sell-order-line";
+import { computeSellOrderLineStatus } from "@/lib/sell-order-line";
 import { serializeSellOrderLine } from "@/lib/serializers";
 import log from "@/logging/log";
 import { LogMessages, LoggerLevels } from "@/logging/types";
@@ -53,7 +53,6 @@ import {
 } from "@/messages/sell-order";
 import { useQueryProductionOrderStatusesBySellOrderLineIds } from "@/queries/production-order";
 import { ProductionOrderStatus } from "@/schemas/production-order";
-import type { TUpdateSellOrderLine } from "@/schemas/sell-order-line";
 import { SellOrderLineStatus, updateSellOrderLineSchema } from "@/schemas/sell-order-line";
 import { CellDataType, TableMode } from "@/types";
 
@@ -177,7 +176,7 @@ export default function TableSellOrderLine({
       columnHelper.accessor("pendingQuantity", {
         header: STATUS_PENDING_LABEL,
         id: "pendingQuantity",
-        meta: { dataType: CellDataType.Number, editable: true, min: -Infinity },
+        meta: { dataType: CellDataType.Number },
       }),
       ...(isAdmin
         ? [
@@ -337,20 +336,11 @@ export default function TableSellOrderLine({
         className={className}
         skeletonRowsCount={3}
         onRowEdit={async (cell, value) => {
-          const { row } = cell;
-          const input: TUpdateSellOrderLine = {
-            id: row.original.id,
-            quantity: row.original.quantity,
-            pendingQuantity: row.original.pendingQuantity,
-            partPrice: row.original.partPrice,
-            requestedDeliveryDate: row.original.requestedDeliveryDate,
-            notes: row.original.notes,
+          // Only the edited cell is sent, so a stale copy of the rest of the row can not overwrite what changed meanwhile
+          const mutationValidationResult = updateSellOrderLineSchema.safeParse({
+            id: cell.row.original.id,
             [cell.column.id]: value,
-          };
-          if (cell.column.id === "quantity" && typeof value === "number") {
-            input.pendingQuantity = clampPendingQuantity(input.pendingQuantity, value);
-          }
-          const mutationValidationResult = updateSellOrderLineSchema.safeParse(input);
+          });
           if (!mutationValidationResult.success) {
             toaster.error({
               description:
@@ -362,14 +352,11 @@ export default function TableSellOrderLine({
             });
             return;
           }
+          const { id, ...changes } = mutationValidationResult.data;
           await showToastOnTransaction({
             transaction: () =>
-              dbClient.collection(sellOrderLineCollection).update(row.original.id, (draft) => {
-                draft.quantity = input.quantity;
-                draft.pendingQuantity = input.pendingQuantity;
-                draft.partPrice = input.partPrice;
-                draft.requestedDeliveryDate = input.requestedDeliveryDate;
-                draft.notes = input.notes;
+              dbClient.collection(sellOrderLineCollection).update(id, (draft) => {
+                Object.assign(draft, changes);
               }),
             onSuccess: { title: SELL_ORDER_LINE_EDITED_MESSAGE },
           });

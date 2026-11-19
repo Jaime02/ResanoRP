@@ -17,9 +17,15 @@ import {
 import { ProductionOrderStatus } from "@/schemas/production-order";
 import { SellOrderLineStatus } from "@/schemas/sell-order-line";
 
-// A return has a negative quantity, so what is left of it to deliver goes from its quantity up to 0
-export function clampPendingQuantity(pendingQuantity: number, quantity: number): number {
-  return Math.min(Math.max(pendingQuantity, Math.min(quantity, 0)), Math.max(quantity, 0));
+// A return has a negative quantity, so what is left of it to deliver goes from its quantity up to 0.
+// An over-delivery is not stored in the pendingQuantity, so it is also kept within what was not delivered yet
+export function clampPendingQuantity(pendingQuantity: number, quantity: number, deliveredQuantity = 0): number {
+  const notDeliveredQuantity = quantity - deliveredQuantity;
+  return Math.min(
+    Math.max(pendingQuantity, Math.min(quantity, 0), Math.min(notDeliveredQuantity, 0)),
+    Math.max(quantity, 0),
+    Math.max(notDeliveredQuantity, 0),
+  );
 }
 
 interface TSortablePendingSellOrderLine {

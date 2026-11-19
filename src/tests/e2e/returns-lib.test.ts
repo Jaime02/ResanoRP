@@ -4,7 +4,7 @@ import { clampPendingQuantity, computeSellOrderLineStatus } from "@/lib/sell-ord
 import { buildStockLedger } from "@/queries/part-stock";
 import { appendLinesToDeliveryNoteSchema, createDeliveryNoteWithLinesSchema } from "@/schemas/delivery-note";
 import { createDeliveryNoteLineSchema, updateDeliveryNoteLineSchema } from "@/schemas/delivery-note-line";
-import { createSellOrderLineSchema, SellOrderLineStatus, updateSellOrderLineSchema } from "@/schemas/sell-order-line";
+import { createSellOrderLineSchema, SellOrderLineStatus } from "@/schemas/sell-order-line";
 
 const DATE = new Date("2026-03-02T08:00:00");
 
@@ -20,6 +20,14 @@ test("the returns library", async () => {
     expect(clampPendingQuantity(100, -100)).toBe(0);
   });
 
+  await test.step("the pending quantity never asks for parts that were already delivered", () => {
+    expect(clampPendingQuantity(6, 10, 6)).toBe(4);
+    expect(clampPendingQuantity(4, 10, -30)).toBe(4);
+    expect(clampPendingQuantity(140, 100, -30)).toBe(100);
+    expect(clampPendingQuantity(-100, -170, -100)).toBe(-70);
+    expect(clampPendingQuantity(-10, -170, -100)).toBe(-10);
+  });
+
   await test.step("a line can have a negative quantity, but never 0", () => {
     const sellOrderLine = { notes: null, partPrice: "0.82", requestedDeliveryDate: null, sellOrderId: 1 };
     const partSellOrderLine = { ...sellOrderLine, description: null, partReferenceId: 1 };
@@ -32,12 +40,8 @@ test("the returns library", async () => {
     const deliveryNoteLine = { deliveryNoteId: 1, description: "Devolución", partReferenceId: null, unitPrice: null };
     expect(createDeliveryNoteLineSchema.safeParse({ ...deliveryNoteLine, quantity: -170 }).success).toBe(true);
     expect(createDeliveryNoteLineSchema.safeParse({ ...deliveryNoteLine, quantity: 0 }).success).toBe(false);
-    expect(updateDeliveryNoteLineSchema.safeParse({ description: "Devolución", id: 1, quantity: -1 }).success).toBe(
-      true,
-    );
-    expect(updateDeliveryNoteLineSchema.safeParse({ description: "Devolución", id: 1, quantity: 0 }).success).toBe(
-      false,
-    );
+    expect(updateDeliveryNoteLineSchema.safeParse({ id: 1, quantity: -1 }).success).toBe(true);
+    expect(updateDeliveryNoteLineSchema.safeParse({ id: 1, quantity: 0 }).success).toBe(false);
 
     // A staged line left at 0 by lowering the total of its part is not delivered, but something has to be
     for (const [schema, deliveryNote] of [
@@ -61,20 +65,6 @@ test("the returns library", async () => {
   await test.step("a line and its price can be negative, like a discount", () => {
     const line = { deliveryNoteId: 1, description: "Abono", partReferenceId: null, quantity: 1 };
     expect(createDeliveryNoteLineSchema.parse({ ...line, unitPrice: "-733.15" }).unitPrice).toBe("-733.15");
-  });
-
-  await test.step("an edited line keeps its pending quantity between 0 and its quantity", () => {
-    const line = { id: 1, notes: null, partPrice: null, requestedDeliveryDate: null };
-    const isValid = (quantity: number, pendingQuantity: number) =>
-      updateSellOrderLineSchema.safeParse({ ...line, pendingQuantity, quantity }).success;
-    expect(isValid(100, 0)).toBe(true);
-    expect(isValid(100, 100)).toBe(true);
-    expect(isValid(100, 101)).toBe(false);
-    expect(isValid(100, -1)).toBe(false);
-    expect(isValid(-170, 0)).toBe(true);
-    expect(isValid(-170, -170)).toBe(true);
-    expect(isValid(-170, -171)).toBe(false);
-    expect(isValid(-170, 1)).toBe(false);
   });
 
   await test.step("a return is pending until it is delivered back", () => {

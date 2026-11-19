@@ -3,7 +3,6 @@ import type { DbClient } from "@tanstack/react-db";
 
 import { awaitSynced, powerSyncCollection, powerSyncCollectionOptions } from "@/collections/base";
 import { sellOrderLineSchema } from "@/schemas/sell-order-line";
-import type { TCreateSellOrderLine } from "@/schemas/sell-order-line";
 import trpc from "@/trpc/trpc-client";
 
 const sellOrderLineCollection = powerSyncCollection("sell_order_line", (baseOptions) =>
@@ -11,14 +10,9 @@ const sellOrderLineCollection = powerSyncCollection("sell_order_line", (baseOpti
     ...baseOptions,
     schema: sellOrderLineSchema,
     getKey: (item) => item.id,
-    onInsert: async ({ transaction }) => {
-      const { modified: newSellOrderLine } = transaction.mutations[0];
-      await trpc.sellOrderLine.create.mutate(newSellOrderLine as TCreateSellOrderLine);
-      await awaitSynced();
-    },
     onUpdate: async ({ transaction }) => {
-      const { modified: updatedSellOrderLine } = transaction.mutations[0];
-      await trpc.sellOrderLine.update.mutate(updatedSellOrderLine);
+      const { original, changes } = transaction.mutations[0];
+      await trpc.sellOrderLine.update.mutate({ ...changes, id: original.id });
       await awaitSynced();
     },
     onDelete: async ({ transaction }) => {

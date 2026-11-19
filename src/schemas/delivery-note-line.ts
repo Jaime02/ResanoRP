@@ -47,9 +47,11 @@ export const createDeliveryNoteLineSchema = z.union([
 ]);
 export type TCreateDeliveryNoteLine = z.infer<typeof createDeliveryNoteLineSchema>;
 
-export const updateDeliveryNoteLineSchema = baseDeliveryNoteLineSchema.extend({
-  id: requiredIdSchema,
-});
+// Only the quantity cell of a Línea is edited, and an edit only sends the field it changed
+export const updateDeliveryNoteLineSchema = baseDeliveryNoteLineSchema
+  .pick({ quantity: true })
+  .partial()
+  .extend({ id: requiredIdSchema });
 export type TUpdateDeliveryNoteLine = z.infer<typeof updateDeliveryNoteLineSchema>;
 
 export const updateDeliveryNoteLinePriceSchema = z.object({

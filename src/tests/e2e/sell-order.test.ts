@@ -6,6 +6,7 @@ import type { Locator } from "@playwright/test";
 import { eq } from "drizzle-orm";
 
 import { UserMode } from "@/contexts/app-context";
+import { getSellOrderLineDeliveredQuantity } from "@/db/functions/delivery-note-line";
 import { getMachineById } from "@/db/functions/machine";
 import { getMachineProductionOrderQueue } from "@/db/functions/machine-production-order-queue";
 import { getPartPricesByPartId } from "@/db/functions/part-price";
@@ -23,6 +24,7 @@ import { findFolderById } from "@/files/functions";
 import { getSellOrderPath, getSellOrderRootPath } from "@/files/sell-order";
 import { isSameAppDay } from "@/lib/dates";
 import { formatPrice } from "@/lib/formatters";
+import { clampPendingQuantity } from "@/lib/sell-order-line";
 import { LogMessages } from "@/logging/types";
 import {
   STATUS_COMPLETED_LABEL,
@@ -53,7 +55,6 @@ import {
   SELL_ORDER_LINE_CREATED_MESSAGE,
   SELL_ORDER_LINE_EDITED_MESSAGE,
   SELL_ORDER_LINE_RESTORED_MESSAGE,
-  SELL_ORDER_LINE_PENDING_QUANTITY_RANGE_MESSAGE,
   SELL_ORDER_LINE_VALIDATION_ERROR_MESSAGE,
 } from "@/messages/sell-order";
 import { ProductionOrderStatus } from "@/schemas/production-order";
@@ -141,7 +142,6 @@ import {
   workflowUploadSellOrderFile,
 } from "@/tests/workflows/sell-order";
 import type { BaseSellOrder } from "@/types/sell-order";
-import type { BaseSellOrderLine } from "@/types/sell-order-line";
 import { ToastType } from "@/types/toast";
 
 test("manage the sell orders", { annotation: TestAnnotations.ResetSellOrders }, async ({ page, db, toasts }) => {
@@ -573,9 +573,9 @@ test("manage the sell orders", { annotation: TestAnnotations.ResetSellOrders }, 
     expect(sellOrderLineToBeUpdated).toBeDefined();
 
     const updatedSellOrderLineData: Partial<TSellOrderLine> = {
-      pendingQuantity: 2,
       quantity: 20,
     };
+    const previousSellOrderLine = (await getSellOrderLineById(sellOrderLineToBeUpdated.id))!;
 
     await page.goto(`/sell-order/${sellOrder.id}`);
 
@@ -593,21 +593,17 @@ test("manage the sell orders", { annotation: TestAnnotations.ResetSellOrders }, 
 
     await expectSingleSuccessToast(page, SELL_ORDER_LINE_EDITED_MESSAGE);
 
+    // The pending quantity can not be typed: it moves with the quantity, within what was not delivered
     let updatedSellOrderLine = await getSellOrderLineById(sellOrderLineToBeUpdated.id);
-    expect(updatedSellOrderLine).toBeDefined();
-    expect(updatedSellOrderLine!.quantity).toBe(updatedSellOrderLineData.quantity);
-
-    const inputPendingQuantity = getEditableCellById(rowSellOrderLine, "pendingQuantity");
-    await expect(inputPendingQuantity).toBeVisible();
-    await inputPendingQuantity.clear();
-    await inputPendingQuantity.pressSequentially(String(updatedSellOrderLineData.pendingQuantity));
-    await inputPendingQuantity.press("Enter");
-
-    await expectSingleSuccessToast(page, SELL_ORDER_LINE_EDITED_MESSAGE);
-
-    updatedSellOrderLine = await getSellOrderLineById(sellOrderLineToBeUpdated.id);
-    expect(updatedSellOrderLine).toBeDefined();
-    expect(updatedSellOrderLine!.pendingQuantity).toBe(updatedSellOrderLineData.pendingQuantity);
+    expect(updatedSellOrderLine).toMatchObject({
+      pendingQuantity: clampPendingQuantity(
+        previousSellOrderLine.pendingQuantity + updatedSellOrderLineData.quantity! - previousSellOrderLine.quantity,
+        updatedSellOrderLineData.quantity!,
+        await getSellOrderLineDeliveredQuantity(sellOrderLineToBeUpdated.id),
+      ),
+      quantity: updatedSellOrderLineData.quantity,
+    });
+    await expect(getEditableCellById(rowSellOrderLine, "pendingQuantity")).toHaveCount(0);
 
     const sellOrderLineWithNotes = sellOrderLines.find((sellOrderLine) => sellOrderLine.notes !== null)!;
     expect(sellOrderLineWithNotes, "A sell order line with notes is needed").toBeDefined();
@@ -732,7 +728,6 @@ test("manage the sell orders", { annotation: TestAnnotations.ResetSellOrders }, 
 
     await expect(rowSellOrderLine).toBeVisible();
     await expect(getEditableCellById(rowSellOrderLine, "quantity")).toHaveAttribute("readonly");
-    await expect(getEditableCellById(rowSellOrderLine, "pendingQuantity")).toHaveAttribute("readonly");
     const partPriceCell = rowSellOrderLine.getByTestId("partPrice");
     await expect(partPriceCell.getByTestId("input-picker-part-price")).not.toBeAttached();
 
@@ -1015,10 +1010,7 @@ test("manage the sell order lines without part", async ({ page, db }) => {
       createSellOrderLineSchema.parse({ ...line, description: "Portes", partPrice: "", partReferenceId: null })
         .partPrice,
     ).toBeNull();
-    expect(
-      updateSellOrderLineSchema.parse({ ...line, id: mockSellOrderLines[0].id, partPrice: "", pendingQuantity: 1 })
-        .partPrice,
-    ).toBeNull();
+    expect(updateSellOrderLineSchema.parse({ id: mockSellOrderLines[0].id, partPrice: "" }).partPrice).toBeNull();
     expect(
       createSellOrderLineSchema.safeParse({ ...line, description: "", partPrice: "1", partReferenceId: null }).success,
     ).toBe(false);
@@ -1112,15 +1104,6 @@ test("manage the sell order lines without part", async ({ page, db }) => {
     await inputRowPartPrice.press("Enter");
     await expectSingleSuccessToast(page, SELL_ORDER_LINE_EDITED_MESSAGE);
     expect((await getSellOrderLineById(customSellOrderLineId))?.partPrice).toBeNull();
-
-    // Delivering all of it by hand completes it, like any other line
-    const inputPendingQuantity = getEditableCellById(rowSellOrderLine, "pendingQuantity");
-    await inputPendingQuantity.clear();
-    await inputPendingQuantity.pressSequentially("0");
-    await inputPendingQuantity.press("Enter");
-    await expectSingleSuccessToast(page, SELL_ORDER_LINE_EDITED_MESSAGE);
-    expect((await getSellOrderLineById(customSellOrderLineId))?.pendingQuantity).toBe(0);
-    await expect(rowSellOrderLine.getByTestId("status")).toHaveText(STATUS_COMPLETED_LABEL);
   });
 });
 
@@ -1135,17 +1118,6 @@ test("manage the returns of a sell order", async ({ page }) => {
   const buttonSubmit = dialogCreateSellOrderLine.getByTestId("button-submit");
   const returnLine = { description: "Devolución pieza", quantity: -170 };
   let returnSellOrderLineId: number;
-  // The page checks the row it would save, with the edited value, before sending it
-  const expectSellOrderLineRejected = async (values: Partial<BaseSellOrderLine>) => {
-    const { id, notes, partPrice, pendingQuantity, quantity, requestedDeliveryDate } =
-      (await getSellOrderLineById(returnSellOrderLineId))!;
-    const input = { id, notes, partPrice, pendingQuantity, quantity, requestedDeliveryDate, ...values };
-    expectErrorsLog(
-      clientErrorEvent(schemaErrorMessage(updateSellOrderLineSchema, input), {
-        message: LogMessages.sellOrderLineValidationFailed,
-      }),
-    );
-  };
 
   await test.step("a line can not have a quantity of 0", async () => {
     await workflowOpenCreateSellOrderLine(page, sellOrder.id);
@@ -1187,54 +1159,23 @@ test("manage the returns of a sell order", async ({ page }) => {
     await expect(rowSellOrderLine.getByTestId("button-create-production-order")).toHaveCount(0);
   });
 
-  await test.step("the pending quantity of a return can not leave its range", async () => {
-    const rowSellOrderLine = getTableRowByTestId(tableSellOrderLine, returnSellOrderLineId);
-    const inputPendingQuantity = getEditableCellById(rowSellOrderLine, "pendingQuantity");
-    for (const pendingQuantity of [5, -171]) {
-      await inputPendingQuantity.clear();
-      await inputPendingQuantity.pressSequentially(String(pendingQuantity));
-      await inputPendingQuantity.press("Enter");
-      await expectSingleToast(page, {
-        description: SELL_ORDER_LINE_PENDING_QUANTITY_RANGE_MESSAGE,
-        title: SELL_ORDER_LINE_VALIDATION_ERROR_MESSAGE,
-        type: ToastType.Error,
-      });
-      await expectSellOrderLineRejected({ pendingQuantity });
-      expect((await getSellOrderLineById(returnSellOrderLineId))?.pendingQuantity).toBe(returnLine.quantity);
-    }
-
-    await inputPendingQuantity.clear();
-    await inputPendingQuantity.pressSequentially("-20");
-    await inputPendingQuantity.press("Enter");
-    await expectSingleSuccessToast(page, SELL_ORDER_LINE_EDITED_MESSAGE);
-    expect((await getSellOrderLineById(returnSellOrderLineId))?.pendingQuantity).toBe(-20);
-  });
-
-  await test.step("changing the quantity brings the pending quantity into its new range", async () => {
+  await test.step("the pending quantity can not be typed, it moves with the quantity", async () => {
     const rowSellOrderLine = getTableRowByTestId(tableSellOrderLine, returnSellOrderLineId);
     const inputRowQuantity = getEditableCellById(rowSellOrderLine, "quantity");
-    const inputPendingQuantity = getEditableCellById(rowSellOrderLine, "pendingQuantity");
-    const editCell = async (input: Locator, value: number) => {
-      await input.clear();
-      await input.pressSequentially(String(value));
-      await input.press("Enter");
+    await expect(getEditableCellById(rowSellOrderLine, "pendingQuantity")).toHaveCount(0);
+    const editQuantity = async (quantity: number) => {
+      await inputRowQuantity.clear();
+      await inputRowQuantity.pressSequentially(String(quantity));
+      await inputRowQuantity.press("Enter");
       await expectSingleSuccessToast(page, SELL_ORDER_LINE_EDITED_MESSAGE);
     };
 
-    // A return turned into an ordered line has nothing pending until it is set again
-    await editCell(inputRowQuantity, 100);
-    expect(await getSellOrderLineById(returnSellOrderLineId)).toMatchObject({ pendingQuantity: 0, quantity: 100 });
-    await expect(rowSellOrderLine.getByTestId("status")).toHaveText(STATUS_COMPLETED_LABEL);
-
-    await editCell(inputPendingQuantity, 40);
-    expect(await getSellOrderLineById(returnSellOrderLineId)).toMatchObject({ pendingQuantity: 40, quantity: 100 });
+    // Nothing of it was delivered, so all of the new quantity is pending, also once it is an ordered line
+    for (const quantity of [100, 30, -30]) {
+      await editQuantity(quantity);
+      expect(await getSellOrderLineById(returnSellOrderLineId)).toMatchObject({ pendingQuantity: quantity, quantity });
+    }
     await expect(rowSellOrderLine.getByTestId("status")).toHaveText(STATUS_PENDING_LABEL);
-
-    await editCell(inputRowQuantity, 30);
-    expect(await getSellOrderLineById(returnSellOrderLineId)).toMatchObject({ pendingQuantity: 30, quantity: 30 });
-
-    await editCell(inputRowQuantity, -30);
-    expect(await getSellOrderLineById(returnSellOrderLineId)).toMatchObject({ pendingQuantity: 0, quantity: -30 });
 
     // 0 is rejected, keeping the line as it was
     await inputRowQuantity.clear();
@@ -1245,8 +1186,13 @@ test("manage the returns of a sell order", async ({ page }) => {
       title: SELL_ORDER_LINE_VALIDATION_ERROR_MESSAGE,
       type: ToastType.Error,
     });
-    await expectSellOrderLineRejected({ quantity: 0 });
-    expect(await getSellOrderLineById(returnSellOrderLineId)).toMatchObject({ pendingQuantity: 0, quantity: -30 });
+    // The page checks the edited cell before sending it
+    expectErrorsLog(
+      clientErrorEvent(schemaErrorMessage(updateSellOrderLineSchema, { id: returnSellOrderLineId, quantity: 0 }), {
+        message: LogMessages.sellOrderLineValidationFailed,
+      }),
+    );
+    expect(await getSellOrderLineById(returnSellOrderLineId)).toMatchObject({ pendingQuantity: -30, quantity: -30 });
   });
 });
 

@@ -7,16 +7,6 @@ const productionOrderCollection = powerSyncCollection("production_order", (baseO
     ...baseOptions,
     schema: productionOrderSchema,
     getKey: (item) => item.id,
-    onInsert: async ({ transaction }) => {
-      const { modified: newProductionOrder } = transaction.mutations[0];
-      await trpc.productionOrder.create.mutate(newProductionOrder);
-      await awaitSynced();
-    },
-    onUpdate: async ({ transaction }) => {
-      const { modified: updatedProductionOrder } = transaction.mutations[0];
-      await trpc.productionOrder.update.mutate(updatedProductionOrder);
-      await awaitSynced();
-    },
     onDelete: async ({ transaction }) => {
       const { original: deletedProductionOrder } = transaction.mutations[0];
       await trpc.productionOrder.delete.mutate({

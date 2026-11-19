@@ -53,7 +53,10 @@ export default router({
   update: procedure.input(updateDeliveryNoteLineSchema).mutation(async ({ ctx, input }) =>
     ctx.db.transaction(async (tx) => {
       try {
-        const previousDeliveryNoteLine = await tx.query.dbTableDeliveryNoteLine.findFirst({ where: { id: input.id } });
+        // Locked, or two edits at the same time would both give back the difference from the same previous quantity
+        const previousDeliveryNoteLine = (
+          await tx.select().from(dbTableDeliveryNoteLine).where(eq(dbTableDeliveryNoteLine.id, input.id)).for("update")
+        ).at(0);
         const updatedDeliveryNoteLine = (
           await tx
             .update(dbTableDeliveryNoteLine)

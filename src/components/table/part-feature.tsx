@@ -24,7 +24,7 @@ import {
   PART_FEATURE_MIN_VALUE_LABEL,
 } from "@/messages/part";
 import type { TPartFormPartFeature } from "@/queries/part";
-import { updatePartFeatureSchema } from "@/schemas/part-feature";
+import { partFeatureSchema, updatePartFeatureSchema } from "@/schemas/part-feature";
 import type { TTablePartFeatureState } from "@/schemas/part-feature";
 import { CellDataType, TableMode } from "@/types";
 
@@ -117,17 +117,17 @@ export default function TablePartFeatures({
           ) : undefined
         }
         onRowEdit={async (cell, value) => {
-          const input = updatePartFeatureSchema.safeParse({ ...cell.row.original, [cell.column.id]: value });
-          if (!input.success) {
+          const edit = { id: cell.row.original.id, [cell.column.id]: value };
+          // The range spans two cells, so the edited one is checked within its row
+          if (!partFeatureSchema.safeParse({ ...cell.row.original, ...edit }).success) {
             toaster.error({ title: PART_FEATURE_EDIT_VALIDATION_ERROR_MESSAGE });
             return;
           }
+          const { id, ...changes } = updatePartFeatureSchema.parse(edit);
           await showToastOnTransaction({
             transaction: () =>
-              dbClient.collection(partFeatureCollection).update(input.data.id, (draft) => {
-                draft.feature = input.data.feature;
-                draft.minValue = input.data.minValue;
-                draft.maxValue = input.data.maxValue;
+              dbClient.collection(partFeatureCollection).update(id, (draft) => {
+                Object.assign(draft, changes);
               }),
             onSuccess: { title: PART_FEATURE_EDITED_MESSAGE },
           });

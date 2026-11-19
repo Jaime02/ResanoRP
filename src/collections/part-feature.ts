@@ -7,14 +7,9 @@ const partFeatureCollection = powerSyncCollection("part_feature", (baseOptions) 
     ...baseOptions,
     schema: partFeatureSchema,
     getKey: (item) => item.id,
-    onInsert: async ({ transaction }) => {
-      const { modified: newPartFeature } = transaction.mutations[0];
-      await trpc.partFeature.create.mutate(newPartFeature);
-      await awaitSynced();
-    },
     onUpdate: async ({ transaction }) => {
-      const { modified: updatedPartFeature } = transaction.mutations[0];
-      await trpc.partFeature.update.mutate(updatedPartFeature);
+      const { original, changes } = transaction.mutations[0];
+      await trpc.partFeature.update.mutate({ ...changes, id: original.id });
       await awaitSynced();
     },
     onDelete: async ({ transaction }) => {

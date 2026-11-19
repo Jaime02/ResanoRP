@@ -7,11 +7,6 @@ const clientInvoiceEmailCollection = powerSyncCollection("client_invoice_email",
     ...baseOptions,
     schema: clientInvoiceEmailSchema,
     getKey: (item) => item.id,
-    onInsert: async ({ transaction }) => {
-      const { modified: newClientInvoiceEmail } = transaction.mutations[0];
-      await trpc.clientInvoiceEmail.create.mutate(newClientInvoiceEmail);
-      await awaitSynced();
-    },
     onDelete: async ({ transaction }) => {
       const { original: deletedClientInvoiceEmail } = transaction.mutations[0];
       await trpc.clientInvoiceEmail.delete.mutate({

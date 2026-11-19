@@ -86,3 +86,8 @@ body {
   font-feature-settings: "zero";
   font-variant-numeric: slashed-zero;
 }
+
+input,
+textarea {
+  caret-color: var(--color-primary);
+}

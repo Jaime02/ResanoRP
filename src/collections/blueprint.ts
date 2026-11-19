@@ -7,16 +7,6 @@ const blueprintCollection = powerSyncCollection("blueprint", (baseOptions) => {
     ...baseOptions,
     schema: collectionBlueprintSchema,
     getKey: (item) => item.id,
-    onInsert: async ({ transaction }) => {
-      const { modified: newBlueprint } = transaction.mutations[0];
-      await trpc.blueprint.create.mutate(newBlueprint);
-      await awaitSynced();
-    },
-    onUpdate: async ({ transaction }) => {
-      const { modified: updatedBlueprint } = transaction.mutations[0];
-      await trpc.blueprint.update.mutate(updatedBlueprint);
-      await awaitSynced();
-    },
     onDelete: async ({ transaction }) => {
       const { original: deletedBlueprint } = transaction.mutations[0];
       await trpc.blueprint.delete.mutate({

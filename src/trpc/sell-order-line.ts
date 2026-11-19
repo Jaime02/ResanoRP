@@ -1,10 +1,13 @@
 import { TRPCError } from "@trpc/server";
 import { and, eq, isNotNull } from "drizzle-orm";
 
+import { getSellOrderLineDeliveredQuantity } from "@/db/functions/delivery-note-line";
 import { resetSellOrderLineInvoices } from "@/db/functions/invoice";
 import { removeProductionOrdersFromMachines } from "@/db/functions/machine-production-order-queue";
+import { getSellOrderLineForUpdate } from "@/db/functions/sell-order-line";
 import { dbTableProductionOrder, dbTableSellOrderLine } from "@/db/schema";
 import { handleMutationError } from "@/lib/handlers";
+import { clampPendingQuantity } from "@/lib/sell-order-line";
 import { requiredIdObjectSchema } from "@/schemas";
 import { createSellOrderLineSchema, updateSellOrderLineSchema } from "@/schemas/sell-order-line";
 import { adminProcedure, router } from "@/trpc";
@@ -38,16 +41,32 @@ export default router({
   update: adminProcedure.input(updateSellOrderLineSchema).mutation(async ({ ctx, input }) =>
     ctx.db.transaction(async (tx) => {
       try {
-        const previousSellOrderLine = await tx.query.dbTableSellOrderLine.findFirst({ where: { id: input.id } });
-        const updatedSellOrderLine = (
-          await tx.update(dbTableSellOrderLine).set(input).where(eq(dbTableSellOrderLine.id, input.id)).returning()
-        ).at(0);
-        if (!previousSellOrderLine || !updatedSellOrderLine) {
+        // Locked, so an Albarán sent at the same time changes the pending quantity before or after this edit
+        const previousSellOrderLine = await getSellOrderLineForUpdate(input.id, tx);
+        if (!previousSellOrderLine) {
           throw new TRPCError({
             code: "NOT_FOUND",
             message: `Línea del Pedido de venta con ID ${input.id} no encontrada`,
           });
         }
+        // The pending quantity is not edited by hand: it moves with the quantity, so lowering it to what was delivered
+        // completes the Línea. It is taken from the stored row, not the copy the page had
+        const changes =
+          input.quantity === undefined
+            ? input
+            : {
+                ...input,
+                pendingQuantity: clampPendingQuantity(
+                  previousSellOrderLine.pendingQuantity + input.quantity - previousSellOrderLine.quantity,
+                  input.quantity,
+                  await getSellOrderLineDeliveredQuantity(input.id, tx),
+                ),
+              };
+        const [updatedSellOrderLine] = await tx
+          .update(dbTableSellOrderLine)
+          .set(changes)
+          .where(eq(dbTableSellOrderLine.id, input.id))
+          .returning();
         // Compared as numbers, as the same price can be typed with more trailing zeros
         const toNumber = (price: string | null) => (price === null ? null : Number(price));
         if (toNumber(previousSellOrderLine.partPrice) !== toNumber(updatedSellOrderLine.partPrice)) {

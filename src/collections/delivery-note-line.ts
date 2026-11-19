@@ -7,14 +7,9 @@ const deliveryNoteLineCollection = powerSyncCollection("delivery_note_line", (ba
     ...baseOptions,
     schema: deliveryNoteLineSchema,
     getKey: (item) => item.id,
-    onInsert: async ({ transaction }) => {
-      const { modified: newDeliveryNoteLine } = transaction.mutations[0];
-      await trpc.deliveryNoteLine.create.mutate(newDeliveryNoteLine);
-      await awaitSynced();
-    },
     onUpdate: async ({ transaction }) => {
-      const { modified: updatedDeliveryNoteLine } = transaction.mutations[0];
-      await trpc.deliveryNoteLine.update.mutate(updatedDeliveryNoteLine);
+      const { original, changes } = transaction.mutations[0];
+      await trpc.deliveryNoteLine.update.mutate({ ...changes, id: original.id });
       await awaitSynced();
     },
     onDelete: async ({ transaction }) => {
