@@ -6,12 +6,12 @@ is unzipped on the server. The server needs no internet and no source code.
 
 ## 1. What runs
 
-| Process    | Run by                                         | Listens on                                    | Reached by                       |
-| ---------- | ---------------------------------------------- | --------------------------------------------- | -------------------------------- |
-| PostgreSQL | Windows service `ResanoRP-db` (NetworkService) | `localhost:POSTGRES_PORT`                     | app, PowerSync, backup scripts   |
-| PowerSync  | `supervisor.ts` (`bin\node.exe`)               | 8080                                          | Caddy only                       |
-| App        | `supervisor.ts` (`bin\bun.exe .output\…`)      | 5173                                          | Caddy only                       |
-| Caddy      | `supervisor.ts` (`bin\caddy.exe`)              | `VITE_CADDY_HTTP_PORT` / `_HTTPS_PORT`         | the browsers of the client PCs   |
+| Process    | Run by                                         | Listens on                             | Reached by                     |
+| ---------- | ---------------------------------------------- | -------------------------------------- | ------------------------------ |
+| PostgreSQL | Windows service `ResanoRP-db` (NetworkService) | `localhost:POSTGRES_PORT`              | app, PowerSync, backup scripts |
+| PowerSync  | `supervisor.ts` (`bin\node.exe`)               | 8080                                   | Caddy only                     |
+| App        | `supervisor.ts` (`bin\bun.exe .output\…`)      | 5173                                   | Caddy only                     |
+| Caddy      | `supervisor.ts` (`bin\caddy.exe`)              | `VITE_CADDY_HTTP_PORT` / `_HTTPS_PORT` | the browsers of the client PCs |
 
 `supervisor.ts` runs inside the Windows service `ResanoRP` (WinSW, `resanorp-service.exe`, as SYSTEM). On start it:
 
@@ -42,27 +42,27 @@ service 10 s after a crash and gives it 15 s to stop (`resanorp-service.xml`).
 `C:\ResanoRP` holds what the zip brings and what the machine creates. The machine's own folders are never in the zip,
 so unzipping a new version over the folder keeps them.
 
-| Path                                     | From         | What                                                                                     |
-| ---------------------------------------- | ------------ | ---------------------------------------------------------------------------------------- |
-| `.output\`, `public\`                    | zip          | The built app                                                                            |
-| `bin\`                                   | zip          | `bun.exe`, `node.exe`, `caddy.exe`, `postgres\` (PostgreSQL binaries)                    |
-| `browsers\`                              | zip          | Playwright Chromium, which renders the tags and PDFs                                     |
-| `powersync-service\`                     | zip          | `@powersync/service-image` installed with npm                                            |
-| `powersync\`                             | zip          | `service.yaml`, `sync-config.yaml`, `init.sql` (copied from `docker/powersync`)          |
-| `resanorp-service.exe`, `.xml`           | zip          | WinSW and its service definition                                                         |
-| `supervisor.ts`                          | zip          | Copy of `src/scripts/production-supervisor.ts`                                           |
-| `.env`, `Caddyfile`, `trust-cert.ps1`    | zip          | Configuration (section 4), copy of `docker/Caddyfile`, copy of `src/scripts/trust-cert.ps1` |
-| `install.cmd`, `start.cmd`               | zip          | Section 6                                                                                |
-| `backup.cmd`, `cleanup-backups.ps1`, `restore.cmd` | zip | Section 9                                                                               |
-| `client\setup.cmd`                       | zip          | Section 7                                                                                |
-| `import\`                                | zip, if staged | Data that `start.cmd` swaps in (section 8)                                             |
-| `pgdata\`                                | machine      | The PostgreSQL cluster                                                                   |
-| `caddy\`, `caddy-config\`                | machine      | Caddy's own certificate authority and state. Losing `caddy\` means every client must trust a new root |
-| `BLUEPRINTS\`, `SELL_ORDERS\`, `TAGS\`, `DELIVERY_NOTES\`, `INVOICES\` | machine | Files of the app                                                  |
-| `LOGS\`                                  | machine      | App logs                                                                                 |
-| `service-logs\`                          | machine      | WinSW logs: the supervisor's output, with PowerSync and Caddy. Rolled at 10 MB, 5 files  |
-| `backups\`                               | machine      | What an import replaced (section 8)                                                      |
-| `client\root.crt`, `client\host.txt`     | machine      | Written by `start.cmd` for the clients (section 7)                                       |
+| Path                                                                   | From           | What                                                                                                  |
+| ---------------------------------------------------------------------- | -------------- | ----------------------------------------------------------------------------------------------------- |
+| `.output\`, `public\`                                                  | zip            | The built app                                                                                         |
+| `bin\`                                                                 | zip            | `bun.exe`, `node.exe`, `caddy.exe`, `postgres\` (PostgreSQL binaries)                                 |
+| `browsers\`                                                            | zip            | Playwright Chromium, which renders the tags and PDFs                                                  |
+| `powersync-service\`                                                   | zip            | `@powersync/service-image` installed with npm                                                         |
+| `powersync\`                                                           | zip            | `service.yaml`, `sync-config.yaml`, `init.sql` (copied from `docker/powersync`)                       |
+| `resanorp-service.exe`, `.xml`                                         | zip            | WinSW and its service definition                                                                      |
+| `supervisor.ts`                                                        | zip            | Copy of `src/scripts/production-supervisor.ts`                                                        |
+| `.env`, `Caddyfile`, `trust-cert.ps1`                                  | zip            | Configuration (section 4), copy of `docker/Caddyfile`, copy of `src/scripts/trust-cert.ps1`           |
+| `install.cmd`, `start.cmd`                                             | zip            | Section 6                                                                                             |
+| `backup.cmd`, `cleanup-backups.ps1`, `restore.cmd`                     | zip            | Section 9                                                                                             |
+| `client\setup.cmd`                                                     | zip            | Section 7                                                                                             |
+| `import\`                                                              | zip, if staged | Data that `start.cmd` swaps in (section 8)                                                            |
+| `pgdata\`                                                              | machine        | The PostgreSQL cluster                                                                                |
+| `caddy\`, `caddy-config\`                                              | machine        | Caddy's own certificate authority and state. Losing `caddy\` means every client must trust a new root |
+| `BLUEPRINTS\`, `SELL_ORDERS\`, `TAGS\`, `DELIVERY_NOTES\`, `INVOICES\` | machine        | Files of the app                                                                                      |
+| `LOGS\`                                                                | machine        | App logs                                                                                              |
+| `service-logs\`                                                        | machine        | WinSW logs: the supervisor's output, with PowerSync and Caddy. Rolled at 10 MB, 5 files               |
+| `backups\`                                                             | machine        | What an import replaced (section 8)                                                                   |
+| `client\root.crt`, `client\host.txt`                                   | machine        | Written by `start.cmd` for the clients (section 7)                                                    |
 
 The nightly backups go to `BACKUP_LOCAL_PATH` (`C:\ResanoRP-backups`), outside this folder.
 
@@ -73,16 +73,16 @@ copies it to `envs/production/.env` and rewrites `./envs/production` to `.`, bec
 at `./envs/production` while on the server everything runs from the folder itself. Bun loads `.env` from the working
 directory when WinSW starts `bun run supervisor.ts`, and every child inherits it.
 
-| Key                                     | Used for                                                                                     |
-| --------------------------------------- | -------------------------------------------------------------------------------------------- |
-| `VITE_HOST`, `SERVER_IP`                | Site name in the `Caddyfile`, and the line `start.cmd` writes to `client\host.txt`            |
-| `VITE_CADDY_HTTP_PORT`, `_HTTPS_PORT`   | Caddy's ports and the firewall rules                                                          |
-| `POSTGRES_DB`, `_USER`, `_PASSWORD`, `_PORT` | `initdb`, the scripts, PowerSync's connection strings (built by the supervisor)          |
-| `DATABASE_URL`                          | The app's connection                                                                          |
-| `POWERSYNC_JWT_SECRET`                  | Shared by the app (signs browser tokens) and PowerSync (`PS_JWT_SECRET`)                      |
-| `*_ROOT_PATH`, `LOGS_PATH`              | The data folders, relative to the production folder                                           |
-| `BACKUP_LOCAL_PATH`                     | Backup target. Unquoted, because Docker Compose reads `\\` inside double quotes as an escape  |
-| `ADMIN_PASSWORD`                        | The app's Administrador mode                                                                  |
+| Key                                          | Used for                                                                                     |
+| -------------------------------------------- | -------------------------------------------------------------------------------------------- |
+| `VITE_HOST`, `SERVER_IP`                     | Site name in the `Caddyfile`, and the line `start.cmd` writes to `client\host.txt`           |
+| `VITE_CADDY_HTTP_PORT`, `_HTTPS_PORT`        | Caddy's ports and the firewall rules                                                         |
+| `POSTGRES_DB`, `_USER`, `_PASSWORD`, `_PORT` | `initdb`, the scripts, PowerSync's connection strings (built by the supervisor)              |
+| `DATABASE_URL`                               | The app's connection                                                                         |
+| `POWERSYNC_JWT_SECRET`                       | Shared by the app (signs browser tokens) and PowerSync (`PS_JWT_SECRET`)                     |
+| `*_ROOT_PATH`, `LOGS_PATH`                   | The data folders, relative to the production folder                                          |
+| `BACKUP_LOCAL_PATH`                          | Backup target. Unquoted, because Docker Compose reads `\\` inside double quotes as an escape |
+| `ADMIN_PASSWORD`                             | The app's Administrador mode                                                                 |
 
 Changing `POSTGRES_PORT` after the install needs the same change in `pgdata\postgresql.conf`, which `install.cmd`
 wrote once.
@@ -193,8 +193,11 @@ is enough: `bundle-production -- --update`, unzip it over the folder, `net stop 
 The task `ResanoRP-backup` runs `backup.cmd` every night at 02:00 as SYSTEM. It writes `BACKUP_LOCAL_PATH\<yyyyMMdd>\`
 with the database (`production.dump`, `pg_dump -Fc`), `SELL_ORDERS`, `TAGS`, `DELIVERY_NOTES`, `INVOICES` and
 `caddy`, plus `BLUEPRINTS` on Sunday night (the Monday folder). `cleanup-backups.ps1` then keeps every backup of the
-current week, the latest one of each of the three previous weeks, and the two newest blueprint copies. Each run is
-logged in `BACKUP_LOCAL_PATH\backup.log`.
+current week, the latest one of each of the three previous weeks, and the two newest blueprint copies. A run writes
+to `<yyyyMMdd>.partial` and replaces the day's folder only once complete, so a half-written backup is never kept or
+restored, a failed run (also a second one the same day) leaves the backup already there as it was, and the cleanup
+waits for the next run that succeeds. `cleanup-backups.ps1` and `restore.cmd` only see the date folders. Each run is logged in `BACKUP_LOCAL_PATH\backup.log`, which starts again past 1 MB and keeps the previous
+one as `backup.old.log`.
 
 The backups are only on the server for now: copying them to another machine is a TODO in `backup.cmd`. A backup on
 the server alone is lost with its disk.
@@ -252,13 +255,13 @@ Not yet verified on a server:
 
 ## 13. Files
 
-| Source in the repository                     | On the server             |
-| -------------------------------------------- | ------------------------- |
-| `src/scripts/prepare-production.ts`          | (builds the folder)       |
-| `src/scripts/bundle-production.ts`           | (zips it)                 |
-| `src/scripts/production-supervisor.ts`       | `supervisor.ts`           |
-| `envs/production/install.cmd`, `start.cmd`, `backup.cmd`, `cleanup-backups.ps1`, `restore.cmd`, `resanorp-service.xml`, `client/setup.cmd` | same names |
-| `docker/Caddyfile`                           | `Caddyfile`               |
-| `docker/powersync/`                          | `powersync\`              |
-| `src/scripts/trust-cert.ps1`                 | `trust-cert.ps1`          |
-| `envs/.env.production` (not in git)          | `.env`                    |
+| Source in the repository                                                                                                                   | On the server       |
+| ------------------------------------------------------------------------------------------------------------------------------------------ | ------------------- |
+| `src/scripts/prepare-production.ts`                                                                                                        | (builds the folder) |
+| `src/scripts/bundle-production.ts`                                                                                                         | (zips it)           |
+| `src/scripts/production-supervisor.ts`                                                                                                     | `supervisor.ts`     |
+| `envs/production/install.cmd`, `start.cmd`, `backup.cmd`, `cleanup-backups.ps1`, `restore.cmd`, `resanorp-service.xml`, `client/setup.cmd` | same names          |
+| `docker/Caddyfile`                                                                                                                         | `Caddyfile`         |
+| `docker/powersync/`                                                                                                                        | `powersync\`        |
+| `src/scripts/trust-cert.ps1`                                                                                                               | `trust-cert.ps1`    |
+| `envs/.env.production` (not in git)                                                                                                        | `.env`              |

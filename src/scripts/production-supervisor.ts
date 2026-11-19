@@ -140,15 +140,19 @@ function start(service: TService) {
   });
   running.set(service.name, child);
   log(service.name, `started, pid ${child.pid}`);
-  child.on("exit", (code) => {
+  // A child that fails to spawn emits only error, and one that exits may emit both
+  let isRestarting = false;
+  const restart = (reason: string) => {
+    if (stopping || isRestarting) return;
+    isRestarting = true;
     running.delete(service.name);
-    if (stopping) return;
-    log(service.name, `exited with code ${code}, restarting`);
+    log(service.name, `${reason}, restarting`);
     setTimeout(() => {
       if (!stopping) start(service);
     }, RESTART_DELAY_MS);
-  });
-  child.on("error", (error) => log(service.name, `failed to start: ${error.message}`));
+  };
+  child.on("exit", (code) => restart(`exited with code ${code}`));
+  child.on("error", (error) => restart(`failed to start: ${error.message}`));
 }
 
 function stop() {

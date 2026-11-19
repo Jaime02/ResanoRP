@@ -5,8 +5,7 @@ import { expect } from "@playwright/test";
 import type { Locator, Page } from "@playwright/test";
 import { getDocument } from "pdfjs-dist/legacy/build/pdf.mjs";
 
-import { formatPartUnits } from "@/lib/formatters";
-import { getPartTagFileUrl } from "@/lib/part-tag";
+import { getPartTagFileUrl, getTagSellOrderQuantityText } from "@/lib/part-tag";
 import { SELL_ORDER_LABEL } from "@/messages/sell-order";
 import { expectPrintedByBrowser } from "@/tests/workflows/printer";
 
@@ -36,8 +35,8 @@ export function expectTagField(tag: string, label: string, value: string | numbe
 }
 
 // A tag of a single Pedido names it, while a tag shared by several Pedidos lists them in rows
-export function getTagSellOrderText(reference: string, quantity: number, isSingle: boolean) {
-  return `${isSingle ? `${SELL_ORDER_LABEL}: ` : ""}${reference} ${formatPartUnits(quantity)}`;
+export function getTagSellOrderText(reference: string, quantity: number, sellOrderCount: number) {
+  return `${sellOrderCount === 1 ? `${SELL_ORDER_LABEL}: ` : ""}${reference} ${getTagSellOrderQuantityText(quantity, sellOrderCount)}`;
 }
 
 // The server deletes a tag once it is served, so its text is read from the response of the browser print and the file

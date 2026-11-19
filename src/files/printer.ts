@@ -6,7 +6,7 @@ import net from "node:net";
 import os from "node:os";
 import path from "node:path";
 
-import { PrinterKind } from "@/types/printer";
+import { PRINTER_HOST_PATTERN, PRINTER_SHARE_NAME_PATTERN, PrinterKind } from "@/types/printer";
 
 const PRINT_TIMEOUT_MS = 60_000;
 const PING_TIMEOUT_MS = 10_000;
@@ -249,8 +249,12 @@ async function runSmbClient(printer: TPrinterConnection, command: string, timeou
   );
 }
 
+// Checked again here, as a printer saved before the patterns were tightened may hold an operator of cmd.exe
 function getWindowsSharePath(printer: TPrinterConnection) {
   if (printer.shareName === null) throw new Error("The printer has no share name");
+  if (!PRINTER_HOST_PATTERN.test(printer.address) || !PRINTER_SHARE_NAME_PATTERN.test(printer.shareName)) {
+    throw new Error(`The share path of the printer is not valid: \\\\${printer.address}\\${printer.shareName}`);
+  }
   return `\\\\${printer.address}\\${printer.shareName}`;
 }
 

@@ -59,9 +59,21 @@ test("the printer library", async () => {
       password: null,
       username: null,
     });
-    for (const shareName of [null, "", " ", "\\\\192.168.1.128\\Albaranes", "Impresoras/Albaranes"]) {
+    // The share path goes through cmd.exe on a Windows server, so its operators would run commands
+    for (const shareName of [
+      null,
+      "",
+      " ",
+      "\\\\192.168.1.128\\Albaranes",
+      "Impresoras/Albaranes",
+      "Albaranes&calc",
+      "Albaranes|calc",
+      "Albaranes%TEMP%",
+      'Albaranes"',
+    ]) {
       expect(createPrinterSchema.safeParse({ ...SHARED_PRINTER, shareName }).success, String(shareName)).toBe(false);
     }
+    expect(createPrinterSchema.safeParse({ ...SHARED_PRINTER, shareName: "Almacén (2) $" }).success).toBe(true);
 
     const labelPrinter = { ...SHARED_PRINTER, kind: PrinterKind.IntermecShare, labelLengthMm: 107, labelWidthMm: 52 };
     expect(createPrinterSchema.safeParse(labelPrinter).success).toBe(true);

@@ -3,7 +3,7 @@ import { and, eq, ne, sql } from "drizzle-orm";
 
 import type { TDatabase } from "@/db";
 import db from "@/db";
-import { dbTableDeliveryNoteLine, dbTableSellOrderLine } from "@/db/schema";
+import { dbTableDeliveryNote, dbTableDeliveryNoteLine, dbTableSellOrderLine } from "@/db/schema";
 import {
   CLIENT_SPLITS_SELL_ORDERS_MESSAGE,
   PENDING_QUANTITY_EXCEEDED_MESSAGE,
@@ -65,12 +65,13 @@ export function assertSellOrderLineNotDelivered(sellOrderLine: { id: number; pen
   }
 }
 
+// The caller must hold lockDeliveryNote, or two Pedidos added at the same time both pass against the old lines
 export async function assertDeliveryNoteHasNoOtherSellOrder(
   deliveryNoteId: number,
   sellOrderId: number,
-  dbConnection: TDatabase = db,
+  tx: TDatabase,
 ) {
-  const lineOfOtherSellOrder = await dbConnection
+  const lineOfOtherSellOrder = await tx
     .select({ id: dbTableDeliveryNoteLine.id })
     .from(dbTableDeliveryNoteLine)
     .innerJoin(dbTableSellOrderLine, eq(dbTableDeliveryNoteLine.sellOrderLineId, dbTableSellOrderLine.id))
@@ -87,6 +88,16 @@ export async function assertDeliveryNoteHasNoOtherSellOrder(
       message: CLIENT_SPLITS_SELL_ORDERS_MESSAGE,
     });
   }
+}
+
+// Locked until the transaction ends. Taken before any Línea de pedido is locked, so transactions lock in one order.
+// No key: a plain update lock would also wait for every Línea inserted into the Albarán, whose foreign key shares it
+export async function lockDeliveryNote(deliveryNoteId: number, tx: TDatabase) {
+  await tx
+    .select({ id: dbTableDeliveryNote.id })
+    .from(dbTableDeliveryNote)
+    .where(eq(dbTableDeliveryNote.id, deliveryNoteId))
+    .for("no key update");
 }
 
 export async function addSellOrderLinePendingQuantity(

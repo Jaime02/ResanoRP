@@ -7,7 +7,7 @@ import { Separator } from "@/components/ui/separator";
 import { renderPdf } from "@/files";
 import { AutoFitText } from "@/files";
 import { formatDate, formatPartUnits } from "@/lib/formatters";
-import { allocateTagSellOrders, getTagClientText } from "@/lib/part-tag";
+import { allocateTagSellOrders, getTagClientText, getTagSellOrderQuantityText } from "@/lib/part-tag";
 import type { TTagSellOrder } from "@/lib/part-tag";
 import { cn } from "@/lib/utils";
 import { COATING_LABEL, PART_LABEL, QUANTITY_LABEL, TOTAL_LABEL } from "@/messages/common";
@@ -104,9 +104,6 @@ const TAG_SELL_ORDER_SIZES = [
 // More Pedidos than rows go in the next column
 const TAG_SELL_ORDER_ROWS = TAG_SELL_ORDER_SIZES.length;
 
-// From this many Pedidos the rows have no room left for the word "unidades" next to their quantity
-const TAG_BARE_QUANTITY_MIN_SELL_ORDERS = 3;
-
 // Bigger than the rows of the Pedidos it adds up, yet not so tall that it stretches them
 const TAG_TOTAL_SIZE = { idealChars: 6, maxPt: 24, minPt: 18 };
 
@@ -118,8 +115,6 @@ function TagSellOrders({ sellOrders, partQuantity }: TagSellOrdersProps) {
   );
   // Every reference and quantity is sized by the longest reference, so the Pedidos share one font size
   const isSingle = sellOrders.length === 1;
-  const getRowQuantityText = (quantity: number) =>
-    sellOrders.length < TAG_BARE_QUANTITY_MIN_SELL_ORDERS ? formatPartUnits(quantity) : String(quantity);
   const getReferenceText = (reference: string) => (isSingle ? `${SELL_ORDER_LABEL}: ${reference}` : reference);
   const longestReference = sellOrders.reduce((longest, { reference }) => {
     const text = getReferenceText(reference);
@@ -152,7 +147,7 @@ function TagSellOrders({ sellOrders, partQuantity }: TagSellOrdersProps) {
                       value={longestReference}
                       {...size}
                     >
-                      {getRowQuantityText(sellOrder.quantity)}
+                      {getTagSellOrderQuantityText(sellOrder.quantity, sellOrders.length)}
                     </AutoFitText>
                   </>
                 )}

@@ -3,10 +3,12 @@ setlocal
 cd /d "%~dp0"
 
 for /f "usebackq tokens=1,* delims== " %%a in (`findstr /b BACKUP_ .env`) do set "%%a=%%~b"
+rem Only the date folders are backups: backup.cmd writes the .partial and .replaced ones next to them
+set "DATE_FOLDER=[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9]"
 
 rem A full backup folder, a date in BACKUP_LOCAL_PATH or, without either, its latest backup
 set "SOURCE=%~1"
-if not defined SOURCE for /f %%d in ('dir /b /ad /o-n "%BACKUP_LOCAL_PATH%"') do if not defined SOURCE set "SOURCE=%BACKUP_LOCAL_PATH%\%%d"
+if not defined SOURCE for /f %%d in ('dir /b /ad /o-n "%BACKUP_LOCAL_PATH%" ^| findstr /x "%DATE_FOLDER%"') do if not defined SOURCE set "SOURCE=%BACKUP_LOCAL_PATH%\%%d"
 if not exist "%SOURCE%\production.dump" set "SOURCE=%BACKUP_LOCAL_PATH%\%~1"
 if not exist "%SOURCE%\production.dump" (echo No backup found at %SOURCE% & goto :fail)
 if exist import (echo An import is already staged, remove the import folder first & goto :fail)
@@ -14,7 +16,7 @@ if exist import (echo An import is already staged, remove the import folder firs
 for %%p in ("%SOURCE%\..") do set "ROOT=%%~fp"
 for %%p in ("%SOURCE%") do set "DAY=%%~nxp"
 rem Only the Sunday night backups hold the blueprints
-for /f %%d in ('dir /b /ad /o-n "%ROOT%"') do if not defined BLUEPRINTS if %%d leq %DAY% if exist "%ROOT%\%%d\BLUEPRINTS" set "BLUEPRINTS=%ROOT%\%%d\BLUEPRINTS"
+for /f %%d in ('dir /b /ad /o-n "%ROOT%" ^| findstr /x "%DATE_FOLDER%"') do if not defined BLUEPRINTS if %%d leq %DAY% if exist "%ROOT%\%%d\BLUEPRINTS" set "BLUEPRINTS=%ROOT%\%%d\BLUEPRINTS"
 
 echo Database and files: %SOURCE%
 echo Blueprints: %BLUEPRINTS%

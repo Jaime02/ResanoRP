@@ -1,3 +1,4 @@
+import { formatPartUnits } from "@/lib/formatters";
 import { CLIENT_LABEL } from "@/messages/common";
 
 // What a part tag is printed for, which names its file, so the server writes it and the browser asks for it by the
@@ -58,4 +59,11 @@ export function allocateTagSellOrders(partQuantities: Array<number>, sellOrders:
 
 export function getTagClientText(clientName: string) {
   return `${CLIENT_LABEL}: ${clientName}`;
+}
+
+// From this many Pedidos the rows of a tag have no room left for the word "unidades" next to their quantity
+export const TAG_BARE_QUANTITY_MIN_SELL_ORDERS = 3;
+
+export function getTagSellOrderQuantityText(quantity: number, sellOrderCount: number) {
+  return sellOrderCount < TAG_BARE_QUANTITY_MIN_SELL_ORDERS ? formatPartUnits(quantity) : String(quantity);
 }

@@ -10,6 +10,7 @@ import {
   assertPendingQuantityWithinQuantity,
   assertSellOrderLineNotDelivered,
   deleteDeliveryNoteLine,
+  lockDeliveryNote,
 } from "@/db/functions/delivery-note-line";
 import { resetChangedDeliveryNoteInvoice, resetInvoiceStatus } from "@/db/functions/invoice";
 import { getSellOrderById } from "@/db/functions/sell-order";
@@ -40,6 +41,9 @@ async function insertStagedSellOrderLines(
 ): Promise<void> {
   const vatPercentage = await getConfigurationVatPercentage(tx);
   const client = await tx.query.dbTableClient.findFirst({ where: { id: deliveryNote.clientId } });
+  if (client?.splitSellOrdersInDeliveryNotes === true) {
+    await lockDeliveryNote(deliveryNote.id, tx);
+  }
 
   for (const stagedSellOrderLine of stagedSellOrderLines) {
     const sellOrderLine = await getSellOrderLineForUpdate(stagedSellOrderLine.id, tx);

@@ -17,6 +17,11 @@ const LABEL_PRINTER_KINDS = new Set([PrinterKind.IntermecShare, PrinterKind.TscR
 export const isSharePrinterKind = (kind: PrinterKind | null) => kind !== null && SHARE_PRINTER_KINDS.has(kind);
 export const isLabelPrinterKind = (kind: PrinterKind | null) => kind !== null && LABEL_PRINTER_KINDS.has(kind);
 
+// The share path of a printer goes through cmd.exe on a Windows server, so neither part may hold its operators (& | < >
+// ^ % ")
+export const PRINTER_HOST_PATTERN = /^[\w.-]+$/;
+export const PRINTER_SHARE_NAME_PATTERN = /^[\p{L}\p{N} _.$()-]*$/u;
+
 export type BasePrinter = InferSelectModel<typeof dbTablePrinter>;
 
 // What the browsers get of a printer: its password stays on the server

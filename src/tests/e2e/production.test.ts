@@ -8,6 +8,7 @@ import { getSellOrderById } from "@/db/functions/sell-order";
 import { getSellOrderLineById } from "@/db/functions/sell-order-line";
 import { dbTableProductionOrder } from "@/db/schema";
 import { formatDate } from "@/lib/formatters";
+import { getTagClientText } from "@/lib/part-tag";
 import { CLIENT_LABEL, NOTES_LABEL, QUANTITY_LABEL } from "@/messages/common";
 import {
   PRODUCTION_ORDER_EDITED_MESSAGE,
@@ -234,10 +235,10 @@ test(
         const sellOrder = (await getSellOrderById(sellOrderLine.sellOrderId))!;
         const [tag, ...otherTags] = await workflowPrintStopProductionOrderTag(page, dbProductionOrder.id);
         expect(otherTags).toEqual([]);
-        expectTagField(tag, CLIENT_LABEL, await getProductionOrderClientName(dbProductionOrder));
+        expect(tag).toContain(getTagClientText(await getProductionOrderClientName(dbProductionOrder)));
         expectTagField(tag, DELIVERY_LABEL, formatDate(sellOrderLine.requestedDeliveryDate));
         expect(tag).toContain(
-          getTagSellOrderText(sellOrder.clientReference ?? String(sellOrder.id), producedQuantity, true),
+          getTagSellOrderText(sellOrder.clientReference ?? String(sellOrder.id), producedQuantity, 1),
         );
 
         const confirmStopButton = dialogContentStopProductionOrder.getByTestId("button-confirm-stop-production-order");
@@ -311,7 +312,8 @@ test(
 
         const [tag, ...otherTags] = await workflowPrintStopProductionOrderTag(page, productionOrder.id);
         expect(otherTags).toEqual([]);
-        expectTagField(tag, CLIENT_LABEL, clientName);
+        if (clientName === undefined) expectTagField(tag, CLIENT_LABEL, null);
+        else expect(tag).toContain(getTagClientText(clientName));
         expectTagField(tag, DELIVERY_LABEL, null);
         expectTagField(tag, QUANTITY_LABEL, producedQuantity);
         expect(tag).not.toContain(SELL_ORDER_LABEL);

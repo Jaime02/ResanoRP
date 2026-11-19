@@ -4,7 +4,13 @@ import { z } from "zod";
 import { dbTablePrinter } from "@/db/schema";
 import { PRINTER_SHARE_NAME_INVALID_MESSAGE, PRINTER_HOST_INVALID_MESSAGE } from "@/messages/printer";
 import { nameFiltersSchema, nameSchema, requiredIdObjectSchema, requiredIdSchema, tableStateSchema } from "@/schemas";
-import { isLabelPrinterKind, isSharePrinterKind, PrinterKind } from "@/types/printer";
+import {
+  isLabelPrinterKind,
+  isSharePrinterKind,
+  PRINTER_HOST_PATTERN,
+  PRINTER_SHARE_NAME_PATTERN,
+  PrinterKind,
+} from "@/types/printer";
 
 const REQUIRED_MESSAGE = "Campo obligatorio";
 
@@ -15,7 +21,7 @@ const hostSchema = z
   .string({ error: REQUIRED_MESSAGE })
   .trim()
   .min(1, REQUIRED_MESSAGE)
-  .regex(/^[\w.-]+$/, PRINTER_HOST_INVALID_MESSAGE);
+  .regex(PRINTER_HOST_PATTERN, PRINTER_HOST_INVALID_MESSAGE);
 
 const emptyToNull = (value: string | null) => (value === "" ? null : value);
 
@@ -45,7 +51,7 @@ const printerFieldsSchema = z.object({
   shareName: z
     .string()
     .trim()
-    .regex(/^[^\\/]*$/, PRINTER_SHARE_NAME_INVALID_MESSAGE)
+    .regex(PRINTER_SHARE_NAME_PATTERN, PRINTER_SHARE_NAME_INVALID_MESSAGE)
     .nullable()
     .transform(emptyToNull),
   username: optionalTextSchema,

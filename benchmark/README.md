@@ -239,17 +239,14 @@ Same data on every build:
 
 - `tools/compare-tables.ts`: opens the same table states on several stacks and checks each group shows the same tables.
 - `tools/query-bench/`: runs the slow tables' queries over the benchmark data in memory, outside the browser, before
-  (`old/`) and after a change, and checks they give the same rows (`docs/query-performance.md` §6). `exp.ts` times
-  each piece of a query, `analyze.ts` lists the top functions of a `.cpuprofile` (`prof/`).
+  (`old/`, not in git: `git show HEAD:src/queries/<name>.ts > old/<name>.ts` before the change) and after it, and
+  checks they give the same rows (`docs/query-performance.md` §6). `exp.ts` times each piece of a query, `analyze.ts`
+  lists the top functions of a `.cpuprofile` (`prof/`).
 
 Progressive collections (master's on-demand subsets and the PoC's Postgres subsets):
 
 - `tools/subsets.ts`: which subsets of each table a master page asks for, and how much it gets.
 - `tools/subset-requests.ts`: every Postgres subset request of a first load on a progressive build, with its size.
-- `tools/poc-check.ts`: console errors, when the data shows and what was requested, for one load of each path.
-- `tools/poc-html.ts`: what the server alone renders, with JavaScript disabled.
-
-`tools/_debug.ts` is a scratch script for one-off checks.
 
 ## Traps
 

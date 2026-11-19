@@ -21,7 +21,8 @@ export const MILLIMETERS_SUFFIX = " mm";
 export const PRINTER_PASSWORD_UNCHANGED_PLACEHOLDER = "Vacía para no cambiarla";
 export const PRINTER_HOST_INVALID_MESSAGE =
   "Introduce una dirección IP o un nombre de equipo, sin \\, http:// ni puerto";
-export const PRINTER_SHARE_NAME_INVALID_MESSAGE = "Introduce solo el nombre del recurso compartido, sin barras";
+export const PRINTER_SHARE_NAME_INVALID_MESSAGE =
+  "Introduce solo el nombre del recurso compartido: letras, números, espacios y . _ - $ ( )";
 export const PRINTER_KIND_LABELS: Record<PrinterKind, string> = {
   [PrinterKind.Ipp]: "Red (IPP)",
   [PrinterKind.IntermecShare]: "Compartida: Intermec (etiquetas)",

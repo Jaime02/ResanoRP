@@ -2,6 +2,8 @@ ignore/
 # Private shop data and per-stack secrets and keys
 benchmark/bench.dump
 benchmark/stacks/
+# Made from git before each query change, see benchmark/tools/query-bench/run.ts
+benchmark/tools/query-bench/old/
 *.cpuprofile
 routeTree.gen.ts
 html/

@@ -135,11 +135,8 @@ export async function workflowFillCustomDeliveryNoteLine(
 }
 
 // The Líneas de pedido de venta have to be staged already
-export async function workflowAppendStagedLinesToDeliveryNote(
-  page: Page,
-  deliveryNoteId: number,
-  expectedErrorMessage?: string,
-) {
+// Leaves the dialog ready to be submitted, so the test decides when it is sent
+export async function workflowPrepareAppendStagedLinesToDeliveryNote(page: Page, deliveryNoteId: number) {
   const dialog = page.getByTestId("dialog-add-lines-to-existing-delivery-note-content");
   const comboboxDeliveryNote = dialog.getByTestId("combobox-delivery-note");
   await page.getByTestId("button-add-lines-to-existing-delivery-note").click();
@@ -147,6 +144,14 @@ export async function workflowAppendStagedLinesToDeliveryNote(
   await openCombobox(comboboxDeliveryNote);
   await clickInComboboxOption(page, `Albarán ${deliveryNoteId} `);
   await assertComboboxValue(comboboxDeliveryNote, String(deliveryNoteId));
-  await dialog.getByTestId("button-submit-add-lines-to-existing-delivery-note").click();
+  return dialog.getByTestId("button-submit-add-lines-to-existing-delivery-note");
+}
+
+export async function workflowAppendStagedLinesToDeliveryNote(
+  page: Page,
+  deliveryNoteId: number,
+  expectedErrorMessage?: string,
+) {
+  await (await workflowPrepareAppendStagedLinesToDeliveryNote(page, deliveryNoteId)).click();
   await expectSingleSuccessOrErrorToast(page, LINES_ADDED_TO_DELIVERY_NOTE_MESSAGE, expectedErrorMessage);
 }

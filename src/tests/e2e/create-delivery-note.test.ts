@@ -25,7 +25,7 @@ import {
   dbTableSellOrderLine,
 } from "@/db/schema";
 import { formatDate, formatPrice } from "@/lib/formatters";
-import { getPartTagName, getTagClientText, PartTagSource } from "@/lib/part-tag";
+import { getPartTagName, getTagClientText, PartTagSource, TAG_BARE_QUANTITY_MIN_SELL_ORDERS } from "@/lib/part-tag";
 import { formatCents, getLineTotalInCents } from "@/lib/prices";
 import { groupStagedSellOrderLines, sortPendingSellOrderLines } from "@/lib/sell-order-line";
 import { LogMessages } from "@/logging/types";
@@ -45,7 +45,14 @@ import {
 import { INVOICE_CREATE_TITLE } from "@/messages/invoice";
 import { DELIVERY_LABEL, SHOW_PREPARED_LINES_LABEL } from "@/messages/sell-order";
 import { SellOrderStatus } from "@/schemas/sell-order";
-import { MOCK_INITIAL_DATE, mockClients, mockDeliveryNotes, mockInvoices, mockSellOrderLines } from "@/tests/mock-data";
+import {
+  MOCK_INITIAL_DATE,
+  mockClients,
+  mockDeliveryNotes,
+  mockInvoices,
+  mockParts,
+  mockSellOrderLines,
+} from "@/tests/mock-data";
 import { getTestId } from "@/tests/utils/components";
 import {
   assertComboboxValue,
@@ -86,6 +93,7 @@ import {
   workflowEditDeliveryNoteLineQuantity,
   workflowOpenCreateDeliveryNoteForClient,
   workflowOpenEditDeliveryNote,
+  workflowPrepareAppendStagedLinesToDeliveryNote,
   workflowStageSingleSellOrderLine,
 } from "@/tests/workflows/delivery-note";
 import { workflowPickInvoiceClient } from "@/tests/workflows/invoice";
@@ -795,18 +803,18 @@ for (const client of clientsWithPendingLines) {
         expect(otherTags).toEqual([]);
         expect(firstTag).toContain(getTagClientText(client.name));
         expectTagField(firstTag, DELIVERY_LABEL, deliveryDate);
-        expect(firstTag).toContain(getTagSellOrderText(otherReference, firstTagQuantity, true));
+        expect(firstTag).toContain(getTagSellOrderText(otherReference, firstTagQuantity, 1));
         expect(firstTag).not.toContain(mockReference);
 
         expectTagField(secondTag, DELIVERY_LABEL, deliveryDate);
         expect(secondTag).not.toContain(formatDate(laterDeliveryDate)!);
-        expect(secondTag).toContain(getTagSellOrderText(otherReference, 1, false));
-        expect(secondTag).toContain(getTagSellOrderText(mockReference, secondTagQuantity - 1, false));
+        expect(secondTag).toContain(getTagSellOrderText(otherReference, 1, 2));
+        expect(secondTag).toContain(getTagSellOrderText(mockReference, secondTagQuantity - 1, 2));
         expect(secondTag.split(mockReference)).toHaveLength(2);
         expectTagField(secondTag, TOTAL_LABEL, secondTagQuantity);
 
         expectTagField(thirdTag, DELIVERY_LABEL, null);
-        expect(thirdTag).toContain(getTagSellOrderText(mockReference, thirdTagQuantity, true));
+        expect(thirdTag).toContain(getTagSellOrderText(mockReference, thirdTagQuantity, 1));
       });
 
       await test.step("unstaging the part unstages all of its lines", async () => {
@@ -849,8 +857,8 @@ for (const client of clientsWithPendingLines) {
         // The lines left at 0 are left out of the tag, which holds the whole total by default
         const [tag, ...otherTags] = await workflowPrintTag(page, partRow, tagFilePath);
         expect(otherTags).toEqual([]);
-        expect(tag).toContain(getTagSellOrderText(otherReference, earliestLine.pendingQuantity, false));
-        expect(tag).toContain(getTagSellOrderText(mockReference, servedOfMockFirstLine, false));
+        expect(tag).toContain(getTagSellOrderText(otherReference, earliestLine.pendingQuantity, 2));
+        expect(tag).toContain(getTagSellOrderText(mockReference, servedOfMockFirstLine, 2));
         expectTagField(tag, TOTAL_LABEL, total);
 
         deliveryNoteLines = await createDeliveryNote();
@@ -885,7 +893,7 @@ for (const client of clientsWithPendingLines) {
         expect(otherTags).toEqual([]);
         expect(tag).toContain(getTagClientText(client.name));
         expectTagField(tag, DELIVERY_LABEL, deliveryDate);
-        expect(tag).toContain(getTagSellOrderText(otherReference, deliveryNoteLine.quantity, true));
+        expect(tag).toContain(getTagSellOrderText(otherReference, deliveryNoteLine.quantity, 1));
         expect(tag).not.toContain(mockReference);
       });
 
@@ -1509,72 +1517,162 @@ for (const client of clientsWithPendingLines) {
   });
 }
 
-test("a client that splits its sell orders gets a delivery note per sell order", async ({ db, page }) => {
-  const [client] = await db
-    .insert(dbTableClient)
-    .values({
-      address: "Calle Mayor 2",
-      city: "Pamplona",
-      legalName: "Cliente Pedidos Separados S.L.",
-      name: "Cliente Pedidos Separados",
-      postalCode: "31002",
-      taxId: "B31000001",
-    })
-    .returning();
-  const sellOrders = await db
-    .insert(dbTableSellOrder)
-    .values([
-      { clientId: client.id, receptionDate: new Date() },
-      { clientId: client.id, receptionDate: new Date() },
-    ])
-    .returning();
-  const [firstSellOrderLine, secondSellOrderLine] = await db
-    .insert(dbTableSellOrderLine)
-    .values(
-      sellOrders.map((sellOrder) => ({
-        description: "Portes",
-        partPrice: "12.5",
-        pendingQuantity: 3,
-        quantity: 3,
-        sellOrderId: sellOrder.id,
-      })),
-    )
-    .returning();
-  const getButtonStage = (sellOrderLine: BaseSellOrderLine) =>
-    getTableRowByTestId(tablePendingSellOrderLines, sellOrderLine.id).getByTestId("button-success");
-  let deliveryNoteId: number;
+test(
+  "a part pending in many sell orders shares a tag, until its client splits them in delivery notes",
+  {
+    annotation: TestAnnotations.ResetTags,
+  },
+  async ({ db, page }) => {
+    const [client] = await db
+      .insert(dbTableClient)
+      .values({
+        address: "Calle Mayor 2",
+        city: "Pamplona",
+        legalName: "Cliente Pedidos Separados S.L.",
+        name: "Cliente Pedidos Separados",
+        postalCode: "31002",
+        taxId: "B31000001",
+      })
+      .returning();
+    const [partReference] = await db
+      .insert(dbTablePartReference)
+      .values({
+        clientDescription: "Pieza de varios pedidos",
+        clientId: client.id,
+        partId: mockParts[0].id,
+        reference: "VARIOS",
+      })
+      .returning();
+    const sellOrders = await db
+      .insert(dbTableSellOrder)
+      .values(
+        Array.from({ length: TAG_BARE_QUANTITY_MIN_SELL_ORDERS }, (_, index) => ({
+          clientId: client.id,
+          clientReference: `PS-${index + 1}`,
+          receptionDate: new Date(),
+        })),
+      )
+      .returning();
+    // Each Pedido is due a day after the previous one, so they are served and listed on the tag in their order
+    const sellOrderLines = await db
+      .insert(dbTableSellOrderLine)
+      .values(
+        sellOrders.map((sellOrder, index) => ({
+          partPrice: "12.5",
+          partReferenceId: partReference.id,
+          pendingQuantity: index + 2,
+          quantity: index + 2,
+          requestedDeliveryDate: addDays(MOCK_INITIAL_DATE, index),
+          sellOrderId: sellOrder.id,
+        })),
+      )
+      .returning();
+    const [firstSellOrderLine, secondSellOrderLine] = sellOrderLines;
+    const getButtonStage = (sellOrderLine: BaseSellOrderLine) =>
+      getTableRowByTestId(tablePendingSellOrderLines, sellOrderLine.id).getByTestId("button-success");
+    let deliveryNoteId: number;
 
-  await test.step("mark the client as splitting its sell orders in delivery notes", async () => {
-    await page.goto(`/client/${client.id}`);
-    const formClient = page.getByTestId("form-client");
-    await assertFormLoaded(formClient);
-    await formClient.getByTestId(CLIENT_SPLIT_SELL_ORDERS_CHECKBOX_ID).click();
-    await formClient.getByTestId("button-submit").click();
-    await expectSingleSuccessToast(page, CLIENT_EDITED_MESSAGE);
-    expect((await getClientById(client.id))?.splitSellOrdersInDeliveryNotes).toBe(true);
-  });
-
-  await test.step("once a line is staged, the lines of other sell orders can not be staged", async () => {
-    await workflowOpenCreateDeliveryNoteForClient(page, client);
-    await expect(page.getByTestId(CLIENT_SPLIT_SELL_ORDERS_TOOLTIP_TEST_ID)).toBeVisible();
-    await expect(getButtonStage(secondSellOrderLine)).toBeEnabled();
-    await workflowStageSingleSellOrderLine(page, firstSellOrderLine.id);
-    await expect(getButtonStage(secondSellOrderLine)).toBeDisabled();
-    await buttonSubmitFormDeliveryNote.click();
-    await expectSingleSuccessToast(page, DELIVERY_NOTE_CREATED_MESSAGE);
-    deliveryNoteId = (await db.query.dbTableDeliveryNoteLine.findFirst({
-      where: { sellOrderLineId: firstSellOrderLine.id },
-    }))!.deliveryNoteId;
-  });
-
-  await test.step("a line of another sell order can not be added to the delivery note", async () => {
-    await workflowStageSingleSellOrderLine(page, secondSellOrderLine.id);
-    await workflowAppendStagedLinesToDeliveryNote(page, deliveryNoteId, CLIENT_SPLITS_SELL_ORDERS_MESSAGE);
-    expectRejectedMutation({
-      code: "BAD_REQUEST",
-      message: CLIENT_SPLITS_SELL_ORDERS_MESSAGE,
-      procedurePath: "deliveryNote.appendLines",
+    await test.step("a tag shared by many sell orders lists each one with its bare quantity", async () => {
+      await workflowOpenCreateDeliveryNoteForClient(page, client);
+      for (const sellOrderLine of sellOrderLines) {
+        await getButtonStage(sellOrderLine).click();
+      }
+      const partRow = getTableRowByTestId(tableStagedSellOrderLines, firstSellOrderLine.id);
+      const [tag, ...otherTags] = await workflowPrintTag(
+        page,
+        partRow,
+        path.join(
+          process.env.TAGS_ROOT_PATH!,
+          `${getPartTagName(PartTagSource.SellOrderLine, firstSellOrderLine.id)}.pdf`,
+        ),
+      );
+      expect(otherTags).toEqual([]);
+      for (const [index, sellOrder] of sellOrders.entries()) {
+        expect(tag).toContain(
+          getTagSellOrderText(sellOrder.clientReference!, sellOrderLines[index].pendingQuantity, sellOrders.length),
+        );
+      }
+      expectTagField(
+        tag,
+        TOTAL_LABEL,
+        sellOrderLines.reduce((total, sellOrderLine) => total + sellOrderLine.pendingQuantity, 0),
+      );
+      await partRow.getByTestId("button-unstage").click();
     });
-    expect(await getDeliveryNoteLinesByDeliveryNoteId(deliveryNoteId)).toHaveLength(1);
-  });
-});
+
+    await test.step("mark the client as splitting its sell orders in delivery notes", async () => {
+      await page.goto(`/client/${client.id}`);
+      const formClient = page.getByTestId("form-client");
+      await assertFormLoaded(formClient);
+      await formClient.getByTestId(CLIENT_SPLIT_SELL_ORDERS_CHECKBOX_ID).click();
+      await formClient.getByTestId("button-submit").click();
+      await expectSingleSuccessToast(page, CLIENT_EDITED_MESSAGE);
+      expect((await getClientById(client.id))?.splitSellOrdersInDeliveryNotes).toBe(true);
+    });
+
+    await test.step("only the lines of the staged sell order can be staged, until it is unstaged", async () => {
+      await workflowOpenCreateDeliveryNoteForClient(page, client);
+      await expect(page.getByTestId(CLIENT_SPLIT_SELL_ORDERS_TOOLTIP_TEST_ID)).toBeVisible();
+      await expect(getButtonStage(secondSellOrderLine)).toBeEnabled();
+      await workflowStageSingleSellOrderLine(page, secondSellOrderLine.id);
+      await expect(getButtonStage(firstSellOrderLine)).toBeDisabled();
+      await getTableRowByTestId(tableStagedSellOrderLines, secondSellOrderLine.id)
+        .getByTestId("button-unstage")
+        .click();
+      await expect(getButtonStage(firstSellOrderLine)).toBeEnabled();
+      await workflowStageSingleSellOrderLine(page, firstSellOrderLine.id);
+      await expect(getButtonStage(secondSellOrderLine)).toBeDisabled();
+      await buttonSubmitFormDeliveryNote.click();
+      await expectSingleSuccessToast(page, DELIVERY_NOTE_CREATED_MESSAGE);
+      deliveryNoteId = (await db.query.dbTableDeliveryNoteLine.findFirst({
+        where: { sellOrderLineId: firstSellOrderLine.id },
+      }))!.deliveryNoteId;
+    });
+
+    await test.step("a line of another sell order can not be added to the delivery note", async () => {
+      await workflowStageSingleSellOrderLine(page, secondSellOrderLine.id);
+      await workflowAppendStagedLinesToDeliveryNote(page, deliveryNoteId, CLIENT_SPLITS_SELL_ORDERS_MESSAGE);
+      expectRejectedMutation({
+        code: "BAD_REQUEST",
+        message: CLIENT_SPLITS_SELL_ORDERS_MESSAGE,
+        procedurePath: "deliveryNote.appendLines",
+      });
+      expect(await getDeliveryNoteLinesByDeliveryNoteId(deliveryNoteId)).toHaveLength(1);
+    });
+
+    await test.step("lines of two sell orders added at the same time to an empty delivery note are not both kept", async () => {
+      const [emptyDeliveryNote] = await db
+        .insert(dbTableDeliveryNote)
+        .values({
+          clientId: client.id,
+          createdAt: new Date(),
+          deliveryDate: new Date(),
+          deliveryMethodId: mockDeliveryNotes[0].deliveryMethodId,
+        })
+        .returning();
+      const [, , thirdSellOrderLine] = sellOrderLines;
+
+      await workflowOpenCreateDeliveryNoteForClient(page, client);
+      await workflowStageSingleSellOrderLine(page, secondSellOrderLine.id);
+      const buttonSubmitAppend = await workflowPrepareAppendStagedLinesToDeliveryNote(page, emptyDeliveryNote.id);
+      await inAnotherTab(page, async (anotherPage) => {
+        await workflowOpenCreateDeliveryNoteForClient(anotherPage, client);
+        await workflowStageSingleSellOrderLine(anotherPage, thirdSellOrderLine.id);
+        const buttonSubmitAnotherAppend = await workflowPrepareAppendStagedLinesToDeliveryNote(
+          anotherPage,
+          emptyDeliveryNote.id,
+        );
+
+        await Promise.all([buttonSubmitAppend.click(), buttonSubmitAnotherAppend.click()]);
+        await Promise.all([expect(getToasts(page)).toHaveCount(1), expect(getToasts(anotherPage)).toHaveCount(1)]);
+      });
+
+      expectRejectedMutation({
+        code: "BAD_REQUEST",
+        message: CLIENT_SPLITS_SELL_ORDERS_MESSAGE,
+        procedurePath: "deliveryNote.appendLines",
+      });
+      expect(await getDeliveryNoteLinesByDeliveryNoteId(emptyDeliveryNote.id)).toHaveLength(1);
+    });
+  },
+);
