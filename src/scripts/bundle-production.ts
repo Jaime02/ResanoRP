@@ -21,6 +21,7 @@ const entries = [
   "cleanup-backups.ps1",
   "restore.cmd",
   "refresh.cmd",
+  "uninstall.cmd",
   "schema.sql",
   "src",
   "supervisor.ts",

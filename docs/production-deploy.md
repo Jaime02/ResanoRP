@@ -42,27 +42,29 @@ service 10 s after a crash and gives it 15 s to stop (`resanorp-service.xml`).
 `C:\ResanoRP` holds what the zip brings and what the machine creates. The machine's own folders are never in the zip,
 so unzipping a new version over the folder keeps them.
 
-| Path                                                                   | From           | What                                                                                                  |
-| ---------------------------------------------------------------------- | -------------- | ----------------------------------------------------------------------------------------------------- |
-| `.output\`, `public\`                                                  | zip            | The built app                                                                                         |
-| `bin\`                                                                 | zip            | `bun.exe`, `node.exe`, `caddy.exe`, `postgres\` (PostgreSQL binaries)                                 |
-| `browsers\`                                                            | zip            | Playwright Chromium, which renders the tags and PDFs                                                  |
-| `powersync-service\`                                                   | zip            | `@powersync/service-image` installed with npm                                                         |
-| `powersync\`                                                           | zip            | `service.yaml`, `sync-config.yaml`, `init.sql` (copied from `docker/powersync`)                       |
-| `resanorp-service.exe`, `.xml`                                         | zip            | WinSW and its service definition                                                                      |
-| `supervisor.ts`                                                        | zip            | Copy of `src/scripts/production-supervisor.ts`                                                        |
-| `.env`, `Caddyfile`, `trust-cert.ps1`                                  | zip            | Configuration (section 4), copy of `docker/Caddyfile`, copy of `src/scripts/trust-cert.ps1`           |
-| `install.cmd`, `start.cmd`                                             | zip            | Section 6                                                                                             |
-| `backup.cmd`, `cleanup-backups.ps1`, `restore.cmd`                     | zip            | Section 9                                                                                             |
-| `client\setup.cmd`                                                     | zip            | Section 7                                                                                             |
-| `import\`                                                              | zip, if staged | Data that `start.cmd` swaps in (section 8)                                                            |
-| `pgdata\`                                                              | machine        | The PostgreSQL cluster                                                                                |
-| `caddy\`, `caddy-config\`                                              | machine        | Caddy's own certificate authority and state. Losing `caddy\` means every client must trust a new root |
-| `BLUEPRINTS\`, `SELL_ORDERS\`, `TAGS\`, `DELIVERY_NOTES\`, `INVOICES\` | machine        | Files of the app                                                                                      |
-| `LOGS\`                                                                | machine        | App logs                                                                                              |
-| `service-logs\`                                                        | machine        | WinSW logs: the supervisor's output, with PowerSync and Caddy. Rolled at 10 MB, 5 files               |
-| `backups\`                                                             | machine        | What an import replaced (section 8)                                                                   |
-| `client\root.crt`                                                      | machine        | Written by `start.cmd` for the clients (section 7)                                                    |
+| Path                                                                   | From    | What                                                                                                  |
+| ---------------------------------------------------------------------- | ------- | ----------------------------------------------------------------------------------------------------- |
+| `.output\`, `public\`                                                  | zip     | The built app                                                                                         |
+| `bin\`                                                                 | zip     | `bun.exe`, `node.exe`, `caddy.exe`, `postgres\` (PostgreSQL binaries)                                 |
+| `browsers\`                                                            | zip     | Playwright Chromium, which renders the tags and PDFs                                                  |
+| `powersync-service\`                                                   | zip     | `@powersync/service-image` installed with npm                                                         |
+| `powersync\`                                                           | zip     | `service.yaml`, `sync-config.yaml`, `init.sql` (copied from `docker/powersync`)                       |
+| `resanorp-service.exe`, `.xml`                                         | zip     | WinSW and its service definition                                                                      |
+| `supervisor.ts`                                                        | zip     | Copy of `src/scripts/production-supervisor.ts`                                                        |
+| `.env`, `Caddyfile`, `trust-cert.ps1`                                  | zip     | Configuration (section 4), copy of `docker/Caddyfile`, copy of `src/scripts/trust-cert.ps1`           |
+| `install.cmd`, `uninstall.cmd`, `start.cmd`                            | zip     | Section 6                                                                                             |
+| `refresh.cmd`, `schema.sql`, `src\db\`                                 | zip     | The data refresh and its migration (section 8)                                                        |
+| `venv\`                                                                | machine | Python packages for `refresh.cmd`                                                                     |
+| `backup.cmd`, `cleanup-backups.ps1`, `restore.cmd`                     | zip     | Section 9                                                                                             |
+| `client\setup.cmd`                                                     | zip     | Section 7                                                                                             |
+| `import\`                                                              | machine | A backup `start.cmd` swaps in, staged by `restore.cmd` or a failed refresh (section 8)                |
+| `pgdata\`                                                              | machine | The PostgreSQL cluster                                                                                |
+| `caddy\`, `caddy-config\`                                              | machine | Caddy's own certificate authority and state. Losing `caddy\` means every client must trust a new root |
+| `BLUEPRINTS\`, `SELL_ORDERS\`, `TAGS\`, `DELIVERY_NOTES\`, `INVOICES\` | machine | Files of the app                                                                                      |
+| `LOGS\`                                                                | machine | App logs                                                                                              |
+| `service-logs\`                                                        | machine | WinSW logs: the supervisor's output, with PowerSync and Caddy. Rolled at 10 MB, 5 files               |
+| `backups\`                                                             | machine | What a refresh or an import replaced (section 8)                                                      |
+| `client\root.crt`                                                      | machine | Written by `start.cmd` for the clients (section 7)                                                    |
 
 The nightly backups go to `BACKUP_LOCAL_PATH` (`C:\ResanoRP-backups`), outside this folder.
 
@@ -130,7 +132,23 @@ Every file the server needs must be listed in `entries` of `src/scripts/bundle-p
    - schedules `backup.cmd` daily at 02:00 as SYSTEM (task `ResanoRP-backup`),
    - runs `start.cmd`.
 
-`install.cmd` can be run again: every step skips what already exists, and the firewall rules are recreated.
+`install.cmd` can be run again: every step skips what already exists, and the firewall rules are recreated. 5. Run `refresh.cmd` as administrator to load the data (section 8).
+
+### Clean install
+
+`uninstall.cmd` (administrator) removes what `install.cmd` registered: both services, the backup task and the firewall
+rules. It leaves the folder untouched, so the old folder renamed is a complete copy of the previous install. An older
+install that has no `uninstall.cmd` can take the one from the new zip.
+
+1. Run `uninstall.cmd` in the production folder.
+2. Rename the production folder (for example to `C:\ResanoRP-old`) and unzip the new `production.zip` into
+   `C:\ResanoRP`.
+3. Move `caddy\` from the old folder into the new one, so the clients keep trusting the same root (section 7).
+4. Run `install.cmd`, then `refresh.cmd`, both as administrator.
+5. Once the app works, delete the old folder.
+
+If installing fails with "marked for deletion", close the Services console (or restart the machine), because Windows
+only deletes a service once nothing has it open.
 
 ## 7. Client PCs
 
@@ -264,13 +282,14 @@ Not yet verified on a server:
 
 ## 13. Files
 
-| Source in the repository                                                                                                                   | On the server       |
-| ------------------------------------------------------------------------------------------------------------------------------------------ | ------------------- |
-| `src/scripts/prepare-production.ts`                                                                                                        | (builds the folder) |
-| `src/scripts/bundle-production.ts`                                                                                                         | (zips it)           |
-| `src/scripts/production-supervisor.ts`                                                                                                     | `supervisor.ts`     |
-| `envs/production/install.cmd`, `start.cmd`, `backup.cmd`, `cleanup-backups.ps1`, `restore.cmd`, `resanorp-service.xml`, `client/setup.cmd` | same names          |
-| `docker/Caddyfile`                                                                                                                         | `Caddyfile`         |
-| `docker/powersync/`                                                                                                                        | `powersync\`        |
-| `src/scripts/trust-cert.ps1`                                                                                                               | `trust-cert.ps1`    |
-| `envs/.env.production` (not in git)                                                                                                        | `.env`              |
+| Source in the repository                                                                                                                                                   | On the server       |
+| -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------- |
+| `src/scripts/prepare-production.ts`                                                                                                                                        | (builds the folder) |
+| `src/scripts/bundle-production.ts`                                                                                                                                         | (zips it)           |
+| `src/scripts/production-supervisor.ts`                                                                                                                                     | `supervisor.ts`     |
+| `envs/production/install.cmd`, `uninstall.cmd`, `start.cmd`, `refresh.cmd`, `backup.cmd`, `cleanup-backups.ps1`, `restore.cmd`, `resanorp-service.xml`, `client/setup.cmd` | same names          |
+| `src/db/` (the Python files, `requirements.txt`, `fbclient.dll`)                                                                                                           | `src\db\`           |
+| `docker/Caddyfile`                                                                                                                                                         | `Caddyfile`         |
+| `docker/powersync/`                                                                                                                                                        | `powersync\`        |
+| `src/scripts/trust-cert.ps1`                                                                                                                                               | `trust-cert.ps1`    |
+| `envs/.env.production` (not in git)                                                                                                                                        | `.env`              |

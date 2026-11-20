@@ -85,6 +85,7 @@ envs/production/*
 !envs/production/cleanup-backups.ps1
 !envs/production/restore.cmd
 !envs/production/refresh.cmd
+!envs/production/uninstall.cmd
 !envs/production/install.cmd
 !envs/production/resanorp-service.xml
 !envs/production/client/
