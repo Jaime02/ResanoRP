@@ -1180,8 +1180,7 @@ test("urgent production orders are tinted and their urgency can be edited", asyn
 });
 
 test("hovering a production order shows the blueprints of its part beside the table", async ({ page }) => {
-  const statuses = [ProductionOrderStatus.Pending, ProductionOrderStatus.InProduction];
-  const productionOrders = await getProductionOrdersByStatuses(statuses);
+  const productionOrders = await getProductionOrders();
   const getFirstBlueprint = (productionOrder: BaseProductionOrder) =>
     mockBlueprints.find((blueprint) => blueprint.partId === productionOrder.partId);
   const productionOrderWithBlueprints = productionOrders.find(getFirstBlueprint)!;
@@ -1189,7 +1188,8 @@ test("hovering a production order shows the blueprints of its part beside the ta
     (productionOrder) => !getFirstBlueprint(productionOrder),
   )!;
 
-  await gotoProductionOrdersWithStatuses(page, statuses);
+  await page.goto("/production-order");
+  await tableProductionOrders.getByTestId("button-clear-filter-statuses").click();
   await getTableRowByTestId(tableProductionOrders, productionOrderWithBlueprints.id).hover();
   await expect(
     page.getByTestId(`card-blueprint-${getFirstBlueprint(productionOrderWithBlueprints)!.id}`),
