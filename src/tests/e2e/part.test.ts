@@ -1077,6 +1077,57 @@ test("the range of a feature that has quality checks cannot change but its name 
 });
 
 test(
+  "another tab sees the blueprints uploaded, renamed and deleted without reloading",
+  { annotation: TestAnnotations.ResetBlueprints },
+  async ({ page, openPage }) => {
+    const part = activeParts.find((activePart) =>
+      mockBlueprints.some((blueprint) => blueprint.partId === activePart.id),
+    )!;
+    const mockBlueprint = mockBlueprints.find((blueprint) => blueprint.partId === part.id)!;
+    const url = `/part/${part.id}?tab=blueprints`;
+    const dialogCreateBlueprint = page.getByTestId("dialog-create-blueprint");
+    const dialogEditBlueprint = page.getByTestId("dialog-edit-blueprint");
+
+    const otherPage = await openPage({ userMode: UserMode.Admin });
+    await otherPage.goto(url);
+    const otherFormPart = otherPage.getByTestId("form-part");
+    await assertFormLoaded(otherFormPart);
+    await page.goto(url);
+    await assertFormLoaded(formPart);
+
+    const newBlueprintName = `NewBlueprint-${part.id}`;
+    await formPart.getByTestId("button-add-blueprint").click();
+    await setInputFiles(
+      page,
+      getFormInputByLabel(dialogCreateBlueprint, BLUEPRINT_LABEL, InputElementType.File),
+      path.join(MOCK_DATA_PATH, "sample.pdf"),
+    );
+    await getFormInputByLabel(dialogCreateBlueprint, NAME_LABEL).fill(newBlueprintName);
+    await dialogCreateBlueprint.getByTestId("button-submit").click();
+    await expect(dialogCreateBlueprint).not.toBeVisible();
+    const newBlueprint = (await getBlueprintsByPartId(part.id)).find(
+      (blueprint) => blueprint.fileName === newBlueprintName,
+    )!;
+    const otherCardNew = otherFormPart.getByTestId(`card-blueprint-${newBlueprint.id}`);
+    await expect(otherCardNew).toContainText(newBlueprintName);
+
+    const renamedName = `Renamed-${mockBlueprint.id}`;
+    await formPart.getByTestId(`card-blueprint-${mockBlueprint.id}`).getByTestId("button-edit").click();
+    await getFormInputByLabel(dialogEditBlueprint, NAME_LABEL).fill(renamedName);
+    await dialogEditBlueprint.getByTestId("button-submit").click();
+    await expect(dialogEditBlueprint).not.toBeVisible();
+    await expect(otherFormPart.getByTestId(`card-blueprint-${mockBlueprint.id}`)).toContainText(renamedName);
+
+    await openAndConfirmAlertDialog(
+      page,
+      formPart.getByTestId(`card-blueprint-${newBlueprint.id}`).getByTestId("button-delete"),
+      "dialog-delete-model-content",
+    );
+    await expect(otherCardNew).not.toBeVisible();
+  },
+);
+
+test(
   "upload, rename and delete the blueprints of every part",
   { annotation: TestAnnotations.ResetBlueprints },
   async ({ page }) => {

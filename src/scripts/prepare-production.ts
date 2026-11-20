@@ -3,16 +3,10 @@ import { createHash } from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 
-const prismaCompose =
-  "docker compose -p resanorp-prisma --project-directory . -f docker/docker-compose.base.yml -f docker/docker-compose.prisma.yml --env-file ./envs/.env.prisma --profile prisma";
-const sourcePath = "./envs/prisma";
 const productionPath = "./envs/production";
 const binPath = path.join(productionPath, "bin");
 const downloadsPath = path.join(binPath, "downloads");
-// Staged instead of written over the data folders so start.cmd swaps it in while production is down
-const importPath = `${productionPath}/import`;
-// caddy holds each machine's own CA and LOGS are per run, so neither is copied
-const folders = ["BLUEPRINTS", "SELL_ORDERS", "TAGS", "DELIVERY_NOTES", "INVOICES"];
+const migrationPath = path.join(productionPath, "src", "db");
 
 const BUN_VERSION = "1.4.4";
 const NODE_VERSION = "24.14.0";
@@ -138,27 +132,19 @@ fs.writeFileSync(
   fs.readFileSync("./envs/.env.production", "utf8").replaceAll("./envs/production", "."),
 );
 
-// fs.rmSync skips what it cannot delete without saying so, and the next import would merge into the leftovers. rmdir
-// with the extended-length prefix deletes the same folders
-if (fs.existsSync(importPath)) {
-  execFileSync("cmd", ["/c", "rmdir", "/s", "/q", "\\\\?\\" + path.resolve(importPath)], { stdio: "inherit" });
-}
-if (fs.existsSync(importPath)) throw new Error(`${importPath} could not be deleted, close whatever has it open`);
-// start.cmd replaces the production data with an import, so only `bun run prepare-production -- --import` stages one
-if (process.argv.includes("--import")) {
-  for (const folder of folders) {
-    fs.cpSync(path.join(sourcePath, folder), path.join(importPath, folder), { recursive: true });
-  }
-
-  execSync(`${prismaCompose} up -d --wait db`, { stdio: "inherit" });
-  // PowerSync's publication and the grants to its role are left out: init.sql creates both before start.cmd restores,
-  // and its default privileges grant the restored tables
-  execSync(
-    `${prismaCompose} exec -T db sh -c "pg_dump -U $POSTGRES_USER -d $POSTGRES_DB -Fc --no-publications --no-privileges -f /tmp/prisma.dump"`,
-    { stdio: "inherit" },
-  );
-  execSync(`${prismaCompose} cp db:/tmp/prisma.dump ${importPath}/prisma.dump`, { stdio: "inherit" });
-}
+// refresh.cmd runs the migration on the server, against an empty database built from this schema
+fs.writeFileSync(
+  path.join(productionPath, "schema.sql"),
+  execFileSync("bun", ["run", "drizzle-kit", "export", "--dialect", "postgresql", "--schema", "./src/db/schema.ts"]),
+);
+fs.rmSync(migrationPath, { force: true, recursive: true });
+fs.cpSync("./src/db", migrationPath, {
+  recursive: true,
+  filter: (source) =>
+    fs.statSync(source).isDirectory()
+      ? !source.endsWith("__pycache__")
+      : [".py", ".txt", ".dll"].includes(path.extname(source)),
+});
 
 // The production machine has no source and no internet to build from, so everything it runs ships inside the folder
 await downloadBinaries();

@@ -39,7 +39,11 @@ def main():
 
     clear_log()
     setup()
+    migrate()
+    start_powersync()
 
+
+def migrate():
     seed_configuration()
     seed_shapes()
     seed_delivery_methods()
@@ -63,8 +67,6 @@ def main():
 
     machines, production_orders = raio_migrate_machines_production_orders()
     raio_migrate_active_production_orders(machines, production_orders)
-
-    start_powersync()
 
 
 if __name__ == "__main__":

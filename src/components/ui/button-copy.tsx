@@ -50,7 +50,13 @@ export default function ButtonCopy({ value, html, copiedTitle, ...props }: Butto
   }, [copiedTitle, html, toaster, value]);
 
   return (
-    <Button variant={hasCopied ? "success" : "secondary"} size="icon" onClick={async () => handleCopy()} {...props}>
+    <Button
+      testId="button-copy"
+      variant={hasCopied ? "success" : "secondary"}
+      size="icon"
+      onClick={async () => handleCopy()}
+      {...props}
+    >
       {hasCopied ? <CheckIcon /> : <CopyIcon />}
     </Button>
   );

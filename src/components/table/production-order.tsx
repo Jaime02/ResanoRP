@@ -2,14 +2,14 @@ import { useDbClient } from "@tanstack/react-db";
 import { useNavigate } from "@tanstack/react-router";
 import type { Row } from "@tanstack/react-table";
 import { FunnelIcon, ListIcon, ListOrderedIcon, PlusIcon, XIcon } from "lucide-react";
-import { useCallback, useMemo } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 
 import machineProductionOrderQueueCollection from "@/collections/machine-production-order-queue";
 import productionOrderCollection from "@/collections/production-order";
 import ComboboxMachine from "@/components/combobox/machine";
-import DialogBlueprintViewer from "@/components/dialog/blueprint-viewer";
 import CogWorking from "@/components/icons/cog-working";
 import ShapeIcon from "@/components/icons/shape";
+import LayoutBlueprintViewer from "@/components/pdf/layout-blueprint-viewer";
 import PopoverPartMaterialFilters from "@/components/popover/part-material-filters";
 import type { PublicBaseTableProps, TBaseTableFeatures } from "@/components/table/base-table";
 import BaseTable from "@/components/table/base-table";
@@ -23,7 +23,9 @@ import TooltipProductionOrderStatus from "@/components/tooltip/production-order-
 import { Button } from "@/components/ui/button";
 import { ButtonCopyLayout } from "@/components/ui/button-copy";
 import ButtonLink from "@/components/ui/button-link";
+import Header from "@/components/ui/header";
 import { ModelActions } from "@/components/ui/model-actions";
+import { ResizablePanel, ResizablePanelGroup, ResizablePanelSeparator } from "@/components/ui/resizable";
 import { TableCell, TableRow } from "@/components/ui/table";
 import { useAppContext } from "@/contexts/app-context";
 import FormProductionOrder from "@/form/forms/production-order";
@@ -31,7 +33,7 @@ import { formatDate, formatPartDimension } from "@/lib/formatters";
 import { getProductionOrderPendingQuantity, isProductionFinished } from "@/lib/production-order";
 import { serializeProductionOrder } from "@/lib/serializers";
 import { useTableStateSearch } from "@/lib/use-table-state-search";
-import { BLUEPRINTS_OF_PART_TITLE } from "@/messages/blueprint";
+import { BLUEPRINTS_TITLE } from "@/messages/blueprint";
 import {
   ACTIONS_LABEL,
   CLIENT_LABEL,
@@ -83,6 +85,9 @@ const DIMENSION_FILTER_IDS = {
   shapeId: "partShapeId",
 } satisfies Record<string, TProductionOrderFilters[number]["id"]>;
 
+// Crossing rows on the way to another one would otherwise start and cancel a PDF load per row
+const BLUEPRINT_HOVER_DELAY_MS = 100;
+
 const columnHelper = createTableColumnHelper<TProductionOrderTableRow>();
 
 export default function TableProductionOrder({
@@ -96,6 +101,8 @@ export default function TableProductionOrder({
   const dbClient = useDbClient();
   const navigateOnStateSearch = useTableStateSearch<TTableState>(testId, props.defaultState);
   const navigateOnStateChange = props.onStateChange ?? navigateOnStateSearch;
+  const [hoveredProductionOrderId, setHoveredProductionOrderId] = useState<number | null>(null);
+  const hoverTimeoutRef = useRef<ReturnType<typeof setTimeout>>(undefined);
 
   const handleOpenEditDialog = useCallback(
     async (productionOrderId: number) => {
@@ -129,7 +136,7 @@ export default function TableProductionOrder({
       }),
       columnHelper.accessor((productionOrder) => productionOrder.part?.references, {
         cell: ({ row }) => (
-          <ButtonCopyLayout value={row.original.sellOrderLine?.partReference?.reference}>
+          <ButtonCopyLayout value={isAdmin ? row.original.sellOrderLine?.partReference?.reference : undefined}>
             {!row.original.sellOrderLine && <TooltipPartReferences references={row.original.part?.references ?? []} />}
             <ButtonLink
               to="/part/$id"
@@ -351,12 +358,6 @@ export default function TableProductionOrder({
                   onEdit: async () => handleOpenEditDialog(row.original.id),
                 }
               : {})}
-            extraComponentsStart={
-              <DialogBlueprintViewer
-                title={`${BLUEPRINTS_OF_PART_TITLE} "${row.original.sellOrderLine?.partReference?.reference ?? row.original.part?.description}"`}
-                blueprints={row.original.part?.blueprints}
-              />
-            }
           />
         ),
         header: ACTIONS_LABEL,
@@ -366,48 +367,72 @@ export default function TableProductionOrder({
     [tableMode, isAdmin, handleOpenEditDialog, dbClient, showToastOnTransaction, showToastOnTRPCMutation],
   );
 
+  const hoveredProductionOrder = productionOrders.find(
+    (productionOrder) => productionOrder.id === hoveredProductionOrderId,
+  );
+
   return (
-    <BaseTable
-      defaultState={DEFAULT_STATE}
-      testId={testId}
-      state={state}
-      tableMode={tableMode}
-      columns={columns}
-      rows={productionOrders}
-      rowCount={rowCount}
-      virtualized={state?.pagination === null}
-      isLoading={props.isLoading === true || isLoadingProductionOrders}
-      renderSubRows={ProductionOrderSubRow}
-      getRowVariant={(row) => (row.urgent ? "urgent" : undefined)}
-      headerExtraComponents={
-        <>
-          <Button
-            testId="button-toggle-pagination"
-            variant="secondary"
-            onClick={() =>
-              navigateOnStateChange((prev) => {
-                if (prev?.pagination === null) {
-                  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-                  const { pagination, ...rest } = prev;
-                  return rest;
-                }
-                return { ...prev, pagination: null };
-              })
+    <ResizablePanelGroup orientation="horizontal" className="h-auto grow">
+      <ResizablePanel defaultSize="75" className="flex min-w-0 flex-col">
+        <BaseTable
+          defaultState={DEFAULT_STATE}
+          testId={testId}
+          state={state}
+          tableMode={tableMode}
+          columns={columns}
+          rows={productionOrders}
+          rowCount={rowCount}
+          virtualized={state?.pagination === null}
+          isLoading={props.isLoading === true || isLoadingProductionOrders}
+          renderSubRows={ProductionOrderSubRow}
+          getRowVariant={(row) => (row.urgent ? "urgent" : undefined)}
+          onRowHover={(row) => {
+            clearTimeout(hoverTimeoutRef.current);
+            if (row) {
+              hoverTimeoutRef.current = setTimeout(() => setHoveredProductionOrderId(row.id), BLUEPRINT_HOVER_DELAY_MS);
             }
-          >
-            {state?.pagination === null ? <ListOrderedIcon /> : <ListIcon />}
-            {state?.pagination === null ? PAGINATE_LABEL : SHOW_ALL_LABEL}
-          </Button>
-          {isAdmin && (
-            <ButtonLink variant="success" to="/create-production-order">
-              <PlusIcon /> {PRODUCTION_ORDER_CREATE_TITLE}
-            </ButtonLink>
-          )}
-        </>
-      }
-      title={({ rowCount }) => <>{rowCount} Órdenes de producción</>}
-      {...props}
-    />
+          }}
+          headerExtraComponents={
+            <>
+              <Button
+                testId="button-toggle-pagination"
+                variant="secondary"
+                onClick={() =>
+                  navigateOnStateChange((prev) => {
+                    if (prev?.pagination === null) {
+                      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+                      const { pagination, ...rest } = prev;
+                      return rest;
+                    }
+                    return { ...prev, pagination: null };
+                  })
+                }
+              >
+                {state?.pagination === null ? <ListOrderedIcon /> : <ListIcon />}
+                {state?.pagination === null ? PAGINATE_LABEL : SHOW_ALL_LABEL}
+              </Button>
+              {isAdmin && (
+                <ButtonLink variant="success" to="/create-production-order">
+                  <PlusIcon /> {PRODUCTION_ORDER_CREATE_TITLE}
+                </ButtonLink>
+              )}
+            </>
+          }
+          title={({ rowCount }) => <>{rowCount} Órdenes de producción</>}
+          {...props}
+        />
+      </ResizablePanel>
+      <ResizablePanelSeparator />
+      <ResizablePanel defaultSize="25" className="flex min-h-0 min-w-0 flex-col gap-3">
+        <Header>{BLUEPRINTS_TITLE}</Header>
+        <LayoutBlueprintViewer
+          blueprints={hoveredProductionOrder?.part?.blueprints}
+          stackedFiles
+          layoutClassName="grow basis-0"
+          pdfViewerClassName="grow w-full"
+        />
+      </ResizablePanel>
+    </ResizablePanelGroup>
   );
 }
 
@@ -421,6 +446,7 @@ function ProductionOrderSubRow({ row }: ProductionOrderSubRowProps) {
       <TableCell colSpan={row.getAllCells().length} className="p-4">
         <FormProductionOrder
           key={JSON.stringify(row.original)}
+          showBlueprints={false}
           requestedFormMode={FormMode.ReadOnly}
           productionOrderId={row.original.id}
         />

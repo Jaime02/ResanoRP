@@ -1564,6 +1564,16 @@ test(
           sameClientSellOrderWithFile.id,
         ),
       ).not.toBe(oldUrl);
+      // The other tab serves the new file too, not the one cached under the old url
+      await page.keyboard.press("Escape");
+      expect(
+        await workflowDownloadSellOrderFile(
+          tablePage,
+          await workflowOpenSellOrderFile(tablePage, getTableButtonFile(sameClientSellOrderWithFile.id)),
+          sameClientSellOrderWithFile.id,
+        ),
+      ).not.toBe(oldUrl);
+      await tablePage.keyboard.press("Escape");
     });
 
     await test.step("editing a sell order without uploading a file keeps it", async () => {

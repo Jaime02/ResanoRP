@@ -1,10 +1,9 @@
 import { execFileSync } from "node:child_process";
-import fs from "node:fs";
 import path from "node:path";
 
 const productionPath = "./envs/production";
-// --update leaves out what only changes when the app or its tools do, so a new .env, new scripts or a new import do not
-// mean copying the whole bundle again
+// --update leaves out what only changes when the app or its tools do, so a new .env or new scripts do not mean copying
+// the whole bundle again
 const isUpdate = process.argv.includes("--update");
 const bundlePath = isUpdate ? "./envs/production-update.zip" : "./envs/production.zip";
 const toolEntries = ["powersync-service", "bin", "browsers", ".output", "public", "resanorp-service.exe"];
@@ -21,10 +20,11 @@ const entries = [
   "backup.cmd",
   "cleanup-backups.ps1",
   "restore.cmd",
+  "refresh.cmd",
+  "schema.sql",
+  "src",
   "supervisor.ts",
   "resanorp-service.xml",
-  // Only staged by prepare-production --import
-  ...(fs.existsSync(path.join(productionPath, "import")) ? ["import"] : []),
   "client/setup.cmd",
 ];
 

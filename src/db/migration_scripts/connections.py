@@ -11,12 +11,14 @@ import psycopg
 from psycopg.rows import TupleRow
 from tqdm import tqdm
 
-RAIO_SERVER = "localhost\\SQLEXPRESS"
 RAIO_DATABASE = "Raio"
 
 project_root = Path(__file__).parent.parent.parent.parent
 load_dotenv((project_root / "envs" / ".env.prisma").resolve())
 
+RAIO_SERVER = os.getenv("RAIO_SERVER", "localhost\\SQLEXPRESS")
+RAIO_USER = os.getenv("RAIO_USER")
+RAIO_LOGIN = f"UID={RAIO_USER};PWD={{{os.getenv('RAIO_PASSWORD')}}};" if RAIO_USER else "Trusted_Connection=yes;"
 
 
 def require_env(name: str) -> str:
@@ -82,7 +84,7 @@ def start_powersync():
 @contextmanager
 def get_raio_cursor(database: str = RAIO_DATABASE) -> Generator[pyodbc.Cursor]:
     conn = pyodbc.connect(
-        f"Driver={{SQL Server}};Server={RAIO_SERVER};Database={database};Trusted_Connection=yes;",
+        f"Driver={{SQL Server}};Server={RAIO_SERVER};Database={database};{RAIO_LOGIN}",
         autocommit=True,
     )
     cursor = conn.cursor()
@@ -200,16 +202,32 @@ def fetch_id(cursor: psycopg.Cursor[TupleRow]) -> int:
     return row[0]
 
 
+class PrismaConnection(fdb.Connection):
+    # Prisma's server in production is InterBase 7.5, not the Firebird 1.5 the migration was written against
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # Prisma's text columns have no character set, and InterBase refuses to transliterate them to WIN1252 as
+        # Firebird does. They are read as raw bytes (charset NONE) and decoded with the code page Prisma writes them in
+        self._python_charset = "cp1252"
+
+    # InterBase can not answer the version fdb asks for on connect
+    def db_info(self, request):
+        if request == fdb.isc_info_firebird_version:
+            return "WI-V1.5.6.5026 Firebird 1.5"
+        return super().db_info(request)
+
+
 @contextmanager
 def get_firebird_cursor() -> Generator[fdb.Cursor]:
     try:
         fb_con = fdb.connect(
+            connection_class=PrismaConnection,
             host=FB_HOST,
             database=FB_DATABASE,
             user=FB_USER,
             password=FB_PASSWORD,
             fb_library_name=project_root / "src" / "db" / "fbclient.dll",
-            charset="win1252",
+            charset="NONE",
         )
         fb_cursor = fb_con.cursor()
     except fdb.DatabaseError:

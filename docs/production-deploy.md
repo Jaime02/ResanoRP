@@ -32,10 +32,10 @@ service 10 s after a crash and gives it 15 s to stop (`resanorp-service.xml`).
 
 ## 2. The server and the clients
 
-- The server is a Windows Server machine on the LAN, with a fixed address (`SERVER_IP` in `.env`).
+- The server is a Windows Server machine on the LAN, with a fixed address.
 - The clients open `https://<VITE_HOST>:<VITE_CADDY_HTTPS_PORT>`.
-- `VITE_HOST` does not need to be in any DNS: every client PC pins it in its hosts file with `client\setup.cmd`
-  (section 7).
+- `VITE_HOST` must resolve to the server's address on every client PC. Add a host override for it in the LAN's DNS resolver
+  (the router or firewall), and make sure the PCs use that resolver as their DNS server.
 
 ## 3. The production folder
 
@@ -62,7 +62,7 @@ so unzipping a new version over the folder keeps them.
 | `LOGS\`                                                                | machine        | App logs                                                                                              |
 | `service-logs\`                                                        | machine        | WinSW logs: the supervisor's output, with PowerSync and Caddy. Rolled at 10 MB, 5 files               |
 | `backups\`                                                             | machine        | What an import replaced (section 8)                                                                   |
-| `client\root.crt`, `client\host.txt`                                   | machine        | Written by `start.cmd` for the clients (section 7)                                                    |
+| `client\root.crt`                                                      | machine        | Written by `start.cmd` for the clients (section 7)                                                    |
 
 The nightly backups go to `BACKUP_LOCAL_PATH` (`C:\ResanoRP-backups`), outside this folder.
 
@@ -75,7 +75,7 @@ directory when WinSW starts `bun run supervisor.ts`, and every child inherits it
 
 | Key                                          | Used for                                                                                     |
 | -------------------------------------------- | -------------------------------------------------------------------------------------------- |
-| `VITE_HOST`, `SERVER_IP`                     | Site name in the `Caddyfile`, and the line `start.cmd` writes to `client\host.txt`           |
+| `VITE_HOST`                                  | Site name in the `Caddyfile`                                                                 |
 | `VITE_CADDY_HTTP_PORT`, `_HTTPS_PORT`        | Caddy's ports and the firewall rules                                                         |
 | `POSTGRES_DB`, `_USER`, `_PASSWORD`, `_PORT` | `initdb`, the scripts, PowerSync's connection strings (built by the supervisor)              |
 | `DATABASE_URL`                               | The app's connection                                                                         |
@@ -91,7 +91,6 @@ wrote once.
 
 ```bash
 bun run prepare-production               # build the app and gather everything into envs/production
-bun run prepare-production -- --import   # the same, and stage the Prisma environment's data in envs/production/import
 bun run bundle-production                # envs/production.zip, the whole folder
 bun run bundle-production -- --update    # envs/production-update.zip, without bin, browsers, powersync-service, .output, public and WinSW
 ```
@@ -107,9 +106,8 @@ bun run bundle-production -- --update    # envs/production-update.zip, without b
   `docker/docker-compose.base.yml`, so Docker and production run the same PowerSync.
 - Installs Playwright Chromium into `envs/production/browsers`.
 - Builds the app (`copy-pdf-worker`, `build:css`, `vite build`) and copies `.output` and `public`.
-- With `--import`: copies the data folders from `envs/prisma` and a `pg_dump` of the Prisma stack's database
-  (`--no-publications --no-privileges`) into `envs/production/import`. Without it, a previous `import` folder is
-  deleted, so a stale import is never shipped.
+- Writes `schema.sql` (`drizzle-kit export` of `src/db/schema.ts`) and copies the migration's Python files,
+  `requirements.txt` and `fbclient.dll` into `src/db`, for `refresh.cmd` (section 8).
 
 Every file the server needs must be listed in `entries` of `src/scripts/bundle-production.ts`, and a new file in
 `envs/production` that is versioned must be added to the exceptions in `.gitignore`.
@@ -136,34 +134,46 @@ Every file the server needs must be listed in `entries` of `src/scripts/bundle-p
 
 ## 7. Client PCs
 
-`start.cmd` keeps `C:\ResanoRP\client` ready: `setup.cmd`, Caddy's `root.crt` and `host.txt` (`SERVER_IP VITE_HOST`).
+`start.cmd` keeps `C:\ResanoRP\client` ready: `setup.cmd` and Caddy's `root.crt`.
 Copy that folder to the PC (or open it from a share) and run `setup.cmd` as the user who uses the app. It:
 
-1. pins the name in the hosts file, because some PCs get a public DNS from the router that does not know it. If the
-   hosts file already maps the name to that address on one line, it is left alone. Otherwise every line of the name is
-   replaced by the new one, so a server that changed its address is not shadowed by its old line. Only this step needs
-   administrator: it asks for it, and runs the elevated copy from `%TEMP%`, because an elevated process does not see
-   mapped network drives,
-2. trusts `root.crt` in the user's certificate store (no administrator needed),
-3. removes the other Caddy roots from the user's store. Every Caddy root has the same name, and Firefox fails with
+1. trusts `root.crt` in the user's certificate store (no administrator needed),
+2. removes the other Caddy roots from the user's store. Every Caddy root has the same name, and Firefox fails with
    `SEC_ERROR_BAD_SIGNATURE` on a stale one.
 
 Then restart the browser and open `https://<VITE_HOST>:<VITE_CADDY_HTTPS_PORT>`. Run it again on every PC whenever `caddy\` is lost or
-recreated on the server, or the server's address changes.
+recreated on the server.
 
 ## 8. Starting, stopping and deploying a new version
 
 `start.cmd` (administrator) is safe to run at any time. It starts `ResanoRP-db`, waits for it, swaps in a staged
 `import\`, starts `ResanoRP`, waits up to 2 minutes for the app, trusts the Caddy root on the server
-(`trust-cert.ps1 -RemoveOtherCaddyRoots`) and refreshes `client\root.crt` and `client\host.txt`. Both services start
+(`trust-cert.ps1 -RemoveOtherCaddyRoots`) and refreshes `client\root.crt`. Both services start
 with Windows, so after a reboot it is only needed if one did not come up.
 
 Stopping: `net stop ResanoRP` (app, PowerSync, Caddy), then `net stop ResanoRP-db`. A changed `.env`, `Caddyfile` or
 `supervisor.ts` takes effect when `ResanoRP` restarts.
 
+### Refreshing the data
+
+`refresh.cmd` (administrator) replaces all production data with a new migration from Prisma and RAIO, read live on
+the server. It needs Python in the PATH. The first run creates `venv` and installs `src\db\requirements.txt`. The
+sources are `.env` keys: `FB_HOST`, `FB_DATABASE`, `FB_USER`, `FB_PASSWORD` (Prisma, read through its own database
+server: Firebird 1.5 and InterBase 7.5 both work), `RAIO_SERVER`, `RAIO_USER`, `RAIO_PASSWORD`, `RAIO_BLUEPRINT_ROOT_PATH` and `OFERTAS_ROOT_PATH`. After you
+type `YES`, `src\db\refresh_production.py`:
+
+1. stops `ResanoRP` and dumps the database to `backups\<yyyyMMdd-HHmmss>\production.dump`,
+2. moves the data folders into that backup and leaves them empty,
+3. drops and recreates `POSTGRES_DB` and drops `powersync_storage`, then runs `init.sql` and `schema.sql`,
+4. runs the migration (`migrate()` in `src\db\main.py`; its log is `src\db\migration.log`),
+5. runs `start.cmd`.
+
+If a step after the dump fails, it stages the backup as `import\` and runs `start.cmd`, which puts the previous data
+back.
+
 ### An import
 
-When `start.cmd` finds `import\`, it:
+`restore.cmd` and a failed refresh stage a backup in `import\`. When `start.cmd` finds `import\`, it:
 
 1. stops `ResanoRP`,
 2. dumps the current database to `backups\<yyyyMMdd-HHmmss>\production.dump`,
@@ -178,14 +188,14 @@ If a step fails it stops with an error and leaves `ResanoRP` stopped. The previo
 ### Deploying
 
 There are no database migrations in production. A schema change (a new column, a new table) only reaches it through
-an import, which replaces all of its data with the Prisma environment's. So every deploy is an import.
+a refresh, which builds the database from the bundle's `schema.sql`. So every deploy is a refresh.
 
-1. Dev machine: `bun run prepare-production -- --import`, then `bun run bundle-production`.
+1. Dev machine: `bun run prepare-production`, then `bun run bundle-production`.
 2. Server: `net stop ResanoRP` and `net stop ResanoRP-db` (Windows can not overwrite the binaries of a running
-   process), unzip the new `production.zip` over `C:\ResanoRP` (it brings no machine folder, see section 3), and run
-   `start.cmd` as administrator.
+   process), unzip the new `production.zip` over `C:\ResanoRP` (it brings no machine folder, see section 3), run
+   `start.cmd`, then `refresh.cmd`, both as administrator.
 
-For a change that needs no new build (only `.env`, the scripts, the PowerSync config or a new import), the update zip
+For a change that needs no new build (only `.env`, the scripts, the migration or the PowerSync config), the update zip
 is enough: `bundle-production -- --update`, unzip it over the folder, `net stop ResanoRP` and `start.cmd`.
 
 ## 9. Backups and restore
@@ -241,8 +251,7 @@ conversion needs `gswin64c` in the system PATH (section 6). The details are in `
 On a Windows dev machine with a real bundle, without installing the services: `initdb`, an import (including a
 leftover replication slot), the supervisor starting the three processes, the app loading and syncing live changes,
 `backup.cmd` with its retention, `restore.cmd` staging, a crashed app restarted in ~3 s, and `taskkill /T` leaving no
-orphan processes. Also the Windows share connection logic (`docs/printers.md`) and the hosts update of
-`client\setup.cmd`, both against test targets.
+orphan processes. Also the Windows share connection logic (`docs/printers.md`) against test targets.
 
 Not yet verified on a server:
 

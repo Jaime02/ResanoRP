@@ -58,6 +58,7 @@ interface FormProductionOrderProps extends Pick<
   "requestedFormMode" | "onSubmit" | "createSellOrderLineId"
 > {
   productionOrderId?: number;
+  showBlueprints?: boolean;
 }
 
 export default function FormProductionOrder({
@@ -65,6 +66,7 @@ export default function FormProductionOrder({
   productionOrderId,
   createSellOrderLineId,
   onSubmit,
+  showBlueprints = true,
 }: FormProductionOrderProps) {
   const dbClient = useDbClient();
   const { isAdmin, showToastOnTransaction, showToastOnTRPCMutation } = useAppContext();
@@ -252,16 +254,20 @@ export default function FormProductionOrder({
             skipQueries={isLoading}
           />
         </ResizablePanel>
-        <ResizablePanelSeparator />
-        <ResizablePanel className="flex min-h-0 min-w-0 flex-col gap-3">
-          <Header>{BLUEPRINTS_TITLE}</Header>
-          <LayoutBlueprintViewer
-            blueprints={productionOrder?.part?.blueprints ?? pickedPartBlueprints}
-            stackedFiles
-            layoutClassName="grow basis-0"
-            pdfViewerClassName="grow w-full"
-          />
-        </ResizablePanel>
+        {showBlueprints && (
+          <>
+            <ResizablePanelSeparator />
+            <ResizablePanel className="flex min-h-0 min-w-0 flex-col gap-3">
+              <Header>{BLUEPRINTS_TITLE}</Header>
+              <LayoutBlueprintViewer
+                blueprints={productionOrder?.part?.blueprints ?? pickedPartBlueprints}
+                stackedFiles
+                layoutClassName="grow basis-0"
+                pdfViewerClassName="grow w-full"
+              />
+            </ResizablePanel>
+          </>
+        )}
       </ResizablePanelGroup>
     </FormContextProvider>
   );

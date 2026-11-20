@@ -62,6 +62,7 @@ export interface PublicBaseTableProps<TRow extends TBaseModel, TState extends TT
   tableClassName?: string;
   highlightRowOnHover?: boolean;
   getRowVariant?: (row: TRow) => React.ComponentProps<typeof TableRow>["variant"];
+  onRowHover?: (row: TRow | null) => void;
   noDataMessage?: React.ReactNode;
   isLoading?: boolean;
   rowCount?: number | null;
@@ -105,6 +106,7 @@ export default function BaseTable<TRow extends TBaseModel, TState extends TTable
   noDataMessage = NO_DATA_MESSAGE,
   highlightRowOnHover = true,
   getRowVariant,
+  onRowHover,
   isLoading = false,
   rowCount,
   virtualized = false,
@@ -258,6 +260,8 @@ export default function BaseTable<TRow extends TBaseModel, TState extends TTable
         testId={String(row.original.id)}
         highlightOnHover={highlightRowOnHover}
         variant={getRowVariant?.(row.original)}
+        onMouseEnter={onRowHover && (() => onRowHover(row.original))}
+        onMouseLeave={onRowHover && (() => onRowHover(null))}
       >
         {row.getAllCells().map((cell, cellIndex, cells) => {
           const isHiddenExpanderCell = (columnId?: string) => columnId === EXPANDER_COLUMN_ID && !row.getCanExpand();

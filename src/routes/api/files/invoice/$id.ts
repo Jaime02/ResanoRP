@@ -8,7 +8,7 @@ import { getConfiguration } from "@/db/functions/configuration";
 import { getInvoiceWithClientInvoiceEmails } from "@/db/functions/invoice";
 import { getInvoiceEmail, getInvoicePath } from "@/files/invoice";
 import { ADMIN_SESSION_COOKIE_NAME, isAdminSession } from "@/lib/admin-session";
-import { textResponse } from "@/lib/responses";
+import { pdfFileResponse, textResponse } from "@/lib/responses";
 import logger from "@/logging/logger";
 import { LogMessages } from "@/logging/types";
 import { ADMIN_ONLY_MESSAGE } from "@/messages/common";
@@ -37,14 +37,13 @@ export const Route = createFileRoute("/api/files/invoice/$id")({
         const { format } = routeSearchSchema.parse(Object.fromEntries(new URL(request.url).searchParams.entries()));
 
         try {
-          const fileBuffer = await fs.readFile(getInvoicePath(id));
           if (format === "eml") {
             const invoice = await getInvoiceWithClientInvoiceEmails(id);
             const configuration = await getConfiguration();
             const invoiceEmail = getInvoiceEmail({
               from: configuration?.invoiceSenderEmail ?? null,
               invoiceId: id,
-              pdf: fileBuffer,
+              pdf: await fs.readFile(getInvoicePath(id)),
               to: invoice?.client.invoiceEmails.map(({ email }) => email) ?? [],
             });
             return new Response(invoiceEmail, {
@@ -55,15 +54,7 @@ export const Route = createFileRoute("/api/files/invoice/$id")({
               status: 200,
             });
           }
-          const fileUint8Array = new Uint8Array(fileBuffer);
-          return new Response(fileUint8Array, {
-            headers: {
-              "Accept-Ranges": "bytes",
-              "Content-Disposition": `inline; filename="Factura ${id}.pdf"`,
-              "Content-Type": "application/pdf",
-            },
-            status: 200,
-          });
+          return await pdfFileResponse(request, getInvoicePath(id), `inline; filename="Factura ${id}.pdf"`);
         } catch (error) {
           logger.error(LogMessages.invoiceReadFailed, { error, id });
           return textResponse("Failed to read file", 500);

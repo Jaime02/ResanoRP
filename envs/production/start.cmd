@@ -5,7 +5,7 @@ cd /d "%~dp0"
 net session >nul 2>&1 || (echo Run this as administrator & goto :fail)
 sc query ResanoRP-db >nul 2>&1 || (echo ResanoRP is not installed, run install.cmd first & goto :fail)
 
-for /f "usebackq tokens=1,* delims== " %%a in (`findstr /b /c:POSTGRES_ /c:VITE_HOST /c:SERVER_IP .env`) do set "%%a=%%~b"
+for /f "usebackq tokens=1,* delims== " %%a in (`findstr /b /c:POSTGRES_ /c:VITE_HOST .env`) do set "%%a=%%~b"
 set "PGPASSWORD=%POSTGRES_PASSWORD%"
 set "PATH=%~dp0bin\postgres\bin;%PATH%"
 set "PSQL=psql -h localhost -p %POSTGRES_PORT% -U %POSTGRES_USER% -v ON_ERROR_STOP=1 -q"
@@ -23,7 +23,6 @@ call :wait-for-app || goto :fail
 
 powershell -NoProfile -ExecutionPolicy Bypass -File trust-cert.ps1 -CertPath caddy\caddy\pki\authorities\local\root.crt -RemoveOtherCaddyRoots
 if exist caddy\caddy\pki\authorities\local\root.crt copy /y caddy\caddy\pki\authorities\local\root.crt client\root.crt >nul
-if defined SERVER_IP (echo %SERVER_IP% %VITE_HOST%)>client\host.txt
 echo ResanoRP is running
 exit /b 0
 

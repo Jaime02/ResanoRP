@@ -1,10 +1,8 @@
-import fs from "node:fs/promises";
-
 import { createFileRoute } from "@tanstack/react-router";
 
 import { getBlueprintById } from "@/db/functions/blueprint";
 import { getBlueprintPath } from "@/files/blueprint";
-import { textResponse } from "@/lib/responses";
+import { pdfFileResponse, textResponse } from "@/lib/responses";
 import logger from "@/logging/logger";
 import { LogMessages } from "@/logging/types";
 import { coercedIdObjectSchema } from "@/schemas";
@@ -12,7 +10,7 @@ import { coercedIdObjectSchema } from "@/schemas";
 export const Route = createFileRoute("/api/files/blueprint/$id")({
   server: {
     handlers: {
-      GET: async ({ params }: { params: { id: string } }) => {
+      GET: async ({ params, request }: { params: { id: string }; request: Request }) => {
         let id: number;
         try {
           ({ id } = coercedIdObjectSchema.parse(params));
@@ -33,16 +31,11 @@ export const Route = createFileRoute("/api/files/blueprint/$id")({
         }
 
         try {
-          const fileBuffer = await fs.readFile(blueprintPath);
-          const fileUint8Array = new Uint8Array(fileBuffer);
-          return new Response(fileUint8Array, {
-            headers: {
-              "Accept-Ranges": "bytes",
-              "Content-Disposition": `inline; filename*=UTF-8''${encodeURIComponent(blueprint.fileName)}`,
-              "Content-Type": "application/pdf",
-            },
-            status: 200,
-          });
+          return await pdfFileResponse(
+            request,
+            blueprintPath,
+            `inline; filename*=UTF-8''${encodeURIComponent(blueprint.fileName)}`,
+          );
         } catch (error) {
           logger.error(LogMessages.fileReadFailed, error);
           return textResponse("Failed to read file", 500);

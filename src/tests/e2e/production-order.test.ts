@@ -21,6 +21,7 @@ import {
 } from "@/db/schema";
 import { formatPartDimension } from "@/lib/formatters";
 import { translatedEnums } from "@/lib/translations";
+import { BLUEPRINTS_EMPTY_MESSAGE } from "@/messages/blueprint";
 import { STATUS_PENDING_LABEL, PART_LABEL } from "@/messages/common";
 import {
   PRODUCTION_ORDERS_LABEL,
@@ -1176,4 +1177,37 @@ test("urgent production orders are tinted and their urgency can be edited", asyn
     await gotoProductionOrdersWithStatuses(page, [ProductionOrderStatus.Pending]);
     await expect(getRow(urgentProductionOrder.id)).not.toHaveAttribute("data-variant", "urgent");
   });
+});
+
+test("hovering a production order shows the blueprints of its part beside the table", async ({ page }) => {
+  const statuses = [ProductionOrderStatus.Pending, ProductionOrderStatus.InProduction];
+  const productionOrders = await getProductionOrdersByStatuses(statuses);
+  const getFirstBlueprint = (productionOrder: BaseProductionOrder) =>
+    mockBlueprints.find((blueprint) => blueprint.partId === productionOrder.partId);
+  const productionOrderWithBlueprints = productionOrders.find(getFirstBlueprint)!;
+  const productionOrderWithoutBlueprints = productionOrders.find(
+    (productionOrder) => !getFirstBlueprint(productionOrder),
+  )!;
+
+  await gotoProductionOrdersWithStatuses(page, statuses);
+  await getTableRowByTestId(tableProductionOrders, productionOrderWithBlueprints.id).hover();
+  await expect(
+    page.getByTestId(`card-blueprint-${getFirstBlueprint(productionOrderWithBlueprints)!.id}`),
+  ).toBeVisible();
+
+  await getTableRowByTestId(tableProductionOrders, productionOrderWithoutBlueprints.id).hover();
+  await expect(page.getByText(BLUEPRINTS_EMPTY_MESSAGE)).toBeVisible();
+});
+
+test("only admins can copy the reference of a production order", async ({ page }) => {
+  const statuses = [ProductionOrderStatus.Pending, ProductionOrderStatus.InProduction];
+  const buttonsCopy = tableProductionOrders.getByTestId("button-copy");
+
+  await gotoProductionOrdersWithStatuses(page, statuses);
+  await expect(buttonsCopy.first()).toBeVisible();
+
+  await setUserMode(page, UserMode.User);
+  await gotoProductionOrdersWithStatuses(page, statuses);
+  await expect(getTableRows(tableProductionOrders).first()).toBeVisible();
+  await expect(buttonsCopy).toHaveCount(0);
 });

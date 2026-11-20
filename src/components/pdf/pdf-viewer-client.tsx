@@ -12,7 +12,9 @@ import "react-pdf/dist/Page/AnnotationLayer.css";
 
 pdfjs.GlobalWorkerOptions.workerSrc = "/pdf.worker.min.mjs";
 
-const documentOptions = { wasmUrl: "/pdfjs-wasm/" };
+// Without a given worker, PDF.js starts one per document and terminates it with the document, reloading the script on
+// every file change. A worker passed in is never destroyed by the documents, unlike a shared workerPort
+const documentOptions = { wasmUrl: "/pdfjs-wasm/", worker: new pdfjs.PDFWorker() };
 
 export interface PDFViewerClientProps {
   url?: string;

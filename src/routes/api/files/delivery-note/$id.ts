@@ -1,10 +1,8 @@
-import fs from "node:fs/promises";
-
 import { createFileRoute } from "@tanstack/react-router";
 import { z } from "zod";
 
 import { getDeliveryNotePath } from "@/files/delivery-note";
-import { textResponse } from "@/lib/responses";
+import { pdfFileResponse, textResponse } from "@/lib/responses";
 import logger from "@/logging/logger";
 import { LogMessages } from "@/logging/types";
 import { coercedIdObjectSchema } from "@/schemas";
@@ -28,16 +26,11 @@ export const Route = createFileRoute("/api/files/delivery-note/$id")({
         const { copies } = routeSearchSchema.parse(Object.fromEntries(new URL(request.url).searchParams.entries()));
 
         try {
-          const fileBuffer = await fs.readFile(getDeliveryNotePath(id, copies));
-          const fileUint8Array = new Uint8Array(fileBuffer);
-          return new Response(fileUint8Array, {
-            headers: {
-              "Accept-Ranges": "bytes",
-              "Content-Disposition": `inline; filename="albaran-${id}.pdf"`,
-              "Content-Type": "application/pdf",
-            },
-            status: 200,
-          });
+          return await pdfFileResponse(
+            request,
+            getDeliveryNotePath(id, copies),
+            `inline; filename="albaran-${id}.pdf"`,
+          );
         } catch (error) {
           logger.error(LogMessages.deliveryNoteReadFailed, { error, id });
           return textResponse("Failed to read file", 500);
