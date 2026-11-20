@@ -49,7 +49,7 @@ function TableFooter({ className, ...props }: React.ComponentProps<"tfoot">) {
 }
 
 const tableRowVariants = cva(
-  "border-b border-border [&[data-highlight-on-hover]]:transition-colors [&[data-highlight-on-hover]:not(:has(input:focus))]:hover:bg-accent",
+  "border-b border-border [&[data-highlight-on-hover]]:transition-colors [&[data-highlight-on-hover]:not(:has(input:focus))]:hover:bg-accent [&[data-selected]]:outline-2 [&[data-selected]]:-outline-offset-2 [&[data-selected]]:outline-primary",
   {
     defaultVariants: {
       variant: "default",
@@ -68,15 +68,25 @@ const tableRowVariants = cva(
 interface TableRowProps extends React.ComponentProps<"tr">, VariantProps<typeof tableRowVariants> {
   testId?: string;
   highlightOnHover?: boolean;
+  selected?: boolean;
   rowType?: "row" | "subrow";
 }
 
-function TableRow({ testId, highlightOnHover = false, className, rowType = "row", variant, ...props }: TableRowProps) {
+function TableRow({
+  testId,
+  highlightOnHover = false,
+  selected = false,
+  className,
+  rowType = "row",
+  variant,
+  ...props
+}: TableRowProps) {
   return (
     <tr
       data-testid={testId}
       data-row-type={rowType}
       data-variant={variant}
+      {...(selected ? { "data-selected": true } : {})}
       {...(highlightOnHover ? { "data-highlight-on-hover": true } : {})}
       className={tableRowVariants({ className, variant })}
       {...props}

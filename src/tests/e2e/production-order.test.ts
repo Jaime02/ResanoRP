@@ -1179,7 +1179,9 @@ test("urgent production orders are tinted and their urgency can be edited", asyn
   });
 });
 
-test("hovering a production order shows the blueprints of its part beside the table", async ({ page }) => {
+test("hovering a production order shows the blueprints of its part beside the table until one is clicked", async ({
+  page,
+}) => {
   const productionOrders = await getProductionOrders();
   const getFirstBlueprint = (productionOrder: BaseProductionOrder) =>
     mockBlueprints.find((blueprint) => blueprint.partId === productionOrder.partId);
@@ -1187,16 +1189,51 @@ test("hovering a production order shows the blueprints of its part beside the ta
   const productionOrderWithoutBlueprints = productionOrders.find(
     (productionOrder) => !getFirstBlueprint(productionOrder),
   )!;
+  const rowWithBlueprints = getTableRowByTestId(tableProductionOrders, productionOrderWithBlueprints.id);
+  const rowWithoutBlueprints = getTableRowByTestId(tableProductionOrders, productionOrderWithoutBlueprints.id);
+  const cardBlueprint = page.getByTestId(`card-blueprint-${getFirstBlueprint(productionOrderWithBlueprints)!.id}`);
+  const noBlueprints = page.getByText(BLUEPRINTS_EMPTY_MESSAGE);
 
   await page.goto("/production-order");
   await tableProductionOrders.getByTestId("button-clear-filter-statuses").click();
-  await getTableRowByTestId(tableProductionOrders, productionOrderWithBlueprints.id).hover();
-  await expect(
-    page.getByTestId(`card-blueprint-${getFirstBlueprint(productionOrderWithBlueprints)!.id}`),
-  ).toBeVisible();
 
-  await getTableRowByTestId(tableProductionOrders, productionOrderWithoutBlueprints.id).hover();
-  await expect(page.getByText(BLUEPRINTS_EMPTY_MESSAGE)).toBeVisible();
+  await test.step("hovering a row shows its blueprints", async () => {
+    await rowWithBlueprints.hover();
+    await expect(cardBlueprint).toBeVisible();
+    await rowWithoutBlueprints.hover();
+    await expect(noBlueprints).toBeVisible();
+  });
+
+  await test.step("clicking a button of a row does not pin it", async () => {
+    await rowWithBlueprints.getByTestId("button-expander").click();
+    await expect(rowWithBlueprints).not.toHaveAttribute("data-selected");
+    await rowWithBlueprints.getByTestId("button-expander").click();
+  });
+
+  await test.step("clicking a row pins its blueprints, and hovering other rows no longer changes them", async () => {
+    await rowWithBlueprints.getByTestId("dimension").click();
+    await expect(rowWithBlueprints).toHaveAttribute("data-selected");
+    await expect(cardBlueprint).toBeVisible();
+    await rowWithoutBlueprints.hover();
+    await expect(rowWithoutBlueprints).not.toHaveAttribute("data-selected");
+    await expect(noBlueprints).not.toBeVisible();
+    await expect(cardBlueprint).toBeVisible();
+  });
+
+  await test.step("clicking another row moves the pin", async () => {
+    await rowWithoutBlueprints.getByTestId("dimension").click();
+    await expect(rowWithBlueprints).not.toHaveAttribute("data-selected");
+    await expect(rowWithoutBlueprints).toHaveAttribute("data-selected");
+    await expect(noBlueprints).toBeVisible();
+  });
+
+  await test.step("clicking the pinned row again unpins it and hovering works again", async () => {
+    await rowWithoutBlueprints.getByTestId("dimension").click();
+    await expect(rowWithoutBlueprints).not.toHaveAttribute("data-selected");
+    await expect(noBlueprints).toBeVisible();
+    await rowWithBlueprints.hover();
+    await expect(cardBlueprint).toBeVisible();
+  });
 });
 
 test("only admins can copy the reference of a production order", async ({ page }) => {

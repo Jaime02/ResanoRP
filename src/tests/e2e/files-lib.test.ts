@@ -5,6 +5,7 @@ import path from "node:path";
 import { expect, test } from "@playwright/test";
 
 import { removeOnRollback } from "@/files/functions";
+import { pdfFileResponse } from "@/lib/responses";
 import { fileNameSchema } from "@/schemas";
 
 test("the files library", async () => {
@@ -51,5 +52,52 @@ test("the files library", async () => {
     // Ø takes 2 bytes
     expect(fileNameSchema.safeParse("Ø".repeat(125)).success).toBe(true);
     expect(fileNameSchema.safeParse("Ø".repeat(126)).success).toBe(false);
+  });
+
+  await test.step("a PDF is served with a version tag, answers 304 while the file is the same and is served again once it changes", async () => {
+    const rootFolder = fs.mkdtempSync(path.join(os.tmpdir(), "pdf-file-response-"));
+    const pdfPath = path.join(rootFolder, "file.pdf");
+    const contentDisposition = 'inline; filename="file.pdf"';
+    const getPdf = async (ifNoneMatch?: string) =>
+      pdfFileResponse(
+        new Request(
+          "http://localhost/file",
+          ifNoneMatch === undefined ? {} : { headers: { "If-None-Match": ifNoneMatch } },
+        ),
+        pdfPath,
+        contentDisposition,
+      );
+
+    fs.writeFileSync(pdfPath, "first");
+    const first = await getPdf();
+    const firstEtag = first.headers.get("ETag")!;
+    expect(first.status).toBe(200);
+    expect(firstEtag).toBeTruthy();
+    expect(first.headers.get("Content-Type")).toBe("application/pdf");
+    expect(first.headers.get("Content-Disposition")).toBe(contentDisposition);
+    expect(first.headers.get("Accept-Ranges")).toBeNull();
+    expect(await first.text()).toBe("first");
+
+    const notModified = await getPdf(firstEtag);
+    expect(notModified.status).toBe(304);
+    expect(notModified.headers.get("ETag")).toBe(firstEtag);
+    expect(await notModified.text()).toBe("");
+    expect((await getPdf(`"other", ${firstEtag}`)).status).toBe(304);
+    expect((await getPdf('"other"')).status).toBe(200);
+
+    fs.writeFileSync(pdfPath, "second, longer");
+    const changed = await getPdf(firstEtag);
+    expect(changed.status).toBe(200);
+    expect(changed.headers.get("ETag")).not.toBe(firstEtag);
+    expect(await changed.text()).toBe("second, longer");
+
+    const changedEtag = changed.headers.get("ETag")!;
+    const now = Date.now() / 1000;
+    fs.utimesSync(pdfPath, now + 60, now + 60);
+    expect((await getPdf(changedEtag)).status).toBe(200);
+
+    fs.rmSync(pdfPath);
+    await expect(getPdf()).rejects.toThrow();
+    fs.rmSync(rootFolder, { force: true, recursive: true });
   });
 });

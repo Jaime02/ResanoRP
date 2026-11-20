@@ -31,6 +31,8 @@ import {
 import type { TBaseModel, TTableState } from "@/schemas";
 import { CellDataType, TableMode } from "@/types";
 
+const INTERACTIVE_ELEMENTS_SELECTOR = "button, a, input, select, textarea, [role=combobox]";
+
 type TTitleFunction = ({
   pageIndex,
   pageSize,
@@ -63,6 +65,8 @@ export interface PublicBaseTableProps<TRow extends TBaseModel, TState extends TT
   highlightRowOnHover?: boolean;
   getRowVariant?: (row: TRow) => React.ComponentProps<typeof TableRow>["variant"];
   onRowHover?: (row: TRow | null) => void;
+  onRowClick?: (row: TRow) => void;
+  isRowSelected?: (row: TRow) => boolean;
   noDataMessage?: React.ReactNode;
   isLoading?: boolean;
   rowCount?: number | null;
@@ -107,6 +111,8 @@ export default function BaseTable<TRow extends TBaseModel, TState extends TTable
   highlightRowOnHover = true,
   getRowVariant,
   onRowHover,
+  onRowClick,
+  isRowSelected,
   isLoading = false,
   rowCount,
   virtualized = false,
@@ -262,6 +268,15 @@ export default function BaseTable<TRow extends TBaseModel, TState extends TTable
         variant={getRowVariant?.(row.original)}
         onMouseEnter={onRowHover && (() => onRowHover(row.original))}
         onMouseLeave={onRowHover && (() => onRowHover(null))}
+        selected={isRowSelected?.(row.original)}
+        onClick={
+          onRowClick &&
+          ((event) => {
+            if (!(event.target instanceof Element) || event.target.closest(INTERACTIVE_ELEMENTS_SELECTOR) === null) {
+              onRowClick(row.original);
+            }
+          })
+        }
       >
         {row.getAllCells().map((cell, cellIndex, cells) => {
           const isHiddenExpanderCell = (columnId?: string) => columnId === EXPANDER_COLUMN_ID && !row.getCanExpand();

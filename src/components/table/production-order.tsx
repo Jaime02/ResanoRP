@@ -2,7 +2,7 @@ import { useDbClient } from "@tanstack/react-db";
 import { useNavigate } from "@tanstack/react-router";
 import type { Row } from "@tanstack/react-table";
 import { FunnelIcon, ListIcon, ListOrderedIcon, PlusIcon, XIcon } from "lucide-react";
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import machineProductionOrderQueueCollection from "@/collections/machine-production-order-queue";
 import productionOrderCollection from "@/collections/production-order";
@@ -102,7 +102,15 @@ export default function TableProductionOrder({
   const navigateOnStateSearch = useTableStateSearch<TTableState>(testId, props.defaultState);
   const navigateOnStateChange = props.onStateChange ?? navigateOnStateSearch;
   const [hoveredProductionOrderId, setHoveredProductionOrderId] = useState<number | null>(null);
+  const [pinnedProductionOrderId, setPinnedProductionOrderId] = useState<number | null>(null);
   const hoverTimeoutRef = useRef<ReturnType<typeof setTimeout>>(undefined);
+
+  useEffect(
+    () => () => {
+      clearTimeout(hoverTimeoutRef.current);
+    },
+    [],
+  );
 
   const handleOpenEditDialog = useCallback(
     async (productionOrderId: number) => {
@@ -367,8 +375,9 @@ export default function TableProductionOrder({
     [tableMode, isAdmin, handleOpenEditDialog, dbClient, showToastOnTransaction, showToastOnTRPCMutation],
   );
 
-  const hoveredProductionOrder = productionOrders.find(
-    (productionOrder) => productionOrder.id === hoveredProductionOrderId,
+  const shownProductionOrderId = pinnedProductionOrderId ?? hoveredProductionOrderId;
+  const shownProductionOrder = productionOrders.find(
+    (productionOrder) => productionOrder.id === shownProductionOrderId,
   );
 
   return (
@@ -388,10 +397,16 @@ export default function TableProductionOrder({
           getRowVariant={(row) => (row.urgent ? "urgent" : undefined)}
           onRowHover={(row) => {
             clearTimeout(hoverTimeoutRef.current);
-            if (row) {
+            if (row && pinnedProductionOrderId === null) {
               hoverTimeoutRef.current = setTimeout(() => setHoveredProductionOrderId(row.id), BLUEPRINT_HOVER_DELAY_MS);
             }
           }}
+          onRowClick={(row) => {
+            clearTimeout(hoverTimeoutRef.current);
+            setHoveredProductionOrderId(row.id);
+            setPinnedProductionOrderId(pinnedProductionOrderId === row.id ? null : row.id);
+          }}
+          isRowSelected={(row) => row.id === pinnedProductionOrderId}
           headerExtraComponents={
             <>
               <Button
@@ -426,7 +441,7 @@ export default function TableProductionOrder({
       <ResizablePanel defaultSize="25" className="flex min-h-0 min-w-0 flex-col gap-3">
         <Header>{BLUEPRINTS_TITLE}</Header>
         <LayoutBlueprintViewer
-          blueprints={hoveredProductionOrder?.part?.blueprints}
+          blueprints={shownProductionOrder?.part?.blueprints}
           stackedFiles
           layoutClassName="grow basis-0"
           pdfViewerClassName="grow w-full"
