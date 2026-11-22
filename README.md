@@ -19,7 +19,7 @@ bun install
 
 The environment files live in `envs/` (`.env.development`, `.env.test`, `.env.prisma`, `.env.production`, `.env.blank`). Only `.env.test` and `.env.development` are committed. Each one needs `POWERSYNC_JWT_SECRET`, 32 random bytes as base64url: `bun -e "console.log(crypto.getRandomValues(Buffer.alloc(32)).toString('base64url'))"`. `.env.production` also needs `BACKUP_LOCAL_PATH`, the folder `envs/production/backup.cmd` backs up to every night.
 
-Once per machine, map the dev host to localhost by adding `127.0.0.1 dev.resanorp` to `C:\Windows\System32\drivers\etc\hosts` (`/etc/hosts` on macOS and Linux). It needs administrator rights.
+No hosts file change is needed: each environment is served from `localhost` on its own `VITE_CADDY_HTTPS_PORT` (dev: `https://localhost:4443`).
 
 ## Run the application
 
@@ -61,7 +61,17 @@ bun run test           # opens the Playwright UI
 bun run test:stop      # stops the stack
 ```
 
-The stack runs the built image, so after changing app code run `bun run test:restart` before the tests. `bun run test:serve` starts the stack and follows the app logs. CI (`.github/workflows/test.yml`) runs the tests in 3 shards.
+The stack runs a bundle of the app built in development mode, which keeps the React and TanStack DB warnings the tests fail on, so after changing app code run `bun run test:restart` before the tests. `bun run test:serve` starts the stack and follows the app logs. CI (`.github/workflows/test.yml`) runs the tests in 3 shards.
+
+### Audit checks
+
+Every tRPC mutation is written to the audit log (`LOGS_PATH/audit/audit-yyyy-MM.log`, one JSON line per mutation and admin login or logout, with `password` fields hidden). After each test that passed, the fixtures check that:
+
+- the audit log has exactly the mutations the browser sent, plus the entries the test declared with `expectAuditLog`;
+- the app wrote rows only inside the transaction of a mutation that succeeded. The test build tags every `ctx.db.transaction` with its procedure (`src/trpc/index.ts`) and a trigger records every write (`src/tests/utils/write-trace.ts`), so a mutation must do all its writes inside `ctx.db.transaction`;
+- a mutation wrote only the tables listed for it in `src/tests/audit-tables.json`, and stored the values it was sent.
+
+A new mutation needs its tables in `audit-tables.json`. Write them by hand, or run its tests with `UPDATE_AUDIT_TABLES=true` to add the ones they saw. A full run (all files, no filter, no shards) also fails when a listed table is never seen written by a test. CI does the same check on all its shards together with `bun run check-audit-tables`.
 
 ## Code quality
 

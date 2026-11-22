@@ -1,5 +1,5 @@
 {
-	http_port {$VITE_CADDY_HTTP_PORT}
+	auto_https disable_redirects
 	https_port {$VITE_CADDY_HTTPS_PORT}
 }
 

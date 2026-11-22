@@ -11,6 +11,7 @@ import expanderCustomFiltersColumn, { EXPANDER_COLUMN_ID } from "@/components/ta
 import NoDataRow from "@/components/table/no-data-row";
 import type { TOnRadioSelectedRowChange } from "@/components/table/radio-column";
 import radioColumn from "@/components/table/radio-column";
+import { TABLE_ROW_HEIGHT_PX } from "@/components/table/row-height";
 import SkeletonRow from "@/components/table/skeleton-row";
 import VirtualizedRows from "@/components/table/virtualized-rows";
 import { Button } from "@/components/ui/button";
@@ -227,6 +228,8 @@ export default function BaseTable<TRow extends TBaseModel, TState extends TTable
       Object.fromEntries(table.getAllLeafColumns().map((column, i) => [`--col-${i}-size`, `${column.getSize()}px`])),
     [table],
   );
+  const visibleRowsCount = skeletonRowsCount ?? state?.pagination?.pageSize ?? 10;
+
   useLayoutEffect(() => {
     // Centered tables re-center as they resize, so the left edge is held in place during the drag to keep the
     // resize handle under the cursor
@@ -239,10 +242,8 @@ export default function BaseTable<TRow extends TBaseModel, TState extends TTable
       const isResizing = table.atoms.columnResizing.get().isResizingColumn !== false;
       resizeAnchorLeft = isResizing ? (resizeAnchorLeft ?? root.getBoundingClientRect().left) : undefined;
       Object.entries(getColumnSizeVars()).forEach(([name, value]) => tableRef.current?.style.setProperty(name, value));
-      tableRef.current?.style.setProperty(
-        "max-width",
-        Object.keys(table.atoms.columnSizing.get()).length > 0 ? "none" : "",
-      );
+      const hasResizedColumns = Object.keys(table.atoms.columnSizing.get()).length > 0;
+      tableRef.current?.style.setProperty("max-width", hasResizedColumns ? "none" : "");
       if (resizeAnchorLeft !== undefined) {
         root.style.translate = `${resizeAnchorLeft - root.getBoundingClientRect().left}px`;
       } else if (heldTranslate !== "") {
@@ -250,6 +251,20 @@ export default function BaseTable<TRow extends TBaseModel, TState extends TTable
       }
     }).unsubscribe;
   }, [table, getColumnSizeVars]);
+
+  useLayoutEffect(() => {
+    const head = tableRef.current?.tHead;
+    const scroller = tableRef.current?.parentElement;
+    const root = rootRef.current;
+    if (!head || !scroller || !root) return;
+    // The fade overlay must not be taller than what is visible, or it adds empty scrollable space
+    const resizeObserver = new ResizeObserver(() => {
+      root.style.setProperty("--header-height", `${head.getBoundingClientRect().height}px`);
+      scroller.style.setProperty("--viewport-height", `${scroller.clientHeight}px`);
+    });
+    [head, scroller].forEach((element) => resizeObserver.observe(element));
+    return () => resizeObserver.disconnect();
+  }, []);
 
   const tableRows = table.getRowModel().rows;
   const tbodyRef = useRef<HTMLTableSectionElement>(null);
@@ -332,14 +347,18 @@ export default function BaseTable<TRow extends TBaseModel, TState extends TTable
       ref={rootRef}
       value={String(radioSelectedRowId)}
       className={cn("flex w-fit max-w-full flex-col items-stretch gap-2", className)}
+      style={Object.fromEntries([
+        ["--row-height", `${TABLE_ROW_HEIGHT_PX}px`],
+        ["--scroll-rows", String(visibleRowsCount)],
+      ])}
     >
       {((title !== undefined && title !== null) ||
         headerExtraComponents !== undefined ||
         isPaginationUnknown ||
         table.getPageCount() > 1) && (
-        <div className="flex items-center justify-end gap-3">
+        <div className="flex flex-wrap items-center justify-end gap-3">
           {title !== undefined && title !== null && (
-            <Header level={2} className="flex-1">
+            <Header level={2} className="flex-auto">
               {typeof title === "string"
                 ? title
                 : title({
@@ -390,7 +409,7 @@ export default function BaseTable<TRow extends TBaseModel, TState extends TTable
             </div>
           )}
           {headerExtraComponents !== undefined && (
-            <div className="flex shrink-0 justify-end gap-2">{headerExtraComponents}</div>
+            <div className="flex max-w-full shrink-0 flex-wrap justify-end gap-2">{headerExtraComponents}</div>
           )}
         </div>
       )}
@@ -399,7 +418,8 @@ export default function BaseTable<TRow extends TBaseModel, TState extends TTable
         testId={testId}
         data-row-count={isLoading || rows === undefined || rowCount === null ? undefined : table.getRowCount()}
         disabledMessage={disabledMessage}
-        className="self-center"
+        scrollable
+        className="table-scroll self-center"
         tableClassName={cn("w-max max-w-full", tableClassName)}
         style={getColumnSizeVars()}
       >
@@ -416,7 +436,7 @@ export default function BaseTable<TRow extends TBaseModel, TState extends TTable
         </CustomFiltersContext>
         <TableBody ref={tbodyRef}>
           {isLoading || disabledMessage !== undefined ? (
-            Array.from({ length: skeletonRowsCount ?? state?.pagination?.pageSize ?? 10 }).map((_, index) => (
+            Array.from({ length: visibleRowsCount }).map((_, index) => (
               <SkeletonRow
                 key={index}
                 columns={table.getAllLeafColumns().length}

@@ -10,6 +10,9 @@ if (process.env.VITE_CADDY_HTTPS_PORT === undefined) {
   throw new Error("VITE_CADDY_HTTPS_PORT environment variable is not set");
 }
 
+// The tests and the app share the database. This name tells the rows the app writes from the ones the tests write
+process.env.PGAPPNAME = "resanorp-test-runner";
+
 const baseURL = `https://${process.env.VITE_HOST}:${process.env.VITE_CADDY_HTTPS_PORT}`;
 
 export default defineConfig({
@@ -19,7 +22,10 @@ export default defineConfig({
       use: { ...devices["Desktop Chrome"] },
     },
   ],
-  reporter: [["line"]],
+  // With a single worker the tests still run one at a time; this only lets CI split the shards by test instead of by file
+  fullyParallel: true,
+  globalSetup: "./src/tests/global-setup.ts",
+  reporter: [["line"], ["./src/tests/utils/audit-tables-reporter.ts"]],
   testDir: "./src/tests/e2e",
   // Each test goes through a whole feature in steps, sharing its database
   timeout: 3 * 60 * 1000, // 3 minutes

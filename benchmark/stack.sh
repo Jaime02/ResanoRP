@@ -77,7 +77,6 @@ case ${1:-} in
     sed -E \
       -e "s|^NODE_ENV.*|NODE_ENV = \"production\"|" \
       -e "s|^VITE_ENV_NAME.*|VITE_ENV_NAME = \"bench-$name\"|" \
-      -e "s|^VITE_CADDY_HTTP_PORT.*|VITE_CADDY_HTTP_PORT = ${port}080|" \
       -e "s|^VITE_CADDY_HTTPS_PORT.*|VITE_CADDY_HTTPS_PORT = ${port}443|" \
       -e "s|^POSTGRES_PORT.*|POSTGRES_PORT = $pg|" \
       -e "s#@(localhost|127\.0\.0\.1):[0-9]+/#@\1:$pg/#" \

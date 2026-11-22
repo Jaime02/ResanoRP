@@ -82,6 +82,127 @@
   --tr-subrow-background: oklch(0.2 0 0);
 }
 
+@property --fade-size {
+  syntax: "<length>";
+  inherits: true;
+  initial-value: 0px;
+}
+
+@property --fade-start {
+  syntax: "<length>";
+  inherits: true;
+  initial-value: 0px;
+}
+
+@property --fade-end {
+  syntax: "<length>";
+  inherits: true;
+  initial-value: 0px;
+}
+
+@property --fade-left {
+  syntax: "<length>";
+  inherits: true;
+  initial-value: 0px;
+}
+
+@property --fade-right {
+  syntax: "<length>";
+  inherits: true;
+  initial-value: 0px;
+}
+
+@keyframes fade-start {
+  to {
+    --fade-start: var(--fade-size);
+  }
+}
+
+@keyframes fade-end {
+  from {
+    --fade-end: var(--fade-size);
+  }
+}
+
+@keyframes fade-left {
+  to {
+    --fade-left: var(--fade-size);
+  }
+}
+
+@keyframes fade-right {
+  from {
+    --fade-right: var(--fade-size);
+  }
+}
+
+/* Fades the edges of the scroll container only where there is more to scroll, with overlays so that the header and the scrollbar stay untouched */
+@utility table-scroll {
+  --fade-start: 0px;
+  --fade-end: 0px;
+  --fade-left: 0px;
+  --fade-right: 0px;
+  --fade-size: calc(var(--row-height) / 2);
+  --fade-color: color-mix(in srgb, black 15%, transparent);
+  --scroll-height: calc(var(--header-height, 0px) + var(--row-height) * var(--scroll-rows));
+  max-height: var(--scroll-height);
+  overflow-y: auto;
+  animation:
+    fade-start linear both,
+    fade-end linear both,
+    fade-left linear both,
+    fade-right linear both;
+  animation-timeline: scroll(self), scroll(self), scroll(self inline), scroll(self inline);
+  animation-range:
+    0 var(--fade-size),
+    calc(100% - var(--fade-size)) 100%,
+    0 var(--fade-size),
+    calc(100% - var(--fade-size)) 100%;
+
+  /* Pinned over the visible area as the border of the table, so that the scrollbars sit outside it, and as the horizontal fades; as tall as the visible area so that it does not grow the scrollable one, and 1px narrower so that the browser does not push it back at the end of the horizontal scroll */
+  &::before {
+    content: "";
+    display: block;
+    position: sticky;
+    top: 0;
+    left: 0;
+    z-index: 30;
+    width: calc(100% - 1px);
+    height: var(--viewport-height, 0px);
+    margin-bottom: calc(var(--viewport-height, 0px) * -1);
+    background:
+      linear-gradient(to right, var(--fade-color), transparent var(--fade-left)),
+      linear-gradient(to left, var(--fade-color), transparent var(--fade-right));
+    box-sizing: border-box;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    pointer-events: none;
+  }
+
+  & th::after {
+    content: "";
+    position: absolute;
+    top: 100%;
+    left: 0;
+    width: 100%;
+    height: var(--fade-start);
+    background: linear-gradient(var(--fade-color), transparent);
+    pointer-events: none;
+  }
+
+  &::after {
+    content: "";
+    display: block;
+    position: sticky;
+    bottom: 0;
+    left: 0;
+    height: var(--fade-end);
+    margin-top: calc(var(--fade-end) * -1);
+    background: linear-gradient(transparent, var(--fade-color));
+    pointer-events: none;
+  }
+}
+
 body {
   font-feature-settings: "zero";
   font-variant-numeric: slashed-zero;

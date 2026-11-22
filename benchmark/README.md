@@ -47,9 +47,8 @@ last commit is `240c4e0`. The SQLite branch's last measured commit, `83b60e4` (r
 
 - Docker Desktop running, `bun install`, and Playwright's Chromium installed (`bun run test:install`).
 - An env file: `envs/.env.prisma` by default. It is not in the repository: in a clone, prefix the commands of `stack.sh`
-  with `SOURCE_ENV=envs/.env.development`, and use `dev.resanorp` instead of `prisma.resanorp` in step 3. `stack.sh`
-  copies the file's secrets, admin password and `VITE_HOST`, and changes only the ports, the env name and `NODE_ENV`.
-  `VITE_HOST` must resolve to 127.0.0.1: add `127.0.0.1 dev.resanorp` (or `prisma.resanorp`) to the hosts file.
+  with `SOURCE_ENV=envs/.env.development`. `stack.sh` copies the file's secrets, admin password and `VITE_HOST`
+  (`localhost`, so no hosts file change is needed), and changes only the ports, the env name and `NODE_ENV`.
 - About 3.5 GB of free disk per stack (its image is 3 GB), and nothing else heavy running: other programs changed absolute times by up to 40%
   between runs.
 
@@ -83,9 +82,9 @@ last commit is `240c4e0`. The SQLite branch's last measured commit, `83b60e4` (r
 
    ```sh
    MSYS_NO_PATHCONV=1 bun --env-file=benchmark/stacks/master/.env benchmark/benchmark-load.ts 5 "" \
-     master=https://prisma.resanorp:14443@resanorp-bench-master-caddy-1 \
-     powersync=https://prisma.resanorp:15443@resanorp-bench-powersync-caddy-1 \
-     lite=https://prisma.resanorp:16443@resanorp-bench-lite-caddy-1 | tee benchmark/results/new-run.txt
+     master=https://localhost:14443@resanorp-bench-master-caddy-1 \
+     powersync=https://localhost:15443@resanorp-bench-powersync-caddy-1 \
+     lite=https://localhost:16443@resanorp-bench-lite-caddy-1 | tee benchmark/results/new-run.txt
    ```
 
    The env file only provides the admin password and `DATABASE_URL`, which picks the ids of the detail pages. Every
@@ -115,7 +114,7 @@ On a running `lite` stack:
 ```sh
 ./benchmark/churn.sh lite 5   # ~2 min: 595,859 operations for the same 101,239 rows
 MSYS_NO_PATHCONV=1 bun --env-file=benchmark/stacks/lite/.env benchmark/benchmark-load.ts 3 "sell order" \
-  uncompacted=https://prisma.resanorp:16443@resanorp-bench-lite-caddy-1
+  uncompacted=https://localhost:16443@resanorp-bench-lite-caddy-1
 MSYS_NO_PATHCONV=1 docker exec resanorp-bench-lite-powersync-1 node service/lib/entry.js compact
 ```
 
@@ -152,6 +151,7 @@ swapped pair.
 | `23-poc-on-query-fixes.txt`, `24-…-swapped.txt`      | 11-15 | `master`, `lite` and `poc` rebased on the query fixes, then swapped. The machine was busy: master's times are 30% higher   | cold 10 pages 11.6 s (master 10.4, lite 23.7); navigation 3.6 s           |
 | `25-progressive-collections.txt`, `26-…-swapped.txt` | 11-15 | `master`, `lite` and `prog`: branch `progressive-collections` (`79b6df9`..`9f0bf6f` on the query fixes), then swapped      | cold 10 pages 11.2 s (master 8.0, lite 19.0); navigation 2.9 s (6.1, 4.2) |
 | `27-standalone-client.txt`                           | 11-15 | `old` (vendored client) against `new` (`@powersync/standalone-client`, `64bd007`), one run, not swapped                    | no difference: cold 21.6 / 21.9 s, navigation 4.65 / 4.64 s               |
+| `28-virtualization.txt`                              | 11-21 | `tools/virtualization.ts`: one build (master `51f474e` + the scroll container and row memo fixes) with virtualization on and off | 48 rows: no gain. 2,761 rows: scroll 16.7 / 433 ms frames, pin 44 / 872 ms |
 
 PowerSync with SQLite (`powersync`) was left out after run 6: ~17 s on every first load while it fills SQLite.
 
@@ -234,6 +234,12 @@ Page loads:
 - `tools/write-check.ts`: saves on a first load and on a reload, with the time to the toast and the client ids.
 - `tools/profile-one.ts`: CPU profile of a page load, top functions by self time.
 - `tools/profile-nav.ts`: CPU profile of an in-app navigation to a page whose data is already in memory.
+
+Rendering:
+
+- `tools/virtualization.ts`: the production orders table showing every row, with its rows virtualized or all rendered,
+  in one build that reads the `bench-virtualized` localStorage key. `PROFILE="<row set>|<mode>"` profiles one cell's
+  show all click.
 
 Same data on every build:
 

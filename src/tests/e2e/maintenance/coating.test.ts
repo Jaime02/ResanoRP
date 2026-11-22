@@ -7,6 +7,7 @@ import {
   COATING_CREATED_MESSAGE,
   COATING_CREATE_TITLE,
   COATING_DELETED_MESSAGE,
+  COATING_EDITED_MESSAGE,
   COATING_RESTORED_MESSAGE,
   SHOW_DELETED_COATINGS_LABEL,
 } from "@/messages/coating";
@@ -52,6 +53,25 @@ test("manage the Tratamientos", async ({ page, db }) => {
     await dialogCreateEditCoating.getByTestId("button-close").click();
     await expect(dialogCreateEditCoating).not.toBeVisible();
   };
+
+  await test.step("rename a Tratamiento and give it back its name", async () => {
+    const coating = activeCoatings[0];
+    await page.goto(MAINTENANCE_COATING_URL);
+
+    let currentName = coating.name;
+    for (const name of [`${coating.name} editado`, coating.name]) {
+      await (await findTableRowByText(tableCoating, currentName)).getByTestId("button-edit").click();
+      await assertFormLoaded(dialogCreateEditCoating);
+      await getFormInputByLabel(dialogCreateEditCoating, NAME_LABEL).fill(name);
+      await dialogCreateEditCoating.getByTestId("button-submit").click();
+      await expect(dialogCreateEditCoating).not.toBeVisible();
+      await expectSingleSuccessToast(page, COATING_EDITED_MESSAGE);
+
+      expect((await getCoatingById(coating.id))?.name).toBe(name);
+      await expect(filterByExactText(getTableRows(tableCoating), name)).toHaveCount(1);
+      currentName = name;
+    }
+  });
 
   await test.step("reject a Tratamiento with the name of any active one", async () => {
     await page.goto(MAINTENANCE_COATING_URL);

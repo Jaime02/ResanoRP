@@ -9,7 +9,16 @@ interface ButtonProps extends React.ComponentProps<"button">, VariantProps<typeo
   clickable?: boolean;
 }
 
-function Button({ testId, className, variant, size, clickable = true, disabled = false, ...props }: ButtonProps) {
+function Button({
+  testId,
+  className,
+  variant,
+  size,
+  clickable = true,
+  disabled = false,
+  children,
+  ...props
+}: ButtonProps) {
   return (
     <button
       type="button"
@@ -18,8 +27,35 @@ function Button({ testId, className, variant, size, clickable = true, disabled =
       disabled={disabled}
       className={cn(buttonVariants({ size, variant }), className)}
       {...props}
-    />
+    >
+      {joinAdjacentText(children).map((child, index): React.ReactNode =>
+        isText(child) && String(child).trim() !== "" ? (
+          <span key={index} className="truncate">
+            {child}
+          </span>
+        ) : (
+          child
+        ),
+      )}
+    </button>
   );
+}
+
+function isText(child: unknown): child is string | number {
+  return typeof child === "string" || typeof child === "number";
+}
+
+// `Albarán {id}` comes as two children, which must stay one text, or the gap splits them and each one truncates apart
+function joinAdjacentText(children: React.ReactNode) {
+  return React.Children.toArray(children).reduce<Array<React.ReactNode>>((joined, child) => {
+    const previous = joined.at(-1);
+    if (isText(child) && isText(previous)) {
+      joined[joined.length - 1] = `${previous}${child}`;
+    } else {
+      joined.push(child);
+    }
+    return joined;
+  }, []);
 }
 
 export { Button };

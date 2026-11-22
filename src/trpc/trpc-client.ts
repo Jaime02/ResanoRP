@@ -2,7 +2,7 @@ import { createTRPCProxyClient, httpBatchLink, httpLink, splitLink, isNonJsonSer
 
 import type { AppRouter } from "@/routes/api/trpc/$";
 
-const TRPC_URL = "/api/trpc";
+export const TRPC_URL = "/api/trpc";
 
 async function cookieHeader() {
   return {

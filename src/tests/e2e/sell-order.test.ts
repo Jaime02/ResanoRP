@@ -928,6 +928,25 @@ test("manage the sell orders", { annotation: TestAnnotations.ResetSellOrders }, 
 });
 
 test(
+  "deleting a sell order stops the Máquina working on one of its production orders",
+  { annotation: TestAnnotations.ResetSellOrders },
+  async ({ page }) => {
+    const machine = mockMachines.find((mockMachine) => mockMachine.activeProductionOrderId !== null)!;
+    const productionOrder = mockProductionOrders.find(
+      (mockProductionOrder) => mockProductionOrder.id === machine.activeProductionOrderId,
+    )!;
+
+    await workflowDeleteSellOrder(page, getMockSellOrderLineById(productionOrder.sellOrderLineId!)!.sellOrderId);
+
+    expect((await getMachineById(machine.id))?.activeProductionOrderId).toBeNull();
+    expect((await getMachineProductionOrderQueue(machine.id)).map((po) => po.id)).not.toContain(productionOrder.id);
+    expect(await dbGetProductionOrderStatus((await getProductionOrderById(productionOrder.id))!)).toBe(
+      ProductionOrderStatus.SellOrderDeleted,
+    );
+  },
+);
+
+test(
   "create a sell order with a file for a client inserted outside the app",
   { annotation: TestAnnotations.ResetSellOrders },
   async ({ page, db }) => {

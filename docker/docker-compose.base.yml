@@ -94,10 +94,8 @@ services:
       ]
     environment:
       - VITE_HOST=${VITE_HOST}
-      - VITE_CADDY_HTTP_PORT=${VITE_CADDY_HTTP_PORT}
       - VITE_CADDY_HTTPS_PORT=${VITE_CADDY_HTTPS_PORT}
     ports:
-      - ${VITE_CADDY_HTTP_PORT}:${VITE_CADDY_HTTP_PORT}
       - ${VITE_CADDY_HTTPS_PORT}:${VITE_CADDY_HTTPS_PORT}
       - ${VITE_CADDY_HTTPS_PORT}:${VITE_CADDY_HTTPS_PORT}/udp # HTTP/3
     volumes:

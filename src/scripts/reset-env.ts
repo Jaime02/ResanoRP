@@ -4,6 +4,7 @@ import path from "node:path";
 
 import { sql } from "drizzle-orm";
 
+import { WRITE_TRACE_SCHEMA } from "@/logging/audit";
 import logger from "@/logging/logger";
 import { MOCK_DATA_PATH } from "@/tests/mock-data";
 
@@ -56,11 +57,16 @@ export default async function resetEnv() {
     logger.crit("Failed to clean the database", err);
     process.exit(1);
   });
-  // Dropping the schema stops drizzle-kit from asking rename-or-create questions for new columns, which --force can't answer
-  await db.execute(sql.raw("DROP SCHEMA public CASCADE; CREATE SCHEMA public;")).catch((err: unknown) => {
-    logger.crit("Failed to drop the public schema", err);
-    process.exit(1);
-  });
+  // Dropping the schema stops drizzle-kit from asking rename-or-create questions for new columns, which --force can't
+  // answer. A table it finds outside the app's schema makes it ask them too
+  await db
+    .execute(
+      sql.raw(`DROP SCHEMA public CASCADE; CREATE SCHEMA public; DROP SCHEMA IF EXISTS ${WRITE_TRACE_SCHEMA} CASCADE;`),
+    )
+    .catch((err: unknown) => {
+      logger.crit("Failed to drop the public schema", err);
+      process.exit(1);
+    });
 
   try {
     // Not bunx: without the local binary it downloads the latest stable drizzle-kit, which fails on drizzle-orm's rc

@@ -6,6 +6,7 @@ import { AppContextStorage, UserMode } from "@/contexts/app-context";
 import { getInvoiceById } from "@/db/functions/invoice";
 import { dbTableClient, dbTableInvoice } from "@/db/schema";
 import { ADMIN_SESSION_COOKIE_NAME } from "@/lib/admin-session";
+import { ADMIN_LOGIN_ERROR_CODES, ADMIN_SESSION_AUDIT_PATHS } from "@/logging/audit";
 import { LogMessages, LoggerLevels } from "@/logging/types";
 import {
   MACHINE_LABEL,
@@ -37,6 +38,7 @@ import {
   mockProductionOrders,
   mockSellOrders,
 } from "@/tests/mock-data";
+import { expectAuditLog, expectAuditedRequest } from "@/tests/utils/audit-log";
 import { assertFormLoaded, getFormInputByLabel } from "@/tests/utils/components/form";
 import {
   assertTableRowCount,
@@ -55,6 +57,7 @@ import {
 } from "@/tests/utils/mock-data-utils";
 import { holdRequestWhile } from "@/tests/utils/trpc";
 import { workflowUnaccountInvoice } from "@/tests/workflows/invoice";
+import { TRPC_URL } from "@/trpc/trpc-client";
 import { ToastType } from "@/types/toast";
 
 const activeMachines = mockMachines.filter((machine) => machine.deletedAt === null);
@@ -88,6 +91,7 @@ test("login with every user mode", { annotation: TestAnnotations.UserModeNull },
     await inputAdminPassword.fill(process.env.ADMIN_PASSWORD!);
     await expect(inputAdminPassword).toHaveValue(process.env.ADMIN_PASSWORD!);
 
+    expectAuditLog({ path: ADMIN_SESSION_AUDIT_PATHS.login, ok: true });
     await dialogInputAdminPassword.getByTestId("button-submit").click();
     await expect(dialogInputAdminPassword).not.toBeVisible();
 
@@ -98,6 +102,8 @@ test("login with every user mode", { annotation: TestAnnotations.UserModeNull },
   await test.step("login as user", async () => {
     const dialogLogin = await openLoginDialog(page);
 
+    // Leaving the Administrador closes its session. The modes picked next have none to close
+    expectAuditLog({ path: ADMIN_SESSION_AUDIT_PATHS.logout, ok: true });
     await dialogLogin.getByRole("button", { name: UserMode.User }).click();
 
     await expect(dialogLogin).not.toBeVisible();
@@ -405,6 +411,11 @@ test(
     await test.step("with a wrong password", async () => {
       await dialogLogin.getByRole("button", { name: UserMode.Admin }).click();
       await inputAdminPassword.fill(`${process.env.ADMIN_PASSWORD}-incorrecta`);
+      expectAuditLog({
+        path: ADMIN_SESSION_AUDIT_PATHS.login,
+        ok: false,
+        errorCode: ADMIN_LOGIN_ERROR_CODES.wrongPassword,
+      });
       await dialogInputAdminPassword.getByTestId("button-submit").click();
       await expectSingleToast(page, { title: WRONG_PASSWORD_MESSAGE, type: ToastType.Error });
       expectErrorsLog(clientLogEvent(LoggerLevels.emerg, LogMessages.wrongUserModePassword, {}));
@@ -414,6 +425,7 @@ test(
 
     await test.step("with the right password", async () => {
       await inputAdminPassword.fill(process.env.ADMIN_PASSWORD!);
+      expectAuditLog({ path: ADMIN_SESSION_AUDIT_PATHS.login, ok: true });
       await dialogInputAdminPassword.getByTestId("button-submit").click();
       await expect(dialogInputAdminPassword).not.toBeVisible();
       await expect(page.getByTestId("span-current-user-mode")).toHaveText(UserMode.Admin);
@@ -431,7 +443,7 @@ test(
       // No page of the app sends a request from another site of the host, so it is sent from outside the page, with the
       // session cookie and the header a browser would add
       const unaccountInvoiceFrom = async (fetchSite: string) =>
-        page.request.post("/api/trpc/invoice.unaccount", {
+        page.request.post(`${TRPC_URL}/invoice.unaccount`, {
           data: { id: accountedInvoice.id },
           headers: { "Sec-Fetch-Site": fetchSite },
         });
@@ -441,7 +453,11 @@ test(
       expect(await sameSiteResponse.text()).toBe("Forbidden");
       expect((await getInvoiceById(accountedInvoice.id))?.accounted).toBe(true);
 
-      expect((await unaccountInvoiceFrom("same-origin")).status()).toBe(200);
+      const sameOriginResponse = await expectAuditedRequest(
+        { path: "invoice.unaccount", ok: true, isAdmin: true, input: { id: accountedInvoice.id } },
+        async () => unaccountInvoiceFrom("same-origin"),
+      );
+      expect(sameOriginResponse.status()).toBe(200);
       expect((await getInvoiceById(accountedInvoice.id))?.accounted).toBe(false);
     });
 
@@ -452,6 +468,7 @@ test(
         async () =>
           inAnotherTab(page, async (anotherPage) => {
             await anotherPage.goto("/");
+            expectAuditLog({ path: ADMIN_SESSION_AUDIT_PATHS.logout, ok: true });
             await anotherPage.getByTestId("button-logout").click();
             await expect(anotherPage.getByTestId("form-login")).toBeVisible();
             await expect.poll(getAdminSessionCookie).toBeUndefined();

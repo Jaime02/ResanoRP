@@ -17,6 +17,7 @@ export const LogMessages = {
   activeProductionOrderNotInQueue: (machineId: number) =>
     `Active production order not found in machine ${machineId} production orders queue`,
   appContextStorageParseFailed: "Failed to parse AppContextStorage from its cookie",
+  auditWriteFailed: "Failed to write an audit log entry",
   blueprintFileNotFound: "Blueprint file does not exist",
   blueprintNotFound: "Blueprint not found",
   blueprintPathNotFound: "Blueprint path not found",

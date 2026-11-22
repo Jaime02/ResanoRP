@@ -36,6 +36,7 @@ import {
 import { ProductionOrderStatus } from "@/schemas/production-order";
 import type { TProductionOrderFilters, TTableProductionOrderState } from "@/schemas/production-order";
 import {
+  MOCK_INITIAL_DATE,
   mockBlueprints,
   mockMachineProductionOrderQueues,
   mockMachines,
@@ -64,6 +65,7 @@ import {
   getTableNoDataRow,
   getTableRowByTestId,
   getTableRows,
+  getTableSubrowById,
 } from "@/tests/utils/components/table";
 import { expectSingleToast, expectSingleSuccessToast } from "@/tests/utils/components/toast";
 import { expectRejectedMutation, type TErrorCode } from "@/tests/utils/errors-log";
@@ -497,6 +499,65 @@ test("the heading only counts the production orders once they are loaded", async
     ...(window as Window & { productionOrderHeadings?: Set<string> }).productionOrderHeadings!,
   ]);
   expect(headings).not.toContain("0 Órdenes de producción");
+});
+
+test("showing every production order renders the rows scrolled into view and expands them", async ({ page, db }) => {
+  const addedProductionOrdersCount = 60;
+  await db.insert(dbTableProductionOrder).values(
+    Array.from({ length: addedProductionOrdersCount }, () => ({
+      createdAt: MOCK_INITIAL_DATE,
+      partId: mockParts[0].id,
+      quantity: 1,
+    })),
+  );
+  const productionOrdersCount = mockProductionOrders.length + addedProductionOrdersCount;
+
+  await gotoProductionOrdersWithStatuses(page, Object.values(ProductionOrderStatus));
+  await page.getByTestId("button-toggle-pagination").click();
+  await assertTableRowCount(tableProductionOrders, productionOrdersCount);
+  const lastRow = getTableRows(tableProductionOrders).last();
+
+  const getFades = async () =>
+    tableProductionOrders.evaluate((element) => {
+      const style = getComputedStyle(element);
+      return {
+        size: style.getPropertyValue("--fade-size"),
+        start: style.getPropertyValue("--fade-start"),
+        end: style.getPropertyValue("--fade-end"),
+      };
+    });
+
+  await test.step("the table scrolls its own rows and only fades the edge with more to scroll", async () => {
+    const table = tableProductionOrders;
+    await expect.poll(async () => table.evaluate((element) => element.scrollHeight > element.clientHeight)).toBe(true);
+    await expect.poll(async () => (await getFades()).end).toBe((await getFades()).size);
+    expect((await getFades()).start).toBe("0px");
+  });
+
+  await test.step("scrolling to the end renders the last production order", async () => {
+    await getTableRows(tableProductionOrders).first().hover();
+    // The rows are measured as they are rendered, so the end of the table moves away while scrolling to it
+    await expect
+      .poll(async () => {
+        await page.mouse.wheel(0, 100_000);
+        return tableProductionOrders.evaluate(
+          (element) => element.scrollHeight - element.clientHeight - element.scrollTop,
+        );
+      })
+      .toBeLessThanOrEqual(1);
+    await expect(lastRow).toHaveAttribute("data-index", String(productionOrdersCount - 1));
+    await expect.poll(async () => (await getFades()).start).toBe((await getFades()).size);
+    await expect.poll(async () => (await getFades()).end).toBe("0px");
+  });
+
+  await test.step("a scrolled into view production order expands and collapses", async () => {
+    const productionOrderId = Number(await lastRow.getAttribute("data-testid"));
+    const subrow = getTableSubrowById(tableProductionOrders, productionOrderId);
+    await lastRow.getByTestId("button-expander").click();
+    await expect(subrow).toBeVisible();
+    await lastRow.getByTestId("button-expander").click();
+    await expect(subrow).not.toBeAttached();
+  });
 });
 
 test("the assign machine combobox only lists the machines compatible with the part width", async ({ page, db }) => {

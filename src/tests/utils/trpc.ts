@@ -1,7 +1,9 @@
 import type { Page } from "@playwright/test";
 import type { AnyTRPCProcedure, TRPCRouterRecord } from "@trpc/server";
 
+import { ADMIN_SESSION_COOKIE_NAME, isAdminSession } from "@/lib/admin-session";
 import type { AppRouter } from "@/routes/api/trpc/$";
+import { setReleasedSession } from "@/tests/utils/audit-log";
 
 export type TProcedurePath<TRecord extends TRPCRouterRecord, TPrefix extends string = ""> = {
   [TKey in keyof TRecord & string]: TRecord[TKey] extends AnyTRPCProcedure
@@ -31,7 +33,7 @@ export async function holdRequestWhile({ page, procedurePath, send, meanwhile }:
     url,
     async (route) => {
       await released;
-      await route.continue();
+      await route.fallback();
     },
     { times: 1 },
   );
@@ -39,6 +41,10 @@ export async function holdRequestWhile({ page, procedurePath, send, meanwhile }:
   const sent = send();
   await request;
   await meanwhile();
+  const adminSessionCookie = (await page.context().cookies()).find(
+    (cookie) => cookie.name === ADMIN_SESSION_COOKIE_NAME,
+  );
+  setReleasedSession(procedurePath, isAdminSession(adminSessionCookie?.value));
   release();
   await sent;
 }

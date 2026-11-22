@@ -1,0 +1,6 @@
+5 samples per cell, medians. https://localhost:17443
+row set | mode	rows	show all ms	show all task ms	DOM nodes	heap MB	scroll frame p50	scroll frame p95	frames >20ms /80	scroll task ms	pin ms	unpin ms
+default | virtualized	48	544	581	1787	111.8	16.7	16.8	0	715	102	62
+default | all rows	48	622	698	3788	117.8	16.7	16.8	1	481	50	38
+all statuses | virtualized	2761	8753	8781	1368	443.5	16.7	16.8	2	1096	44	41
+all statuses | all rows	2761	11569	13723	167808	718.6	433.4	549.9	80	36792	872	1000

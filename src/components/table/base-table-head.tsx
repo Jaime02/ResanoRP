@@ -37,7 +37,7 @@ export default function BaseTableHead<TRow extends TBaseModel = TBaseModel>({
   };
 
   return (
-    <TableHead>
+    <TableHead className="sticky top-0 z-20 bg-background shadow-[0_1px_0_var(--color-border)]">
       {table.getHeaderGroups().map((headerGroup) => (
         <TableRow key={headerGroup.id}>
           {headerGroup.headers.map((header, i: number) => {

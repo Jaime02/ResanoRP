@@ -4,7 +4,7 @@ import { cn } from "@/lib/utils";
 
 export const buttonVariants = cva(
   cn(
-    "inline-flex items-center gap-2 rounded-md border-border font-medium whitespace-nowrap transition-colors outline-none select-none disabled:pointer-events-none disabled:bg-black data-[clickable=true]:cursor-pointer",
+    "inline-flex max-w-full min-w-0 items-center gap-2 rounded-md border-border font-medium whitespace-nowrap transition-colors outline-none select-none disabled:pointer-events-none disabled:bg-black data-[clickable=true]:cursor-pointer",
     "focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/70",
     "aria-invalid:border-destructive aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40",
     "[&_svg]:pointer-events-none [&_svg]:shrink-0",

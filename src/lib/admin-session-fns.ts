@@ -1,9 +1,10 @@
 import { createServerFn } from "@tanstack/react-start";
-import { deleteCookie, getRequestIP, setCookie } from "@tanstack/react-start/server";
+import { deleteCookie, getCookie, getRequestIP, setCookie } from "@tanstack/react-start/server";
 import { z } from "zod";
 
 import { AppContextStorage } from "@/contexts/app-context-storage";
-import { ADMIN_SESSION_COOKIE_NAME, getAdminSessionToken } from "@/lib/admin-session";
+import { ADMIN_SESSION_COOKIE_NAME, getAdminSessionToken, isAdminSession } from "@/lib/admin-session";
+import { ADMIN_LOGIN_ERROR_CODES, ADMIN_SESSION_AUDIT_PATHS, writeAuditEntry } from "@/logging/audit";
 
 const MAX_FAILED_LOGINS = 5;
 const FAILED_LOGINS_WINDOW_MS = 60_000;
@@ -14,7 +15,7 @@ export const loginAdminFn = createServerFn({
   method: "POST",
 })
   .validator((data: unknown) => z.string().parse(data))
-  .handler(({ data }) => {
+  .handler(async ({ data }) => {
     const ip = getRequestIP({ xForwardedFor: true }) ?? "unknown";
     const now = Date.now();
     let failedLogin = failedLogins.get(ip);
@@ -22,11 +23,25 @@ export const loginAdminFn = createServerFn({
       failedLogin = { count: 0, windowEndsAt: now + FAILED_LOGINS_WINDOW_MS };
       failedLogins.set(ip, failedLogin);
     }
-    if (failedLogin.count >= MAX_FAILED_LOGINS) return false;
+    if (failedLogin.count >= MAX_FAILED_LOGINS) {
+      await writeAuditEntry({
+        path: ADMIN_SESSION_AUDIT_PATHS.login,
+        ok: false,
+        ip,
+        errorCode: ADMIN_LOGIN_ERROR_CODES.locked,
+      });
+      return false;
+    }
 
     const token = getAdminSessionToken(data);
     if (token === undefined) {
       failedLogin.count++;
+      await writeAuditEntry({
+        path: ADMIN_SESSION_AUDIT_PATHS.login,
+        ok: false,
+        ip,
+        errorCode: ADMIN_LOGIN_ERROR_CODES.wrongPassword,
+      });
       return false;
     }
     failedLogins.delete(ip);
@@ -37,11 +52,21 @@ export const loginAdminFn = createServerFn({
       sameSite: "lax",
       secure: true,
     });
+    await writeAuditEntry({ path: ADMIN_SESSION_AUDIT_PATHS.login, ok: true, ip });
     return true;
   });
 
 export const logoutAdminFn = createServerFn({
   method: "POST",
-}).handler(() => {
+}).handler(async () => {
+  // Every pick of another user mode calls it, with or without a session, and only closing one is worth an entry
+  if (!isAdminSession(getCookie(ADMIN_SESSION_COOKIE_NAME))) {
+    return;
+  }
   deleteCookie(ADMIN_SESSION_COOKIE_NAME, { path: "/" });
+  await writeAuditEntry({
+    path: ADMIN_SESSION_AUDIT_PATHS.logout,
+    ok: true,
+    ip: getRequestIP({ xForwardedFor: true }),
+  });
 });

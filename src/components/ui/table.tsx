@@ -5,7 +5,9 @@ import * as React from "react";
 import DisabledMessage from "@/components/ui/disabled-message";
 import { cn } from "@/lib/utils";
 
-const tableVariants = cva("relative max-w-full border-collapse overflow-auto rounded-md border border-border", {
+const BORDER_CLASS_NAME = "rounded-md border border-border";
+
+const tableVariants = cva("relative max-w-full border-collapse overflow-auto", {
   defaultVariants: {
     variant: "default",
   },
@@ -21,13 +23,22 @@ export interface TableProps extends React.ComponentProps<"table">, VariantProps<
   testId?: string;
   disabledMessage?: string;
   tableClassName?: string;
+  scrollable?: boolean;
 }
 
-function Table({ testId, className, tableClassName, variant, disabledMessage, ...props }: TableProps) {
+function Table({
+  testId,
+  className,
+  tableClassName,
+  variant,
+  disabledMessage,
+  scrollable = false,
+  ...props
+}: TableProps) {
   return (
     <div
       data-testid={testId}
-      className={cn(tableVariants({ className, variant }))}
+      className={cn(tableVariants({ className, variant }), !scrollable && BORDER_CLASS_NAME)}
       inert={disabledMessage !== undefined}
     >
       <table className={cn("w-full caption-bottom", tableClassName)} {...props} />

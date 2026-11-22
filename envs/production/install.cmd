@@ -41,7 +41,7 @@ sc query ResanoRP >nul 2>&1 || (
 
 netsh advfirewall firewall delete rule name="ResanoRP" >nul 2>&1
 netsh advfirewall firewall delete rule name="ResanoRP HTTP/3" >nul 2>&1
-netsh advfirewall firewall add rule name="ResanoRP" dir=in action=allow protocol=TCP localport=%VITE_CADDY_HTTP_PORT%,%VITE_CADDY_HTTPS_PORT% >nul || goto :fail
+netsh advfirewall firewall add rule name="ResanoRP" dir=in action=allow protocol=TCP localport=%VITE_CADDY_HTTPS_PORT% >nul || goto :fail
 netsh advfirewall firewall add rule name="ResanoRP HTTP/3" dir=in action=allow protocol=UDP localport=%VITE_CADDY_HTTPS_PORT% >nul || goto :fail
 
 schtasks /create /tn ResanoRP-backup /sc daily /st 02:00 /ru SYSTEM /rl HIGHEST /f /tr "\"%~dp0backup.cmd\"" >nul || echo The daily backup could not be scheduled

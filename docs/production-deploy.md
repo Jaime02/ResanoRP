@@ -6,12 +6,12 @@ is unzipped on the server. The server needs no internet and no source code.
 
 ## 1. What runs
 
-| Process    | Run by                                         | Listens on                             | Reached by                     |
-| ---------- | ---------------------------------------------- | -------------------------------------- | ------------------------------ |
-| PostgreSQL | Windows service `ResanoRP-db` (NetworkService) | `localhost:POSTGRES_PORT`              | app, PowerSync, backup scripts |
-| PowerSync  | `supervisor.ts` (`bin\node.exe`)               | 8080                                   | Caddy only                     |
-| App        | `supervisor.ts` (`bin\bun.exe .output\…`)      | 5173                                   | Caddy only                     |
-| Caddy      | `supervisor.ts` (`bin\caddy.exe`)              | `VITE_CADDY_HTTP_PORT` / `_HTTPS_PORT` | the browsers of the client PCs |
+| Process    | Run by                                         | Listens on                | Reached by                     |
+| ---------- | ---------------------------------------------- | ------------------------- | ------------------------------ |
+| PostgreSQL | Windows service `ResanoRP-db` (NetworkService) | `localhost:POSTGRES_PORT` | app, PowerSync, backup scripts |
+| PowerSync  | `supervisor.ts` (`bin\node.exe`)               | 8080                      | Caddy only                     |
+| App        | `supervisor.ts` (`bin\bun.exe .output\…`)      | 5173                      | Caddy only                     |
+| Caddy      | `supervisor.ts` (`bin\caddy.exe`)              | `VITE_CADDY_HTTPS_PORT`   | the browsers of the client PCs |
 
 `supervisor.ts` runs inside the Windows service `ResanoRP` (WinSW, `resanorp-service.exe`, as SYSTEM). On start it:
 
@@ -35,7 +35,8 @@ service 10 s after a crash and gives it 15 s to stop (`resanorp-service.xml`).
 - The server is a Windows Server machine on the LAN, with a fixed address.
 - The clients open `https://<VITE_HOST>:<VITE_CADDY_HTTPS_PORT>`.
 - `VITE_HOST` must resolve to the server's address on every client PC. Add a host override for it in the LAN's DNS resolver
-  (the router or firewall), and make sure the PCs use that resolver as their DNS server.
+  (the router or firewall), and make sure the PCs use that resolver as their DNS server. Do not edit the hosts file on the
+  client PCs: the DNS rule is the only mapping they need.
 
 ## 3. The production folder
 
@@ -61,7 +62,7 @@ so unzipping a new version over the folder keeps them.
 | `pgdata\`                                                              | machine | The PostgreSQL cluster                                                                                |
 | `caddy\`, `caddy-config\`                                              | machine | Caddy's own certificate authority and state. Losing `caddy\` means every client must trust a new root |
 | `BLUEPRINTS\`, `SELL_ORDERS\`, `TAGS\`, `DELIVERY_NOTES\`, `INVOICES\` | machine | Files of the app                                                                                      |
-| `LOGS\`                                                                | machine | App logs                                                                                              |
+| `LOGS\`                                                                | machine | App logs, and `audit\` with one `audit-yyyy-MM.log` per month, one JSON line per mutation and login   |
 | `service-logs\`                                                        | machine | WinSW logs: the supervisor's output, with PowerSync and Caddy. Rolled at 10 MB, 5 files               |
 | `backups\`                                                             | machine | What a refresh or an import replaced (section 8)                                                      |
 | `client\root.crt`                                                      | machine | Written by `start.cmd` for the clients (section 7)                                                    |
@@ -78,7 +79,7 @@ directory when WinSW starts `bun run supervisor.ts`, and every child inherits it
 | Key                                          | Used for                                                                                     |
 | -------------------------------------------- | -------------------------------------------------------------------------------------------- |
 | `VITE_HOST`                                  | Site name in the `Caddyfile`                                                                 |
-| `VITE_CADDY_HTTP_PORT`, `_HTTPS_PORT`        | Caddy's ports and the firewall rules                                                         |
+| `VITE_CADDY_HTTPS_PORT`                      | Caddy's port and the firewall rules                                                          |
 | `POSTGRES_DB`, `_USER`, `_PASSWORD`, `_PORT` | `initdb`, the scripts, PowerSync's connection strings (built by the supervisor)              |
 | `DATABASE_URL`                               | The app's connection                                                                         |
 | `POWERSYNC_JWT_SECRET`                       | Shared by the app (signs browser tokens) and PowerSync (`PS_JWT_SECRET`)                     |
@@ -175,7 +176,7 @@ Stopping: `net stop ResanoRP` (app, PowerSync, Caddy), then `net stop ResanoRP-d
 ### Refreshing the data
 
 `refresh.cmd` (administrator) replaces all production data with a new migration from Prisma and RAIO, read live on
-the server. It needs Python in the PATH. The first run creates `venv` and installs `src\db\requirements.txt`. The
+the server. It needs Python 3.14 and its `py` launcher: newer versions have no prebuilt pyodbc or python-calamine. The first run creates `venv` and installs `src\db\requirements.txt`. The
 sources are `.env` keys: `FB_HOST`, `FB_DATABASE`, `FB_USER`, `FB_PASSWORD` (Prisma, read through its own database
 server: Firebird 1.5 and InterBase 7.5 both work), `RAIO_SERVER`, `RAIO_USER`, `RAIO_PASSWORD`, `RAIO_BLUEPRINT_ROOT_PATH` and `OFERTAS_ROOT_PATH`. After you
 type `YES`, `src\db\refresh_production.py`:
@@ -220,7 +221,8 @@ is enough: `bundle-production -- --update`, unzip it over the folder, `net stop 
 
 The task `ResanoRP-backup` runs `backup.cmd` every night at 02:00 as SYSTEM. It writes `BACKUP_LOCAL_PATH\<yyyyMMdd>\`
 with the database (`production.dump`, `pg_dump -Fc`), `SELL_ORDERS`, `TAGS`, `DELIVERY_NOTES`, `INVOICES` and
-`caddy`, plus `BLUEPRINTS` on Sunday night (the Monday folder). `cleanup-backups.ps1` then keeps every backup of the
+`caddy` and the audit log as `AUDIT`, plus `BLUEPRINTS` on Sunday night (the Monday folder). `restore.cmd` does not
+import `AUDIT`: copy its files back by hand if the server lost its own. `cleanup-backups.ps1` then keeps every backup of the
 current week, the latest one of each of the three previous weeks, and the two newest blueprint copies. A run writes
 to `<yyyyMMdd>.partial` and replaces the day's folder only once complete, so a half-written backup is never kept or
 restored, a failed run (also a second one the same day) leaves the backup already there as it was, and the cleanup

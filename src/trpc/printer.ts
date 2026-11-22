@@ -55,50 +55,56 @@ async function getPrinter(db: TDatabase, printerId: number) {
 }
 
 export default router({
-  create: adminProcedure.input(createPrinterSchema).mutation(async ({ ctx, input }) => {
-    try {
-      const newPrinter = (
-        await ctx.db.insert(dbTablePrinter).values(toPrinterRow(input)).returning(PUBLIC_PRINTER_COLUMNS)
-      ).at(0);
-      if (!newPrinter) {
-        throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Error al crear la Impresora" });
+  create: adminProcedure.input(createPrinterSchema).mutation(async ({ ctx, input }) =>
+    ctx.db.transaction(async (tx) => {
+      try {
+        const newPrinter = (
+          await tx.insert(dbTablePrinter).values(toPrinterRow(input)).returning(PUBLIC_PRINTER_COLUMNS)
+        ).at(0);
+        if (!newPrinter) {
+          throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Error al crear la Impresora" });
+        }
+        return { item: newPrinter };
+      } catch (error) {
+        handleMutationError({ error });
       }
-      return { item: newPrinter };
-    } catch (error) {
-      handleMutationError({ error });
-    }
-  }),
-  update: adminProcedure.input(updatePrinterSchema).mutation(async ({ ctx, input }) => {
-    try {
-      const { id, ...fields } = input;
-      const updatedPrinter = (
-        await ctx.db
-          .update(dbTablePrinter)
-          .set(toPrinterRow(fields))
-          .where(eq(dbTablePrinter.id, id))
-          .returning(PUBLIC_PRINTER_COLUMNS)
-      ).at(0);
-      if (!updatedPrinter) {
-        throw new TRPCError({ code: "NOT_FOUND", message: PRINTER_NOT_FOUND_MESSAGE(id) });
+    }),
+  ),
+  update: adminProcedure.input(updatePrinterSchema).mutation(async ({ ctx, input }) =>
+    ctx.db.transaction(async (tx) => {
+      try {
+        const { id, ...fields } = input;
+        const updatedPrinter = (
+          await tx
+            .update(dbTablePrinter)
+            .set(toPrinterRow(fields))
+            .where(eq(dbTablePrinter.id, id))
+            .returning(PUBLIC_PRINTER_COLUMNS)
+        ).at(0);
+        if (!updatedPrinter) {
+          throw new TRPCError({ code: "NOT_FOUND", message: PRINTER_NOT_FOUND_MESSAGE(id) });
+        }
+        return { item: updatedPrinter };
+      } catch (error) {
+        handleMutationError({ error });
       }
-      return { item: updatedPrinter };
-    } catch (error) {
-      handleMutationError({ error });
-    }
-  }),
-  delete: adminProcedure.input(requiredIdObjectSchema).mutation(async ({ ctx, input }) => {
-    try {
-      const deletedPrinter = (
-        await ctx.db.delete(dbTablePrinter).where(eq(dbTablePrinter.id, input.id)).returning(PUBLIC_PRINTER_COLUMNS)
-      ).at(0);
-      if (!deletedPrinter) {
-        throw new TRPCError({ code: "NOT_FOUND", message: PRINTER_NOT_FOUND_MESSAGE(input.id) });
+    }),
+  ),
+  delete: adminProcedure.input(requiredIdObjectSchema).mutation(async ({ ctx, input }) =>
+    ctx.db.transaction(async (tx) => {
+      try {
+        const deletedPrinter = (
+          await tx.delete(dbTablePrinter).where(eq(dbTablePrinter.id, input.id)).returning(PUBLIC_PRINTER_COLUMNS)
+        ).at(0);
+        if (!deletedPrinter) {
+          throw new TRPCError({ code: "NOT_FOUND", message: PRINTER_NOT_FOUND_MESSAGE(input.id) });
+        }
+        return { item: deletedPrinter };
+      } catch (error) {
+        handleMutationError({ error });
       }
-      return { item: deletedPrinter };
-    } catch (error) {
-      handleMutationError({ error });
-    }
-  }),
+    }),
+  ),
   ping: adminProcedure.input(requiredIdObjectSchema).mutation(async ({ ctx, input }) => {
     const printer = await getPrinter(ctx.db, input.id);
     try {

@@ -46,8 +46,10 @@ RUN bun ./src/scripts/copy-pdf-worker.ts
 # source changes (see vite.config.ts).
 RUN bun run build:css
 
-# Dev and test keep the prerelease stage and run the dev server; only production pays for the bundle.
+# Dev keeps the prerelease stage and runs the dev server; production and the tests pay for the bundle.
 FROM prerelease AS production
 # envs/ is not in the image and Vite inlines VITE_* variables into the bundle, so a test build needs it from the build
 ARG VITE_ENV_NAME
+# The test build sets development, so the bundle keeps the warnings of React and TanStack DB that the tests fail on
+ARG NODE_ENV=production
 RUN bunx vite build

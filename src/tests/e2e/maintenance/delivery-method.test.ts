@@ -3,13 +3,14 @@ import { eq } from "drizzle-orm";
 
 import { DELIVERY_METHOD_NAME_CONSTRAINT, dbTableDeliveryMethod } from "@/db/schema";
 import { DEFAULT_DELIVERY_METHOD_LABEL } from "@/messages/client";
-import { STATUS_DELETED_LABEL, DELIVERY_METHOD_LABEL } from "@/messages/common";
+import { STATUS_DELETED_LABEL, DELIVERY_METHOD_LABEL, NAME_LABEL } from "@/messages/common";
 import {
   DELIVERY_METHOD_CREATE_TITLE,
   DELIVERY_METHOD_DELETED_MESSAGE,
   DELIVERY_METHOD_RESTORED_MESSAGE,
   SHOW_DELETED_DELIVERY_METHODS_LABEL,
   DELIVERY_METHOD_CREATED_MESSAGE,
+  DELIVERY_METHOD_EDITED_MESSAGE,
 } from "@/messages/delivery-method";
 import { mockClients, mockDeliveryMethods, mockDeliveryNotes } from "@/tests/mock-data";
 import { openAndConfirmAlertDialog } from "@/tests/utils/components/alert-dialog";
@@ -49,6 +50,25 @@ test("manage the Transportes", async ({ page, db }) => {
     await dialogCreateEditDeliveryMethod.getByTestId("button-close").click();
     await expect(dialogCreateEditDeliveryMethod).not.toBeVisible();
   };
+
+  await test.step("rename a Transporte and give it back its name", async () => {
+    const deliveryMethod = activeDeliveryMethods[0];
+    await page.goto(MAINTENANCE_DELIVERY_METHOD_URL);
+
+    let currentName = deliveryMethod.name;
+    for (const name of [`${deliveryMethod.name} editado`, deliveryMethod.name]) {
+      await (await findTableRowByText(tableDeliveryMethod, currentName)).getByTestId("button-edit").click();
+      await assertFormLoaded(dialogCreateEditDeliveryMethod);
+      await getFormInputByLabel(dialogCreateEditDeliveryMethod, NAME_LABEL).fill(name);
+      await dialogCreateEditDeliveryMethod.getByTestId("button-submit").click();
+      await expect(dialogCreateEditDeliveryMethod).not.toBeVisible();
+      await expectSingleSuccessToast(page, DELIVERY_METHOD_EDITED_MESSAGE);
+
+      expect((await db.query.dbTableDeliveryMethod.findFirst({ where: { id: deliveryMethod.id } }))?.name).toBe(name);
+      await expect(filterByExactText(getTableRows(tableDeliveryMethod), name)).toHaveCount(1);
+      currentName = name;
+    }
+  });
 
   await test.step("reject a Transporte with the name of any active one", async () => {
     await page.goto(MAINTENANCE_DELIVERY_METHOD_URL);

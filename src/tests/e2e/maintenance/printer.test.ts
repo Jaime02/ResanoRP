@@ -3,6 +3,7 @@ import { eq } from "drizzle-orm";
 
 import { dbTablePrinter } from "@/db/schema";
 import { IPP_PORT } from "@/files/printer";
+import { AUDIT_REDACTED_VALUE } from "@/logging/audit";
 import { LoggerLevels, LogMessages } from "@/logging/types";
 import {
   PRINTER_CREATED_MESSAGE,
@@ -10,6 +11,7 @@ import {
   PRINTER_PASSWORD_LABEL,
   PRINTER_REACHABLE_MESSAGE,
 } from "@/messages/printer";
+import { readAuditLog } from "@/tests/utils/audit-log";
 import { assertFormLoaded, getFormInputByLabel } from "@/tests/utils/components/form";
 import { filterByExactText, getTableRows } from "@/tests/utils/components/table";
 import { expectSingleSuccessToast, expectSingleToast } from "@/tests/utils/components/toast";
@@ -134,6 +136,15 @@ test("manage the Impresoras", async ({ page, db }) => {
     await expect(dialogCreateEditPrinter).not.toBeVisible();
     await expectSingleSuccessToast(page, PRINTER_CREATED_MESSAGE);
     expect(await getLabelPrinter()).toMatchObject(labelPrinter);
+    // The audit log records the creation but never the password
+    expect(readAuditLog()).toContainEqual(
+      expect.objectContaining({
+        ok: true,
+        isAdmin: true,
+        input: expect.objectContaining({ name: labelPrinter.name, password: AUDIT_REDACTED_VALUE }),
+      }),
+    );
+    expect(JSON.stringify(readAuditLog())).not.toContain(labelPrinter.password);
     await workflowPingPrinter(page, labelPrinter.name);
     await expectSingleSuccessToast(page, PRINTER_REACHABLE_MESSAGE(labelPrinter.name));
 

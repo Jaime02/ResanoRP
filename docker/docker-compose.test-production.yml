@@ -5,6 +5,7 @@ services:
       target: production
       args:
         VITE_ENV_NAME: test
+        NODE_ENV: development
     # Its own tag, so this test build never replaces the production image
     image: resanorp-app:test-production
     environment:

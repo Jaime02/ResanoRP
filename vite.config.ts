@@ -20,6 +20,20 @@ function killTree(pid: number) {
   }
 }
 
+// Nitro bundles the server with the production React whatever NODE_ENV is, which lacks the jsxDEV a development build
+// compiles to. The test bundle is built in development to keep the warnings, so its server needs the development React
+function nitroDevelopmentReact(): Plugin {
+  return {
+    name: "nitro-development-react",
+    apply: () => process.env.NODE_ENV === "development",
+    configEnvironment(name) {
+      if (name === "nitro") {
+        return { define: { "process.env.NODE_ENV": JSON.stringify("development") } };
+      }
+    },
+  };
+}
+
 // public/styles.css is read at runtime by src/files/pdf.tsx to inline styles in the printed tags
 function tailwindCssFile(): Plugin {
   return {
@@ -80,6 +94,7 @@ export default defineConfig(({ command }) => {
       viteReact({ compiler: true }),
       // Nitro's dev worker fails every SSR request with "socket hang up" when Vite runs on Bun, so only the build uses it.
       command === "build" && nitro({ preset: "bun" }),
+      nitroDevelopmentReact(),
     ],
     resolve: {
       tsconfigPaths: true,

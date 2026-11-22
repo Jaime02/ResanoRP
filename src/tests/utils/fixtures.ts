@@ -9,6 +9,13 @@ import { ADMIN_SESSION_COOKIE_NAME, getAdminSessionToken } from "@/lib/admin-ses
 import { errorsLogFilePath } from "@/logging/logger";
 import { resetBlueprints, resetSellOrders, resetTags } from "@/scripts/reset-env";
 import { MOCK_INITIAL_DATE } from "@/tests/mock-data";
+import {
+  LOG_TIMESTAMP_PATTERN,
+  assertAuditLog,
+  resetAuditLog,
+  settleTrackedMutations,
+  trackAuditedMutations,
+} from "@/tests/utils/audit-log";
 import { getToasts } from "@/tests/utils/components/toast";
 import { seedDatabase } from "@/tests/utils/db";
 import type { BaseMachine } from "@/types/machine";
@@ -32,8 +39,6 @@ export const TestAnnotations: Record<string, TestAnnotation> = {
   // Empty the generated tags before and after the test
   ResetTags: { type: "reset_tags" as const },
 } as const;
-
-const LOG_TIMESTAMP_PATTERN = /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/;
 
 // Each worker runs a single test at a time, so the events expected by the current test can live in the module
 let expectedErrorsLogEvents: Array<Record<string, unknown>> = [];
@@ -101,6 +106,9 @@ export const test = base.extend<TestFixture>({
       if (expectedErrorsLogEvents.length === 0) {
         expect(readErrorsLog(), `Errors log file (${errorsLogFilePath}) should be empty`).toEqual([]);
       }
+      if (testInfo.errors.length === 0) {
+        await assertAuditLog();
+      }
     },
     { auto: true },
   ],
@@ -125,6 +133,7 @@ export const test = base.extend<TestFixture>({
 
       fs.truncateSync(errorsLogFilePath);
       expectedErrorsLogEvents = [];
+      await resetAuditLog();
       await use();
     },
     { auto: true },
@@ -144,13 +153,17 @@ export const test = base.extend<TestFixture>({
       expect(readErrorsLog(), message).toHaveLength(expectedErrorsLogEvents.length);
     }
     assertNoUnexpectedErrors();
+    // While the page is open, as closing it aborts the requests still going
+    if (testInfo.errors.length === 0) {
+      await assertAuditLog();
+    }
   },
   toasts: async ({ page }, use) => {
     const toasts = getToasts(page);
     await use(toasts);
   },
   // Pages of other browsers, each one with its own cookies, so they work in another user mode at the same time
-  openPage: async ({ browser, baseURL }, use) => {
+  openPage: async ({ browser, baseURL }, use, testInfo) => {
     const contexts: Array<BrowserContext> = [];
     const assertions: Array<() => void> = [];
     await use(async (userConfig) => {
@@ -163,6 +176,9 @@ export const test = base.extend<TestFixture>({
     });
     for (const assertNoUnexpectedErrors of assertions) {
       assertNoUnexpectedErrors();
+    }
+    if (testInfo.errors.length === 0) {
+      await assertAuditLog();
     }
     await Promise.all(contexts.map(async (context) => context.close()));
   },
@@ -178,6 +194,7 @@ async function prepareContext(context: BrowserContext, baseURL: string, userConf
 
 // Returns the check that fails the test on the warnings, errors and uncaught exceptions the page logged
 async function preparePage(page: Page) {
+  await trackAuditedMutations(page.context());
   const consoleMessages: Array<{ type: string; text: string }> = [];
   const pageErrors: Array<Error> = [];
 
@@ -215,13 +232,14 @@ async function preparePage(page: Page) {
     return response;
   };
 
-  // Disable all animations and transitions to make tests more stable and faster
+  // Disable all animations and transitions to make tests more stable and faster. A duration of 0s would also finish the
+  // animations driven by a scroll at once, whatever the scroll position
   await page.addInitScript(() => {
     document.addEventListener("DOMContentLoaded", () => {
       const disableAnimationsStyleTag = document.createElement("style");
       disableAnimationsStyleTag.innerHTML = `
           *, *::before, *::after {
-            animation-duration: 0s !important;
+            animation-duration: 1ms !important;
             animation-delay: 0s !important;
             transition-duration: 0s !important;
             transition-delay: 0s !important;
@@ -254,6 +272,7 @@ export async function inAnotherTab(page: Page, run: (anotherPage: Page) => Promi
   const assertNoUnexpectedErrors = await preparePage(anotherPage);
   await run(anotherPage);
   assertNoUnexpectedErrors();
+  await settleTrackedMutations();
   await anotherPage.close();
 }
 

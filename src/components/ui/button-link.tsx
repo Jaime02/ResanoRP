@@ -34,16 +34,12 @@ export default function ButtonLink({
       <Button
         testId={testId}
         disabled={disabled}
-        className={cn("max-w-full min-w-0", buttonClassName)}
+        className={buttonClassName}
         variant={variant}
         size={size}
         onClick={onClick}
       >
-        {typeof children === "string" || typeof children === "number" ? (
-          <span className="truncate">{children}</span>
-        ) : (
-          children
-        )}
+        {children}
         {showExternalLinkIcon !== false && props.to !== "." && <ExternalLinkIcon />}
       </Button>
     </Link>
