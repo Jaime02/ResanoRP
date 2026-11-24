@@ -27,6 +27,21 @@ export enum DateFormat {
   DatetimeSeconds = "datetime-seconds",
 }
 
+// Built once: toLocaleString with options builds a formatter per call, ~25 times slower over a long table
+const dateFormatters = new Map(
+  Object.values(DateFormat).map((format) => [
+    format,
+    new Intl.DateTimeFormat("es-ES", {
+      day: "2-digit",
+      month: "2-digit",
+      timeZone: APP_TIME_ZONE,
+      year: "numeric",
+      ...(format !== DateFormat.Date && { hour: "2-digit", hour12: false, minute: "2-digit" }),
+      ...(format === DateFormat.DatetimeSeconds && { second: "2-digit" }),
+    }),
+  ]),
+);
+
 export function formatPartDimension(part?: { width?: string | null; length?: string | null }): string {
   if (!part) {
     return "";
@@ -69,14 +84,7 @@ export function formatDate(dateInput: string | Date | null, format: DateFormat =
     return null;
   }
 
-  return date.toLocaleString("es-ES", {
-    day: "2-digit",
-    month: "2-digit",
-    timeZone: APP_TIME_ZONE,
-    year: "numeric",
-    ...(format !== DateFormat.Date && { hour: "2-digit", hour12: false, minute: "2-digit" }),
-    ...(format === DateFormat.DatetimeSeconds && { second: "2-digit" }),
-  });
+  return dateFormatters.get(format)!.format(date);
 }
 
 export function formatPartUnits(quantity: number): string {

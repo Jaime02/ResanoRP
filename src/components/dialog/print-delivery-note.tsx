@@ -26,10 +26,10 @@ import {
 } from "@/messages/delivery-note";
 import trpc from "@/trpc/trpc-client";
 
-function getDeliveryNoteFileUrl(deliveryNoteId: number, copies: number) {
+function getDeliveryNoteFileUrl(deliveryNoteId: number, copies: number, withPrices: boolean) {
   // The file is overwritten on every print, so the URL carries the generation timestamp to keep the
   // browser from showing a previously cached version of the Albarán.
-  return `/api/files/delivery-note/${deliveryNoteId}?copies=${copies}&generatedAt=${Date.now()}`;
+  return `/api/files/delivery-note/${deliveryNoteId}?copies=${copies}&withPrices=${withPrices}&generatedAt=${Date.now()}`;
 }
 
 interface DialogPrintDeliveryNoteProps {
@@ -53,7 +53,7 @@ export default function DialogPrintDeliveryNote({ deliveryNoteId, iconOnly = fal
       mutation: trpc.deliveryNote.print.mutate({ copies, id: deliveryNoteId, withPrices: printWithPrices }),
     });
     setIsLoading(false);
-    return getDeliveryNoteFileUrl(deliveryNoteId, copies);
+    return getDeliveryNoteFileUrl(deliveryNoteId, copies, printWithPrices);
   }
 
   async function openPreview(printWithPrices: boolean) {

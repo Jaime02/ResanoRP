@@ -1,10 +1,11 @@
 import { createHash } from "node:crypto";
 
+import { eq } from "drizzle-orm";
 import { z } from "zod";
 
 import db from "@/db";
 import { dbTableAuditLog } from "@/db/schema";
-import { getAuditLogMonth } from "@/lib/backoffice";
+import { getAuditLogMonth, getAuditRouterDocument } from "@/lib/backoffice";
 import logger from "@/logging/logger";
 import { LogMessages } from "@/logging/types";
 
@@ -28,6 +29,7 @@ export interface AuditEntry {
   errorCode?: string;
   input?: unknown;
   resultId?: string;
+  documentId?: string;
 }
 
 const auditResultSchema = z.object({ item: z.object({ id: z.union([z.number(), z.string()]) }) });
@@ -37,6 +39,35 @@ const auditResultSchema = z.object({ item: z.object({ id: z.union([z.number(), z
 export function getAuditResultId(data: unknown) {
   const id = auditResultSchema.safeParse(data).data?.item.id;
   return id === undefined ? undefined : String(id);
+}
+
+const toAuditId = (value: unknown) =>
+  typeof value === "number" || typeof value === "string" ? String(value) : undefined;
+const readAuditId = (value: unknown, key: string) =>
+  typeof value === "object" && value !== null ? toAuditId((value as Record<string, unknown>)[key]) : undefined;
+
+/**
+ * The document a mutation changed, the parent one for a line: from the row it returns, else from its input. A failed
+ * delete or restore of a line only sends the id of the line, so its parent is read from the line, if it still exists.
+ */
+export async function getAuditDocumentId(path: string, data: unknown, input: unknown) {
+  const routerDocument = getAuditRouterDocument(path);
+  if (routerDocument === undefined) {
+    return undefined;
+  }
+  const { documentRouter, lineTable } = routerDocument;
+  const item = typeof data === "object" && data !== null ? (data as { item?: unknown }).item : undefined;
+  const parentKey = `${documentRouter}Id`;
+  if (lineTable === undefined) {
+    return readAuditId(item, "id") ?? toAuditId(input) ?? readAuditId(input, "id") ?? readAuditId(input, parentKey);
+  }
+  const parentId = readAuditId(item, parentKey) ?? readAuditId(input, parentKey);
+  const lineId = Number(readAuditId(input, "id"));
+  if (parentId !== undefined || !Number.isInteger(lineId)) {
+    return parentId;
+  }
+  const [line] = await db.select().from(lineTable).where(eq(lineTable.id, lineId));
+  return readAuditId(line, parentKey);
 }
 
 // Two calls of a procedure with the same input are the same call as far as what they write is concerned

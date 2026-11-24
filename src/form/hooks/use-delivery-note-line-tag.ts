@@ -19,10 +19,10 @@ const defaultPrintTagPartFormData = {
   ],
 };
 
-function getTagName(printPartTag: TPrintTagPart) {
+function getTagName(printPartTag: TPrintTagPart, printId: string) {
   return printPartTag.deliveryNoteLineId !== undefined
-    ? getPartTagName(PartTagSource.DeliveryNoteLine, printPartTag.deliveryNoteLineId)
-    : getPartTagName(PartTagSource.SellOrderLine, printPartTag.sellOrderLines[0].id);
+    ? getPartTagName(PartTagSource.DeliveryNoteLine, printPartTag.deliveryNoteLineId, printId)
+    : getPartTagName(PartTagSource.SellOrderLine, printPartTag.sellOrderLines[0].id, printId);
 }
 
 interface UsePartTagFormProps {
@@ -58,10 +58,11 @@ export default function usePartTagForm({
     // The tag is rendered at the size of the labels of the printer selected when it is printed
     onSubmit: async ({ value }) => {
       const printPartTag = { ...value, labelSize: printControls.labelSize } as TPrintTagPart;
+      const printId = crypto.randomUUID();
       await showToastOnTRPCMutation({
-        mutation: trpc.part.printTag.mutate(printPartTag),
+        mutation: trpc.part.printTag.mutate({ ...printPartTag, printId }),
         onSubmit: async () => {
-          await printControls.printPdf(getPartTagFileUrl(getTagName(printPartTag)), onSubmit);
+          await printControls.printPdf(getPartTagFileUrl(getTagName(printPartTag, printId)), onSubmit);
         },
       });
     },

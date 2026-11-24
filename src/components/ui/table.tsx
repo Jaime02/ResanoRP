@@ -127,7 +127,9 @@ function TableCell({ testId, className, ...props }: React.ComponentProps<"td"> &
     <td
       data-testid={testId}
       className={cn(
-        "overflow-hidden border-r border-border px-1.5 py-1 text-nowrap text-ellipsis last:border-r-0",
+        "overflow-hidden border-r border-border px-1.5 py-(--cell-py) text-nowrap text-ellipsis [--cell-py:--spacing(1)] last:border-r-0",
+        // Rows without a button are as tall as those with one
+        "h-[calc(--theme(--size-icon)+2*var(--cell-py))]",
         className,
       )}
       {...props}

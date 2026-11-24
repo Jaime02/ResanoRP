@@ -23,6 +23,7 @@ import { PART_IN_ACTIVE_SETS_ERROR_MESSAGE } from "@/messages/part";
 import { requiredIdObjectSchema } from "@/schemas";
 import { printTagPartSchema } from "@/schemas/delivery-note-line";
 import { createPartFormDataSchema, updatePartSchema } from "@/schemas/part";
+import { tagPrintIdSchema } from "@/schemas/printer";
 import { sanitizePath } from "@/schemas/utils";
 import { router } from "@/trpc";
 import { adminProcedure, procedure } from "@/trpc";
@@ -157,7 +158,7 @@ export default router({
     ),
   printTag: procedure
     .meta({ writes: [] })
-    .input(printTagPartSchema)
+    .input(printTagPartSchema.and(tagPrintIdSchema))
     .mutation(async ({ input }) => {
       let reference: string | undefined;
       let partReferenceId: number | null;
@@ -184,7 +185,7 @@ export default router({
         clientId = (await getDeliveryNote({ id: deliveryNoteLine.deliveryNoteId }))?.clientId;
         reference = deliveryNoteLine.description;
         partReferenceId = deliveryNoteLine.partReferenceId;
-        tagName = getPartTagName(PartTagSource.DeliveryNoteLine, deliveryNoteLine.id);
+        tagName = getPartTagName(PartTagSource.DeliveryNoteLine, deliveryNoteLine.id, input.printId);
       } else {
         const sellOrderLines = await Promise.all(input.sellOrderLines.map(async ({ id }) => getSellOrderLineById(id)));
         if (sellOrderLines.some((sellOrderLine) => sellOrderLine === undefined)) {
@@ -252,7 +253,7 @@ export default router({
         const [sellOrderLine] = definedSellOrderLines;
         reference = sellOrderLine.description ?? undefined;
         partReferenceId = sellOrderLine.partReferenceId;
-        tagName = getPartTagName(PartTagSource.SellOrderLine, sellOrderLine.id);
+        tagName = getPartTagName(PartTagSource.SellOrderLine, sellOrderLine.id, input.printId);
       }
 
       let partReference: BasePartReference | undefined;

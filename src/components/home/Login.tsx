@@ -10,6 +10,7 @@ import { Card, CardFooter, CardTitle } from "@/components/ui/card";
 import LoadingSpinner from "@/components/ui/loading-spinner";
 import { UserMode, useAppContext } from "@/contexts/app-context";
 import { FormContextProvider, useAppForm } from "@/form";
+import { AdminLoginResult } from "@/lib/admin-login";
 import { loginAdminFn } from "@/lib/admin-session-fns";
 import { forgetPowerSyncToken } from "@/lib/powersync";
 import log from "@/logging/log";
@@ -18,6 +19,7 @@ import { NO_MACHINES_MESSAGE } from "@/messages/combobox";
 import { BACK_LABEL } from "@/messages/common";
 import {
   ADMIN_ACCESS_TITLE,
+  ADMIN_LOGIN_LOCKED_MESSAGE,
   ENTER_PASSWORD_LABEL,
   LOGIN_LABEL,
   SELECT_MACHINE_TITLE,
@@ -78,12 +80,15 @@ export default function Login({ children }: { children: ReactNode }) {
       onChange: adminPasswordSchema,
     },
     onSubmit: async ({ value }) => {
-      if (await loginAdminFn({ data: value.password })) {
+      const result = await loginAdminFn({ data: value.password });
+      if (result === AdminLoginResult.Ok) {
         // The token cached before the session cannot sync the audit log
         forgetPowerSyncToken();
         formAdminPassword.reset();
         setUserMode(UserMode.Admin);
         setIsAdminLogin(false);
+      } else if (result === AdminLoginResult.Locked) {
+        toaster.error({ title: ADMIN_LOGIN_LOCKED_MESSAGE });
       } else {
         toaster.error({ title: WRONG_PASSWORD_MESSAGE });
         await log(LoggerLevels.emerg, LogMessages.wrongUserModePassword);

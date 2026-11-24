@@ -9,15 +9,17 @@ export enum PartTagSource {
   ProductionOrder = "production-order",
 }
 
-export const PART_TAG_NAME_PATTERN = new RegExp(`^(${Object.values(PartTagSource).join("|")})-\\d+$`);
+const UUID_PATTERN = "[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}";
 
-export function getPartTagName(source: PartTagSource, id: number) {
-  return `${source}-${id}`;
+export const PART_TAG_NAME_PATTERN = new RegExp(`^(${Object.values(PartTagSource).join("|")})-\\d+-${UUID_PATTERN}$`);
+
+// shortcut: a tag rendered but never fetched stays in TAGS_ROOT_PATH, delete old files there if the folder ever grows
+export function getPartTagName(source: PartTagSource, id: number, printId: string) {
+  return `${source}-${id}-${printId}`;
 }
 
-// The file is overwritten on every print, so the URL carries the time to keep the browser from reusing an older one
 export function getPartTagFileUrl(tagName: string) {
-  return `/api/files/part-tag/${tagName}?generatedAt=${Date.now()}`;
+  return `/api/files/part-tag/${tagName}`;
 }
 
 export interface TTagSellOrder {

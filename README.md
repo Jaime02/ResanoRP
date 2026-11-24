@@ -65,7 +65,7 @@ The stack runs a bundle of the app built in development mode, which keeps the Re
 
 ### Audit checks
 
-Every tRPC mutation is written to the audit log (the `audit_log` table, one row per mutation and admin login or logout, with `password` fields hidden). It syncs to the Backoffice through PowerSync, only for the token of an admin session and the months of its date filter, and the write trace of the tests leaves it out. After each test that passed, the fixtures check that:
+Every tRPC mutation is written to the audit log (the `audit_log` table, one row per mutation and admin login or logout, with `password` fields hidden, and the Pedido, Albarán, Factura or Orden de producción it changed, the parent one for a line, as `documentId`). It syncs to the Backoffice through PowerSync, only for the token of an admin session and the months of its date filter, and the write trace of the tests leaves it out. After each test that passed, the fixtures check that:
 
 - the audit log has exactly the mutations the browser sent, plus the entries the test declared with `expectAuditLog`;
 - the app wrote rows only inside the transaction of a mutation that succeeded. The test build tags every `ctx.db.transaction` with its procedure (`src/trpc/index.ts`) and a trigger records every write (`src/tests/utils/write-trace.ts`), so a mutation must do all its writes inside `ctx.db.transaction`;
@@ -90,11 +90,10 @@ The schema is in `src/db/schema.ts` and managed with Drizzle (`drizzle.config.ts
 
 - `bun run prisma` starts the Prisma environment (`envs/.env.prisma`), used for schema work and the data migration.
 - `bun run reset-env:prisma` resets that environment.
-- `bun run clean-database` cleans the database.
 
 ### Migrating the legacy data
 
-Imports the old Firebird and RAIO databases into Postgres. The connection settings (`DATABASE_URL`, `FB_HOST`, `FB_DATABASE`, `FB_USER`, `FB_PASSWORD`) are read from `envs/.env.prisma`.
+Imports the old Firebird and RAIO databases into Postgres, reading both directly. The connection settings (`DATABASE_URL`, `FB_HOST`, `FB_DATABASE`, `FB_USER`, `FB_PASSWORD`, `RAIO_SERVER`, `RAIO_USER`, `RAIO_PASSWORD`) are read from `envs/.env.prisma`.
 
 1. Start the Prisma environment:
 
@@ -114,7 +113,7 @@ Imports the old Firebird and RAIO databases into Postgres. The connection settin
    pip install -r src/db/requirements.txt
    ```
 
-4. Run the migration (it asks whether to load the RAIO SQL dump first):
+4. Run the migration:
 
    ```bash
    python src/db/main.py

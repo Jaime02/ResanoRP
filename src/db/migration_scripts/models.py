@@ -27,6 +27,12 @@ class Printer:
 
 
 @dataclass
+class User:
+    name: str
+    ip: str
+
+
+@dataclass
 class Machine:
     name: str
     min_diameter: int | None = None

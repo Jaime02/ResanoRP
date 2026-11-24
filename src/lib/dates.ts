@@ -1,5 +1,5 @@
 import { tz } from "@date-fns/tz";
-import { addDays, eachMonthOfInterval, endOfDay, format, isSameDay, startOfDay } from "date-fns";
+import { addDays, eachMonthOfInterval, endOfDay, format, isSameDay, startOfDay, startOfMonth } from "date-fns";
 
 // The business works in Spain, so a day is a day there wherever the code runs: the server runs in UTC
 export const APP_TIME_ZONE = "Europe/Madrid";
@@ -12,6 +12,10 @@ export function startOfAppDay(date: Date): Date {
 
 export function endOfAppDay(date: Date): Date {
   return new Date(endOfDay(date, inAppTimeZone));
+}
+
+export function startOfAppMonth(date: Date): Date {
+  return new Date(startOfMonth(date, inAppTimeZone));
 }
 
 export function addAppDays(date: Date, amount: number): Date {

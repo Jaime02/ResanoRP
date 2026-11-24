@@ -1,5 +1,4 @@
 import fs from "node:fs";
-import path from "node:path";
 
 import { expect } from "@playwright/test";
 import type { Locator, Page } from "@playwright/test";
@@ -19,14 +18,15 @@ import {
   RASTER_BITS_PER_COLOR,
   RASTER_DPI,
 } from "@/files/printer";
-import { getPartTagName, PartTagSource } from "@/lib/part-tag";
+import { PartTagSource } from "@/lib/part-tag";
 import { LoggerLevels, LogMessages } from "@/logging/types";
+import { PRICE_LABEL } from "@/messages/common";
 import { BROWSER_PRINTER_LABEL, PRINTER_UNREACHABLE_MESSAGE, SENT_TO_PRINTER_MESSAGE } from "@/messages/printer";
 import { mockClients, mockDeliveryNotes, mockInvoices, mockSellOrders } from "@/tests/mock-data";
 import { assertComboboxOptionsCount, openCombobox } from "@/tests/utils/components/combobox";
 import { getTableRowByTestId } from "@/tests/utils/components/table";
 import { expectSingleSuccessToast, expectSingleToast } from "@/tests/utils/components/toast";
-import { rejectedMutationEvents } from "@/tests/utils/errors-log";
+import { httpRequestFailedEvent, rejectedMutationEvents } from "@/tests/utils/errors-log";
 import { expectErrorsLog, inAnotherTab, test, TestAnnotations } from "@/tests/utils/fixtures";
 import { getMockDeliveryNoteLines, getMockPendingSellOrderLines } from "@/tests/utils/mock-data-utils";
 import {
@@ -46,6 +46,7 @@ import {
   readShareJobs,
 } from "@/tests/utils/mock-printer";
 import type { TPrintJob } from "@/tests/utils/mock-printer";
+import { readPdfPagesTexts } from "@/tests/utils/pdf";
 import { holdRequestWhile } from "@/tests/utils/trpc";
 import { workflowOpenCreateDeliveryNoteForClient } from "@/tests/workflows/delivery-note";
 import {
@@ -59,6 +60,7 @@ import {
   workflowSelectPrinter,
 } from "@/tests/workflows/printer";
 import { workflowOpenSellOrderFile } from "@/tests/workflows/sell-order";
+import { expectNoTagFile, getTagNamePrefix } from "@/tests/workflows/tag";
 import { PrinterKind } from "@/types/printer";
 
 // Sorted by name, so the first one, the default of the dialogs, is the one that prints
@@ -102,11 +104,15 @@ async function getPrinterId(db: TDatabase, name: string) {
   return (await db.select().from(dbTablePrinter).where(eq(dbTablePrinter.name, name))).at(0)!.id;
 }
 
-async function workflowOpenPrintDeliveryNote(page: Page, isAdmin = true) {
+// An admin chooses whether to print with prices, a user (null) prints without them straight away
+async function workflowOpenPrintDeliveryNote(
+  page: Page,
+  adminChoice: "with-prices" | "without-prices" | null = "without-prices",
+) {
   await page.goto(`/delivery-note/${deliveryNote.id}`);
   await page.getByTestId("button-print-delivery-note").click();
-  if (isAdmin) {
-    await page.getByTestId("button-print-delivery-note-without-prices").click();
+  if (adminChoice !== null) {
+    await page.getByTestId(`button-print-delivery-note-${adminChoice}`).click();
   }
   const dialog = page.getByTestId("dialog-print-delivery-note-content");
   await expect(dialog).toBeVisible();
@@ -422,11 +428,7 @@ test("print the documents on the Impresoras of the server or with the browser", 
     await expect.poll(() => readRawJobs().length, { timeout: TAG_RENDER_TIMEOUT_MS }).toBe(previousRawJobsCount + 1);
     await expectSingleSuccessToast(page, SENT_TO_PRINTER_MESSAGE(tagPrinter.name));
     await expect(dialogTag).not.toBeVisible();
-    const tagFilePath = path.join(
-      process.env.TAGS_ROOT_PATH!,
-      `${getPartTagName(PartTagSource.DeliveryNoteLine, deliveryNoteLine.id)}.pdf`,
-    );
-    expect(fs.existsSync(tagFilePath)).toBe(false);
+    expectNoTagFile(getTagNamePrefix(PartTagSource.DeliveryNoteLine, deliveryNoteLine.id));
 
     // The tag fills the label exactly, so the printer gets it at its size without scaling it
     expect(parseTsplJob(readRawJobs().at(-1)!)).toEqual([
@@ -446,7 +448,7 @@ test(
     clearPrintJobs();
     await createPrinters(await openPage({ userMode: UserMode.Admin }));
 
-    const dialog = await workflowOpenPrintDeliveryNote(page, false);
+    const dialog = await workflowOpenPrintDeliveryNote(page, null);
     await assertSelectedPrinter(dialog, PRINTERS.accepting.name);
     const previousJobsCount = await printOnPrinter(
       page,
@@ -456,3 +458,34 @@ test(
     await expectPrintJob(previousJobsCount, { host: PRINTERS.accepting.address, orientation: Orientation.Portrait });
   },
 );
+
+// The download is the file the preview shows
+async function downloadPrintedDeliveryNote(page: Page, dialog: Locator) {
+  const downloadPromise = page.waitForEvent("download");
+  await dialog.getByTestId("button-download-delivery-note").click();
+  const download = await downloadPromise;
+  return { texts: await readPdfPagesTexts(await fs.promises.readFile(await download.path())), url: download.url() };
+}
+
+test("an Albarán with prices is a file apart, which only the Administrador opens", async ({ page, openPage }) => {
+  const userPage = await openPage({ userMode: UserMode.User });
+  const dialog = await workflowOpenPrintDeliveryNote(page, "with-prices");
+
+  await test.step("a user prints the same Albarán meanwhile, without prices", async () => {
+    const userDialog = await workflowOpenPrintDeliveryNote(userPage, null);
+    const { texts } = await downloadPrintedDeliveryNote(userPage, userDialog);
+    expect(texts.join(" ")).not.toContain(PRICE_LABEL);
+  });
+
+  const { texts, url } = await downloadPrintedDeliveryNote(page, dialog);
+  await test.step("the preview of the Administrador still has the prices", () => {
+    expect(texts.join(" ")).toContain(PRICE_LABEL);
+  });
+
+  await test.step("a user can not open it", async () => {
+    const { pathname, search } = new URL(url);
+    const response = await userPage.goto(url);
+    expect(response?.status()).toBe(403);
+    expectErrorsLog(httpRequestFailedEvent("GET", 403, `${pathname}${search}`));
+  });
+});

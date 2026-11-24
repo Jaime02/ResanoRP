@@ -39,6 +39,10 @@ export const tagLabelSizeSchema = z
   .nullable();
 export type TTagLabelSize = z.infer<typeof tagLabelSizeSchema>;
 
+// Each print has its own file, named by the browser that asks for it, so two people printing tags for the same line
+// never get each other's tags, nor one already deleted by the other's print
+export const tagPrintIdSchema = z.object({ printId: z.uuid() });
+
 const printerFieldsSchema = z.object({
   address: hostSchema,
   forTags: z.boolean(),

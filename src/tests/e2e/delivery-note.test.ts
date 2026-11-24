@@ -1,5 +1,3 @@
-import path from "node:path";
-
 import { expect } from "@playwright/test";
 import type { Locator } from "@playwright/test";
 import { eq } from "drizzle-orm";
@@ -13,7 +11,7 @@ import { getSellOrderLineById } from "@/db/functions/sell-order-line";
 import { dbTableDeliveryNote, dbTableDeliveryNoteLine, dbTableInvoice, dbTableSellOrderLine } from "@/db/schema";
 import { isSameAppDay } from "@/lib/dates";
 import { formatDate, formatPrice } from "@/lib/formatters";
-import { getTagClientText } from "@/lib/part-tag";
+import { getTagClientText, PartTagSource } from "@/lib/part-tag";
 import { formatCents, getLineTotalInCents, getLinesTotalInCents } from "@/lib/prices";
 import { LogMessages } from "@/logging/types";
 import { SELECT_PART_PLACEHOLDER } from "@/messages/combobox";
@@ -102,7 +100,7 @@ import {
   workflowOpenCreateDeliveryNoteLine,
   workflowOpenEditDeliveryNote,
 } from "@/tests/workflows/delivery-note";
-import { expectTagField, workflowPrintTag } from "@/tests/workflows/tag";
+import { expectTagField, getTagNamePrefix, workflowPrintTag } from "@/tests/workflows/tag";
 import { ToastType } from "@/types/toast";
 
 let tableDeliveryNotes: Locator;
@@ -1042,8 +1040,11 @@ test("manage the delivery notes", { annotation: TestAnnotations.ResetTags }, asy
       await expect(getEditableCellById(rowCustomLine, "unitPrice")).toBeVisible();
 
       // The tag of a line without Artículo is printed with its description
-      const tagFilePath = path.join(process.env.TAGS_ROOT_PATH!, `delivery-note-line-${newDbLines[0].id}.pdf`);
-      const [tag, ...otherTags] = await workflowPrintTag(page, rowCustomLine, tagFilePath);
+      const [tag, ...otherTags] = await workflowPrintTag(
+        page,
+        rowCustomLine,
+        getTagNamePrefix(PartTagSource.DeliveryNoteLine, newDbLines[0].id),
+      );
       expect(otherTags).toEqual([]);
       expect(tag).toContain(customLine.description);
       // Without a Pedido, the tag names the Cliente of the Albarán and holds only its quantity
@@ -1062,14 +1063,16 @@ test("manage the delivery notes", { annotation: TestAnnotations.ResetTags }, asy
       const deliveryNote = mockDeliveryNotes.find(
         (mockDeliveryNote) => mockDeliveryNote.id === deliveryNoteLine.deliveryNoteId,
       )!;
-      const tagFilePath = path.join(process.env.TAGS_ROOT_PATH!, `delivery-note-line-${deliveryNoteLine.id}.pdf`);
-
       await workflowOpenEditDeliveryNote(page, deliveryNote.id);
 
       const tableDeliveryNoteLines = dialogCreateEditDeliveryNote.getByTestId("table-delivery-note-line");
       await expect(tableDeliveryNoteLines).toBeVisible();
 
-      await workflowPrintTag(page, getTableRowByTestId(tableDeliveryNoteLines, deliveryNoteLine.id), tagFilePath);
+      await workflowPrintTag(
+        page,
+        getTableRowByTestId(tableDeliveryNoteLines, deliveryNoteLine.id),
+        getTagNamePrefix(PartTagSource.DeliveryNoteLine, deliveryNoteLine.id),
+      );
     });
   }
 

@@ -8,6 +8,7 @@ import type { TDatabase } from "@/db";
 import {
   AUDIT_INPUT_SETTING,
   AUDIT_PROCEDURE_SETTING,
+  getAuditDocumentId,
   getAuditInputKey,
   getAuditResultId,
   redactAuditInput,
@@ -75,13 +76,17 @@ export const auditMiddleware = t.middleware(async ({ type, path, ctx, getRawInpu
     ctx: { db: type === "mutation" ? tagTransactionsWithProcedure(ctx.db, path, rawInput) : ctx.db },
   });
   if (type === "mutation") {
+    const input = redactAuditInput(rawInput);
+    const data = result.ok ? result.data : undefined;
     await writeAuditEntry({
       path,
       ok: result.ok,
       ip: ctx.ip,
       isAdmin: ctx.isAdmin,
-      ...(result.ok ? { resultId: getAuditResultId(result.data) } : { errorCode: result.error.code }),
-      input: redactAuditInput(rawInput),
+      ...(result.ok ? { resultId: getAuditResultId(data) } : { errorCode: result.error.code }),
+      // The change is already done, so a failed read of the document only leaves it out of the entry
+      documentId: await getAuditDocumentId(path, data, input).catch(() => undefined),
+      input,
     });
   }
   return result;

@@ -39,6 +39,10 @@ if exist "%BACKUP_PATH%" ren "%BACKUP_PATH%" "%DAY%.replaced" || exit /b 1
 ren "%PARTIAL_PATH%" "%DAY%" || exit /b 1
 if exist "%REPLACED_PATH%" rmdir /s /q "%REPLACED_PATH%"
 
+rem After the backup, which does not hold PowerSync's storage, so a failed compaction leaves the backup as it is
+echo %DATE% %TIME% Compacting PowerSync's storage
+bin\bun.exe run supervisor.ts compact || echo %DATE% %TIME% PowerSync's compaction failed
+
 rem TODO: copy BACKUP_LOCAL_PATH to another machine (robocopy to a share), a backup on this server alone is lost with its disk
 powershell -NoProfile -ExecutionPolicy Bypass -File cleanup-backups.ps1 -Path "%BACKUP_LOCAL_PATH%" || exit /b 1
 

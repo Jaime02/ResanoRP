@@ -47,10 +47,10 @@ export const STOP_PRODUCTION_LABEL = "Detener producción";
 export const PRINT_LABEL_LABEL = "Imprimir etiqueta";
 export const NO_LABEL_PRINTED_MESSAGE =
   "No se ha impreso ninguna etiqueta para las unidades fabricadas. ¿Quieres detener la producción igualmente?";
-export const PRODUCTION_ORDER_CREATED_MESSAGE = "Órden de producción creada";
-export const PRODUCTION_ORDER_EDITED_MESSAGE = "Órden de producción editada";
-export const PRODUCTION_ORDER_STOPPED_MESSAGE = "Órden de producción detenida";
-export const MACHINE_PRODUCTION_ORDER_VALIDATION_ERROR_MESSAGE = "Error al validar la Órden de producción";
+export const PRODUCTION_ORDER_CREATED_MESSAGE = "Orden de producción creada";
+export const PRODUCTION_ORDER_EDITED_MESSAGE = "Orden de producción editada";
+export const PRODUCTION_ORDER_STOPPED_MESSAGE = "Orden de producción detenida";
+export const MACHINE_PRODUCTION_ORDER_VALIDATION_ERROR_MESSAGE = "Error al validar la Orden de producción";
 export const QUALITY_CONTROL_LABEL = "Control de calidad";
 export const URGENT_LABEL = "Urgente";
 export const QUALITY_CHECK_SAVED_MESSAGE = "Control de calidad guardado";

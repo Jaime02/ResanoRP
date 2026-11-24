@@ -57,7 +57,7 @@ mutation ──► optimistic row ──► tRPC ──► Drizzle tx ──► 
   function. Every browser is the same PowerSync user and syncs every row, the same exposure as the old Electric proxy,
   but for `audit_log`: its stream only returns rows to a token with `role: admin`, which an admin session gets, and
   only of the months (`month`, yyyyMM) the subscription asks for, as the table only grows. The Backoffice subscribes to
-  the months of its date filter (`getAuditLogMonths`), each set of months a collection of its own.
+  the months of its date filter (`getAuditLogRange`), each set of months a collection of its own.
   The browser reuses the token until 60 s before expiry; any connection or checkpoint error discards it, and so do the
   admin login and logout, so the next sync request (a stream acquired or released) carries the new session.
 - **Errors**: the status listener in `src/lib/powersync.ts` logs a connection error once per distinct message, only if

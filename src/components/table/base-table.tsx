@@ -228,7 +228,8 @@ export default function BaseTable<TRow extends TBaseModel, TState extends TTable
       Object.fromEntries(table.getAllLeafColumns().map((column, i) => [`--col-${i}-size`, `${column.getSize()}px`])),
     [table],
   );
-  const visibleRowsCount = skeletonRowsCount ?? state?.pagination?.pageSize ?? 10;
+  const scrollRowsCount = state?.pagination?.pageSize ?? 10;
+  const loadingRowsCount = skeletonRowsCount ?? scrollRowsCount;
 
   useLayoutEffect(() => {
     // Centered tables re-center as they resize, so the left edge is held in place during the drag to keep the
@@ -258,12 +259,18 @@ export default function BaseTable<TRow extends TBaseModel, TState extends TTable
     const root = rootRef.current;
     if (!head || !scroller || !root) return;
     // The fade overlay must not be taller than what is visible, or it adds empty scrollable space
-    const resizeObserver = new ResizeObserver(() => {
-      root.style.setProperty("--header-height", `${head.getBoundingClientRect().height}px`);
-      // clientHeight is rounded, so at fractional zoom levels it can exceed the real height by a subpixel
-      const scrollbarHeight = scroller.offsetHeight - scroller.clientHeight;
-      const viewportHeight = scroller.getBoundingClientRect().height - scrollbarHeight;
-      scroller.style.setProperty("--viewport-height", `${viewportHeight}px`);
+    // borderBoxSize ignores transforms (a dialog opens scaled), unlike getBoundingClientRect, and unlike clientHeight it
+    // is not rounded, which at fractional zoom levels can exceed the real height by a subpixel
+    const resizeObserver = new ResizeObserver((entries) => {
+      for (const entry of entries) {
+        const height = entry.borderBoxSize[0]?.blockSize ?? 0;
+        if (entry.target === head) {
+          root.style.setProperty("--header-height", `${height}px`);
+        } else {
+          const scrollbarHeight = scroller.offsetHeight - scroller.clientHeight;
+          scroller.style.setProperty("--viewport-height", `${height - scrollbarHeight}px`);
+        }
+      }
     });
     [head, scroller].forEach((element) => resizeObserver.observe(element));
     return () => resizeObserver.disconnect();
@@ -352,7 +359,7 @@ export default function BaseTable<TRow extends TBaseModel, TState extends TTable
       className={cn("flex w-fit max-w-full flex-col items-stretch gap-2", className)}
       style={Object.fromEntries([
         ["--row-height", `${TABLE_ROW_HEIGHT_PX}px`],
-        ["--scroll-rows", String(visibleRowsCount)],
+        ["--scroll-rows", String(scrollRowsCount)],
       ])}
     >
       {((title !== undefined && title !== null) ||
@@ -439,7 +446,7 @@ export default function BaseTable<TRow extends TBaseModel, TState extends TTable
         </CustomFiltersContext>
         <TableBody ref={tbodyRef}>
           {isLoading || disabledMessage !== undefined ? (
-            Array.from({ length: visibleRowsCount }).map((_, index) => (
+            Array.from({ length: loadingRowsCount }).map((_, index) => (
               <SkeletonRow
                 key={index}
                 columns={table.getAllLeafColumns().length}

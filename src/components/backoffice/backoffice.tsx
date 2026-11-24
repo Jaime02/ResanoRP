@@ -4,15 +4,17 @@ import DialogClearLog from "@/components/backoffice/clear-log";
 import TableUser from "@/components/backoffice/table-user";
 import TableAuditLog from "@/components/table/audit-log";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { BACKOFFICE_MAX_LINES, parseLogLine } from "@/lib/backoffice";
+import { BACKOFFICE_MAX_LINES, getAuditLogRange, parseLogLine } from "@/lib/backoffice";
+import { formatDate } from "@/lib/formatters";
 import {
   AUDIT_LOG_LABEL,
-  AUDIT_LOG_MONTHS_NOTE,
   ERRORS_LOG_LABEL,
   USERS_LABEL,
+  getAuditLogStartNote,
   getLogLinesNote,
 } from "@/messages/backoffice";
 import { NO_DATA_MESSAGE } from "@/messages/common";
+import { getFilterValue } from "@/schemas/utils";
 
 interface BackofficeProps {
   errors: Array<string>;
@@ -53,6 +55,7 @@ export default function Backoffice({ errors }: BackofficeProps) {
     "table-audit-log": tableAuditLogState,
     "table-user": tableUserState,
   } = useSearch({ from: "/backoffice" });
+  const { start: auditLogStart } = getAuditLogRange(getFilterValue(tableAuditLogState?.filters, "timestamp"));
 
   return (
     <Tabs
@@ -71,7 +74,7 @@ export default function Backoffice({ errors }: BackofficeProps) {
         <TabsTrigger value="users">{USERS_LABEL}</TabsTrigger>
       </TabsList>
       <TabsContent value="audit" className="mx-0">
-        <p className="text-muted-foreground">{AUDIT_LOG_MONTHS_NOTE}</p>
+        <p className="text-muted-foreground">{getAuditLogStartNote(String(formatDate(auditLogStart)))}</p>
         <TableAuditLog state={tableAuditLogState} />
       </TabsContent>
       <TabsContent value="errors" className="mx-0">

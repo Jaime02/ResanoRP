@@ -13,6 +13,8 @@ const auditLogFiltersSchema = z.array(
     z.object({ id: z.literal("path"), value: z.string().nullable() }),
     z.object({ id: z.literal("ok"), value: z.boolean().nullable() }),
     z.object({ id: z.literal("user"), value: z.string().nullable() }),
+    z.object({ id: z.literal("ip"), value: z.string().nullable() }),
+    z.object({ id: z.literal("document"), value: z.string().nullable() }),
   ]),
 );
 export type TAuditLogFilters = z.infer<typeof auditLogFiltersSchema>;

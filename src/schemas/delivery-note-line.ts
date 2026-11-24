@@ -52,7 +52,6 @@ export const updateDeliveryNoteLineSchema = baseDeliveryNoteLineSchema
   .pick({ quantity: true })
   .partial()
   .extend({ id: requiredIdSchema });
-export type TUpdateDeliveryNoteLine = z.infer<typeof updateDeliveryNoteLineSchema>;
 
 export const updateDeliveryNoteLinePriceSchema = z.object({
   id: requiredIdSchema,

@@ -63,7 +63,6 @@ export const createPartFormDataSchema = zfd
     width: zfd.text(stringSchema({ nullable: true }).default(null)),
   })
   .refine((part) => part.blueprint == null || part.fileName !== undefined, blueprintFileNameRequiredError);
-export type TCreatePartFormData = z.infer<typeof createPartFormDataSchema>;
 
 export const updatePartSchema = basePartSchema.extend({
   id: requiredIdSchema,

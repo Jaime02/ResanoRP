@@ -53,6 +53,8 @@ echo The app did not answer
 exit /b 1
 
 :import
+rem A half-copied import would otherwise leave production dropped and empty. Reading it whole also catches a truncated dump
+pg_restore -f NUL import\prisma.dump || (echo import\prisma.dump is missing or damaged, production was left as it was & exit /b 1)
 for /f %%i in ('powershell -NoProfile -Command "Get-Date -Format yyyyMMdd-HHmmss"') do set "BACKUP_PATH=backups\%%i"
 mkdir "%BACKUP_PATH%" || exit /b 1
 

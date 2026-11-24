@@ -1,5 +1,3 @@
-import path from "node:path";
-
 import { expect } from "@playwright/test";
 import type { Page } from "@playwright/test";
 
@@ -15,7 +13,7 @@ import {
 } from "@/db/functions/production-order";
 import { getSellOrderById } from "@/db/functions/sell-order";
 import { getSellOrderLineById } from "@/db/functions/sell-order-line";
-import { getPartTagName, PartTagSource } from "@/lib/part-tag";
+import { PartTagSource } from "@/lib/part-tag";
 import { isProductionFinished } from "@/lib/production-order";
 import { PART_LABEL } from "@/messages/common";
 import {
@@ -38,7 +36,7 @@ import { openPartPicker } from "@/tests/utils/components/picker";
 import { getTableRowByTestId } from "@/tests/utils/components/table";
 import { expectSingleSuccessOrErrorToast, expectSingleSuccessToast } from "@/tests/utils/components/toast";
 import { pickActiveMachine, setUserMode } from "@/tests/utils/fixtures";
-import { expectTagPrintedByBrowser } from "@/tests/workflows/tag";
+import { expectTagPrintedByBrowser, getTagNamePrefix } from "@/tests/workflows/tag";
 import type { BaseMachine } from "@/types/machine";
 import type { BasePart } from "@/types/part";
 import type { BaseProductionOrder } from "@/types/production-order";
@@ -352,11 +350,8 @@ export async function workflowCreateProductionOrder(
 // The stop dialog has to be open with the produced quantity filled in. Without Impresoras for tags, the browser prints it
 export async function workflowPrintStopProductionOrderTag(page: Page, productionOrderId: number) {
   const { dialogContentStopProductionOrder } = getProductionLocators(page);
-  const tagFilePath = path.join(
-    process.env.TAGS_ROOT_PATH!,
-    `${getPartTagName(PartTagSource.ProductionOrder, productionOrderId)}.pdf`,
-  );
+  const tagNamePrefix = getTagNamePrefix(PartTagSource.ProductionOrder, productionOrderId);
   const printTagButton = dialogContentStopProductionOrder.getByTestId("button-print-tag-stop-production-order");
   await expect(printTagButton).toBeEnabled();
-  return expectTagPrintedByBrowser(page, printTagButton, tagFilePath);
+  return expectTagPrintedByBrowser(page, printTagButton, tagNamePrefix);
 }

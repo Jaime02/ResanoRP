@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from tqdm import tqdm
 
-from utils.load_raio_sql import load_raio_sql
 from migration_scripts.connections import setup, start_powersync
 from migration_scripts.logger import clear_log
 from migration_scripts.firebird_migrate import (
@@ -24,20 +23,17 @@ from migration_scripts.raio_migrate import (
     raio_migrate_machines_production_orders,
 )
 from migration_scripts.ofertas_migrate import migrate_ofertas
-from migration_scripts.audit_log_migrate import migrate_audit_log
 from migration_scripts.seed import (
     seed_configuration,
     seed_shapes,
     seed_delivery_methods,
     seed_materials,
     seed_printers,
+    seed_users,
 )
 
 
 def main():
-    if input("Load RAIO SQL dump? (y/n): ").strip().lower() in ["yes", "y"]:
-        load_raio_sql()
-
     clear_log()
     setup()
     migrate()
@@ -49,6 +45,7 @@ def migrate():
     seed_shapes()
     seed_delivery_methods()
     seed_printers()
+    seed_users()
 
     raw_materials = raio_migrate_raw_materials()
     materials = seed_materials(raw_materials)
@@ -68,7 +65,6 @@ def migrate():
 
     machines, production_orders = raio_migrate_machines_production_orders()
     raio_migrate_active_production_orders(machines, production_orders)
-    migrate_audit_log()
 
 
 if __name__ == "__main__":

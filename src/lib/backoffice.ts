@@ -1,28 +1,69 @@
 import { max } from "date-fns";
 
-import { eachAppMonth, endOfAppDay, formatAppDate, startOfAppDay } from "@/lib/dates";
+import { dbTableDeliveryNoteLine, dbTableSellOrderLine } from "@/db/schema";
+import { eachAppMonth, endOfAppDay, formatAppDate, startOfAppDay, startOfAppMonth } from "@/lib/dates";
 import { AUDIT_ADMIN_LABEL, AUDIT_NOT_ADMIN_LABEL, getAuditUserNameLabel } from "@/messages/backoffice";
+import { DELIVERY_NOTE_LABEL } from "@/messages/delivery-note";
+import { INVOICE_LABEL } from "@/messages/invoice";
+import { PRODUCTION_ORDER_LABEL } from "@/messages/production-order";
+import { SELL_ORDER_LABEL } from "@/messages/sell-order";
+import type { DateRangeFilter } from "@/schemas";
 
 export const BACKOFFICE_MAX_LINES = 500;
 export const AUDIT_LOG_PAGE_SIZE = 20;
-// The first entry the database can hold: the oldest document the migration brings from Prisma. Each month is a bucket
+// The first entry the database can hold: the app started writing the audit log in November 2026. Each month is a bucket
 // of PowerSync, which allows 1000 per connection, so an old start date only subscribes to months that can have entries
-const AUDIT_LOG_FIRST_MONTH_START = new Date("2021-01-01T00:00:00+01:00");
+const AUDIT_LOG_FIRST_MONTH_START = new Date("2026-11-01T00:00:00+01:00");
 
 // The month column of the audit log, yyyyMM in the app time zone
 export const getAuditLogMonth = (date: Date) => Number(formatAppDate(date, "yyyyMM"));
 
 /**
- * The months of the audit log the Backoffice syncs: the ones of the date filter. Without a start date, only the month
- * of the end date, or the current month.
+ * The entries the date filter of the Backoffice shows, and the months it syncs for them. Without a start date, from the
+ * start of the month of the end date. Without an end date there is no upper bound, so new entries show as they come.
  *
  * shortcut: a Backoffice left open into a new month does not show its entries until it is reloaded, upgrade if that
  * happens in practice
  */
-export function getAuditLogMonths(startDate?: Date | null, endDate?: Date | null): Array<number> {
-  const end = endOfAppDay(endDate ?? new Date());
-  const start = startDate != null ? startOfAppDay(startDate) : end;
-  return eachAppMonth(max([start, AUDIT_LOG_FIRST_MONTH_START]), end).map(getAuditLogMonth);
+export function getAuditLogRange(filter?: DateRangeFilter | null) {
+  const end = filter?.endDate != null ? endOfAppDay(filter.endDate) : undefined;
+  const lastDay = end ?? new Date();
+  const start = filter?.startDate != null ? startOfAppDay(filter.startDate) : startOfAppMonth(lastDay);
+  const months = eachAppMonth(max([start, AUDIT_LOG_FIRST_MONTH_START]), lastDay).map(getAuditLogMonth);
+  return { end, months, start };
+}
+
+const AUDIT_DOCUMENT_LABELS = {
+  deliveryNote: DELIVERY_NOTE_LABEL,
+  invoice: INVOICE_LABEL,
+  productionOrder: PRODUCTION_ORDER_LABEL,
+  sellOrder: SELL_ORDER_LABEL,
+};
+export type TAuditDocumentRouter = keyof typeof AUDIT_DOCUMENT_LABELS;
+
+interface TAuditRouterDocument {
+  documentRouter: TAuditDocumentRouter;
+  // A failed change of a line only sends the id of the line, so its document is read from its row
+  lineTable?: typeof dbTableDeliveryNoteLine | typeof dbTableSellOrderLine;
+}
+
+// The routers whose mutations change a document, its own and the ones of its lines
+const AUDIT_ROUTER_DOCUMENTS: Record<string, TAuditRouterDocument | undefined> = {
+  deliveryNote: { documentRouter: "deliveryNote" },
+  deliveryNoteLine: { documentRouter: "deliveryNote", lineTable: dbTableDeliveryNoteLine },
+  invoice: { documentRouter: "invoice" },
+  productionOrder: { documentRouter: "productionOrder" },
+  sellOrder: { documentRouter: "sellOrder" },
+  sellOrderLine: { documentRouter: "sellOrder", lineTable: dbTableSellOrderLine },
+};
+
+export const getAuditRouterDocument = (path: string) => AUDIT_ROUTER_DOCUMENTS[path.split(".")[0]];
+
+export function getAuditDocumentLabel(path: string, documentId: string | null) {
+  const routerDocument = getAuditRouterDocument(path);
+  return routerDocument === undefined || documentId === null
+    ? ""
+    : `${AUDIT_DOCUMENT_LABELS[routerDocument.documentRouter]} ${documentId}`;
 }
 
 // The name of the Usuario of the IP, if it has one, and the user mode. A login has no user mode yet

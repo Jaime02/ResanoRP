@@ -3,11 +3,12 @@ import { useMemo } from "react";
 import type { PublicBaseTableProps } from "@/components/table/base-table";
 import BaseTable from "@/components/table/base-table";
 import { DEFAULT_DATETIME_COLUMN_SIZE, createTableColumnHelper } from "@/components/table/column-helper";
-import { AUDIT_LOG_PAGE_SIZE, getAuditUserLabel } from "@/lib/backoffice";
+import { AUDIT_LOG_PAGE_SIZE, getAuditDocumentLabel, getAuditUserLabel } from "@/lib/backoffice";
 import { DateFormat, formatDate } from "@/lib/formatters";
 import {
   AUDIT_ACTION_LABEL,
   AUDIT_DESCRIPTION_LABEL,
+  AUDIT_DOCUMENT_LABEL,
   AUDIT_INPUT_LABEL,
   IP_LABEL,
   AUDIT_OK_LABEL,
@@ -25,6 +26,7 @@ interface TAuditLogRow extends TBaseModel {
   timestamp: string;
   path: string;
   description: string;
+  document: string;
   result: string;
   user: string;
   ip: string;
@@ -39,6 +41,7 @@ function toRow({
   id,
   timestamp,
   path,
+  documentId,
   ok,
   errorCode,
   isAdmin,
@@ -48,6 +51,7 @@ function toRow({
 }: TAuditLog & { userName: string | undefined }): TAuditLogRow {
   return {
     description: MUTATION_MESSAGES[path] ?? "",
+    document: getAuditDocumentLabel(path, documentId),
     id,
     input: input ?? "",
     ip: ip ?? "",
@@ -74,6 +78,13 @@ const columns = [
     size: 300,
   }),
   columnHelper.accessor("description", { header: AUDIT_DESCRIPTION_LABEL, id: "description", size: 300 }),
+  columnHelper.accessor("document", {
+    enableColumnFilter: true,
+    header: AUDIT_DOCUMENT_LABEL,
+    id: "document",
+    meta: { dataType: CellDataType.String },
+    size: 220,
+  }),
   // Checked is the OK, and the in between box the errors
   columnHelper.accessor("result", {
     enableColumnFilter: true,
@@ -89,7 +100,13 @@ const columns = [
     meta: { dataType: CellDataType.String },
     size: 220,
   }),
-  columnHelper.accessor("ip", { header: IP_LABEL, id: "ip", size: 140 }),
+  columnHelper.accessor("ip", {
+    enableColumnFilter: true,
+    header: IP_LABEL,
+    id: "ip",
+    meta: { dataType: CellDataType.String },
+    size: 140,
+  }),
   columnHelper.accessor("input", { header: AUDIT_INPUT_LABEL, id: "input", size: 400 }),
 ];
 

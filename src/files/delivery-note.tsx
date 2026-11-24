@@ -73,12 +73,13 @@ function DeliveryNoteDocument({
   );
 }
 
-function getDeliveryNoteFileName(deliveryNoteId: number, copies: number) {
-  return copies > 1 ? `${deliveryNoteId}-x${copies}.pdf` : `${deliveryNoteId}.pdf`;
+// Each version gets its own file, so printing one never replaces another that is being previewed or printed
+function getDeliveryNoteFileName(deliveryNoteId: number, copies: number, withPrices: boolean) {
+  return `${deliveryNoteId}${withPrices ? "-prices" : ""}${copies > 1 ? `-x${copies}` : ""}.pdf`;
 }
 
-export function getDeliveryNotePath(deliveryNoteId: number, copies = 1) {
-  return path.join(process.env.DELIVERY_NOTE_ROOT_PATH!, getDeliveryNoteFileName(deliveryNoteId, copies));
+export function getDeliveryNotePath(deliveryNoteId: number, copies: number, withPrices: boolean) {
+  return path.join(process.env.DELIVERY_NOTE_ROOT_PATH!, getDeliveryNoteFileName(deliveryNoteId, copies, withPrices));
 }
 
 interface PrintDeliveryNoteProps extends DeliveryNoteDocumentProps {
@@ -93,7 +94,7 @@ export async function printDeliveryNote({ copies = 1, saveHtml = false, ...props
     document: Array.from({ length: copies }, (_, copyIndex) => (
       <DeliveryNoteDocument {...props} isLast={copyIndex === copies - 1} key={copyIndex} totalInCents={totalInCents} />
     )),
-    path: getDeliveryNotePath(props.deliveryNoteId, copies),
+    path: getDeliveryNotePath(props.deliveryNoteId, copies, props.withPrices),
     margin: "1cm",
     format: "A4",
     saveHtml,

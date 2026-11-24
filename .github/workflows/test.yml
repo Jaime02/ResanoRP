@@ -14,7 +14,7 @@ jobs:
       matrix:
         shard: [1, 2, 3]
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
 
       - uses: oven-sh/setup-bun@v2
 
@@ -40,13 +40,13 @@ jobs:
       - run: node --env-file=./envs/.env.test ./node_modules/@playwright/test/cli.js test --shard=${{ matrix.shard }}/3 --reporter=line,blob --trace retain-on-failure
 
       - if: success()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: blob-report-${{ matrix.shard }}
           path: blob-report/
 
       - if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: test-results-${{ matrix.shard }}
           path: test-results/
@@ -58,9 +58,9 @@ jobs:
   # The audit reporter goes first, so that the line reporter prints the error it throws
   audit-tables:
     needs: e2e
-    runs-on: ubuntu-26.04
+    runs-on: ubuntu-slim
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
 
       - uses: oven-sh/setup-bun@v2
 

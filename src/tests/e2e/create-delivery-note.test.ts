@@ -1,5 +1,4 @@
 import fs from "node:fs";
-import path from "node:path";
 
 import { expect } from "@playwright/test";
 import type { Locator } from "@playwright/test";
@@ -26,7 +25,7 @@ import {
   dbTableSellOrderLine,
 } from "@/db/schema";
 import { formatDate, formatPrice } from "@/lib/formatters";
-import { getPartTagName, getTagClientText, PartTagSource, TAG_BARE_QUANTITY_MIN_SELL_ORDERS } from "@/lib/part-tag";
+import { getTagClientText, PartTagSource, TAG_BARE_QUANTITY_MIN_SELL_ORDERS } from "@/lib/part-tag";
 import { formatCents, getLineTotalInCents } from "@/lib/prices";
 import { groupStagedSellOrderLines, sortPendingSellOrderLines } from "@/lib/sell-order-line";
 import { LogMessages } from "@/logging/types";
@@ -100,7 +99,7 @@ import {
 import { workflowPickInvoiceClient } from "@/tests/workflows/invoice";
 import { assertPartStockConsumption } from "@/tests/workflows/part-stock";
 import { workflowOpenSellOrder } from "@/tests/workflows/sell-order";
-import { expectTagField, getTagSellOrderText, workflowPrintTag } from "@/tests/workflows/tag";
+import { expectTagField, getTagNamePrefix, getTagSellOrderText, workflowPrintTag } from "@/tests/workflows/tag";
 import { CLIENT_SPLIT_SELL_ORDERS_CHECKBOX_ID, CLIENT_SPLIT_SELL_ORDERS_TOOLTIP_TEST_ID } from "@/types/client";
 import type { BaseDeliveryNote } from "@/types/delivery-note";
 import type { BaseDeliveryNoteLine } from "@/types/delivery-note-line";
@@ -200,12 +199,12 @@ for (const selectedClient of clientsWithPendingLines) {
 
       await test.step("print the tags of a staged sell order line", async () => {
         await setUserMode(page, UserMode.Admin);
-        const tagFilePath = path.join(process.env.TAGS_ROOT_PATH!, `sell-order-line-${pendingSellOrderLine.id}.pdf`);
+        const tagNamePrefix = getTagNamePrefix(PartTagSource.SellOrderLine, pendingSellOrderLine.id);
 
         await workflowOpenCreateDeliveryNoteForClient(page, selectedClient);
 
         const stagedSellOrderLineRow = await workflowStageSingleSellOrderLine(page, pendingSellOrderLine.id);
-        await workflowPrintTag(page, stagedSellOrderLineRow, tagFilePath);
+        await workflowPrintTag(page, stagedSellOrderLineRow, tagNamePrefix);
       });
 
       await test.step("stage a sell order line, create a delivery note, delete the delivery note", async () => {
@@ -430,7 +429,7 @@ for (const client of clientsWithPendingLines) {
         await workflowPrintTag(
           page,
           stagedSellOrderLineRow,
-          path.join(process.env.TAGS_ROOT_PATH!, `sell-order-line-${customSellOrderLine.id}.pdf`),
+          getTagNamePrefix(PartTagSource.SellOrderLine, customSellOrderLine.id),
         );
       });
 
@@ -770,10 +769,7 @@ for (const client of clientsWithPendingLines) {
       const deliveryDate = formatDate(earliestLine.requestedDeliveryDate)!;
       const partRow = getTableRowByTestId(tableStagedSellOrderLines, earliestLine.id);
       const inputPartQuantity = getEditableCellById(partRow, "quantity");
-      const tagFilePath = path.join(
-        process.env.TAGS_ROOT_PATH!,
-        `${getPartTagName(PartTagSource.SellOrderLine, earliestLine.id)}.pdf`,
-      );
+      const tagNamePrefix = getTagNamePrefix(PartTagSource.SellOrderLine, earliestLine.id);
       const getButtonStage = (line: BaseSellOrderLine) =>
         getTableRowByTestId(tablePendingSellOrderLines, line.id).getByTestId("button-success");
       const createDeliveryNote = async () => {
@@ -826,7 +822,7 @@ for (const client of clientsWithPendingLines) {
         const firstTagQuantity = earliestLine.pendingQuantity - 1;
         const secondTagQuantity = 1 + mockFirstLine.pendingQuantity + 1;
         const thirdTagQuantity = partTotal - firstTagQuantity - secondTagQuantity;
-        const [firstTag, secondTag, thirdTag, ...otherTags] = await workflowPrintTag(page, partRow, tagFilePath, [
+        const [firstTag, secondTag, thirdTag, ...otherTags] = await workflowPrintTag(page, partRow, tagNamePrefix, [
           firstTagQuantity,
           secondTagQuantity,
           thirdTagQuantity,
@@ -886,7 +882,7 @@ for (const client of clientsWithPendingLines) {
         await expect(inputPartQuantity).toHaveValue(String(total));
 
         // The lines left at 0 are left out of the tag, which holds the whole total by default
-        const [tag, ...otherTags] = await workflowPrintTag(page, partRow, tagFilePath);
+        const [tag, ...otherTags] = await workflowPrintTag(page, partRow, tagNamePrefix);
         expect(otherTags).toEqual([]);
         expect(tag).toContain(getTagSellOrderText(otherReference, earliestLine.pendingQuantity, 2));
         expect(tag).toContain(getTagSellOrderText(mockReference, servedOfMockFirstLine, 2));
@@ -912,14 +908,11 @@ for (const client of clientsWithPendingLines) {
       await test.step("the tag of a served line lists its Pedido", async () => {
         const deliveryNoteLine = deliveryNoteLines.find((line) => line.sellOrderLineId === earliestLine.id)!;
         const dialogEditDeliveryNote = await workflowOpenEditDeliveryNote(page, deliveryNoteLine.deliveryNoteId);
-        const deliveryNoteLineTagFilePath = path.join(
-          process.env.TAGS_ROOT_PATH!,
-          `${getPartTagName(PartTagSource.DeliveryNoteLine, deliveryNoteLine.id)}.pdf`,
-        );
+        const deliveryNoteLineTagNamePrefix = getTagNamePrefix(PartTagSource.DeliveryNoteLine, deliveryNoteLine.id);
         const [tag, ...otherTags] = await workflowPrintTag(
           page,
           getTableRowByTestId(dialogEditDeliveryNote.getByTestId("table-delivery-note-line"), deliveryNoteLine.id),
-          deliveryNoteLineTagFilePath,
+          deliveryNoteLineTagNamePrefix,
         );
         expect(otherTags).toEqual([]);
         expect(tag).toContain(getTagClientText(client.name));
@@ -1302,9 +1295,12 @@ for (const client of clientsWithPendingLines) {
     });
     const url = page.url();
 
-    await test.step("the pending lines are paged", async () => {
+    await test.step("the pending lines are paged, and a full page fits without scrolling", async () => {
       await assertTableRowCount(tablePendingSellOrderLines, pendingCount);
       await expect(pendingRows).toHaveCount(PENDING_SELL_ORDER_LINES_PAGE_SIZE);
+      expect(await tablePendingSellOrderLines.evaluate((element) => element.scrollHeight > element.clientHeight)).toBe(
+        false,
+      );
       const firstPageRow = getTableRowByTestId(tablePendingSellOrderLines, await getTestId(pendingRows.first()));
 
       await getTablePagerButton(tablePendingSellOrderLines, NEXT_PAGE_LABEL).click();
@@ -1729,10 +1725,7 @@ test(
       const [tag, ...otherTags] = await workflowPrintTag(
         page,
         partRow,
-        path.join(
-          process.env.TAGS_ROOT_PATH!,
-          `${getPartTagName(PartTagSource.SellOrderLine, firstSellOrderLine.id)}.pdf`,
-        ),
+        getTagNamePrefix(PartTagSource.SellOrderLine, firstSellOrderLine.id),
       );
       expect(otherTags).toEqual([]);
       for (const [index, sellOrder] of sellOrders.entries()) {

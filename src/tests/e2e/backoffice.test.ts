@@ -6,15 +6,14 @@ import { addMonths } from "date-fns";
 
 import { UserMode } from "@/contexts/app-context";
 import { USER_IP_CONSTRAINT, dbTableUser } from "@/db/schema";
-import { getAuditLogMonths } from "@/lib/backoffice";
-import { addAppDays } from "@/lib/dates";
+import { getAuditDocumentLabel, getAuditLogRange } from "@/lib/backoffice";
+import { addAppDays, startOfAppMonth } from "@/lib/dates";
 import { DateFormat, formatDate } from "@/lib/formatters";
 import { errorsLogFilePath } from "@/logging/logger";
 import {
   AUDIT_ADMIN_LABEL,
   AUDIT_NOT_ADMIN_LABEL,
   AUDIT_LOG_LABEL,
-  AUDIT_LOG_MONTHS_NOTE,
   AUDIT_OK_LABEL,
   ERRORS_LOG_LABEL,
   IP_LABEL,
@@ -26,11 +25,13 @@ import {
   USER_EDITED_MESSAGE,
   USER_IP_INVALID_MESSAGE,
   USER_IP_TAKEN_MESSAGE,
+  getAuditLogStartNote,
   getAuditUserNameLabel,
 } from "@/messages/backoffice";
 import { NAME_LABEL, NEXT_PAGE_LABEL, NO_DATA_MESSAGE } from "@/messages/common";
 import { CONFIGURATION_EDITED_MESSAGE, VAT_PERCENTAGE_LABEL } from "@/messages/configuration";
 import type { TTableAuditLogState } from "@/schemas/audit-log";
+import { mockSellOrders } from "@/tests/mock-data";
 import { readAuditLog } from "@/tests/utils/audit-log";
 import { openAndConfirmAlertDialog } from "@/tests/utils/components/alert-dialog";
 import { InputElementType, assertFormLoaded, getFormInputByLabel } from "@/tests/utils/components/form";
@@ -42,8 +43,10 @@ import {
 } from "@/tests/utils/components/table";
 import { expectSingleSuccessToast, expectSingleToast } from "@/tests/utils/components/toast";
 import { expectUniqueViolationRejected, uniqueColumnsViolation } from "@/tests/utils/errors-log";
-import { test } from "@/tests/utils/fixtures";
+import { TestAnnotations, test } from "@/tests/utils/fixtures";
+import { getMockSellOrderLines } from "@/tests/utils/mock-data-utils";
 import { readSyncedAuditLogIds } from "@/tests/utils/powersync";
+import { workflowDeleteSellOrderLine, workflowOpenSellOrder } from "@/tests/workflows/sell-order";
 
 const EDITED_VAT_PERCENTAGES = [10, 11];
 const LONG_AGO = new Date("2000-01-01");
@@ -140,8 +143,11 @@ test("the Backoffice shows the audit log in a readable way and clears the errors
       },
       { rowCount: 0, state: { filters: [{ id: "timestamp", value: { endDate: LONG_AGO } }] } },
     ];
-    const loggedDay = (await readAuditLog())[0].timestamp;
+    const [{ timestamp: loggedDay, ip }] = await readAuditLog();
+    const loggedIp = ip!;
     filteredStates.push(
+      { rowCount: EDITED_VAT_PERCENTAGES.length, state: { filters: [{ id: "ip", value: loggedIp }] } },
+      { rowCount: 0, state: { filters: [{ id: "ip", value: `${loggedIp}0` }] } },
       {
         rowCount: EDITED_VAT_PERCENTAGES.length,
         state: { filters: [{ id: "timestamp", value: { endDate: loggedDay, startDate: loggedDay } }] },
@@ -156,11 +162,17 @@ test("the Backoffice shows the audit log in a readable way and clears the errors
   });
 
   await test.step("only an admin session syncs the audit log, and only the months it subscribes to", async () => {
-    const currentMonths = getAuditLogMonths();
+    const currentMonths = getAuditLogRange().months;
     expect(await readSyncedAuditLogIds(baseURL!, true, currentMonths)).toHaveLength((await readAuditLog()).length);
     expect(await readSyncedAuditLogIds(baseURL!, false, currentMonths)).toEqual([]);
     const nextMonth = addMonths(new Date(), 1);
-    expect(await readSyncedAuditLogIds(baseURL!, true, getAuditLogMonths(nextMonth, nextMonth))).toEqual([]);
+    expect(
+      await readSyncedAuditLogIds(
+        baseURL!,
+        true,
+        getAuditLogRange({ endDate: nextMonth, startDate: nextMonth }).months,
+      ),
+    ).toEqual([]);
   });
 
   await test.step("the errors log is shown and cleared", async () => {
@@ -184,18 +196,53 @@ test("the Backoffice shows the audit log in a readable way and clears the errors
 
   // Last, as the browser stays a month ahead
   await test.step("without a start date the audit log shows a single month", async () => {
-    await page.clock.setSystemTime(addMonths(new Date(), 1));
+    const nextMonth = addMonths(new Date(), 1);
+    await page.clock.setSystemTime(nextMonth);
     await page.goto("/backoffice");
-    await expect(page.getByText(AUDIT_LOG_MONTHS_NOTE)).toBeVisible();
+    await expect(page.getByText(getAuditLogStartNote(String(formatDate(startOfAppMonth(nextMonth)))))).toBeVisible();
     await assertTableRowCount(tableAuditLog, 0);
 
-    const state: TTableAuditLogState = {
-      filters: [{ id: "timestamp", value: { startDate: (await readAuditLog())[0].timestamp } }],
-    };
+    const loggedDay = (await readAuditLog())[0].timestamp;
+    const state: TTableAuditLogState = { filters: [{ id: "timestamp", value: { startDate: loggedDay } }] };
     await page.goto(`/backoffice?${new URLSearchParams({ "table-audit-log": JSON.stringify(state) })}`);
+    await expect(page.getByText(getAuditLogStartNote(String(formatDate(loggedDay))))).toBeVisible();
     await assertTableRowCount(tableAuditLog, EDITED_VAT_PERCENTAGES.length);
   });
 });
+
+test(
+  "the audit log names the document a change was made to",
+  { annotation: TestAnnotations.ResetSellOrders },
+  async ({ page }) => {
+    const tableAuditLog = page.getByTestId("table-audit-log");
+    const sellOrder = mockSellOrders[0];
+    const sellOrderLine = getMockSellOrderLines(sellOrder.id)[0];
+    const lineDeletePath = "sellOrderLine.delete";
+    const sellOrderLabel = getAuditDocumentLabel(lineDeletePath, String(sellOrder.id));
+
+    await test.step("a change to a line is of its Pedido", async () => {
+      await workflowOpenSellOrder(page, sellOrder.id);
+      await workflowDeleteSellOrderLine(page, sellOrderLine.id);
+      expect((await readAuditLog()).map(({ path, documentId }) => ({ documentId, path }))).toEqual([
+        { documentId: String(sellOrder.id), path: lineDeletePath },
+      ]);
+
+      await page.goto("/backoffice");
+      await expect(getTableRows(tableAuditLog).first().getByTestId("document")).toHaveText(sellOrderLabel);
+    });
+
+    await test.step("the audit log is filtered by document", async () => {
+      const filteredStates: Array<{ state: TTableAuditLogState; rowCount: number }> = [
+        { rowCount: 1, state: { filters: [{ id: "document", value: sellOrderLabel.toUpperCase() }] } },
+        { rowCount: 0, state: { filters: [{ id: "document", value: `${sellOrderLabel}0` }] } },
+      ];
+      for (const { state, rowCount } of filteredStates) {
+        await page.goto(`/backoffice?${new URLSearchParams({ "table-audit-log": JSON.stringify(state) })}`);
+        await assertTableRowCount(tableAuditLog, rowCount);
+      }
+    });
+  },
+);
 
 test("the Usuarios of the Backoffice name an IP in the header and in the audit log", async ({ page, db }) => {
   const tableUser = page.getByTestId("table-user");

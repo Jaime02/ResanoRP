@@ -16,6 +16,7 @@ import { handleMutationError } from "@/lib/handlers";
 import { getPartTagName, getTagSellOrder, PartTagSource } from "@/lib/part-tag";
 import { SELL_ORDER_LINE_NOT_OF_PART_MESSAGE } from "@/messages/production-order";
 import { requiredIdObjectSchema } from "@/schemas";
+import { tagPrintIdSchema } from "@/schemas/printer";
 import {
   createProductionOrderSchema,
   printTagPartProductionSchema,
@@ -173,7 +174,7 @@ export default router({
     ),
   printTag: procedure
     .meta({ writes: [] })
-    .input(printTagPartProductionSchema)
+    .input(printTagPartProductionSchema.and(tagPrintIdSchema))
     .mutation(async ({ input }) => {
       const productionOrder = await getProductionOrderById(input.productionOrderId);
       if (!productionOrder) {
@@ -221,7 +222,7 @@ export default router({
             : [],
         labelSize: input.labelSize,
         tagGroups: [{ partQuantity: input.partQuantity, tagQuantity: 1 }],
-        tagName: getPartTagName(PartTagSource.ProductionOrder, productionOrder.id),
+        tagName: getPartTagName(PartTagSource.ProductionOrder, productionOrder.id, input.printId),
       });
     }),
 });

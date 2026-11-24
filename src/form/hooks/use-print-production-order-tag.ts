@@ -14,15 +14,17 @@ export default function usePrintProductionOrderTag(printControls: TPrintControls
   async function printTag(productionOrderId: number, partQuantity: number) {
     setIsPrintingTag(true);
     let isPrinted = false;
+    const printId = crypto.randomUUID();
     await showToastOnTRPCMutation({
       mutation: trpc.productionOrder.printTag.mutate({
         labelSize: printControls.labelSize,
         partQuantity,
+        printId,
         productionOrderId,
       }),
       onSubmit: async () => {
         isPrinted = await printControls.printPdf(
-          getPartTagFileUrl(getPartTagName(PartTagSource.ProductionOrder, productionOrderId)),
+          getPartTagFileUrl(getPartTagName(PartTagSource.ProductionOrder, productionOrderId, printId)),
         );
       },
     });

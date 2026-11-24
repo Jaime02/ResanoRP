@@ -117,17 +117,21 @@ export const dbTableMachine = pgTable(
   (table) => [uniqueIndexByName(table, "machine")],
 );
 
-export const dbTablePartProduction = pgTable("part_production", {
-  date: datetimeType("date").notNull(),
-  id: idType,
-  machineId: integer("machineId")
-    .notNull()
-    .references(() => dbTableMachine.id),
-  productionOrderId: integer("productionOrderId")
-    .notNull()
-    .references(() => dbTableProductionOrder.id),
-  quantity: integer("quantity").notNull(),
-});
+export const dbTablePartProduction = pgTable(
+  "part_production",
+  {
+    date: datetimeType("date").notNull(),
+    id: idType,
+    machineId: integer("machineId")
+      .notNull()
+      .references(() => dbTableMachine.id),
+    productionOrderId: integer("productionOrderId")
+      .notNull()
+      .references(() => dbTableProductionOrder.id),
+    quantity: integer("quantity").notNull(),
+  },
+  (table) => [index().on(table.productionOrderId), index().on(table.machineId)],
+);
 
 export const dbTableMachineProductionOrderQueue = pgTable(
   "machine_production_order_queue",
@@ -184,6 +188,9 @@ export const dbTablePrinter = pgTable("printer", {
 // Written outside the transaction of the mutation it records, so a failed one is kept too. Only admins sync it, see its
 // stream
 export const dbTableAuditLog = pgTable("audit_log", {
+  // The Pedido, Albarán, Factura or Orden de producción the entry changed, the parent one for a line. Kept with the
+  // entry, as a deleted line no longer tells its parent
+  documentId: text("documentId"),
   errorCode: text("errorCode"),
   id: idType,
   // The redacted input as JSON: PowerSync does not sync jsonb
@@ -246,14 +253,18 @@ export const dbTablePart = pgTable("part", {
   width: text("width"),
 });
 
-export const dbTablePartStock = pgTable("part_stock", {
-  date: datetimeType("date").notNull(),
-  id: idType,
-  partId: integer("partId")
-    .notNull()
-    .references(() => dbTablePart.id),
-  quantity: integer("quantity").notNull(),
-});
+export const dbTablePartStock = pgTable(
+  "part_stock",
+  {
+    date: datetimeType("date").notNull(),
+    id: idType,
+    partId: integer("partId")
+      .notNull()
+      .references(() => dbTablePart.id),
+    quantity: integer("quantity").notNull(),
+  },
+  (table) => [index().on(table.partId)],
+);
 
 export const CLIENT_INVOICE_EMAIL_CONSTRAINT = "unique_client_invoice_email";
 export const dbTableClientInvoiceEmail = pgTable(
@@ -286,6 +297,7 @@ export const dbTableSellOrder = pgTable(
     uniqueIndex(SELL_ORDER_REFERENCE_CONSTRAINT)
       .on(table.clientId, table.clientReference)
       .where(sql`${table.deletedAt} IS NULL`),
+    index().on(table.clientId),
   ],
 );
 
@@ -309,58 +321,76 @@ export const dbTableSellOrderLine = pgTable(
   (table) => [
     // A Línea without Artículo is described by hand
     check(SELL_ORDER_LINE_ITEM_CONSTRAINT, sql`num_nonnulls(${table.partReferenceId}, ${table.description}) = 1`),
+    index().on(table.sellOrderId),
+    index().on(table.partReferenceId),
   ],
 );
 
-export const dbTableInvoice = pgTable("invoice", {
-  accounted: boolean("accounted").notNull(),
-  clientId: integer("clientId")
-    .notNull()
-    .references(() => dbTableClient.id),
-  createdAt: datetimeType("createdAt").notNull(),
-  dueDate: datetimeType("dueDate").notNull(),
-  id: idType,
-  paymentMethodId: integer("paymentMethodId").references(() => dbTablePaymentMethod.id),
-  sent: boolean("sent").notNull(),
-});
+export const dbTableInvoice = pgTable(
+  "invoice",
+  {
+    accounted: boolean("accounted").notNull(),
+    clientId: integer("clientId")
+      .notNull()
+      .references(() => dbTableClient.id),
+    createdAt: datetimeType("createdAt").notNull(),
+    dueDate: datetimeType("dueDate").notNull(),
+    id: idType,
+    paymentMethodId: integer("paymentMethodId").references(() => dbTablePaymentMethod.id),
+    sent: boolean("sent").notNull(),
+  },
+  (table) => [index().on(table.clientId)],
+);
 
-export const dbTableDeliveryNote = pgTable("delivery_note", {
-  clientId: integer("clientId")
-    .notNull()
-    .references(() => dbTableClient.id),
-  createdAt: datetimeType("createdAt").notNull(),
-  deliveryDate: datetimeType("deliveryDate"),
-  deliveryMethodId: integer("deliveryMethodId").references(() => dbTableDeliveryMethod.id),
-  id: idType,
-  invoiceId: integer("invoiceId").references(() => dbTableInvoice.id),
-});
+export const dbTableDeliveryNote = pgTable(
+  "delivery_note",
+  {
+    clientId: integer("clientId")
+      .notNull()
+      .references(() => dbTableClient.id),
+    createdAt: datetimeType("createdAt").notNull(),
+    deliveryDate: datetimeType("deliveryDate"),
+    deliveryMethodId: integer("deliveryMethodId").references(() => dbTableDeliveryMethod.id),
+    id: idType,
+    invoiceId: integer("invoiceId").references(() => dbTableInvoice.id),
+  },
+  (table) => [index().on(table.clientId), index().on(table.invoiceId)],
+);
 
-export const dbTableDeliveryNoteLine = pgTable("delivery_note_line", {
-  deliveryNoteId: integer("deliveryNoteId")
-    .notNull()
-    .references(() => dbTableDeliveryNote.id),
-  description: text("description").notNull(),
-  id: idType,
-  partReferenceId: integer("partReferenceId").references(() => dbTablePartReference.id),
-  quantity: integer("quantity").notNull(),
-  sellOrderLineId: integer("sellOrderLineId").references(() => dbTableSellOrderLine.id),
-  unitPrice: numeric("unitPrice"),
-  vatPercentage: integer("vatPercentage").notNull(),
-});
+export const dbTableDeliveryNoteLine = pgTable(
+  "delivery_note_line",
+  {
+    deliveryNoteId: integer("deliveryNoteId")
+      .notNull()
+      .references(() => dbTableDeliveryNote.id),
+    description: text("description").notNull(),
+    id: idType,
+    partReferenceId: integer("partReferenceId").references(() => dbTablePartReference.id),
+    quantity: integer("quantity").notNull(),
+    sellOrderLineId: integer("sellOrderLineId").references(() => dbTableSellOrderLine.id),
+    unitPrice: numeric("unitPrice"),
+    vatPercentage: integer("vatPercentage").notNull(),
+  },
+  (table) => [index().on(table.deliveryNoteId), index().on(table.sellOrderLineId), index().on(table.partReferenceId)],
+);
 
-export const dbTableProductionOrder = pgTable("production_order", {
-  createdAt: datetimeType("createdAt").notNull(),
-  deletedAt: deletedAtType,
-  id: idType,
-  notes: text("notes"),
-  partId: integer("partId")
-    .notNull()
-    .references(() => dbTablePart.id),
-  qualityControl: boolean("qualityControl").notNull().default(false),
-  quantity: integer("quantity"),
-  sellOrderLineId: integer("sellOrderLineId").references(() => dbTableSellOrderLine.id),
-  urgent: boolean("urgent").notNull().default(false),
-});
+export const dbTableProductionOrder = pgTable(
+  "production_order",
+  {
+    createdAt: datetimeType("createdAt").notNull(),
+    deletedAt: deletedAtType,
+    id: idType,
+    notes: text("notes"),
+    partId: integer("partId")
+      .notNull()
+      .references(() => dbTablePart.id),
+    qualityControl: boolean("qualityControl").notNull().default(false),
+    quantity: integer("quantity"),
+    sellOrderLineId: integer("sellOrderLineId").references(() => dbTableSellOrderLine.id),
+    urgent: boolean("urgent").notNull().default(false),
+  },
+  (table) => [index().on(table.partId), index().on(table.sellOrderLineId)],
+);
 
 export const TREATMENT_SHIPMENT_QUANTITY_CONSTRAINT = "treatment_shipment_positive_quantity";
 // The Artículos sent together share the same sentAt, which identifies their batch. A shipment without an Orden de
@@ -376,7 +406,11 @@ export const dbTableTreatmentShipment = pgTable(
     quantity: integer("quantity").notNull(),
     sentAt: datetimeType("sentAt").notNull(),
   },
-  (table) => [check(TREATMENT_SHIPMENT_QUANTITY_CONSTRAINT, sql`${table.quantity} > 0`)],
+  (table) => [
+    check(TREATMENT_SHIPMENT_QUANTITY_CONSTRAINT, sql`${table.quantity} > 0`),
+    index().on(table.partId),
+    index().on(table.productionOrderId),
+  ],
 );
 
 export const TREATMENT_RECEPTION_QUANTITY_CONSTRAINT = "treatment_reception_positive_quantity";
@@ -390,7 +424,10 @@ export const dbTableTreatmentReception = pgTable(
       .notNull()
       .references(() => dbTableTreatmentShipment.id),
   },
-  (table) => [check(TREATMENT_RECEPTION_QUANTITY_CONSTRAINT, sql`${table.quantity} > 0`)],
+  (table) => [
+    check(TREATMENT_RECEPTION_QUANTITY_CONSTRAINT, sql`${table.quantity} > 0`),
+    index().on(table.treatmentShipmentId),
+  ],
 );
 
 export const PART_FEATURE_CONSTRAINT = "unique_part_feature_name";
@@ -444,19 +481,25 @@ export const dbTablePartReference = pgTable(
     uniqueIndex(PART_REFERENCE_CONSTRAINT)
       .on(table.clientId, table.reference)
       .where(sql`${table.deletedAt} IS NULL`),
+    index().on(table.partId),
+    index().on(table.clientId),
   ],
 );
 
-export const dbTablePartPrice = pgTable("part_price", {
-  clientId: integer("clientId").references(() => dbTableClient.id),
-  createdAt: datetimeType("createdAt"),
-  id: idType,
-  partId: integer("partId")
-    .notNull()
-    .references(() => dbTablePart.id),
-  price: numeric("price"),
-  quantity: integer("quantity"),
-});
+export const dbTablePartPrice = pgTable(
+  "part_price",
+  {
+    clientId: integer("clientId").references(() => dbTableClient.id),
+    createdAt: datetimeType("createdAt"),
+    id: idType,
+    partId: integer("partId")
+      .notNull()
+      .references(() => dbTablePart.id),
+    price: numeric("price"),
+    quantity: integer("quantity"),
+  },
+  (table) => [index().on(table.partId), index().on(table.clientId)],
+);
 
 export const dbTablePartPriceEstimator = pgTable("part_price_estimator", {
   coatingCost: numeric("coatingCost"),
@@ -486,7 +529,7 @@ export const dbTablePartMaterial = pgTable(
       .notNull()
       .references(() => dbTablePart.id),
   },
-  (table) => [primaryKey({ columns: [table.materialId, table.partId] })],
+  (table) => [primaryKey({ columns: [table.materialId, table.partId] }), index().on(table.partId)],
 );
 
 export const PART_COMPONENT_CONSTRAINT = "part_component_pkey";
@@ -512,11 +555,15 @@ export const dbTablePartComponent = pgTable(
   ],
 );
 
-export const dbTableBlueprint = pgTable("blueprint", {
-  createdAt: datetimeType("createdAt"),
-  fileName: text("fileName").notNull(),
-  id: idType,
-  partId: integer("partId")
-    .notNull()
-    .references(() => dbTablePart.id),
-});
+export const dbTableBlueprint = pgTable(
+  "blueprint",
+  {
+    createdAt: datetimeType("createdAt"),
+    fileName: text("fileName").notNull(),
+    id: idType,
+    partId: integer("partId")
+      .notNull()
+      .references(() => dbTablePart.id),
+  },
+  (table) => [index().on(table.partId)],
+);

@@ -19,7 +19,9 @@ is unzipped on the server. The server needs no internet and no source code.
 2. creates the `POSTGRES_DB` database if it is missing (`initdb` only creates `postgres`),
 3. runs `powersync/init.sql`, which is idempotent: the `powersync_storage` database, the `powersync` publication, the
    `powersync_role` role with the PostgreSQL password, and its grants,
-4. starts PowerSync, the app and Caddy, and restarts any of them 3 s after it exits.
+4. starts PowerSync, the app and Caddy, and restarts any of them 3 s after it exits,
+5. every 30 s, starts `ResanoRP-db` if it is stopped. Windows would not restart it: `pg_ctl`'s service ends without
+   crashing when PostgreSQL exits. Every planned stop stops `ResanoRP` first, so the supervisor never undoes one.
 
 Before every Caddy start it deletes Caddy's intermediate certificate, so an intermediate that expired while Caddy was
 stopped is recreated instead of signing the site certificate (`ERR_CERT_DATE_INVALID`).
@@ -185,9 +187,8 @@ type `YES`, `src\db\refresh_production.py`:
 2. moves the data folders into that backup and leaves them empty,
 3. drops and recreates `POSTGRES_DB` and drops `powersync_storage`, runs `init.sql` and `schema.sql`, then restores
    the `audit_log` and `user` rows of the dump, as the audit log and the Usuarios outlive a refresh,
-4. runs the migration (`migrate()` in `src\db\main.py`; its log is `src\db\migration.log`). Its last step replaces the
-   audit log rows of the previous migration with one create per migrated document, at the document's date, with
-   `Prisma` or `RAIO` as the IP,
+4. runs the migration (`migrate()` in `src\db\main.py`; its log is `src\db\migration.log`). It seeds the Usuarios of
+   `secrets.py` only into an empty `user` table, so the ones the Backoffice deleted or changed stay so,
 5. runs `start.cmd`.
 
 If a step after the dump fails, it stages the backup as `import\` and runs `start.cmd`, which puts the previous data
@@ -197,15 +198,17 @@ back.
 
 `restore.cmd` and a failed refresh stage a backup in `import\`. When `start.cmd` finds `import\`, it:
 
-1. stops `ResanoRP`,
-2. dumps the current database to `backups\<yyyyMMdd-HHmmss>\production.dump`,
-3. drops and recreates `POSTGRES_DB`, and drops `powersync_storage`. Dropping the databases also drops PowerSync's
+1. reads all of `import\prisma.dump` (`pg_restore -f NUL`), and stops with production untouched if it is missing or
+   damaged,
+2. stops `ResanoRP`,
+3. dumps the current database to `backups\<yyyyMMdd-HHmmss>\production.dump`,
+4. drops and recreates `POSTGRES_DB`, and drops `powersync_storage`. Dropping the databases also drops PowerSync's
    replication slot and its stored rows, so PowerSync replicates the new data from scratch,
-4. runs `init.sql`, then `pg_restore` (`--no-owner --no-publications --no-privileges`),
-5. moves each data folder in `import\` into place, and the one it replaces into the same `backups\` folder,
-6. deletes `import\`.
+5. runs `init.sql`, then `pg_restore` (`--no-owner --no-publications --no-privileges`),
+6. moves each data folder in `import\` into place, and the one it replaces into the same `backups\` folder,
+7. deletes `import\`.
 
-If a step fails it stops with an error and leaves `ResanoRP` stopped. The previous data is in `backups\`.
+If a later step fails it stops with an error and leaves `ResanoRP` stopped. The previous data is in `backups\`.
 
 ### Deploying
 
@@ -231,6 +234,11 @@ to `<yyyyMMdd>.partial` and replaces the day's folder only once complete, so a h
 restored, a failed run (also a second one the same day) leaves the backup already there as it was, and the cleanup
 waits for the next run that succeeds. `cleanup-backups.ps1` and `restore.cmd` only see the date folders. Each run is logged in `BACKUP_LOCAL_PATH\backup.log`, which starts again past 1 MB and keeps the previous
 one as `backup.old.log`.
+
+Once the day's backup is in place, `backup.cmd` compacts PowerSync's storage (`bun run supervisor.ts compact`, which
+runs `entry.js compact` with the env of the PowerSync service). PowerSync never does it on its own: every change keeps
+the operations it replaced, and every new browser downloads all of them. A failed compaction is logged and leaves the
+backup as it is; `powersync_storage` is not in the backup, since PowerSync rebuilds it from the database.
 
 The backups are only on the server for now: copying them to another machine is a TODO in `backup.cmd`. A backup on
 the server alone is lost with its disk.
@@ -279,11 +287,12 @@ orphan processes. Also the Windows share connection logic (`docs/printers.md`) a
 Not yet verified on a server:
 
 - the service parts of `install.cmd`: `pg_ctl register` as NetworkService, WinSW install/start/stop and its kill of the
-  process tree, the service dependency, the firewall rules and the scheduled task as SYSTEM,
+  process tree, the service dependency, the supervisor restarting a stopped `ResanoRP-db`, the firewall rules and the
+  scheduled task as SYSTEM,
 - Caddy as SYSTEM, `trust-cert.ps1` on the server, and whether something else already uses the Caddy ports on the server,
 - whether the PostgreSQL binaries need the Visual C++ runtime,
 - every printer from the server (no paper test was done),
-- `backup.cmd` running unattended at 02:00, and the Monday `BLUEPRINTS` copy.
+- `backup.cmd` running unattended at 02:00, the Monday `BLUEPRINTS` copy, and its PowerSync compaction.
 
 ## 13. Files
 

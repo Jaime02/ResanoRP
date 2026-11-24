@@ -1,28 +1,13 @@
 import fs from "node:fs";
-import path from "node:path";
 
 import { expect } from "@playwright/test";
 import type { Locator, Page } from "@playwright/test";
-import { getDocument } from "pdfjs-dist/legacy/build/pdf.mjs";
 
-import { getPartTagFileUrl, getTagSellOrderQuantityText } from "@/lib/part-tag";
+import { getPartTagFileUrl, getPartTagName, getTagSellOrderQuantityText } from "@/lib/part-tag";
+import type { PartTagSource } from "@/lib/part-tag";
 import { SELL_ORDER_LABEL } from "@/messages/sell-order";
+import { readPdfPagesTexts } from "@/tests/utils/pdf";
 import { expectPrintedByBrowser } from "@/tests/workflows/printer";
-
-// The text of each tag, which is a page of its PDF. A value wrapped onto several lines or split into several runs is
-// joined back, and the fields are separated by a single space
-async function readTagsTexts(tagPdf: Buffer) {
-  const pdf = await getDocument({ data: new Uint8Array(tagPdf) }).promise;
-  return Promise.all(
-    Array.from({ length: pdf.numPages }, async (_, index) =>
-      (await (await pdf.getPage(index + 1)).getTextContent()).items
-        .map((item) => ("str" in item ? `${item.str}${item.hasEOL ? " " : ""}` : ""))
-        .join("")
-        .replace(/\s+/g, " ")
-        .trim(),
-    ),
-  );
-}
 
 // The labels of a tag are uppercased by its style, so they are compared ignoring the case. Without a value, the field
 // is not on the tag
@@ -39,12 +24,22 @@ export function getTagSellOrderText(reference: string, quantity: number, sellOrd
   return `${sellOrderCount === 1 ? `${SELL_ORDER_LABEL}: ` : ""}${reference} ${getTagSellOrderQuantityText(quantity, sellOrderCount)}`;
 }
 
+// Every print names its tag file after what it is printed for and a random id, so a print is found by the start of its
+// name
+export function getTagNamePrefix(source: PartTagSource, id: number) {
+  return getPartTagName(source, id, "");
+}
+
+export function expectNoTagFile(tagNamePrefix: string) {
+  expect(fs.readdirSync(process.env.TAGS_ROOT_PATH!).filter((file) => file.startsWith(tagNamePrefix))).toEqual([]);
+}
+
 // The server deletes a tag once it is served, so its text is read from the response of the browser print and the file
 // on disk has to be gone
-export async function expectTagPrintedByBrowser(page: Page, buttonPrint: Locator, tagFilePath: string) {
-  const tagUrl = getPartTagFileUrl(path.basename(tagFilePath, ".pdf")).split("?")[0];
+export async function expectTagPrintedByBrowser(page: Page, buttonPrint: Locator, tagNamePrefix: string) {
+  const tagUrl = getPartTagFileUrl(tagNamePrefix);
   // The iframe is removed right after printing, which discards the body of its response, so it is read on its way
-  const routeUrl = (url: URL) => url.href.includes(tagUrl);
+  const routeUrl = (url: URL) => url.pathname.startsWith(tagUrl);
   let resolveTagPdf: (tagPdf: Buffer) => void = () => {};
   const tagPdf = new Promise<Buffer>((resolve) => (resolveTagPdf = resolve));
   await page.route(routeUrl, async (route) => {
@@ -55,9 +50,9 @@ export async function expectTagPrintedByBrowser(page: Page, buttonPrint: Locator
   await expectPrintedByBrowser(page, buttonPrint);
   // Unrouting while the handler is still fetching lets the browser request the tag again, which the server has
   // already deleted
-  const tagsTexts = await readTagsTexts(await tagPdf);
+  const tagsTexts = await readPdfPagesTexts(await tagPdf);
   await page.unroute(routeUrl);
-  expect(fs.existsSync(tagFilePath)).toBe(false);
+  expectNoTagFile(tagNamePrefix);
   return tagsTexts;
 }
 
@@ -66,7 +61,7 @@ export async function expectTagPrintedByBrowser(page: Page, buttonPrint: Locator
 export async function workflowPrintTag(
   page: Page,
   row: Locator,
-  tagFilePath: string,
+  tagNamePrefix: string,
   tagsPartQuantities?: Array<number>,
 ) {
   await row.getByTestId("button-print-tag").click();
@@ -85,7 +80,7 @@ export async function workflowPrintTag(
     await inputPartQuantity.fill(String(partQuantity));
     await expect(inputPartQuantity).toHaveValue(String(partQuantity));
   }
-  const tagsTexts = await expectTagPrintedByBrowser(page, buttonSubmit, tagFilePath);
+  const tagsTexts = await expectTagPrintedByBrowser(page, buttonSubmit, tagNamePrefix);
 
   await expect(dialogPrintTag).not.toBeVisible();
   return tagsTexts;

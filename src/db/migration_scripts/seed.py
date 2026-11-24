@@ -1,7 +1,7 @@
 from . import OldRefToNewId
 from .connections import fetch_id, get_postgres_cursor
 from .models import Material
-from .secrets import CONFIGURATION, DELIVERY_METHODS, MATERIAL_WIDTHS, PRINTERS, RENAMED_RAW_MATERIALS, SHAPES
+from .secrets import CONFIGURATION, DELIVERY_METHODS, MATERIAL_WIDTHS, PRINTERS, RENAMED_RAW_MATERIALS, SHAPES, USERS
 
 
 def seed_configuration():
@@ -47,6 +47,17 @@ def seed_printers():
                     printer.for_tags,
                 ),
             )
+
+
+def seed_users():
+    with get_postgres_cursor() as cursor:
+        # A refresh restores the Usuarios of the previous database first, so the ones the Backoffice deleted or changed
+        # must not come back
+        cursor.execute('SELECT 1 FROM "user" LIMIT 1')
+        if cursor.fetchone() is not None:
+            return
+        for user in USERS:
+            cursor.execute('INSERT INTO "user" ("name", "ip") VALUES (%s, %s)', (user.name, user.ip))
 
 
 def seed_materials(migrated_raw_materials: OldRefToNewId) -> list[Material]:

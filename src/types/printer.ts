@@ -22,7 +22,7 @@ export const isLabelPrinterKind = (kind: PrinterKind | null) => kind !== null &&
 export const PRINTER_HOST_PATTERN = /^[\w.-]+$/;
 export const PRINTER_SHARE_NAME_PATTERN = /^[\p{L}\p{N} _.$()-]*$/u;
 
-export type BasePrinter = InferSelectModel<typeof dbTablePrinter>;
+type BasePrinter = InferSelectModel<typeof dbTablePrinter>;
 
 // What the browsers get of a printer: its password stays on the server
 export type TPublicPrinter = Omit<BasePrinter, "password">;

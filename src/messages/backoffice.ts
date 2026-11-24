@@ -6,13 +6,13 @@ export const AUDIT_DESCRIPTION_LABEL = "Descripción";
 export const AUDIT_RESULT_LABEL = "Resultado";
 export const AUDIT_USER_LABEL = "Usuario";
 export const IP_LABEL = "IP";
+export const AUDIT_DOCUMENT_LABEL = "Documento";
 export const AUDIT_INPUT_LABEL = "Datos";
 export const AUDIT_OK_LABEL = "Correcto";
 export const AUDIT_ADMIN_LABEL = "Administrador";
 export const AUDIT_NOT_ADMIN_LABEL = "Otro";
 export const LOG_TIMESTAMP_LABEL = "Fecha";
-export const AUDIT_LOG_MONTHS_NOTE =
-  "Se muestran los meses del filtro de Fecha. Sin fecha de inicio, solo el mes de la fecha de fin o el actual";
+export const getAuditLogStartNote = (startDate: string) => `Se muestran las entradas desde el ${startDate}`;
 export const getLogLinesNote = (maxLines: number) =>
   `Se muestran las últimas ${maxLines} líneas, las más recientes primero`;
 export const CLEAR_LOG_LABEL = "Vaciar";

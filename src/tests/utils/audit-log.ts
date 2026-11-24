@@ -15,7 +15,7 @@ import { getTableName } from "drizzle-orm";
 import { dbTableAuditLog } from "@/db/schema";
 import { ADMIN_SESSION_COOKIE_NAME, isAdminSession } from "@/lib/admin-session";
 import type { AuditEntry } from "@/logging/audit";
-import { getAuditInputKey, getAuditResultId, redactAuditInput } from "@/logging/audit";
+import { getAuditDocumentId, getAuditInputKey, getAuditResultId, redactAuditInput } from "@/logging/audit";
 import { MUTATION_MESSAGES } from "@/messages/mutations";
 import { AUDIT_TABLES_ATTACHMENTS } from "@/tests/utils/audit-tables";
 import type { TPickedFiles } from "@/tests/utils/components/file-input";
@@ -82,8 +82,9 @@ const trackedContexts = new WeakSet<BrowserContext>();
 export async function readAuditLog(): Promise<Array<TAuditLogEntry>> {
   const db = (await import("@/db")).default;
   const rows = await db.select().from(dbTableAuditLog).orderBy(dbTableAuditLog.id);
-  return rows.map(({ id: _id, month: _month, errorCode, input, ip, isAdmin, resultId, ...row }) => ({
+  return rows.map(({ id: _id, month: _month, documentId, errorCode, input, ip, isAdmin, resultId, ...row }) => ({
     ...row,
+    documentId: documentId ?? undefined,
     errorCode: errorCode ?? undefined,
     input: input === null ? undefined : (JSON.parse(input) as unknown),
     ip: ip ?? undefined,
@@ -127,7 +128,14 @@ export function expectAuditLog(...entries: Array<TExpectedAuditEntry>) {
 export async function expectAuditedRequest(entry: TExpectedAuditEntry, sendRequest: () => Promise<APIResponse>) {
   const response = await sendRequest();
   const { result } = (await response.json()) as TTrpcResult;
-  calls.push({ entry: { ...entry, resultId: getAuditResultId(result?.data) }, rawInput: entry.input });
+  calls.push({
+    entry: {
+      ...entry,
+      resultId: getAuditResultId(result?.data),
+      documentId: await getAuditDocumentId(entry.path, result?.data, redactAuditInput(entry.input)),
+    },
+    rawInput: entry.input,
+  });
   return response;
 }
 
@@ -194,20 +202,25 @@ async function recordMutations(request: PlaywrightRequest, response: PlaywrightR
     releasedSessions.delete(paths[0]);
     const isAdmin =
       releasedSession ?? isAdminSession(getCookie((await request.allHeaders()).cookie, ADMIN_SESSION_COOKIE_NAME));
+    // Read as the response arrives, as close as it gets to when the server read the document of the entry
     calls.push(
-      ...paths.map((procedurePath, index) => {
-        const { error, result } = results[index];
-        return {
-          entry: {
-            path: procedurePath,
-            ok: error === undefined,
-            isAdmin,
-            ...(error === undefined ? { resultId: getAuditResultId(result?.data) } : { errorCode: error.data.code }),
-            input: redactAuditInput(inputs[index]),
-          },
-          rawInput: inputs[index],
-        };
-      }),
+      ...(await Promise.all(
+        paths.map(async (procedurePath, index) => {
+          const { error, result } = results[index];
+          const input = redactAuditInput(inputs[index]);
+          return {
+            entry: {
+              path: procedurePath,
+              ok: error === undefined,
+              isAdmin,
+              ...(error === undefined ? { resultId: getAuditResultId(result?.data) } : { errorCode: error.data.code }),
+              documentId: await getAuditDocumentId(procedurePath, result?.data, input),
+              input,
+            },
+            rawInput: inputs[index],
+          };
+        }),
+      )),
     );
   } catch (error) {
     problems.push(`${request.url()} could not be read: ${String(error)}`);

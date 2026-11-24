@@ -10,6 +10,8 @@ const postgresBin = path.join(bin, "postgres", "bin");
 const RESTART_DELAY_MS = 3000;
 const DATABASE_POLL_MS = 2000;
 const DATABASE_ATTEMPTS = 60;
+const DATABASE_SERVICE = "ResanoRP-db";
+const DATABASE_SERVICE_CHECK_MS = 30_000;
 const APP_PORT = "5173";
 const POWERSYNC_PORT = "8080";
 const LOOPBACK = "127.0.0.1";
@@ -33,6 +35,21 @@ function log(name: string, message: string) {
 
 const encodedPassword = encodeURIComponent(databasePassword);
 const databaseHost = `localhost:${databasePort}`;
+const powerSyncEntry = path.join(
+  root,
+  "powersync-service",
+  "node_modules",
+  "@powersync",
+  "service-image",
+  "lib",
+  "entry.js",
+);
+const powerSyncEnv = {
+  POWERSYNC_CONFIG_PATH: path.join(root, "powersync", "service.yaml"),
+  PS_DATA_SOURCE_URI: `postgresql://powersync_role:${encodedPassword}@${databaseHost}/${databaseName}`,
+  PS_STORAGE_SOURCE_URI: `postgresql://${databaseUser}:${encodedPassword}@${databaseHost}/powersync_storage`,
+  PS_JWT_SECRET: requireEnv("POWERSYNC_JWT_SECRET"),
+};
 
 interface TService {
   name: string;
@@ -46,18 +63,8 @@ const services: Array<TService> = [
   {
     name: "powersync",
     command: path.join(bin, "node.exe"),
-    args: [
-      path.join(root, "powersync-service", "node_modules", "@powersync", "service-image", "lib", "entry.js"),
-      "start",
-      "-r",
-      "unified",
-    ],
-    env: {
-      POWERSYNC_CONFIG_PATH: path.join(root, "powersync", "service.yaml"),
-      PS_DATA_SOURCE_URI: `postgresql://powersync_role:${encodedPassword}@${databaseHost}/${databaseName}`,
-      PS_STORAGE_SOURCE_URI: `postgresql://${databaseUser}:${encodedPassword}@${databaseHost}/powersync_storage`,
-      PS_JWT_SECRET: requireEnv("POWERSYNC_JWT_SECRET"),
-    },
+    args: [powerSyncEntry, "start", "-r", "unified"],
+    env: powerSyncEnv,
   },
   {
     name: "app",
@@ -89,6 +96,16 @@ const services: Array<TService> = [
     },
   },
 ];
+
+// PowerSync never compacts its storage on its own, and every change keeps the operations it replaced, which every new
+// browser downloads. backup.cmd runs this once a night, next to the running service
+if (process.argv[2] === "compact") {
+  const result = spawnSync(path.join(bin, "node.exe"), [powerSyncEntry, "compact"], {
+    env: { ...process.env, ...powerSyncEnv },
+    stdio: "inherit",
+  });
+  process.exit(result.status ?? 1);
+}
 
 const databaseEnv = { ...process.env, PGPASSWORD: databasePassword, POSTGRES_PASSWORD: databasePassword };
 const psqlArgs = ["-h", "localhost", "-p", databasePort, "-U", databaseUser];
@@ -126,6 +143,17 @@ function initializePowerSync() {
     { env: databaseEnv, stdio: "inherit" },
   );
   if (result.status !== 0) throw new Error("powersync/init.sql failed");
+}
+
+// Windows runs recovery actions only when a service crashes, and pg_ctl's service ends without crashing when PostgreSQL
+// exits. Every planned stop of the database stops this service first, so a stopped database here is always unplanned
+function watchDatabaseService() {
+  setInterval(() => {
+    const query = spawnSync("sc", ["query", DATABASE_SERVICE], { encoding: "utf8" });
+    if (stopping || query.status !== 0 || !query.stdout.includes("STOPPED")) return;
+    log("database", "service stopped, starting it");
+    spawnSync("sc", ["start", DATABASE_SERVICE], { stdio: "inherit" });
+  }, DATABASE_SERVICE_CHECK_MS);
 }
 
 const running = new Map<string, ChildProcess>();
@@ -172,3 +200,4 @@ await waitForDatabase();
 createDatabase();
 initializePowerSync();
 for (const service of services) start(service);
+watchDatabaseService();
