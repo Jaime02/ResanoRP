@@ -78,3 +78,4 @@ export const PART_FEATURE_CHECKED_DELETE_ERROR_MESSAGE =
   "La Característica tiene Controles de calidad y no se puede eliminar";
 export const PART_FEATURE_CHECKED_RANGE_ERROR_MESSAGE =
   "La Característica tiene Controles de calidad y no se puede cambiar su rango";
+export const PART_TAG_GENERATED_MESSAGE = "Etiqueta de Artículo generada";

@@ -100,5 +100,8 @@
   "treatment.deleteShipment": ["treatment_shipment"],
   "treatment.receive": ["treatment_reception"],
   "treatment.send": ["treatment_shipment"],
-  "treatment.sendPart": ["treatment_shipment"]
+  "treatment.sendPart": ["treatment_shipment"],
+  "user.create": ["user"],
+  "user.delete": ["user"],
+  "user.update": ["user"]
 }

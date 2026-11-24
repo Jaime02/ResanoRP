@@ -62,7 +62,7 @@ so unzipping a new version over the folder keeps them.
 | `pgdata\`                                                              | machine | The PostgreSQL cluster                                                                                |
 | `caddy\`, `caddy-config\`                                              | machine | Caddy's own certificate authority and state. Losing `caddy\` means every client must trust a new root |
 | `BLUEPRINTS\`, `SELL_ORDERS\`, `TAGS\`, `DELIVERY_NOTES\`, `INVOICES\` | machine | Files of the app                                                                                      |
-| `LOGS\`                                                                | machine | App logs, and `audit\` with one `audit-yyyy-MM.log` per month, one JSON line per mutation and login   |
+| `LOGS\`                                                                | machine | App logs                                                                                              |
 | `service-logs\`                                                        | machine | WinSW logs: the supervisor's output, with PowerSync and Caddy. Rolled at 10 MB, 5 files               |
 | `backups\`                                                             | machine | What a refresh or an import replaced (section 8)                                                      |
 | `client\root.crt`                                                      | machine | Written by `start.cmd` for the clients (section 7)                                                    |
@@ -183,8 +183,11 @@ type `YES`, `src\db\refresh_production.py`:
 
 1. stops `ResanoRP` and dumps the database to `backups\<yyyyMMdd-HHmmss>\production.dump`,
 2. moves the data folders into that backup and leaves them empty,
-3. drops and recreates `POSTGRES_DB` and drops `powersync_storage`, then runs `init.sql` and `schema.sql`,
-4. runs the migration (`migrate()` in `src\db\main.py`; its log is `src\db\migration.log`),
+3. drops and recreates `POSTGRES_DB` and drops `powersync_storage`, runs `init.sql` and `schema.sql`, then restores
+   the `audit_log` and `user` rows of the dump, as the audit log and the Usuarios outlive a refresh,
+4. runs the migration (`migrate()` in `src\db\main.py`; its log is `src\db\migration.log`). Its last step replaces the
+   audit log rows of the previous migration with one create per migrated document, at the document's date, with
+   `Prisma` or `RAIO` as the IP,
 5. runs `start.cmd`.
 
 If a step after the dump fails, it stages the backup as `import\` and runs `start.cmd`, which puts the previous data
@@ -221,8 +224,8 @@ is enough: `bundle-production -- --update`, unzip it over the folder, `net stop 
 
 The task `ResanoRP-backup` runs `backup.cmd` every night at 02:00 as SYSTEM. It writes `BACKUP_LOCAL_PATH\<yyyyMMdd>\`
 with the database (`production.dump`, `pg_dump -Fc`), `SELL_ORDERS`, `TAGS`, `DELIVERY_NOTES`, `INVOICES` and
-`caddy` and the audit log as `AUDIT`, plus `BLUEPRINTS` on Sunday night (the Monday folder). `restore.cmd` does not
-import `AUDIT`: copy its files back by hand if the server lost its own. `cleanup-backups.ps1` then keeps every backup of the
+`caddy`, plus `BLUEPRINTS` on Sunday night (the Monday folder). The audit log is the `audit_log` table of the
+database, so a restore takes it back to the time of the backup. `cleanup-backups.ps1` then keeps every backup of the
 current week, the latest one of each of the three previous weeks, and the two newest blueprint copies. A run writes
 to `<yyyyMMdd>.partial` and replaces the day's folder only once complete, so a half-written backup is never kept or
 restored, a failed run (also a second one the same day) leaves the backup already there as it was, and the cleanup

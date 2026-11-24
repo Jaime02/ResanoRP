@@ -166,6 +166,7 @@ const adminPaths = [
   "/create-production-order",
   "/invoicing",
   "/maintenance",
+  "/backoffice",
   "/price-calculator",
   ...mockParts.filter((part) => part.deletedAt === null).map((part) => `/price-calculator/${part.id}`),
 ];

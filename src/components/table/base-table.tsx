@@ -260,7 +260,10 @@ export default function BaseTable<TRow extends TBaseModel, TState extends TTable
     // The fade overlay must not be taller than what is visible, or it adds empty scrollable space
     const resizeObserver = new ResizeObserver(() => {
       root.style.setProperty("--header-height", `${head.getBoundingClientRect().height}px`);
-      scroller.style.setProperty("--viewport-height", `${scroller.clientHeight}px`);
+      // clientHeight is rounded, so at fractional zoom levels it can exceed the real height by a subpixel
+      const scrollbarHeight = scroller.offsetHeight - scroller.clientHeight;
+      const viewportHeight = scroller.getBoundingClientRect().height - scrollbarHeight;
+      scroller.style.setProperty("--viewport-height", `${viewportHeight}px`);
     });
     [head, scroller].forEach((element) => resizeObserver.observe(element));
     return () => resizeObserver.disconnect();

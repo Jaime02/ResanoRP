@@ -65,7 +65,7 @@ The stack runs a bundle of the app built in development mode, which keeps the Re
 
 ### Audit checks
 
-Every tRPC mutation is written to the audit log (`LOGS_PATH/audit/audit-yyyy-MM.log`, one JSON line per mutation and admin login or logout, with `password` fields hidden). After each test that passed, the fixtures check that:
+Every tRPC mutation is written to the audit log (the `audit_log` table, one row per mutation and admin login or logout, with `password` fields hidden). It syncs to the Backoffice through PowerSync, only for the token of an admin session and the months of its date filter, and the write trace of the tests leaves it out. After each test that passed, the fixtures check that:
 
 - the audit log has exactly the mutations the browser sent, plus the entries the test declared with `expectAuditLog`;
 - the app wrote rows only inside the transaction of a mutation that succeeded. The test build tags every `ctx.db.transaction` with its procedure (`src/trpc/index.ts`) and a trigger records every write (`src/tests/utils/write-trace.ts`), so a mutation must do all its writes inside `ctx.db.transaction`;

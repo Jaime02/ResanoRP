@@ -24,6 +24,7 @@ from migration_scripts.raio_migrate import (
     raio_migrate_machines_production_orders,
 )
 from migration_scripts.ofertas_migrate import migrate_ofertas
+from migration_scripts.audit_log_migrate import migrate_audit_log
 from migration_scripts.seed import (
     seed_configuration,
     seed_shapes,
@@ -67,6 +68,7 @@ def migrate():
 
     machines, production_orders = raio_migrate_machines_production_orders()
     raio_migrate_active_production_orders(machines, production_orders)
+    migrate_audit_log()
 
 
 if __name__ == "__main__":

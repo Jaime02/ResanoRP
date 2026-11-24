@@ -1,6 +1,7 @@
 import type { TSellOrderForm, TSellOrderLineForm } from "@/form/hooks/use-sell-order";
 import { formatDate, formatPrice, formatPricePerKilo, formatPrinterAddress } from "@/lib/formatters";
 import { formatCents } from "@/lib/prices";
+import { IP_LABEL } from "@/messages/backoffice";
 import { BLUEPRINT_CREATION_DATE_LABEL } from "@/messages/blueprint";
 import { INVOICE_EMAIL_LABEL } from "@/messages/client";
 import {
@@ -261,4 +262,8 @@ export function serializePaymentMethod(paymentMethod: {
     [NAME_LABEL]: paymentMethod.name,
     [DUE_DATE_LABEL]: paymentMethod.paymentDeadlineDays !== null ? String(paymentMethod.paymentDeadlineDays) : null,
   });
+}
+
+export function serializeUser(user: { name: string; ip: string }): TSerializeOutput {
+  return serialize({ [NAME_LABEL]: user.name, [IP_LABEL]: user.ip });
 }

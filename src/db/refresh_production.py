@@ -70,6 +70,16 @@ def refresh(backup_path: Path):
     psql(DATABASE, "-f", PRODUCTION_PATH / "powersync" / "init.sql")
     # From the bundle, not from the backup: production has no migrations, so the new version's schema comes from here
     psql(DATABASE, "-f", PRODUCTION_PATH / "schema.sql")
+    # The audit log and the Usuarios are of this server, not data of the migration, so they outlive a refresh. With
+    # their id sequences, or the next row would take an id already used
+    run_pg(
+        "pg_restore",
+        "-d",
+        DATABASE,
+        "--data-only",
+        *(arg for table in ["audit_log", "user"] for arg in ("-t", table, "-t", f"{table}_id_seq")),
+        backup_path / "production.dump",
+    )
 
     clear_log()
     migrate()

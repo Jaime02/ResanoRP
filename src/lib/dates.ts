@@ -1,5 +1,5 @@
 import { tz } from "@date-fns/tz";
-import { addDays, endOfDay, format, isSameDay, startOfDay } from "date-fns";
+import { addDays, eachMonthOfInterval, endOfDay, format, isSameDay, startOfDay } from "date-fns";
 
 // The business works in Spain, so a day is a day there wherever the code runs: the server runs in UTC
 export const APP_TIME_ZONE = "Europe/Madrid";
@@ -24,4 +24,9 @@ export function isSameAppDay(date: Date, otherDate: Date): boolean {
 
 export function formatAppDate(date: Date, pattern: string): string {
   return format(date, pattern, inAppTimeZone);
+}
+
+// The first instant of every month from the one of start to the one of end. date-fns lists a reversed interval backwards
+export function eachAppMonth(start: Date, end: Date): Array<Date> {
+  return start > end ? [] : eachMonthOfInterval({ start, end }, inAppTimeZone);
 }

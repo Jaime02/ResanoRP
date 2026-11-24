@@ -18,8 +18,6 @@ if (env === undefined) {
 const isProd = env === "production";
 const isTest = env === "test";
 export const errorsLogFilePath = path.join(process.env.LOGS_PATH, "errors.log");
-const logFilePath = path.join(process.env.LOGS_PATH, "log.log");
-
 if (!fs.existsSync(process.env.LOGS_PATH)) {
   fs.mkdirSync(process.env.LOGS_PATH, { recursive: true });
 }
@@ -50,7 +48,6 @@ const consoleFormat = winston.format.combine(
 );
 
 const ERRORS_LOG_MAX_BYTES = 1024 * 1024 * 1; // 1 MB
-const LOG_MAX_BYTES = 1024 * 1024 * 5; // 5 MB
 const LOG_SIZE_CHECK_INTERVAL_MS = 10_000;
 
 // Any browser can write to the logs through logFromClientFn, so without a limit a stuck page fills the disk. Winston
@@ -67,7 +64,6 @@ function limitLogFileSize(filePath: string, maxBytes: number) {
 }
 
 limitLogFileSize(errorsLogFilePath, ERRORS_LOG_MAX_BYTES);
-limitLogFileSize(logFilePath, LOG_MAX_BYTES);
 
 const errorFileTransport = new winston.transports.File({
   filename: errorsLogFilePath,
@@ -77,19 +73,6 @@ const errorFileTransport = new winston.transports.File({
 
 const transports: Array<winston.transport> = [
   errorFileTransport,
-  new winston.transports.File({
-    filename: logFilePath,
-    format: winston.format.combine(
-      winston.format((info) => {
-        // Only pass through messages at 'info' or 'debug' level
-        if (info.level === String(LoggerLevels.info) || info.level === String(LoggerLevels.debug)) {
-          return info;
-        }
-        return false; // Blocks other levels
-      })(),
-      fileFormat,
-    ),
-  }),
   new winston.transports.Console({
     format: consoleFormat,
     level: isTest ? LoggerLevels.crit : isProd ? LoggerLevels.warning : LoggerLevels.debug,

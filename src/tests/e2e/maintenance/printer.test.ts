@@ -137,14 +137,15 @@ test("manage the Impresoras", async ({ page, db }) => {
     await expectSingleSuccessToast(page, PRINTER_CREATED_MESSAGE);
     expect(await getLabelPrinter()).toMatchObject(labelPrinter);
     // The audit log records the creation but never the password
-    expect(readAuditLog()).toContainEqual(
+    const auditLog = await readAuditLog();
+    expect(auditLog).toContainEqual(
       expect.objectContaining({
         ok: true,
         isAdmin: true,
         input: expect.objectContaining({ name: labelPrinter.name, password: AUDIT_REDACTED_VALUE }),
       }),
     );
-    expect(JSON.stringify(readAuditLog())).not.toContain(labelPrinter.password);
+    expect(JSON.stringify(auditLog)).not.toContain(labelPrinter.password);
     await workflowPingPrinter(page, labelPrinter.name);
     await expectSingleSuccessToast(page, PRINTER_REACHABLE_MESSAGE(labelPrinter.name));
 

@@ -18,7 +18,7 @@ export const TAXABLE_BASE_LABEL = "Base imponible";
 export const INVOICE_TOTAL_LABEL = "Total Factura";
 export const INVOICE_CREATED_MESSAGE = "Factura creada";
 export const ACCOUNT_INVOICES_DESCRIPTION_MESSAGE =
-  "Se descargará el fichero para Prisma con todas las Facturas pendientes de contabilizar, que quedarán marcadas como contabilizadas.";
+  "Se descargará el archivo para Prisma con todas las Facturas pendientes de contabilizar, que quedarán marcadas como contabilizadas.";
 export const ACCOUNT_LABEL = "Contabilizar";
 export const MARK_LABEL = "Marcar";
 export const INVOICE_ACCOUNTED_LABEL = "Contabilizada";
@@ -29,7 +29,7 @@ export const INVOICES_NOT_ACCOUNTED_WITHOUT_ACCOUNT_MESSAGE = (clientNames: Arra
 export const INVOICES_NOT_ACCOUNTED_UNPRICED_MESSAGE = (deliveryNoteIds: Array<number>) =>
   `No se han contabilizado las Facturas porque estos Albaranes tienen Líneas sin precio: ${deliveryNoteIds.join(", ")}`;
 export const INVOICES_NOT_ACCOUNTED_AMOUNT_TOO_LARGE_MESSAGE = (maxAmount: string, invoiceIds: Array<number>) =>
-  `No se han contabilizado las Facturas porque estas tienen importes mayores de ${maxAmount}, que no caben en el fichero de Prisma: ${invoiceIds.join(", ")}`;
+  `No se han contabilizado las Facturas porque estas tienen importes mayores de ${maxAmount}, que no caben en el archivo de Prisma: ${invoiceIds.join(", ")}`;
 export const INVOICE_NOT_DELETED_SENT_MESSAGE = (invoiceId: number) =>
   `No se puede eliminar la Factura ${invoiceId} porque ya se ha enviado al Cliente`;
 export const INVOICE_NOT_DELETED_NOT_LAST_MESSAGE = (invoiceId: number, lastInvoiceId: number) =>
@@ -37,3 +37,4 @@ export const INVOICE_NOT_DELETED_NOT_LAST_MESSAGE = (invoiceId: number, lastInvo
 export const INVOICE_NOT_SENT_UNPRICED_MESSAGE = (deliveryNoteIds: Array<number>) =>
   `No se ha enviado la Factura porque estos Albaranes tienen Líneas sin precio: ${deliveryNoteIds.join(", ")}`;
 export const NO_PENDING_INVOICES_TO_ACCOUNT_MESSAGE = "No hay Facturas pendientes de contabilizar";
+export const INVOICE_FILE_GENERATED_MESSAGE = "Factura generada";

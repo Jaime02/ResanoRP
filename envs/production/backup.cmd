@@ -57,9 +57,4 @@ for %%f in (%FOLDERS%) do (
     if errorlevel 8 exit /b 1
   )
 )
-rem The audit log is the only data of LOGS worth keeping. restore.cmd leaves it out: it records what happened here
-if exist "LOGS\audit" (
-  robocopy "LOGS\audit" "%PARTIAL_PATH%\AUDIT" /E /R:2 /W:5 /NP /NFL /NDL /NJH /NJS
-  if errorlevel 8 exit /b 1
-)
 exit /b 0

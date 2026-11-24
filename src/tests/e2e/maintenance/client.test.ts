@@ -809,3 +809,13 @@ test(
     }
   },
 );
+
+test.describe("at a fractional zoom level", () => {
+  test.use({ deviceScaleFactor: 1.25 });
+
+  test("the clients table does not scroll while all its rows fit", async ({ page }) => {
+    await page.goto("/maintenance");
+    await assertTableRowCount(tableMaintenanceClient, activeClients.length);
+    expect(await tableMaintenanceClient.evaluate((element) => element.scrollHeight > element.clientHeight)).toBe(false);
+  });
+});

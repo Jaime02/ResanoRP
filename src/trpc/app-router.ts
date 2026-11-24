@@ -27,6 +27,7 @@ import rawMaterialRouter from "@/trpc/raw-material";
 import sellOrderRouter from "@/trpc/sell-order";
 import sellOrderLineRouter from "@/trpc/sell-order-line";
 import treatmentRouter from "@/trpc/treatment";
+import userRouter from "@/trpc/user";
 
 export const appRouter = router({
   client: clientsRouter,
@@ -57,4 +58,5 @@ export const appRouter = router({
   partMaterial: partMaterialRouter,
   productionOrder: productionOrderRouter,
   treatment: treatmentRouter,
+  user: userRouter,
 });

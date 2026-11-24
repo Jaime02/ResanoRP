@@ -24,6 +24,7 @@ function getPriceFormatter(decimals: number): Intl.NumberFormat {
 export enum DateFormat {
   Date = "date",
   Datetime = "datetime",
+  DatetimeSeconds = "datetime-seconds",
 }
 
 export function formatPartDimension(part?: { width?: string | null; length?: string | null }): string {
@@ -73,7 +74,8 @@ export function formatDate(dateInput: string | Date | null, format: DateFormat =
     month: "2-digit",
     timeZone: APP_TIME_ZONE,
     year: "numeric",
-    ...(format === DateFormat.Datetime && { hour: "2-digit", hour12: false, minute: "2-digit" }),
+    ...(format !== DateFormat.Date && { hour: "2-digit", hour12: false, minute: "2-digit" }),
+    ...(format === DateFormat.DatetimeSeconds && { second: "2-digit" }),
   });
 }
 

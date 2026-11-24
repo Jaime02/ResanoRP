@@ -9,7 +9,7 @@ import log from "@/logging/log";
 import { LogMessages, LoggerLevels } from "@/logging/types";
 
 // Caddy serves PowerSync under this path of the app origin, see docker/Caddyfile
-const POWERSYNC_PATH = "/powersync";
+export const POWERSYNC_PATH = "/powersync";
 // Longer than the first retries, which start at one second and double
 const SYNC_ERROR_GRACE_MS = 5_000;
 // More than the 30 seconds before expiry at which the sync stream reconnects, so that reconnect gets a new token

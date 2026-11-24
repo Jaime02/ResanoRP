@@ -39,7 +39,7 @@ export default function DialogUnaccountInvoice({ invoiceId, disabled }: DialogUn
       <AlertDialogContent data-testid="dialog-unaccount-invoice-content">
         <AlertDialogTitle>{UNACCOUNT_INVOICE_TITLE}</AlertDialogTitle>
         <AlertDialogDescription>
-          La Factura {invoiceId} volverá a incluirse en el próximo fichero para exportar. Si ya se importó, aparecerá
+          La Factura {invoiceId} volverá a incluirse en el próximo archivo para exportar. Si ya se importó, aparecerá
           duplicada en la contabilidad.
         </AlertDialogDescription>
         <AlertDialogFooter>

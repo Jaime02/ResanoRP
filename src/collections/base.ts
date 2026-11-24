@@ -1,4 +1,4 @@
-import type { TableChanges } from "@powersync/standalone-client";
+import type { StreamSubscription, TableChanges } from "@powersync/standalone-client";
 import { BasicIndex, collectionOptions, withPublicationContext } from "@tanstack/react-db";
 import type {
   ChangeMessageOrDeleteKeyMessage,
@@ -17,9 +17,10 @@ import { LogMessages, LoggerLevels } from "@/logging/types";
 const SYNC_TIMEOUT_MS = 10_000;
 const SYNC_RETRY_MS = 100;
 
-function baseCollectionOptions(table: string) {
+// A variant syncs other rows of the same table, so it is a collection of its own
+function baseCollectionOptions(table: string, variant?: string) {
   return {
-    id: `"${table}"`,
+    id: variant === undefined ? `"${table}"` : `"${table}" ${variant}`,
     defaultIndexType: BasicIndex,
     // A DbClient creates its Collections without any hook to add indexes to them, so each query creates the ones it
     // needs when it compiles
@@ -33,6 +34,8 @@ type TPowerSyncOptions<TSchema extends z.ZodType<object>, TKey extends string | 
 > &
   Omit<CollectionConfig<z.output<TSchema>, TKey, TSchema>, "id" | "sync" | "syncMode" | "utils"> & {
     schema: TSchema;
+    // By default the one stream named after the table, see docker/powersync/sync-config.yaml
+    streams?: ReadonlyArray<StreamSubscription>;
   };
 
 function logSyncError(error: unknown) {
@@ -74,6 +77,7 @@ function commitWithCheckpoint(pendingCommit: TPendingCommit) {
  */
 export function powerSyncCollectionOptions<TSchema extends z.ZodType<object>, TKey extends string | number>({
   table,
+  streams = [{ name: table }],
   ...config
 }: TPowerSyncOptions<TSchema, TKey>): CollectionConfig<z.output<TSchema>, TKey, TSchema> {
   type TRow = z.output<TSchema>;
@@ -170,8 +174,7 @@ export function powerSyncCollectionOptions<TSchema extends z.ZodType<object>, TK
           // Connection errors, which the client retries and logs once from its status
           onError: () => undefined,
         });
-        // One stream per table, see docker/powersync/sync-config.yaml
-        const lease = client.acquireStreams([{ name: table }], {
+        const lease = client.acquireStreams(streams, {
           // The service rejected the stream, which no retry fixes. Releasing it keeps every reconnect from failing and
           // logging it again
           onError: (error) => {
@@ -203,8 +206,10 @@ export function powerSyncCollectionOptions<TSchema extends z.ZodType<object>, TK
 export function powerSyncCollection<TConfig extends CollectionConfig<any, any, any, any>>(
   table: string,
   createConfig: (baseOptions: ReturnType<typeof baseCollectionOptions>, dbClient: DbClient) => TConfig,
+  variant?: string,
 ) {
-  return collectionOptions(`"${table}"`, (dbClient) => createConfig(baseCollectionOptions(table), dbClient));
+  const baseOptions = baseCollectionOptions(table, variant);
+  return collectionOptions(baseOptions.id, (dbClient) => createConfig(baseOptions, dbClient));
 }
 
 /**

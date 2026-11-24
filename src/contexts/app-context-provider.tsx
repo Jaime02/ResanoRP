@@ -11,6 +11,7 @@ import { awaitSynced } from "@/collections/base";
 import { AppContext, AppContextStorage, UserMode } from "@/contexts/app-context";
 import type { ShowToastOnTRPCMutationProps, TBaseMutationResult } from "@/contexts/app-context";
 import { logoutAdminFn } from "@/lib/admin-session-fns";
+import { forgetPowerSyncToken } from "@/lib/powersync";
 import log from "@/logging/log";
 import { LogMessages, LoggerLevels } from "@/logging/types";
 import { ERROR_TITLE, UNKNOWN_ERROR_MESSAGE } from "@/messages/common";
@@ -26,6 +27,11 @@ const subscribeToStorage = (callback: () => void) => AppContextStorage.subscribe
 const getStorageSnapshot = () => AppContextStorage.readCookie();
 
 const toaster = Toast.createToastManager();
+
+// The token of an admin session syncs the audit log, so the next sync request must get one without the session
+function closeAdminSession() {
+  void logoutAdminFn().then(forgetPowerSyncToken);
+}
 
 export function AppContextProvider({ children }: { children: ReactNode }) {
   const router = useRouter();
@@ -63,7 +69,7 @@ export function AppContextProvider({ children }: { children: ReactNode }) {
     (mode: UserMode | null) => {
       new AppContextStorage(mode ?? undefined, persistedState.userModeMachineId).save();
       if (mode !== UserMode.Admin) {
-        void logoutAdminFn();
+        closeAdminSession();
       }
     },
     [persistedState.userModeMachineId],
@@ -78,7 +84,7 @@ export function AppContextProvider({ children }: { children: ReactNode }) {
 
   const resetUserState = useCallback(() => {
     new AppContextStorage().save();
-    void logoutAdminFn();
+    closeAdminSession();
   }, []);
 
   // A deleted Machine can no longer operate, so its session is closed and the user mode has to be picked again

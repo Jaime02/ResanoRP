@@ -1,6 +1,7 @@
 import { expect, test } from "@playwright/test";
 import type { AnyRouter } from "@trpc/server";
 
+import { MUTATION_MESSAGES } from "@/messages/mutations";
 import { AUDIT_TABLES_PATH, readAuditTables } from "@/tests/utils/audit-tables";
 import { auditMiddleware } from "@/trpc";
 import { appRouter } from "@/trpc/app-router";
@@ -32,5 +33,15 @@ test("every mutation of the tRPC router is audited", () => {
   expect(
     Object.keys(auditTables).filter((path) => !mutationPaths.includes(path)),
     `Procedures of ${AUDIT_TABLES_PATH} that are not mutations of the router`,
+  ).toEqual([]);
+
+  const messagePaths = Object.keys(MUTATION_MESSAGES);
+  expect(
+    mutationPaths.filter((path) => !messagePaths.includes(path)),
+    "Mutations with no entry in MUTATION_MESSAGES: give them the toast message, or null if they show none",
+  ).toEqual([]);
+  expect(
+    messagePaths.filter((path) => !mutationPaths.includes(path)),
+    "Procedures of MUTATION_MESSAGES that are not mutations of the router",
   ).toEqual([]);
 });

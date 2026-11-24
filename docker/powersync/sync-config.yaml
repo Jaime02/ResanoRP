@@ -5,6 +5,12 @@ config:
 # downloads the tables its queries read. See powerSyncCollectionOptions in src/collections/base.ts
 streams:
   # PowerSync needs a text id. `*` comes first because the last column of a name wins
+  # Only the token of an admin session gets rows: they have every IP and input sent. See createPowerSyncToken. The
+  # table only grows, so a Backoffice subscribes to the months it shows. Those are not unchecked access, as the role is
+  # what authorizes, so the warning about the months the client chooses is accepted
+  audit_log:
+    accept_potentially_dangerous_queries: true
+    query: SELECT *, CAST(id AS TEXT) AS id FROM audit_log WHERE month IN subscription.parameter('months') AND auth.parameter('role') = 'admin'
   blueprint:
     query: SELECT *, CAST(id AS TEXT) AS id FROM blueprint
   client:
@@ -62,6 +68,9 @@ streams:
     query: SELECT *, CAST(id AS TEXT) AS id FROM treatment_reception
   treatment_shipment:
     query: SELECT *, CAST(id AS TEXT) AS id FROM treatment_shipment
+  # Quoted, as user is a reserved word of Postgres
+  user:
+    query: SELECT *, CAST(id AS TEXT) AS id FROM "user"
   # Tables keyed by other columns only need a unique id here: each collection derives its own key from the row
   part_price_estimator:
     query: SELECT *, CAST("partId" AS TEXT) AS id FROM part_price_estimator

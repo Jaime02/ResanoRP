@@ -10,6 +10,7 @@ import { ToastList } from "@/components/ui/toast";
 import { AppContextProvider } from "@/contexts/app-context-provider";
 import { AppContextStorage, UserMode } from "@/contexts/app-context-storage";
 import { ADMIN_SESSION_COOKIE_NAME, isAdminSession } from "@/lib/admin-session";
+import { getRequestIpFn } from "@/lib/request-ip-fns";
 
 import appCss from "./styles.css?url";
 
@@ -53,6 +54,9 @@ export const Route = createRootRouteWithContext<RouteContext>()({
     }
     return { userStateCookie };
   },
+  // The IP of a browser does not change while it is open, so it is only asked once
+  loader: async () => ({ ip: await getRequestIpFn() }),
+  staleTime: Infinity,
   component: RootComponent,
   shellComponent: RootDocument,
   head: () => ({

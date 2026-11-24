@@ -62,3 +62,4 @@ export const SELL_ORDER_LINE_NOT_OF_PART_MESSAGE = (sellOrderLineId: number, par
   `La Línea de pedido de venta ${sellOrderLineId} no es del Artículo ${partId}`;
 export const PRODUCTION_ORDER_NOT_ASSIGNABLE_MESSAGE = (productionOrderId: number, status: string) =>
   `La Orden de producción ${productionOrderId} no se puede asignar a una Máquina, su estado es "${status}"`;
+export const PRODUCTION_ORDER_TAG_GENERATED_MESSAGE = "Etiqueta de Orden de producción generada";

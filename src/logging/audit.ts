@@ -1,16 +1,12 @@
 import { createHash } from "node:crypto";
-import fs from "node:fs";
-import path from "node:path";
 
-import { format } from "date-fns";
 import { z } from "zod";
 
+import db from "@/db";
+import { dbTableAuditLog } from "@/db/schema";
+import { getAuditLogMonth } from "@/lib/backoffice";
 import logger from "@/logging/logger";
 import { LogMessages } from "@/logging/types";
-
-if (process.env.LOGS_PATH === undefined) {
-  throw new Error("Environment variable LOGS_PATH is not set");
-}
 
 export const AUDIT_REDACTED_VALUE = "***";
 // The settings of a transaction that tell the procedure that opened it and the input it was called with, which the
@@ -24,8 +20,6 @@ const REDACTED_KEY_PATTERN = /password/i;
 export const ADMIN_SESSION_AUDIT_PATHS = { login: "adminSession.login", logout: "adminSession.logout" };
 export const ADMIN_LOGIN_ERROR_CODES = { locked: "TOO_MANY_REQUESTS", wrongPassword: "UNAUTHORIZED" };
 
-export const auditLogFolderPath = path.join(process.env.LOGS_PATH, "audit");
-
 export interface AuditEntry {
   path: string;
   ok: boolean;
@@ -33,14 +27,16 @@ export interface AuditEntry {
   isAdmin?: boolean;
   errorCode?: string;
   input?: unknown;
-  resultId?: number | string;
+  resultId?: string;
 }
 
 const auditResultSchema = z.object({ item: z.object({ id: z.union([z.number(), z.string()]) }) });
 
-// The input of a create has no id, so the entry takes the one of the row the mutation returns
+// The input of a create has no id, so the entry takes the one of the row the mutation returns. As text, as some keys are
+// not numbers
 export function getAuditResultId(data: unknown) {
-  return auditResultSchema.safeParse(data).data?.item.id;
+  const id = auditResultSchema.safeParse(data).data?.item.id;
+  return id === undefined ? undefined : String(id);
 }
 
 // Two calls of a procedure with the same input are the same call as far as what they write is concerned
@@ -72,14 +68,15 @@ export function redactAuditInput(value: unknown): unknown {
 }
 
 // A failed write is logged but never fails the action it records
-export async function writeAuditEntry(entry: AuditEntry) {
+export async function writeAuditEntry({ input, ...entry }: AuditEntry) {
   try {
-    await fs.promises.mkdir(auditLogFolderPath, { recursive: true });
-    const now = new Date();
-    await fs.promises.appendFile(
-      path.join(auditLogFolderPath, `audit-${format(now, "yyyy-MM")}.log`),
-      `${JSON.stringify({ timestamp: format(now, "yyyy-MM-dd HH:mm:ss"), ...entry })}\n`,
-    );
+    const timestamp = new Date();
+    await db.insert(dbTableAuditLog).values({
+      ...entry,
+      input: input === undefined ? null : JSON.stringify(input),
+      month: getAuditLogMonth(timestamp),
+      timestamp,
+    });
   } catch (error) {
     logger.error(LogMessages.auditWriteFailed, { error, path: entry.path });
   }

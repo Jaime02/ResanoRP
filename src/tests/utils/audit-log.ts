@@ -10,14 +10,17 @@ import type {
   Response as PlaywrightResponse,
 } from "@playwright/test";
 
+import { dbTableAuditLog } from "@/db/schema";
 import { ADMIN_SESSION_COOKIE_NAME, isAdminSession } from "@/lib/admin-session";
 import type { AuditEntry } from "@/logging/audit";
-import { auditLogFolderPath, getAuditInputKey, getAuditResultId, redactAuditInput } from "@/logging/audit";
+import { getAuditInputKey, getAuditResultId, redactAuditInput } from "@/logging/audit";
+import { MUTATION_MESSAGES } from "@/messages/mutations";
 import { AUDIT_TABLES_PATH, readAuditTables, recordObservedTables } from "@/tests/utils/audit-tables";
 import type { TPickedFiles } from "@/tests/utils/components/file-input";
 import { readAppWrites, resetWriteTrace } from "@/tests/utils/write-trace";
 import type { TTracedWrite } from "@/tests/utils/write-trace";
 import { TRPC_URL } from "@/trpc/trpc-client";
+import { ToastType } from "@/types/toast";
 
 export const LOG_TIMESTAMP_PATTERN = /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/;
 
@@ -26,7 +29,7 @@ const UPDATE_AUDIT_TABLES = process.env.UPDATE_AUDIT_TABLES === "true";
 // The ip is the address of the browser, as the server sees it, and the timestamp the moment of the write. Both are
 // checked apart, as the test does not know them
 type TExpectedAuditEntry = Omit<AuditEntry, "ip">;
-type TAuditLogEntry = AuditEntry & { timestamp: string };
+type TAuditLogEntry = AuditEntry & { timestamp: Date };
 
 interface TTrpcResult {
   result?: { data?: unknown };
@@ -43,6 +46,7 @@ let calls: Array<TMutationCall> = [];
 let declaredEntries: Array<TExpectedAuditEntry> = [];
 let problems: Array<string> = [];
 let recordings: Array<Promise<void>> = [];
+let successToastTitles: Array<string> = [];
 const unansweredMutations = new Set<PlaywrightRequest>();
 const pickedFiles = new Map<string, File>();
 // A request held by the test meets the session it has when the test releases it, not the one it was sent with
@@ -53,23 +57,27 @@ export function setReleasedSession(procedurePath: string, isAdmin: boolean) {
 }
 const trackedContexts = new WeakSet<BrowserContext>();
 
-export function readAuditLog(): Array<TAuditLogEntry> {
-  if (!fs.existsSync(auditLogFolderPath)) {
-    return [];
-  }
-  return fs
-    .readdirSync(auditLogFolderPath)
-    .flatMap((fileName) => fs.readFileSync(path.join(auditLogFolderPath, fileName), "utf-8").split("\n"))
-    .filter(Boolean)
-    .map((line) => JSON.parse(line) as TAuditLogEntry);
+// Oldest first, in the shape of the entry the app wrote: the columns it left empty are undefined
+export async function readAuditLog(): Promise<Array<TAuditLogEntry>> {
+  const db = (await import("@/db")).default;
+  const rows = await db.select().from(dbTableAuditLog).orderBy(dbTableAuditLog.id);
+  return rows.map(({ id: _id, month: _month, errorCode, input, ip, isAdmin, resultId, ...row }) => ({
+    ...row,
+    errorCode: errorCode ?? undefined,
+    input: input === null ? undefined : (JSON.parse(input) as unknown),
+    ip: ip ?? undefined,
+    isAdmin: isAdmin ?? undefined,
+    resultId: resultId ?? undefined,
+  }));
 }
 
+// The db fixture empties the audit log with every other table
 export async function resetAuditLog() {
-  fs.rmSync(auditLogFolderPath, { force: true, recursive: true });
   calls = [];
   declaredEntries = [];
   problems = [];
   recordings = [];
+  successToastTitles = [];
   unansweredMutations.clear();
   pickedFiles.clear();
   releasedSessions.clear();
@@ -108,6 +116,11 @@ export async function trackAuditedMutations(context: BrowserContext) {
     return;
   }
   trackedContexts.add(context);
+  // The toasts are read as they appear, as a test closes them and a reload loses them
+  await context.exposeFunction(TOAST_BINDING, (title: string) => {
+    successToastTitles.push(title);
+  });
+  await context.addInitScript(observeSuccessToasts, { binding: TOAST_BINDING, type: ToastType.Success });
   // Only an intercepted request keeps the body of its upload, which the check reads
   await context.route(`**${TRPC_URL}/**`, async (route) => route.fallback());
   context.on("request", (request) => {
@@ -125,6 +138,22 @@ export async function trackAuditedMutations(context: BrowserContext) {
       recordings.push(recordMutations(response.request(), response));
     }
   });
+}
+
+const TOAST_BINDING = "recordSuccessToast";
+
+// Runs in the browser, so it cannot use anything of the module
+function observeSuccessToasts({ binding, type }: { binding: string; type: string }) {
+  const seen = new WeakSet<Element>();
+  new MutationObserver(() => {
+    for (const toast of document.querySelectorAll(`[data-testid="toast-root"][data-type="${type}"]`)) {
+      const title = toast.querySelector('[data-testid="toast-title"]')?.textContent;
+      if (title !== undefined && title !== "" && !seen.has(toast)) {
+        seen.add(toast);
+        void (window as unknown as Record<string, (title: string) => Promise<void>>)[binding](title);
+      }
+    }
+  }).observe(document, { characterData: true, childList: true, subtree: true });
 }
 
 export async function settleTrackedMutations() {
@@ -216,14 +245,11 @@ export async function assertAuditLog() {
   await settleTrackedMutations();
   expect(problems, "Every mutation sent by the browser should be read").toEqual([]);
 
-  const actualEntries = readAuditLog();
-  const message = `Audit log (${auditLogFolderPath}) should have exactly the mutations of the test`;
+  const actualEntries = await readAuditLog();
+  const message = "Audit log should have exactly the mutations of the test";
   const expectedEntries = [...calls.map(({ entry }) => entry), ...declaredEntries];
   expect(canonical(actualEntries.map(withoutTimestampAndIp)), message).toEqual(canonical(expectedEntries));
 
-  for (const { timestamp } of actualEntries) {
-    expect(timestamp, message).toMatch(LOG_TIMESTAMP_PATTERN);
-  }
   const ips = new Set(actualEntries.map(({ ip }) => ip));
   for (const ip of ips) {
     expect(isIP(ip ?? ""), `${message}: ${String(ip)} is not an ip address`).not.toBe(0);
@@ -231,6 +257,17 @@ export async function assertAuditLog() {
   expect(ips.size, `${message}: every request comes from the same browser machine`).toBeLessThanOrEqual(1);
 
   await assertWrites();
+  assertSuccessToasts();
+}
+
+// A toast that says a mutation was done must come with that mutation, so a call site cannot show the message of another
+function assertSuccessToasts() {
+  const doneMessages = new Set(calls.filter(({ entry }) => entry.ok).map(({ entry }) => MUTATION_MESSAGES[entry.path]));
+  const mutationMessages = new Set(Object.values(MUTATION_MESSAGES));
+  expect(
+    [...new Set(successToastTitles)].filter((title) => mutationMessages.has(title) && !doneMessages.has(title)),
+    "Success toasts of a mutation that the browser did not send or that failed",
+  ).toEqual([]);
 }
 
 function describeWrite({ table, operation, newRow, oldRow }: TTracedWrite) {

@@ -1,6 +1,7 @@
-import { sql } from "drizzle-orm";
+import { getTableName, sql } from "drizzle-orm";
 
 import type { TDatabase } from "@/db";
+import { dbTableAuditLog } from "@/db/schema";
 import { AUDIT_INPUT_SETTING, AUDIT_PROCEDURE_SETTING, WRITE_TRACE_SCHEMA } from "@/logging/audit";
 
 export interface TTracedWrite {
@@ -22,6 +23,10 @@ function getRunnerApplicationName() {
   }
   return PGAPPNAME;
 }
+
+// The audit log is written after the transaction of the mutation it records, and for the failed ones too, so it is
+// checked on its own by assertAuditLog
+const UNTRACED_TABLE = getTableName(dbTableAuditLog);
 
 async function getDb() {
   return (await import("@/db")).default;
@@ -62,7 +67,7 @@ async function installWriteTrace(db: TDatabase) {
       DO $$
       DECLARE traced_table text;
       BEGIN
-        FOR traced_table IN SELECT tablename FROM pg_catalog.pg_tables WHERE schemaname = 'public' LOOP
+        FOR traced_table IN SELECT tablename FROM pg_catalog.pg_tables WHERE schemaname = 'public' AND tablename <> '${UNTRACED_TABLE}' LOOP
           EXECUTE format(
             'CREATE OR REPLACE TRIGGER write_trace AFTER INSERT OR UPDATE OR DELETE ON public.%I FOR EACH ROW EXECUTE FUNCTION ${WRITE_TRACE_SCHEMA}.record()',
             traced_table
@@ -82,7 +87,7 @@ export async function resetWriteTrace() {
     SELECT (
       EXISTS (
         SELECT FROM pg_catalog.pg_tables traced_table
-        WHERE traced_table.schemaname = 'public' AND NOT EXISTS (
+        WHERE traced_table.schemaname = 'public' AND traced_table.tablename <> ${UNTRACED_TABLE} AND NOT EXISTS (
           SELECT FROM pg_catalog.pg_trigger
           WHERE tgname = 'write_trace' AND tgrelid = format('public.%I', traced_table.tablename)::regclass
         )

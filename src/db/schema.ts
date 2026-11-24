@@ -181,6 +181,37 @@ export const dbTablePrinter = pgTable("printer", {
   username: text("username"),
 });
 
+// Written outside the transaction of the mutation it records, so a failed one is kept too. Only admins sync it, see its
+// stream
+export const dbTableAuditLog = pgTable("audit_log", {
+  errorCode: text("errorCode"),
+  id: idType,
+  // The redacted input as JSON: PowerSync does not sync jsonb
+  input: text("input"),
+  ip: text("ip"),
+  isAdmin: boolean("isAdmin"),
+  // yyyyMM of the timestamp in the app time zone. The stream syncs the months a Backoffice subscribes to, as the table
+  // only grows. Written with the row, not generated: logical replication leaves generated columns out, so PowerSync
+  // would only get the month of the rows of its initial snapshot
+  month: integer("month").notNull(),
+  ok: boolean("ok").notNull(),
+  path: text("path").notNull(),
+  resultId: text("resultId"),
+  timestamp: datetimeType("timestamp").notNull(),
+});
+
+export const USER_IP_CONSTRAINT = "unique_user_ip";
+// Every browser of a user mode shares its session, so a person is only told apart by the IP of their machine
+export const dbTableUser = pgTable(
+  "user",
+  {
+    id: idType,
+    ip: text("ip").notNull(),
+    name: text("name").notNull(),
+  },
+  (table) => [uniqueIndex(USER_IP_CONSTRAINT).on(table.ip)],
+);
+
 export const dbTableClient = pgTable(
   "client",
   {

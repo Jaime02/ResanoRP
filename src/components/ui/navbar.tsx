@@ -1,4 +1,12 @@
-import { ClientOnly, useCanGoBack, useLocation, useMatches, useRouter } from "@tanstack/react-router";
+import {
+  ClientOnly,
+  rootRouteId,
+  useCanGoBack,
+  useLoaderData,
+  useLocation,
+  useMatches,
+  useRouter,
+} from "@tanstack/react-router";
 import { ArrowLeftIcon, HomeIcon, LogOutIcon } from "lucide-react";
 
 import Logo from "@/components/images/ResanoLogo";
@@ -7,6 +15,7 @@ import ButtonLink from "@/components/ui/button-link";
 import Header from "@/components/ui/header";
 import { UserMode, useAppContext } from "@/contexts/app-context";
 import { UNKNOWN_MACHINE_LABEL } from "@/messages/common";
+import { useQueryUserByIp } from "@/queries/user";
 
 const DEFAULT_TITLE = "ResanoRP";
 
@@ -14,6 +23,8 @@ export default function Navbar() {
   const { userMode, userModeMachine, resetUserState } = useAppContext();
   const router = useRouter();
   const canGoBack = useCanGoBack();
+  const { ip } = useLoaderData({ from: rootRouteId });
+  const { data: user } = useQueryUserByIp(ip ?? undefined);
 
   const matches = useMatches();
   const title = [...matches].reverse().find((m) => m.context.title !== undefined)?.context.title ?? DEFAULT_TITLE;
@@ -48,6 +59,11 @@ export default function Navbar() {
       </div>
       <Header className="text-2xl text-white lg:text-3xl">{title}</Header>
       <div className="ml-auto flex flex-row items-center gap-3">
+        {user !== undefined && (
+          <span data-testid="span-current-user-name" className="text-white">
+            {user.name}
+          </span>
+        )}
         <span data-testid="span-current-user-mode" className="text-white">
           {userMode !== UserMode.Machine
             ? userMode

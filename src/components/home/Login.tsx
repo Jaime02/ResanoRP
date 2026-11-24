@@ -11,6 +11,7 @@ import LoadingSpinner from "@/components/ui/loading-spinner";
 import { UserMode, useAppContext } from "@/contexts/app-context";
 import { FormContextProvider, useAppForm } from "@/form";
 import { loginAdminFn } from "@/lib/admin-session-fns";
+import { forgetPowerSyncToken } from "@/lib/powersync";
 import log from "@/logging/log";
 import { LogMessages, LoggerLevels } from "@/logging/types";
 import { NO_MACHINES_MESSAGE } from "@/messages/combobox";
@@ -78,6 +79,8 @@ export default function Login({ children }: { children: ReactNode }) {
     },
     onSubmit: async ({ value }) => {
       if (await loginAdminFn({ data: value.password })) {
+        // The token cached before the session cannot sync the audit log
+        forgetPowerSyncToken();
         formAdminPassword.reset();
         setUserMode(UserMode.Admin);
         setIsAdminLogin(false);
