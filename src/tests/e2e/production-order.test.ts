@@ -540,14 +540,11 @@ test("showing every production order renders the rows scrolled into view and exp
     await expect
       .poll(async () => {
         await page.mouse.wheel(0, 100_000);
-        return tableProductionOrders.evaluate(
-          (element) => element.scrollHeight - element.clientHeight - element.scrollTop,
-        );
+        return (await getFades()).end;
       })
-      .toBeLessThanOrEqual(1);
+      .toBe("0px");
     await expect(lastRow).toHaveAttribute("data-index", String(productionOrdersCount - 1));
     await expect.poll(async () => (await getFades()).start).toBe((await getFades()).size);
-    await expect.poll(async () => (await getFades()).end).toBe("0px");
   });
 
   await test.step("a scrolled into view production order expands and collapses", async () => {
