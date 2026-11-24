@@ -34,6 +34,9 @@ jobs:
 
       - run: bun --env-file=./envs/.env.test ./src/scripts/wait-for-url.ts
 
+      # Caddy, running as root, creates its authority with permissions the tests, which trust its root certificate, cannot read
+      - run: sudo chmod -R a+rX envs/test/caddy
+
       - run: node --env-file=./envs/.env.test ./node_modules/@playwright/test/cli.js test --shard=${{ matrix.shard }}/3 --trace retain-on-failure
 
       - if: success()
