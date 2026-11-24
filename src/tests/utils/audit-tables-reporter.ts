@@ -1,38 +1,36 @@
-import fs from "node:fs";
-import path from "node:path";
+import type { Reporter, TestCase, TestResult } from "@playwright/test/reporter";
 
-import type { FullConfig, FullResult, Reporter, Suite } from "@playwright/test/reporter";
+// Relative, as `playwright merge-reports` does not resolve the path aliases of the app
+import { AUDIT_TABLES_ATTACHMENTS, findStaleAuditTables } from "./audit-tables";
+import type { TTablesByProcedure } from "./audit-tables";
 
-import { findStaleAuditTables } from "@/tests/utils/audit-tables";
-
-// What the tests saw can only be compared with audit-tables.json when every test ran and passed. A sharded run is
-// checked by `bun run check-audit-tables` on what all its shards saw
+// Each CI shard runs a part of the tests, so what they all saw written is compared with what the mutations declare once
+// their blob reports are merged. merge-reports only fails on a reporter that throws
 export default class AuditTablesReporter implements Reporter {
-  private isFullRun = false;
+  private declared: TTablesByProcedure | undefined;
+  private readonly observed: Array<TTablesByProcedure> = [];
 
-  onBegin(config: FullConfig, suite: Suite) {
-    const [{ testDir }] = config.projects;
-    const ranFiles = new Set(suite.allTests().map(({ location }) => path.relative(testDir, location.file)));
-    const testFiles = fs
-      .readdirSync(testDir, { recursive: true, encoding: "utf-8" })
-      .filter((file) => file.endsWith(".test.ts"))
-      .map((file) => path.normalize(file));
-    this.isFullRun =
-      config.shard === null &&
-      config.grepInvert === null &&
-      [config.grep].flat().every(({ source }) => source === ".*") &&
-      testFiles.every((file) => ranFiles.has(file));
+  onTestEnd(_test: TestCase, { attachments }: TestResult) {
+    for (const { name, body } of attachments) {
+      if (body === undefined) {
+        continue;
+      }
+      const tables = JSON.parse(body.toString()) as TTablesByProcedure;
+      if (name === AUDIT_TABLES_ATTACHMENTS.declared) {
+        this.declared = tables;
+      } else if (name === AUDIT_TABLES_ATTACHMENTS.observed) {
+        this.observed.push(tables);
+      }
+    }
   }
 
-  async onEnd(result: FullResult) {
-    if (!this.isFullRun || result.status !== "passed") {
-      return undefined;
+  onEnd() {
+    if (this.declared === undefined) {
+      throw new Error(`No test attached ${AUDIT_TABLES_ATTACHMENTS.declared}, which the router test does`);
     }
-    const stale = findStaleAuditTables();
-    if (stale.length === 0) {
-      return undefined;
+    const stale = findStaleAuditTables(this.declared, this.observed);
+    if (stale.length > 0) {
+      throw new Error(`The tables of meta.writes that no test sees written:\n${stale.join("\n")}`);
     }
-    console.error(`The tables of audit-tables.json that no test sees written:\n${stale.join("\n")}`);
-    return { status: "failed" as const };
   }
 }

@@ -69,9 +69,9 @@ Every tRPC mutation is written to the audit log (the `audit_log` table, one row 
 
 - the audit log has exactly the mutations the browser sent, plus the entries the test declared with `expectAuditLog`;
 - the app wrote rows only inside the transaction of a mutation that succeeded. The test build tags every `ctx.db.transaction` with its procedure (`src/trpc/index.ts`) and a trigger records every write (`src/tests/utils/write-trace.ts`), so a mutation must do all its writes inside `ctx.db.transaction`;
-- a mutation wrote only the tables listed for it in `src/tests/audit-tables.json`, and stored the values it was sent.
+- a mutation wrote only the tables it declares with `.meta({ writes: [dbTable…] })`, and stored the values it was sent.
 
-A new mutation needs its tables in `audit-tables.json`. Write them by hand, or run its tests with `UPDATE_AUDIT_TABLES=true` to add the ones they saw. A full run (all files, no filter, no shards) also fails when a listed table is never seen written by a test. CI does the same check on all its shards together with `bun run check-audit-tables`.
+A new mutation declares the tables it may write, or `writes: []` if it writes none; `audit-router.test.ts` fails on a mutation without it. CI merges the blob reports of its shards and fails when a declared table is never seen written by a test, or a mutation is never called successfully (`src/tests/utils/audit-tables-reporter.ts`).
 
 ## Code quality
 

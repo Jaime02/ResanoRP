@@ -13,7 +13,6 @@
     "build:css": "bunx @tailwindcss/cli -i ./src/routes/styles.css -o ./public/styles.css --minify",
     "build:start": "bun run build && bun run start",
     "bundle-production": "bun ./src/scripts/bundle-production.ts",
-    "check-audit-tables": "bun ./src/scripts/check-audit-tables.ts",
     "clean-database": "bun ./src/scripts/run-clean-database.ts",
     "copy-pdf-worker": "bun ./src/scripts/copy-pdf-worker.ts",
     "dev": "bun run dev:up && bun run dev:server",

@@ -1,5 +1,6 @@
 import { initTRPC, TRPCError } from "@trpc/server";
 import { sql } from "drizzle-orm";
+import type { PgTable } from "drizzle-orm/pg-core";
 import { ZodError } from "zod";
 
 import type db from "@/db";
@@ -24,17 +25,26 @@ export type Context = {
   // The cookies of the caller, which the server sends back to itself to read the files it prints, as some need a session
   cookie: string | null;
 };
-const t = initTRPC.context<Context>().create({
-  errorFormatter({ shape, error }) {
-    return {
-      ...shape,
-      data: {
-        ...shape.data,
-        zodError: error.cause instanceof ZodError ? formatZodError(error.cause) : null,
-      },
-    };
-  },
-});
+
+// The tables a mutation may write. The tests fail on a write to any other one
+export interface TProcedureMeta {
+  writes: Array<PgTable>;
+}
+
+const t = initTRPC
+  .context<Context>()
+  .meta<TProcedureMeta>()
+  .create({
+    errorFormatter({ shape, error }) {
+      return {
+        ...shape,
+        data: {
+          ...shape.data,
+          zodError: error.cause instanceof ZodError ? formatZodError(error.cause) : null,
+        },
+      };
+    },
+  });
 
 // Only the test build tags, as its database traces every write with the procedure that made it
 function tagTransactionsWithProcedure(db: TDatabase, path: string, input: unknown): TDatabase {

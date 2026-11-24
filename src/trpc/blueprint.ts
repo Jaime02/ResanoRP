@@ -63,89 +63,98 @@ export async function createBlueprint(
 }
 
 export default router({
-  create: adminProcedure.input(createBlueprintFormDataSchema).mutation(async ({ ctx, input }) =>
-    removeOnRollback(async (createdPaths) =>
+  create: adminProcedure
+    .meta({ writes: [dbTableBlueprint] })
+    .input(createBlueprintFormDataSchema)
+    .mutation(async ({ ctx, input }) =>
+      removeOnRollback(async (createdPaths) =>
+        ctx.db.transaction(async (tx) => {
+          try {
+            await assertBlueprintFileNameIsFree(input);
+            const newBlueprint = await createBlueprint(tx, input, createdPaths);
+            return { item: newBlueprint };
+          } catch (error) {
+            handleMutationError({ error });
+          }
+        }),
+      ),
+    ),
+  update: adminProcedure
+    .meta({ writes: [dbTableBlueprint] })
+    .input(updateBlueprintSchema)
+    .mutation(async ({ ctx, input }) =>
       ctx.db.transaction(async (tx) => {
         try {
-          await assertBlueprintFileNameIsFree(input);
-          const newBlueprint = await createBlueprint(tx, input, createdPaths);
-          return { item: newBlueprint };
+          const blueprint = await getBlueprintById(input.id, tx);
+          if (!blueprint) {
+            throw new TRPCError({
+              code: "NOT_FOUND",
+              message: `No se encontró el Plano con ID ${input.id}`,
+            });
+          }
+
+          const filePath = await getBlueprintPath({
+            ...blueprint,
+            checkIfFileExists: true,
+          });
+          if (filePath === null) {
+            throw new TRPCError({
+              code: "NOT_FOUND",
+              message: `No se encontró la ruta del archivo para el Plano con ID ${input.id}`,
+            });
+          }
+          await assertBlueprintFileNameIsFree({ fileName: input.fileName, partId: blueprint.partId });
+
+          await renameFile({
+            filePath,
+            newFileName: `${input.fileName}.pdf`,
+          });
+
+          const updatedBlueprint = (
+            await tx
+              .update(dbTableBlueprint)
+              .set({ fileName: input.fileName })
+              .where(eq(dbTableBlueprint.id, input.id))
+              .returning()
+          ).at(0);
+
+          if (!updatedBlueprint) {
+            throw new TRPCError({
+              code: "NOT_FOUND",
+              message: `No se pudo editar el Plano con ID ${input.id}`,
+            });
+          }
+          return { item: updatedBlueprint };
         } catch (error) {
           handleMutationError({ error });
         }
       }),
     ),
-  ),
-  update: adminProcedure.input(updateBlueprintSchema).mutation(async ({ ctx, input }) =>
-    ctx.db.transaction(async (tx) => {
-      try {
-        const blueprint = await getBlueprintById(input.id, tx);
-        if (!blueprint) {
-          throw new TRPCError({
-            code: "NOT_FOUND",
-            message: `No se encontró el Plano con ID ${input.id}`,
-          });
+  delete: adminProcedure
+    .meta({ writes: [dbTableBlueprint] })
+    .input(requiredIdObjectSchema)
+    .mutation(async ({ ctx, input }) =>
+      ctx.db.transaction(async (tx) => {
+        try {
+          const deletedBlueprint = (
+            await tx.delete(dbTableBlueprint).where(eq(dbTableBlueprint.id, input.id)).returning()
+          ).at(0);
+          if (!deletedBlueprint) {
+            throw new TRPCError({
+              code: "NOT_FOUND",
+              message: `Plano con ID ${input.id} no encontrado`,
+            });
+          }
+          if ((await archiveBlueprintFiles([deletedBlueprint])) !== undefined) {
+            throw new TRPCError({
+              code: "NOT_FOUND",
+              message: `No se encontró la ruta del archivo para el Plano con ID ${input.id}`,
+            });
+          }
+          return { item: deletedBlueprint };
+        } catch (error) {
+          handleMutationError({ error });
         }
-
-        const filePath = await getBlueprintPath({
-          ...blueprint,
-          checkIfFileExists: true,
-        });
-        if (filePath === null) {
-          throw new TRPCError({
-            code: "NOT_FOUND",
-            message: `No se encontró la ruta del archivo para el Plano con ID ${input.id}`,
-          });
-        }
-        await assertBlueprintFileNameIsFree({ fileName: input.fileName, partId: blueprint.partId });
-
-        await renameFile({
-          filePath,
-          newFileName: `${input.fileName}.pdf`,
-        });
-
-        const updatedBlueprint = (
-          await tx
-            .update(dbTableBlueprint)
-            .set({ fileName: input.fileName })
-            .where(eq(dbTableBlueprint.id, input.id))
-            .returning()
-        ).at(0);
-
-        if (!updatedBlueprint) {
-          throw new TRPCError({
-            code: "NOT_FOUND",
-            message: `No se pudo editar el Plano con ID ${input.id}`,
-          });
-        }
-        return { item: updatedBlueprint };
-      } catch (error) {
-        handleMutationError({ error });
-      }
-    }),
-  ),
-  delete: adminProcedure.input(requiredIdObjectSchema).mutation(async ({ ctx, input }) =>
-    ctx.db.transaction(async (tx) => {
-      try {
-        const deletedBlueprint = (
-          await tx.delete(dbTableBlueprint).where(eq(dbTableBlueprint.id, input.id)).returning()
-        ).at(0);
-        if (!deletedBlueprint) {
-          throw new TRPCError({
-            code: "NOT_FOUND",
-            message: `Plano con ID ${input.id} no encontrado`,
-          });
-        }
-        if ((await archiveBlueprintFiles([deletedBlueprint])) !== undefined) {
-          throw new TRPCError({
-            code: "NOT_FOUND",
-            message: `No se encontró la ruta del archivo para el Plano con ID ${input.id}`,
-          });
-        }
-        return { item: deletedBlueprint };
-      } catch (error) {
-        handleMutationError({ error });
-      }
-    }),
-  ),
+      }),
+    ),
 });

@@ -24,8 +24,7 @@ export default defineConfig({
   ],
   // With a single worker the tests still run one at a time; this only lets CI split the shards by test instead of by file
   fullyParallel: true,
-  globalSetup: "./src/tests/global-setup.ts",
-  reporter: [["line"], ["./src/tests/utils/audit-tables-reporter.ts"]],
+  reporter: "line",
   testDir: "./src/tests/e2e",
   // Each test goes through a whole feature in steps, sharing its database
   timeout: 3 * 60 * 1000, // 3 minutes

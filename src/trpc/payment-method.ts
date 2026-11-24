@@ -16,86 +16,98 @@ const uniqueConstraints = [
 ];
 
 export default router({
-  create: adminProcedure.input(createPaymentMethodSchema).mutation(async ({ ctx, input }) =>
-    ctx.db.transaction(async (tx) => {
-      try {
-        const newPaymentMethod = (await tx.insert(dbTablePaymentMethod).values(input).returning()).at(0);
-        if (!newPaymentMethod) {
-          throw new TRPCError({
-            code: "INTERNAL_SERVER_ERROR",
-            message: "Error al crear la Forma de pago",
-          });
+  create: adminProcedure
+    .meta({ writes: [dbTablePaymentMethod] })
+    .input(createPaymentMethodSchema)
+    .mutation(async ({ ctx, input }) =>
+      ctx.db.transaction(async (tx) => {
+        try {
+          const newPaymentMethod = (await tx.insert(dbTablePaymentMethod).values(input).returning()).at(0);
+          if (!newPaymentMethod) {
+            throw new TRPCError({
+              code: "INTERNAL_SERVER_ERROR",
+              message: "Error al crear la Forma de pago",
+            });
+          }
+          return { item: newPaymentMethod };
+        } catch (error) {
+          handleMutationError({ error, uniqueConstraints });
         }
-        return { item: newPaymentMethod };
-      } catch (error) {
-        handleMutationError({ error, uniqueConstraints });
-      }
-    }),
-  ),
-  update: adminProcedure.input(updatePaymentMethodSchema).mutation(async ({ ctx, input }) =>
-    ctx.db.transaction(async (tx) => {
-      try {
-        const updatedPaymentMethod = (
-          await tx.update(dbTablePaymentMethod).set(input).where(eq(dbTablePaymentMethod.id, input.id)).returning()
-        ).at(0);
-        if (!updatedPaymentMethod) {
-          throw new TRPCError({
-            code: "NOT_FOUND",
-            message: `Forma de pago con ID ${input.id} no encontrada`,
-          });
+      }),
+    ),
+  update: adminProcedure
+    .meta({ writes: [dbTablePaymentMethod] })
+    .input(updatePaymentMethodSchema)
+    .mutation(async ({ ctx, input }) =>
+      ctx.db.transaction(async (tx) => {
+        try {
+          const updatedPaymentMethod = (
+            await tx.update(dbTablePaymentMethod).set(input).where(eq(dbTablePaymentMethod.id, input.id)).returning()
+          ).at(0);
+          if (!updatedPaymentMethod) {
+            throw new TRPCError({
+              code: "NOT_FOUND",
+              message: `Forma de pago con ID ${input.id} no encontrada`,
+            });
+          }
+          return { item: updatedPaymentMethod };
+        } catch (error) {
+          handleMutationError({ error, uniqueConstraints });
         }
-        return { item: updatedPaymentMethod };
-      } catch (error) {
-        handleMutationError({ error, uniqueConstraints });
-      }
-    }),
-  ),
-  delete: adminProcedure.input(requiredIdObjectSchema).mutation(async ({ ctx, input }) =>
-    ctx.db.transaction(async (tx) => {
-      try {
-        const deletedPaymentMethod = (
+      }),
+    ),
+  delete: adminProcedure
+    .meta({ writes: [dbTableClient, dbTablePaymentMethod] })
+    .input(requiredIdObjectSchema)
+    .mutation(async ({ ctx, input }) =>
+      ctx.db.transaction(async (tx) => {
+        try {
+          const deletedPaymentMethod = (
+            await tx
+              .update(dbTablePaymentMethod)
+              .set({ deletedAt: new Date() })
+              .where(eq(dbTablePaymentMethod.id, input.id))
+              .returning()
+          ).at(0);
+          if (!deletedPaymentMethod) {
+            throw new TRPCError({
+              code: "NOT_FOUND",
+              message: `Forma de pago con ID ${input.id} no encontrada`,
+            });
+          }
           await tx
-            .update(dbTablePaymentMethod)
-            .set({ deletedAt: new Date() })
-            .where(eq(dbTablePaymentMethod.id, input.id))
-            .returning()
-        ).at(0);
-        if (!deletedPaymentMethod) {
-          throw new TRPCError({
-            code: "NOT_FOUND",
-            message: `Forma de pago con ID ${input.id} no encontrada`,
-          });
+            .update(dbTableClient)
+            .set({ defaultPaymentMethodId: null })
+            .where(eq(dbTableClient.defaultPaymentMethodId, input.id));
+          return { item: deletedPaymentMethod };
+        } catch (error) {
+          handleMutationError({ error });
         }
-        await tx
-          .update(dbTableClient)
-          .set({ defaultPaymentMethodId: null })
-          .where(eq(dbTableClient.defaultPaymentMethodId, input.id));
-        return { item: deletedPaymentMethod };
-      } catch (error) {
-        handleMutationError({ error });
-      }
-    }),
-  ),
-  restore: adminProcedure.input(requiredIdObjectSchema).mutation(async ({ ctx, input }) =>
-    ctx.db.transaction(async (tx) => {
-      try {
-        const restoredPaymentMethod = (
-          await tx
-            .update(dbTablePaymentMethod)
-            .set({ deletedAt: null })
-            .where(and(eq(dbTablePaymentMethod.id, input.id), isNotNull(dbTablePaymentMethod.deletedAt)))
-            .returning()
-        ).at(0);
-        if (!restoredPaymentMethod) {
-          throw new TRPCError({
-            code: "NOT_FOUND",
-            message: `Forma de pago con ID ${input.id} no encontrada o no eliminada`,
-          });
+      }),
+    ),
+  restore: adminProcedure
+    .meta({ writes: [dbTablePaymentMethod] })
+    .input(requiredIdObjectSchema)
+    .mutation(async ({ ctx, input }) =>
+      ctx.db.transaction(async (tx) => {
+        try {
+          const restoredPaymentMethod = (
+            await tx
+              .update(dbTablePaymentMethod)
+              .set({ deletedAt: null })
+              .where(and(eq(dbTablePaymentMethod.id, input.id), isNotNull(dbTablePaymentMethod.deletedAt)))
+              .returning()
+          ).at(0);
+          if (!restoredPaymentMethod) {
+            throw new TRPCError({
+              code: "NOT_FOUND",
+              message: `Forma de pago con ID ${input.id} no encontrada o no eliminada`,
+            });
+          }
+          return { item: restoredPaymentMethod };
+        } catch (error) {
+          handleMutationError({ error, uniqueConstraints });
         }
-        return { item: restoredPaymentMethod };
-      } catch (error) {
-        handleMutationError({ error, uniqueConstraints });
-      }
-    }),
-  ),
+      }),
+    ),
 });

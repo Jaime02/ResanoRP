@@ -33,62 +33,65 @@ async function getQualityControlProductionOrder(productionOrderId: number, tx: T
 }
 
 export default router({
-  create: procedure.input(createQualityCheckSchema).mutation(async ({ ctx, input }) =>
-    ctx.db.transaction(async (tx) => {
-      try {
-        const productionOrder = await getQualityControlProductionOrder(input.productionOrderId, tx);
-        const partFeatures = await tx
-          .select()
-          .from(dbTablePartFeature)
-          .where(eq(dbTablePartFeature.partId, productionOrder.partId));
-        const resultsByFeatureId = new Map(input.results.map((result) => [result.partFeatureId, result]));
-        if (
-          resultsByFeatureId.size !== input.results.length ||
-          resultsByFeatureId.size !== partFeatures.length ||
-          partFeatures.some(({ id }) => !resultsByFeatureId.has(id))
-        ) {
-          throw new TRPCError({
-            code: "BAD_REQUEST",
-            message: "El Control de calidad debe revisar cada Característica del Artículo una vez",
-          });
-        }
+  create: procedure
+    .meta({ writes: [dbTableQualityCheck] })
+    .input(createQualityCheckSchema)
+    .mutation(async ({ ctx, input }) =>
+      ctx.db.transaction(async (tx) => {
+        try {
+          const productionOrder = await getQualityControlProductionOrder(input.productionOrderId, tx);
+          const partFeatures = await tx
+            .select()
+            .from(dbTablePartFeature)
+            .where(eq(dbTablePartFeature.partId, productionOrder.partId));
+          const resultsByFeatureId = new Map(input.results.map((result) => [result.partFeatureId, result]));
+          if (
+            resultsByFeatureId.size !== input.results.length ||
+            resultsByFeatureId.size !== partFeatures.length ||
+            partFeatures.some(({ id }) => !resultsByFeatureId.has(id))
+          ) {
+            throw new TRPCError({
+              code: "BAD_REQUEST",
+              message: "El Control de calidad debe revisar cada Característica del Artículo una vez",
+            });
+          }
 
-        const checkedAt = new Date();
-        const qualityChecks = await tx
-          .insert(dbTableQualityCheck)
-          .values(
-            partFeatures.map((partFeature) => {
-              const result = resultsByFeatureId.get(partFeature.id)!;
-              const base = {
-                checkedAt,
-                notes: result.notes,
-                partFeatureId: partFeature.id,
-                producedQuantity: input.producedQuantity,
-              };
-              if (partFeature.minValue === null && partFeature.maxValue === null) {
-                return { ...base, ok: result.ok, productionOrderId: productionOrder.id };
-              }
-              if (result.value === null) {
+          const checkedAt = new Date();
+          const qualityChecks = await tx
+            .insert(dbTableQualityCheck)
+            .values(
+              partFeatures.map((partFeature) => {
+                const result = resultsByFeatureId.get(partFeature.id)!;
+                const base = {
+                  checkedAt,
+                  notes: result.notes,
+                  partFeatureId: partFeature.id,
+                  producedQuantity: input.producedQuantity,
+                };
+                if (partFeature.minValue === null && partFeature.maxValue === null) {
+                  return { ...base, ok: result.ok, productionOrderId: productionOrder.id };
+                }
+                if (result.value === null) {
+                  return {
+                    ...base,
+                    ok: true,
+                    productionOrderId: productionOrder.id,
+                    value: partFeature.maxValue ?? partFeature.minValue,
+                  };
+                }
                 return {
                   ...base,
-                  ok: true,
+                  ok: isWithinPartFeatureRange(result.value, partFeature),
                   productionOrderId: productionOrder.id,
-                  value: partFeature.maxValue ?? partFeature.minValue,
+                  value: result.value,
                 };
-              }
-              return {
-                ...base,
-                ok: isWithinPartFeatureRange(result.value, partFeature),
-                productionOrderId: productionOrder.id,
-                value: result.value,
-              };
-            }),
-          )
-          .returning();
-        return { item: { qualityChecks } };
-      } catch (error) {
-        handleMutationError({ error });
-      }
-    }),
-  ),
+              }),
+            )
+            .returning();
+          return { item: { qualityChecks } };
+        } catch (error) {
+          handleMutationError({ error });
+        }
+      }),
+    ),
 });

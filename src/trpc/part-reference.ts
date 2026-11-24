@@ -16,82 +16,94 @@ const uniqueConstraints = [
 ];
 
 export default router({
-  create: adminProcedure.input(createPartReferenceSchema).mutation(async ({ ctx, input }) =>
-    ctx.db.transaction(async (tx) => {
-      try {
-        const newPartReference = (await tx.insert(dbTablePartReference).values(input).returning()).at(0);
-        if (!newPartReference) {
-          throw new TRPCError({
-            code: "INTERNAL_SERVER_ERROR",
-            message: "Error al crear la Referencia del Artículo",
-          });
+  create: adminProcedure
+    .meta({ writes: [dbTablePartReference] })
+    .input(createPartReferenceSchema)
+    .mutation(async ({ ctx, input }) =>
+      ctx.db.transaction(async (tx) => {
+        try {
+          const newPartReference = (await tx.insert(dbTablePartReference).values(input).returning()).at(0);
+          if (!newPartReference) {
+            throw new TRPCError({
+              code: "INTERNAL_SERVER_ERROR",
+              message: "Error al crear la Referencia del Artículo",
+            });
+          }
+          return { item: newPartReference };
+        } catch (error) {
+          handleMutationError({ error, uniqueConstraints });
         }
-        return { item: newPartReference };
-      } catch (error) {
-        handleMutationError({ error, uniqueConstraints });
-      }
-    }),
-  ),
-  update: adminProcedure.input(updatePartReferenceSchema).mutation(async ({ ctx, input }) =>
-    ctx.db.transaction(async (tx) => {
-      try {
-        const updatedPartReference = (
-          await tx.update(dbTablePartReference).set(input).where(eq(dbTablePartReference.id, input.id)).returning()
-        ).at(0);
-        if (!updatedPartReference) {
-          throw new TRPCError({
-            code: "NOT_FOUND",
-            message: `Referencia del Artículo con ID ${input.id} no encontrada`,
-          });
+      }),
+    ),
+  update: adminProcedure
+    .meta({ writes: [dbTablePartReference] })
+    .input(updatePartReferenceSchema)
+    .mutation(async ({ ctx, input }) =>
+      ctx.db.transaction(async (tx) => {
+        try {
+          const updatedPartReference = (
+            await tx.update(dbTablePartReference).set(input).where(eq(dbTablePartReference.id, input.id)).returning()
+          ).at(0);
+          if (!updatedPartReference) {
+            throw new TRPCError({
+              code: "NOT_FOUND",
+              message: `Referencia del Artículo con ID ${input.id} no encontrada`,
+            });
+          }
+          return { item: updatedPartReference };
+        } catch (error) {
+          handleMutationError({ error, uniqueConstraints });
         }
-        return { item: updatedPartReference };
-      } catch (error) {
-        handleMutationError({ error, uniqueConstraints });
-      }
-    }),
-  ),
-  delete: adminProcedure.input(requiredIdObjectSchema).mutation(async ({ ctx, input }) =>
-    ctx.db.transaction(async (tx) => {
-      try {
-        const deletedPartReference = (
-          await tx
-            .update(dbTablePartReference)
-            .set({ deletedAt: new Date() })
-            .where(eq(dbTablePartReference.id, input.id))
-            .returning()
-        ).at(0);
-        if (!deletedPartReference) {
-          throw new TRPCError({
-            code: "NOT_FOUND",
-            message: `Referencia del Artículo con ID ${input.id} no encontrada`,
-          });
+      }),
+    ),
+  delete: adminProcedure
+    .meta({ writes: [dbTablePartReference] })
+    .input(requiredIdObjectSchema)
+    .mutation(async ({ ctx, input }) =>
+      ctx.db.transaction(async (tx) => {
+        try {
+          const deletedPartReference = (
+            await tx
+              .update(dbTablePartReference)
+              .set({ deletedAt: new Date() })
+              .where(eq(dbTablePartReference.id, input.id))
+              .returning()
+          ).at(0);
+          if (!deletedPartReference) {
+            throw new TRPCError({
+              code: "NOT_FOUND",
+              message: `Referencia del Artículo con ID ${input.id} no encontrada`,
+            });
+          }
+          return { item: deletedPartReference };
+        } catch (error) {
+          handleMutationError({ error });
         }
-        return { item: deletedPartReference };
-      } catch (error) {
-        handleMutationError({ error });
-      }
-    }),
-  ),
-  restore: adminProcedure.input(requiredIdObjectSchema).mutation(async ({ ctx, input }) =>
-    ctx.db.transaction(async (tx) => {
-      try {
-        const restoredPartReference = (
-          await tx
-            .update(dbTablePartReference)
-            .set({ deletedAt: null })
-            .where(and(eq(dbTablePartReference.id, input.id), isNotNull(dbTablePartReference.deletedAt)))
-            .returning()
-        ).at(0);
-        if (!restoredPartReference) {
-          throw new TRPCError({
-            code: "NOT_FOUND",
-            message: `Referencia del Artículo con ID ${input.id} no encontrada o no eliminada`,
-          });
+      }),
+    ),
+  restore: adminProcedure
+    .meta({ writes: [dbTablePartReference] })
+    .input(requiredIdObjectSchema)
+    .mutation(async ({ ctx, input }) =>
+      ctx.db.transaction(async (tx) => {
+        try {
+          const restoredPartReference = (
+            await tx
+              .update(dbTablePartReference)
+              .set({ deletedAt: null })
+              .where(and(eq(dbTablePartReference.id, input.id), isNotNull(dbTablePartReference.deletedAt)))
+              .returning()
+          ).at(0);
+          if (!restoredPartReference) {
+            throw new TRPCError({
+              code: "NOT_FOUND",
+              message: `Referencia del Artículo con ID ${input.id} no encontrada o no eliminada`,
+            });
+          }
+          return { item: restoredPartReference };
+        } catch (error) {
+          handleMutationError({ error, uniqueConstraints });
         }
-        return { item: restoredPartReference };
-      } catch (error) {
-        handleMutationError({ error, uniqueConstraints });
-      }
-    }),
-  ),
+      }),
+    ),
 });

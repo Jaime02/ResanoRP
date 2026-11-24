@@ -2,29 +2,50 @@ import fs from "node:fs";
 import { isIP } from "node:net";
 import path from "node:path";
 
-import { expect } from "@playwright/test";
+import { expect, test } from "@playwright/test";
 import type {
   APIResponse,
   BrowserContext,
   Request as PlaywrightRequest,
   Response as PlaywrightResponse,
 } from "@playwright/test";
+import type { AnyRouter } from "@trpc/server";
+import { getTableName } from "drizzle-orm";
 
 import { dbTableAuditLog } from "@/db/schema";
 import { ADMIN_SESSION_COOKIE_NAME, isAdminSession } from "@/lib/admin-session";
 import type { AuditEntry } from "@/logging/audit";
 import { getAuditInputKey, getAuditResultId, redactAuditInput } from "@/logging/audit";
 import { MUTATION_MESSAGES } from "@/messages/mutations";
-import { AUDIT_TABLES_PATH, readAuditTables, recordObservedTables } from "@/tests/utils/audit-tables";
+import { AUDIT_TABLES_ATTACHMENTS } from "@/tests/utils/audit-tables";
 import type { TPickedFiles } from "@/tests/utils/components/file-input";
 import { readAppWrites, resetWriteTrace } from "@/tests/utils/write-trace";
 import type { TTracedWrite } from "@/tests/utils/write-trace";
+import type { TProcedureMeta } from "@/trpc";
 import { TRPC_URL } from "@/trpc/trpc-client";
 import { ToastType } from "@/types/toast";
 
 export const LOG_TIMESTAMP_PATTERN = /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/;
 
-const UPDATE_AUDIT_TABLES = process.env.UPDATE_AUDIT_TABLES === "true";
+// The public type of a procedure leaves out what it was built with
+interface TBuiltProcedure {
+  _def: { type: string; middlewares: Array<unknown>; meta?: TProcedureMeta };
+}
+
+export async function readMutations() {
+  const { appRouter } = await import("@/trpc/app-router");
+  // The type of appRouter nests the routers, but at runtime every procedure is in the same record, by its full path
+  const router: AnyRouter = appRouter;
+  return Object.entries(router._def.procedures as Record<string, TBuiltProcedure>).filter(
+    ([, procedure]) => procedure._def.type === "mutation",
+  );
+}
+
+export async function readDeclaredWrites(): Promise<Record<string, Array<string> | undefined>> {
+  return Object.fromEntries(
+    (await readMutations()).map(([path, { _def }]) => [path, _def.meta?.writes.map((table) => getTableName(table))]),
+  );
+}
 
 // The ip is the address of the browser, as the server sees it, and the timestamp the moment of the write. Both are
 // checked apart, as the test does not know them
@@ -291,19 +312,19 @@ async function assertWrites() {
   ).toEqual([]);
 
   // The rows of a call are the ones its procedure wrote when it got its input. Calls with the same input write the same
-  const known = readAuditTables();
+  const declared = await readDeclaredWrites();
   const unstored = calls
     .filter(({ entry }) => entry.ok)
     .flatMap(({ entry, rawInput }) => {
       const inputKey = getAuditInputKey(rawInput);
       const callWrites = writes.filter((write) => write.procedure === entry.path && write.inputKey === inputKey);
-      return callWrites.length === 0 && (known[entry.path]?.length ?? 0) > 0
+      return callWrites.length === 0 && (declared[entry.path]?.length ?? 0) > 0
         ? [`${entry.path}: no row written got the input it was sent: ${JSON.stringify(entry.input)}`]
         : findUnstoredValues(entry.path, rawInput, callWrites);
     });
   expect(unstored, "The rows written by a mutation should have the values it was sent").toEqual([]);
 
-  assertTablesOfProcedures(writes);
+  await assertTablesOfProcedures(writes, declared);
 }
 
 function* getScalars(value: unknown, key = ""): Generator<[string, string | number | boolean]> {
@@ -360,8 +381,10 @@ function findUnstoredValues(procedurePath: string, rawInput: unknown, writes: Ar
 }
 
 // The tables a procedure writes may be a part of the ones it writes in some case, but never another one
-function assertTablesOfProcedures(writes: Array<TTracedWrite>) {
-  const known = readAuditTables();
+async function assertTablesOfProcedures(
+  writes: Array<TTracedWrite>,
+  declared: Record<string, Array<string> | undefined>,
+) {
   const recorded: Record<string, Set<string>> = {};
   for (const { entry } of calls) {
     if (entry.ok) {
@@ -373,32 +396,18 @@ function assertTablesOfProcedures(writes: Array<TTracedWrite>) {
       (recorded[procedure] ??= new Set()).add(table);
     }
   }
-  const unexpected = Object.entries(recorded).flatMap(([procedurePath, tables]) => {
-    const expected = known[procedurePath];
-    const extra = [...tables].filter((table) => expected?.includes(table) !== true);
-    return expected === undefined || extra.length > 0
-      ? [`${procedurePath} wrote ${extra.join(", ") || "nothing"}, not in ${AUDIT_TABLES_PATH}`]
-      : [];
+  // The CI merges what every test saw to find the declared tables that none sees written
+  await test.info().attach(AUDIT_TABLES_ATTACHMENTS.observed, {
+    body: JSON.stringify(
+      Object.fromEntries(Object.entries(recorded).map(([procedurePath, tables]) => [procedurePath, [...tables]])),
+    ),
+    contentType: "application/json",
   });
-  recordObservedTables(
-    Object.fromEntries(Object.entries(recorded).map(([procedurePath, tables]) => [procedurePath, [...tables]])),
-  );
-  if (UPDATE_AUDIT_TABLES) {
-    const merged = { ...known };
-    for (const [procedurePath, tables] of Object.entries(recorded)) {
-      merged[procedurePath] = [...new Set([...(known[procedurePath] ?? []), ...tables])].sort();
-    }
-    const sorted = Object.fromEntries(Object.entries(merged).sort(([a], [b]) => a.localeCompare(b)));
-    fs.writeFileSync(AUDIT_TABLES_PATH, `${JSON.stringify(sorted, null, 2)}\n`);
-    for (const [procedurePath, tables] of Object.entries(sorted)) {
-      if (known[procedurePath]?.join() !== tables?.join()) {
-        console.log(`Recorded ${procedurePath}: ${tables?.join(", ")}`);
-      }
-    }
-    return;
-  }
   expect(
-    unexpected,
-    "The tables a mutation writes should be the ones of audit-tables.json. Run with UPDATE_AUDIT_TABLES=true to record them",
+    Object.entries(recorded).flatMap(([procedurePath, tables]) => {
+      const extra = [...tables].filter((table) => declared[procedurePath]?.includes(table) !== true);
+      return extra.length > 0 ? [`${procedurePath} wrote ${extra.join(", ")}`] : [];
+    }),
+    "The tables a mutation writes should be in the writes of its meta",
   ).toEqual([]);
 }

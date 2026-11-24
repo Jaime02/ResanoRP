@@ -15,7 +15,7 @@ import {
 import { resetChangedDeliveryNoteInvoice, resetInvoiceStatus } from "@/db/functions/invoice";
 import { getSellOrderById } from "@/db/functions/sell-order";
 import { getSellOrderLineForUpdate } from "@/db/functions/sell-order-line";
-import { dbTableDeliveryNote, dbTableDeliveryNoteLine, dbTableInvoice } from "@/db/schema";
+import { dbTableDeliveryNote, dbTableDeliveryNoteLine, dbTableInvoice, dbTableSellOrderLine } from "@/db/schema";
 import { printDeliveryNote } from "@/files/delivery-note";
 import { getSalesDocumentLine } from "@/files/sales-document";
 import { formatDate } from "@/lib/formatters";
@@ -94,162 +94,180 @@ async function insertStagedSellOrderLines(
 
 export default router({
   nextId: procedure.query(async ({ ctx }) => getNextDeliveryNoteId(ctx.db)),
-  create: procedure.input(createDeliveryNoteSchema).mutation(async ({ ctx, input }) =>
-    ctx.db.transaction(async (tx) => {
-      try {
-        const newDeliveryNote = (
-          await tx
-            .insert(dbTableDeliveryNote)
-            .values({ ...input, createdAt: new Date() })
-            .returning()
-        ).at(0);
-        if (!newDeliveryNote) {
-          throw new TRPCError({
-            code: "INTERNAL_SERVER_ERROR",
-            message: "Error al crear el Albarán",
-          });
+  create: procedure
+    .meta({ writes: [dbTableDeliveryNote] })
+    .input(createDeliveryNoteSchema)
+    .mutation(async ({ ctx, input }) =>
+      ctx.db.transaction(async (tx) => {
+        try {
+          const newDeliveryNote = (
+            await tx
+              .insert(dbTableDeliveryNote)
+              .values({ ...input, createdAt: new Date() })
+              .returning()
+          ).at(0);
+          if (!newDeliveryNote) {
+            throw new TRPCError({
+              code: "INTERNAL_SERVER_ERROR",
+              message: "Error al crear el Albarán",
+            });
+          }
+          return { item: newDeliveryNote };
+        } catch (error) {
+          handleMutationError({ error });
         }
-        return { item: newDeliveryNote };
-      } catch (error) {
-        handleMutationError({ error });
-      }
-    }),
-  ),
-  createWithLines: procedure.input(createDeliveryNoteWithLinesSchema).mutation(async ({ ctx, input }) =>
-    ctx.db.transaction(async (tx) => {
-      try {
-        const deliveryNote = (
-          await tx
-            .insert(dbTableDeliveryNote)
-            .values({
-              clientId: input.clientId,
-              createdAt: new Date(),
-              deliveryDate: new Date(),
-              deliveryMethodId: input.deliveryMethodId,
-            })
-            .returning()
-        ).at(0);
+      }),
+    ),
+  createWithLines: procedure
+    .meta({ writes: [dbTableDeliveryNote, dbTableDeliveryNoteLine, dbTableSellOrderLine] })
+    .input(createDeliveryNoteWithLinesSchema)
+    .mutation(async ({ ctx, input }) =>
+      ctx.db.transaction(async (tx) => {
+        try {
+          const deliveryNote = (
+            await tx
+              .insert(dbTableDeliveryNote)
+              .values({
+                clientId: input.clientId,
+                createdAt: new Date(),
+                deliveryDate: new Date(),
+                deliveryMethodId: input.deliveryMethodId,
+              })
+              .returning()
+          ).at(0);
 
-        if (deliveryNote === undefined) {
-          throw new TRPCError({
-            code: "INTERNAL_SERVER_ERROR",
-            message: "Albarán no creado",
-          });
+          if (deliveryNote === undefined) {
+            throw new TRPCError({
+              code: "INTERNAL_SERVER_ERROR",
+              message: "Albarán no creado",
+            });
+          }
+
+          await insertStagedSellOrderLines(deliveryNote, input.stagedSellOrderLines, tx);
+          return { item: deliveryNote };
+        } catch (error) {
+          handleMutationError({ error });
         }
+      }),
+    ),
+  appendLines: procedure
+    .meta({ writes: [dbTableDeliveryNoteLine, dbTableInvoice, dbTableSellOrderLine] })
+    .input(appendLinesToDeliveryNoteSchema)
+    .mutation(async ({ ctx, input }) =>
+      ctx.db.transaction(async (tx) => {
+        try {
+          const deliveryNote = await tx.query.dbTableDeliveryNote.findFirst({
+            where: { id: input.deliveryNoteId },
+          });
+          if (!deliveryNote) {
+            throw new TRPCError({
+              code: "NOT_FOUND",
+              message: `Albarán con ID ${input.deliveryNoteId} no encontrado`,
+            });
+          }
+          await resetChangedDeliveryNoteInvoice({ deliveryNoteId: deliveryNote.id, isAdmin: ctx.isAdmin }, tx);
 
-        await insertStagedSellOrderLines(deliveryNote, input.stagedSellOrderLines, tx);
-        return { item: deliveryNote };
-      } catch (error) {
-        handleMutationError({ error });
-      }
-    }),
-  ),
-  appendLines: procedure.input(appendLinesToDeliveryNoteSchema).mutation(async ({ ctx, input }) =>
-    ctx.db.transaction(async (tx) => {
-      try {
-        const deliveryNote = await tx.query.dbTableDeliveryNote.findFirst({
-          where: { id: input.deliveryNoteId },
+          await insertStagedSellOrderLines(deliveryNote, input.stagedSellOrderLines, tx);
+          return { item: deliveryNote };
+        } catch (error) {
+          handleMutationError({ error });
+        }
+      }),
+    ),
+  update: adminProcedure
+    .meta({ writes: [dbTableDeliveryNote, dbTableInvoice] })
+    .input(updateDeliveryNoteSchema)
+    .mutation(async ({ ctx, input }) =>
+      ctx.db.transaction(async (tx) => {
+        try {
+          const previousDeliveryNote = await tx.query.dbTableDeliveryNote.findFirst({ where: { id: input.id } });
+          const updatedDeliveryNote = (
+            await tx.update(dbTableDeliveryNote).set(input).where(eq(dbTableDeliveryNote.id, input.id)).returning()
+          ).at(0);
+          if (!previousDeliveryNote || !updatedDeliveryNote) {
+            throw new TRPCError({
+              code: "NOT_FOUND",
+              message: `Albarán con ID ${input.id} no encontrado`,
+            });
+          }
+          // The Factura lists the delivery date of its Albaranes, so the one the Cliente got no longer matches it
+          if (
+            updatedDeliveryNote.invoiceId !== null &&
+            previousDeliveryNote.deliveryDate?.getTime() !== updatedDeliveryNote.deliveryDate?.getTime()
+          ) {
+            await tx
+              .update(dbTableInvoice)
+              .set({ sent: false })
+              .where(eq(dbTableInvoice.id, updatedDeliveryNote.invoiceId));
+          }
+          return { item: updatedDeliveryNote };
+        } catch (error) {
+          handleMutationError({ error });
+        }
+      }),
+    ),
+  delete: adminProcedure
+    .meta({ writes: [dbTableDeliveryNote, dbTableDeliveryNoteLine, dbTableInvoice, dbTableSellOrderLine] })
+    .input(requiredIdObjectSchema)
+    .mutation(async ({ ctx, input }) =>
+      ctx.db.transaction(async (tx) => {
+        try {
+          const deliveryNoteLines = await tx.query.dbTableDeliveryNoteLine.findMany({
+            where: { deliveryNoteId: input.id },
+          });
+
+          for (const deliveryNoteLine of deliveryNoteLines) {
+            await deleteDeliveryNoteLine(deliveryNoteLine.id, tx);
+          }
+
+          const deletedDeliveryNote = (
+            await tx.delete(dbTableDeliveryNote).where(eq(dbTableDeliveryNote.id, input.id)).returning()
+          ).at(0);
+          if (!deletedDeliveryNote) {
+            throw new TRPCError({
+              code: "NOT_FOUND",
+              message: `Albarán con ID ${input.id} no encontrado`,
+            });
+          }
+          // The Factura is computed from its Albaranes, so it has to be accounted and sent again without this one
+          if (deletedDeliveryNote.invoiceId !== null) {
+            await resetInvoiceStatus(deletedDeliveryNote.invoiceId, tx);
+          }
+          return { item: deletedDeliveryNote };
+        } catch (error) {
+          handleMutationError({ error });
+        }
+      }),
+    ),
+  print: procedure
+    .meta({ writes: [] })
+    .input(printDeliveryNoteSchema)
+    .mutation(async ({ ctx, input }) => {
+      const deliveryNote = await getDeliveryNoteWithLinesForDocument(input.id);
+      if (!deliveryNote) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: `Albarán con ID ${input.id} no encontrado`,
         });
-        if (!deliveryNote) {
-          throw new TRPCError({
-            code: "NOT_FOUND",
-            message: `Albarán con ID ${input.deliveryNoteId} no encontrado`,
-          });
-        }
-        await resetChangedDeliveryNoteInvoice({ deliveryNoteId: deliveryNote.id, isAdmin: ctx.isAdmin }, tx);
+      }
 
-        await insertStagedSellOrderLines(deliveryNote, input.stagedSellOrderLines, tx);
-        return { item: deliveryNote };
-      } catch (error) {
-        handleMutationError({ error });
-      }
-    }),
-  ),
-  update: adminProcedure.input(updateDeliveryNoteSchema).mutation(async ({ ctx, input }) =>
-    ctx.db.transaction(async (tx) => {
-      try {
-        const previousDeliveryNote = await tx.query.dbTableDeliveryNote.findFirst({ where: { id: input.id } });
-        const updatedDeliveryNote = (
-          await tx.update(dbTableDeliveryNote).set(input).where(eq(dbTableDeliveryNote.id, input.id)).returning()
-        ).at(0);
-        if (!previousDeliveryNote || !updatedDeliveryNote) {
-          throw new TRPCError({
-            code: "NOT_FOUND",
-            message: `Albarán con ID ${input.id} no encontrado`,
-          });
-        }
-        // The Factura lists the delivery date of its Albaranes, so the one the Cliente got no longer matches it
-        if (
-          updatedDeliveryNote.invoiceId !== null &&
-          previousDeliveryNote.deliveryDate?.getTime() !== updatedDeliveryNote.deliveryDate?.getTime()
-        ) {
-          await tx
-            .update(dbTableInvoice)
-            .set({ sent: false })
-            .where(eq(dbTableInvoice.id, updatedDeliveryNote.invoiceId));
-        }
-        return { item: updatedDeliveryNote };
-      } catch (error) {
-        handleMutationError({ error });
-      }
-    }),
-  ),
-  delete: adminProcedure.input(requiredIdObjectSchema).mutation(async ({ ctx, input }) =>
-    ctx.db.transaction(async (tx) => {
-      try {
-        const deliveryNoteLines = await tx.query.dbTableDeliveryNoteLine.findMany({
-          where: { deliveryNoteId: input.id },
+      const configuration = await getConfiguration();
+      if (!configuration) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "No se ha configurado los datos de la empresa",
         });
-
-        for (const deliveryNoteLine of deliveryNoteLines) {
-          await deleteDeliveryNoteLine(deliveryNoteLine.id, tx);
-        }
-
-        const deletedDeliveryNote = (
-          await tx.delete(dbTableDeliveryNote).where(eq(dbTableDeliveryNote.id, input.id)).returning()
-        ).at(0);
-        if (!deletedDeliveryNote) {
-          throw new TRPCError({
-            code: "NOT_FOUND",
-            message: `Albarán con ID ${input.id} no encontrado`,
-          });
-        }
-        // The Factura is computed from its Albaranes, so it has to be accounted and sent again without this one
-        if (deletedDeliveryNote.invoiceId !== null) {
-          await resetInvoiceStatus(deletedDeliveryNote.invoiceId, tx);
-        }
-        return { item: deletedDeliveryNote };
-      } catch (error) {
-        handleMutationError({ error });
       }
+
+      await printDeliveryNote({
+        client: deliveryNote.client,
+        company: configuration,
+        copies: input.copies,
+        deliveryDate: formatDate(deliveryNote.deliveryDate),
+        deliveryMethodName: deliveryNote.deliveryMethod?.name ?? null,
+        deliveryNoteId: deliveryNote.id,
+        lines: deliveryNote.deliveryNoteLines.map(getSalesDocumentLine),
+        withPrices: input.withPrices && ctx.isAdmin,
+      });
     }),
-  ),
-  print: procedure.input(printDeliveryNoteSchema).mutation(async ({ ctx, input }) => {
-    const deliveryNote = await getDeliveryNoteWithLinesForDocument(input.id);
-    if (!deliveryNote) {
-      throw new TRPCError({
-        code: "NOT_FOUND",
-        message: `Albarán con ID ${input.id} no encontrado`,
-      });
-    }
-
-    const configuration = await getConfiguration();
-    if (!configuration) {
-      throw new TRPCError({
-        code: "NOT_FOUND",
-        message: "No se ha configurado los datos de la empresa",
-      });
-    }
-
-    await printDeliveryNote({
-      client: deliveryNote.client,
-      company: configuration,
-      copies: input.copies,
-      deliveryDate: formatDate(deliveryNote.deliveryDate),
-      deliveryMethodName: deliveryNote.deliveryMethod?.name ?? null,
-      deliveryNoteId: deliveryNote.id,
-      lines: deliveryNote.deliveryNoteLines.map(getSalesDocumentLine),
-      withPrices: input.withPrices && ctx.isAdmin,
-    });
-  }),
 });

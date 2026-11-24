@@ -8,22 +8,25 @@ import { router } from "@/trpc";
 import { adminProcedure } from "@/trpc";
 
 export default router({
-  update: adminProcedure.input(updateConfigurationSchema).mutation(async ({ ctx, input }) =>
-    ctx.db.transaction(async (tx) => {
-      try {
-        const updatedConfiguration = (
-          await tx.update(dbTableConfiguration).set(input).where(eq(dbTableConfiguration.id, input.id)).returning()
-        ).at(0);
-        if (!updatedConfiguration) {
-          throw new TRPCError({
-            code: "NOT_FOUND",
-            message: `Configuración con ID ${input.id} no encontrada`,
-          });
+  update: adminProcedure
+    .meta({ writes: [dbTableConfiguration] })
+    .input(updateConfigurationSchema)
+    .mutation(async ({ ctx, input }) =>
+      ctx.db.transaction(async (tx) => {
+        try {
+          const updatedConfiguration = (
+            await tx.update(dbTableConfiguration).set(input).where(eq(dbTableConfiguration.id, input.id)).returning()
+          ).at(0);
+          if (!updatedConfiguration) {
+            throw new TRPCError({
+              code: "NOT_FOUND",
+              message: `Configuración con ID ${input.id} no encontrada`,
+            });
+          }
+          return { item: updatedConfiguration };
+        } catch (error) {
+          handleMutationError({ error });
         }
-        return { item: updatedConfiguration };
-      } catch (error) {
-        handleMutationError({ error });
-      }
-    }),
-  ),
+      }),
+    ),
 });

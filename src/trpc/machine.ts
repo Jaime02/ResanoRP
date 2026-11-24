@@ -28,170 +28,186 @@ const uniqueConstraints = [
 ];
 
 export default router({
-  create: adminProcedure.input(createMachineSchema).mutation(async ({ ctx, input }) =>
-    ctx.db.transaction(async (tx) => {
-      try {
-        const newMachine = (await tx.insert(dbTableMachine).values(input).returning()).at(0);
-        if (!newMachine) {
-          throw new TRPCError({
-            code: "INTERNAL_SERVER_ERROR",
-            message: "Error al crear la Máquina",
-          });
+  create: adminProcedure
+    .meta({ writes: [dbTableMachine] })
+    .input(createMachineSchema)
+    .mutation(async ({ ctx, input }) =>
+      ctx.db.transaction(async (tx) => {
+        try {
+          const newMachine = (await tx.insert(dbTableMachine).values(input).returning()).at(0);
+          if (!newMachine) {
+            throw new TRPCError({
+              code: "INTERNAL_SERVER_ERROR",
+              message: "Error al crear la Máquina",
+            });
+          }
+          return { item: newMachine };
+        } catch (error) {
+          handleMutationError({ error, uniqueConstraints });
         }
-        return { item: newMachine };
-      } catch (error) {
-        handleMutationError({ error, uniqueConstraints });
-      }
-    }),
-  ),
-  update: adminProcedure.input(updateMachineSchema).mutation(async ({ ctx, input }) =>
-    ctx.db.transaction(async (tx) => {
-      try {
-        const updatedMachine = (
-          await tx.update(dbTableMachine).set(input).where(eq(dbTableMachine.id, input.id)).returning()
-        ).at(0);
-        if (!updatedMachine) {
-          throw new TRPCError({
-            code: "NOT_FOUND",
-            message: `Máquina con ID ${input.id} no encontrada`,
-          });
+      }),
+    ),
+  update: adminProcedure
+    .meta({ writes: [dbTableMachine] })
+    .input(updateMachineSchema)
+    .mutation(async ({ ctx, input }) =>
+      ctx.db.transaction(async (tx) => {
+        try {
+          const updatedMachine = (
+            await tx.update(dbTableMachine).set(input).where(eq(dbTableMachine.id, input.id)).returning()
+          ).at(0);
+          if (!updatedMachine) {
+            throw new TRPCError({
+              code: "NOT_FOUND",
+              message: `Máquina con ID ${input.id} no encontrada`,
+            });
+          }
+          return { item: updatedMachine };
+        } catch (error) {
+          handleMutationError({ error, uniqueConstraints });
         }
-        return { item: updatedMachine };
-      } catch (error) {
-        handleMutationError({ error, uniqueConstraints });
-      }
-    }),
-  ),
-  delete: adminProcedure.input(requiredIdObjectSchema).mutation(async ({ ctx, input }) =>
-    ctx.db.transaction(async (tx) => {
-      try {
-        // The active Production Order always belongs to the queue, so it is cleared along with the queue
-        const deletedMachine = (
+      }),
+    ),
+  delete: adminProcedure
+    .meta({ writes: [dbTableMachine, dbTableMachineProductionOrderQueue] })
+    .input(requiredIdObjectSchema)
+    .mutation(async ({ ctx, input }) =>
+      ctx.db.transaction(async (tx) => {
+        try {
+          // The active Production Order always belongs to the queue, so it is cleared along with the queue
+          const deletedMachine = (
+            await tx
+              .update(dbTableMachine)
+              .set({ activeProductionOrderId: null, deletedAt: new Date() })
+              .where(eq(dbTableMachine.id, input.id))
+              .returning()
+          ).at(0);
+          if (!deletedMachine) {
+            throw new TRPCError({
+              code: "NOT_FOUND",
+              message: `Máquina con ID ${input.id} no encontrada`,
+            });
+          }
+          await tx
+            .delete(dbTableMachineProductionOrderQueue)
+            .where(eq(dbTableMachineProductionOrderQueue.machineId, input.id));
+          return { item: deletedMachine };
+        } catch (error) {
+          handleMutationError({ error });
+        }
+      }),
+    ),
+  restore: adminProcedure
+    .meta({ writes: [dbTableMachine] })
+    .input(requiredIdObjectSchema)
+    .mutation(async ({ ctx, input }) =>
+      ctx.db.transaction(async (tx) => {
+        try {
+          const restoredMachine = (
+            await tx
+              .update(dbTableMachine)
+              .set({ deletedAt: null })
+              .where(and(eq(dbTableMachine.id, input.id), isNotNull(dbTableMachine.deletedAt)))
+              .returning()
+          ).at(0);
+          if (!restoredMachine) {
+            throw new TRPCError({
+              code: "NOT_FOUND",
+              message: `Máquina con ID ${input.id} no encontrada o no eliminada`,
+            });
+          }
+          return { item: restoredMachine };
+        } catch (error) {
+          handleMutationError({ error, uniqueConstraints });
+        }
+      }),
+    ),
+  stopProductionOrder: procedure
+    .meta({ writes: [dbTableMachine, dbTableMachineProductionOrderQueue, dbTablePartProduction] })
+    .input(stopMachineProductionOrderSchema)
+    .mutation(async ({ ctx, input }) =>
+      ctx.db.transaction(async (tx) => {
+        try {
+          // Locked, so a second stop at the same time waits and then finds the Máquina already stopped
+          const machine = (
+            await tx.select().from(dbTableMachine).where(eq(dbTableMachine.id, input.machineId)).for("update")
+          ).at(0);
+          if (machine === undefined) {
+            throw new TRPCError({
+              code: "NOT_FOUND",
+              message: `Máquina con ID ${input.machineId} no encontrada`,
+            });
+          }
+
+          const { activeProductionOrderId } = machine;
+          if (activeProductionOrderId === null) {
+            throw new TRPCError({
+              code: "BAD_REQUEST",
+              message: `La máquina "${machine.name}" no tiene una orden de producción activa`,
+            });
+          }
+          const activeProductionOrder = await tx.query.dbTableProductionOrder.findFirst({
+            where: { id: activeProductionOrderId },
+          });
+          if (activeProductionOrder === undefined) {
+            throw new TRPCError({
+              code: "NOT_FOUND",
+              message: `Orden de producción con ID ${activeProductionOrderId} no encontrada`,
+            });
+          }
+
+          const activePart = await tx.query.dbTablePart.findFirst({
+            where: { id: activeProductionOrder.partId },
+          });
+          if (activePart === undefined) {
+            throw new TRPCError({
+              code: "NOT_FOUND",
+              message: `Artículo con ID ${activeProductionOrder.partId} no encontrado`,
+            });
+          }
+
+          if (input.producedQuantity !== null && input.producedQuantity > 0) {
+            await tx.insert(dbTablePartProduction).values({
+              date: new Date(),
+              machineId: input.machineId,
+              productionOrderId: activeProductionOrderId,
+              quantity: input.producedQuantity,
+            });
+          }
+
           await tx
             .update(dbTableMachine)
-            .set({ activeProductionOrderId: null, deletedAt: new Date() })
-            .where(eq(dbTableMachine.id, input.id))
-            .returning()
-        ).at(0);
-        if (!deletedMachine) {
-          throw new TRPCError({
-            code: "NOT_FOUND",
-            message: `Máquina con ID ${input.id} no encontrada`,
-          });
-        }
-        await tx
-          .delete(dbTableMachineProductionOrderQueue)
-          .where(eq(dbTableMachineProductionOrderQueue.machineId, input.id));
-        return { item: deletedMachine };
-      } catch (error) {
-        handleMutationError({ error });
-      }
-    }),
-  ),
-  restore: adminProcedure.input(requiredIdObjectSchema).mutation(async ({ ctx, input }) =>
-    ctx.db.transaction(async (tx) => {
-      try {
-        const restoredMachine = (
-          await tx
-            .update(dbTableMachine)
-            .set({ deletedAt: null })
-            .where(and(eq(dbTableMachine.id, input.id), isNotNull(dbTableMachine.deletedAt)))
-            .returning()
-        ).at(0);
-        if (!restoredMachine) {
-          throw new TRPCError({
-            code: "NOT_FOUND",
-            message: `Máquina con ID ${input.id} no encontrada o no eliminada`,
-          });
-        }
-        return { item: restoredMachine };
-      } catch (error) {
-        handleMutationError({ error, uniqueConstraints });
-      }
-    }),
-  ),
-  stopProductionOrder: procedure.input(stopMachineProductionOrderSchema).mutation(async ({ ctx, input }) =>
-    ctx.db.transaction(async (tx) => {
-      try {
-        // Locked, so a second stop at the same time waits and then finds the Máquina already stopped
-        const machine = (
-          await tx.select().from(dbTableMachine).where(eq(dbTableMachine.id, input.machineId)).for("update")
-        ).at(0);
-        if (machine === undefined) {
-          throw new TRPCError({
-            code: "NOT_FOUND",
-            message: `Máquina con ID ${input.machineId} no encontrada`,
-          });
-        }
+            .set({ activeProductionOrderId: null })
+            .where(eq(dbTableMachine.id, input.machineId));
 
-        const { activeProductionOrderId } = machine;
-        if (activeProductionOrderId === null) {
-          throw new TRPCError({
-            code: "BAD_REQUEST",
-            message: `La máquina "${machine.name}" no tiene una orden de producción activa`,
-          });
-        }
-        const activeProductionOrder = await tx.query.dbTableProductionOrder.findFirst({
-          where: { id: activeProductionOrderId },
-        });
-        if (activeProductionOrder === undefined) {
-          throw new TRPCError({
-            code: "NOT_FOUND",
-            message: `Orden de producción con ID ${activeProductionOrderId} no encontrada`,
-          });
-        }
-
-        const activePart = await tx.query.dbTablePart.findFirst({
-          where: { id: activeProductionOrder.partId },
-        });
-        if (activePart === undefined) {
-          throw new TRPCError({
-            code: "NOT_FOUND",
-            message: `Artículo con ID ${activeProductionOrder.partId} no encontrado`,
-          });
-        }
-
-        if (input.producedQuantity !== null && input.producedQuantity > 0) {
-          await tx.insert(dbTablePartProduction).values({
-            date: new Date(),
-            machineId: input.machineId,
-            productionOrderId: activeProductionOrderId,
-            quantity: input.producedQuantity,
-          });
-        }
-
-        await tx
-          .update(dbTableMachine)
-          .set({ activeProductionOrderId: null })
-          .where(eq(dbTableMachine.id, input.machineId));
-
-        // Machines still running a produced order keep it queued so their production can still be reported
-        if (isProductionFinished(await dbGetProductionOrderStatus(activeProductionOrder, tx))) {
-          await tx.delete(dbTableMachineProductionOrderQueue).where(
-            and(
-              eq(dbTableMachineProductionOrderQueue.productionOrderId, activeProductionOrderId),
-              notExists(
-                tx
-                  .select()
-                  .from(dbTableMachine)
-                  .where(
-                    and(
-                      eq(dbTableMachine.id, dbTableMachineProductionOrderQueue.machineId),
-                      eq(dbTableMachine.activeProductionOrderId, activeProductionOrderId),
+          // Machines still running a produced order keep it queued so their production can still be reported
+          if (isProductionFinished(await dbGetProductionOrderStatus(activeProductionOrder, tx))) {
+            await tx.delete(dbTableMachineProductionOrderQueue).where(
+              and(
+                eq(dbTableMachineProductionOrderQueue.productionOrderId, activeProductionOrderId),
+                notExists(
+                  tx
+                    .select()
+                    .from(dbTableMachine)
+                    .where(
+                      and(
+                        eq(dbTableMachine.id, dbTableMachineProductionOrderQueue.machineId),
+                        eq(dbTableMachine.activeProductionOrderId, activeProductionOrderId),
+                      ),
                     ),
-                  ),
+                ),
               ),
-            ),
-          );
-        }
+            );
+          }
 
-        return {};
-      } catch (error) {
-        handleMutationError({ error });
-      }
-    }),
-  ),
+          return {};
+        } catch (error) {
+          handleMutationError({ error });
+        }
+      }),
+    ),
   updateActiveProductionOrder: procedure
+    .meta({ writes: [dbTableMachine, dbTableMachineProductionOrderQueue] })
     .input(updateMachineActiveProductionOrderSchema)
     .mutation(async ({ ctx, input }) =>
       ctx.db.transaction(async (tx) => {
@@ -253,28 +269,31 @@ export default router({
         }
       }),
     ),
-  updateMachineProductionOrder: procedure.input(updateMachineProductionOrderSchema).mutation(async ({ ctx, input }) =>
-    ctx.db.transaction(async (tx) => {
-      try {
-        const updatedProductionOrder = (
-          await tx
-            .update(dbTableProductionOrder)
-            .set(input)
-            .where(eq(dbTableProductionOrder.id, input.productionOrderId))
-            .returning()
-        ).at(0);
+  updateMachineProductionOrder: procedure
+    .meta({ writes: [dbTableProductionOrder] })
+    .input(updateMachineProductionOrderSchema)
+    .mutation(async ({ ctx, input }) =>
+      ctx.db.transaction(async (tx) => {
+        try {
+          const updatedProductionOrder = (
+            await tx
+              .update(dbTableProductionOrder)
+              .set(input)
+              .where(eq(dbTableProductionOrder.id, input.productionOrderId))
+              .returning()
+          ).at(0);
 
-        if (!updatedProductionOrder) {
-          throw new TRPCError({
-            code: "NOT_FOUND",
-            message: `Orden de producción con ID ${input.productionOrderId} no encontrada`,
-          });
+          if (!updatedProductionOrder) {
+            throw new TRPCError({
+              code: "NOT_FOUND",
+              message: `Orden de producción con ID ${input.productionOrderId} no encontrada`,
+            });
+          }
+
+          return { item: updatedProductionOrder };
+        } catch (error) {
+          handleMutationError({ error });
         }
-
-        return { item: updatedProductionOrder };
-      } catch (error) {
-        handleMutationError({ error });
-      }
-    }),
-  ),
+      }),
+    ),
 });

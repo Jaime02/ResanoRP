@@ -41,7 +41,7 @@ import { router } from "@/trpc";
 import { adminProcedure } from "@/trpc";
 
 export default router({
-  account: adminProcedure.mutation(async ({ ctx }) =>
+  account: adminProcedure.meta({ writes: [dbTableInvoice] }).mutation(async ({ ctx }) =>
     removeOnRollback(async (createdPaths) =>
       ctx.db.transaction(async (tx) => {
         try {
@@ -131,221 +131,236 @@ export default router({
       }),
     ),
   ),
-  unaccount: adminProcedure.input(requiredIdObjectSchema).mutation(async ({ ctx, input }) =>
-    ctx.db.transaction(async (tx) => {
-      try {
-        const unaccountedInvoice = await unaccountInvoice(input.id, tx);
-        if (!unaccountedInvoice) {
-          throw new TRPCError({
-            code: "NOT_FOUND",
-            message: `Factura contabilizada con ID ${input.id} no encontrada`,
-          });
+  unaccount: adminProcedure
+    .meta({ writes: [dbTableInvoice] })
+    .input(requiredIdObjectSchema)
+    .mutation(async ({ ctx, input }) =>
+      ctx.db.transaction(async (tx) => {
+        try {
+          const unaccountedInvoice = await unaccountInvoice(input.id, tx);
+          if (!unaccountedInvoice) {
+            throw new TRPCError({
+              code: "NOT_FOUND",
+              message: `Factura contabilizada con ID ${input.id} no encontrada`,
+            });
+          }
+          return { item: unaccountedInvoice };
+        } catch (error) {
+          handleMutationError({ error });
         }
-        return { item: unaccountedInvoice };
-      } catch (error) {
-        handleMutationError({ error });
-      }
-    }),
-  ),
-  send: adminProcedure.input(requiredIdObjectSchema).mutation(async ({ ctx, input }) =>
-    ctx.db.transaction(async (tx) => {
-      try {
-        // A Línea can lose its price after its Factura was created, and the Cliente would get it at 0 €
-        const invoice = await getInvoiceForDocument(input.id, tx);
-        const unpricedDeliveryNoteIds = getUnpricedDeliveryNoteIds(invoice?.deliveryNotes ?? []);
-        if (unpricedDeliveryNoteIds.length > 0) {
-          throw new TRPCError({
-            code: "BAD_REQUEST",
-            message: INVOICE_NOT_SENT_UNPRICED_MESSAGE(unpricedDeliveryNoteIds),
-          });
+      }),
+    ),
+  send: adminProcedure
+    .meta({ writes: [dbTableInvoice] })
+    .input(requiredIdObjectSchema)
+    .mutation(async ({ ctx, input }) =>
+      ctx.db.transaction(async (tx) => {
+        try {
+          // A Línea can lose its price after its Factura was created, and the Cliente would get it at 0 €
+          const invoice = await getInvoiceForDocument(input.id, tx);
+          const unpricedDeliveryNoteIds = getUnpricedDeliveryNoteIds(invoice?.deliveryNotes ?? []);
+          if (unpricedDeliveryNoteIds.length > 0) {
+            throw new TRPCError({
+              code: "BAD_REQUEST",
+              message: INVOICE_NOT_SENT_UNPRICED_MESSAGE(unpricedDeliveryNoteIds),
+            });
+          }
+          const sentInvoice = await sendInvoice(input.id, tx);
+          if (!sentInvoice) {
+            throw new TRPCError({
+              code: "NOT_FOUND",
+              message: `Factura no enviada con ID ${input.id} no encontrada`,
+            });
+          }
+          return { item: sentInvoice };
+        } catch (error) {
+          handleMutationError({ error });
         }
-        const sentInvoice = await sendInvoice(input.id, tx);
-        if (!sentInvoice) {
-          throw new TRPCError({
-            code: "NOT_FOUND",
-            message: `Factura no enviada con ID ${input.id} no encontrada`,
+      }),
+    ),
+  create: adminProcedure
+    .meta({ writes: [dbTableDeliveryNote, dbTableInvoice] })
+    .input(createInvoiceSchema)
+    .mutation(async ({ ctx, input }) =>
+      ctx.db.transaction(async (tx) => {
+        try {
+          const client = await tx.query.dbTableClient.findFirst({
+            where: { id: input.clientId },
+            with: { defaultPaymentMethod: true },
           });
-        }
-        return { item: sentInvoice };
-      } catch (error) {
-        handleMutationError({ error });
-      }
-    }),
-  ),
-  create: adminProcedure.input(createInvoiceSchema).mutation(async ({ ctx, input }) =>
-    ctx.db.transaction(async (tx) => {
-      try {
-        const client = await tx.query.dbTableClient.findFirst({
-          where: { id: input.clientId },
-          with: { defaultPaymentMethod: true },
-        });
-        if (!client) {
-          throw new TRPCError({
-            code: "NOT_FOUND",
-            message: `Cliente con ID ${input.clientId} no encontrado`,
-          });
-        }
+          if (!client) {
+            throw new TRPCError({
+              code: "NOT_FOUND",
+              message: `Cliente con ID ${input.clientId} no encontrado`,
+            });
+          }
 
-        const deliveryNotes = await getDeliveryNotesToInvoice(
-          {
-            clientId: client.id,
-            endDate: input.endDate !== null ? endOfAppDay(input.endDate) : undefined,
-            startDate: input.startDate !== null ? startOfAppDay(input.startDate) : undefined,
-          },
-          tx,
-        );
-        if (deliveryNotes.length === 0) {
-          throw new TRPCError({
-            code: "NOT_FOUND",
-            message: `No hay Albaranes del Cliente ${client.name} pendientes de facturar entre las fechas seleccionadas`,
-          });
-        }
-
-        const unpricedDeliveryNotes = await tx
-          .selectDistinct({ id: dbTableDeliveryNoteLine.deliveryNoteId })
-          .from(dbTableDeliveryNoteLine)
-          .leftJoin(dbTableSellOrderLine, eq(dbTableSellOrderLine.id, dbTableDeliveryNoteLine.sellOrderLineId))
-          .where(
-            and(
-              inArray(
-                dbTableDeliveryNoteLine.deliveryNoteId,
-                deliveryNotes.map((deliveryNote) => deliveryNote.id),
-              ),
-              isNull(dbTableDeliveryNoteLine.unitPrice),
-              isNull(dbTableSellOrderLine.partPrice),
-            ),
-          )
-          .orderBy(dbTableDeliveryNoteLine.deliveryNoteId);
-        if (unpricedDeliveryNotes.length > 0) {
-          throw new TRPCError({
-            code: "BAD_REQUEST",
-            message: `Los Albaranes ${unpricedDeliveryNotes.map((deliveryNote) => deliveryNote.id).join(", ")} tienen Líneas sin precio`,
-          });
-        }
-
-        const deliveryNoteIds = deliveryNotes.map((deliveryNote) => deliveryNote.id);
-        // Claimed before the Factura takes a number, so a conflict does not leave a gap in the numbering
-        const claimedDeliveryNotes = await tx
-          .select({ id: dbTableDeliveryNote.id })
-          .from(dbTableDeliveryNote)
-          .where(and(inArray(dbTableDeliveryNote.id, deliveryNoteIds), isNull(dbTableDeliveryNote.invoiceId)))
-          .for("update");
-        // Another Factura took some of them since they were listed
-        if (claimedDeliveryNotes.length !== deliveryNotes.length) {
-          throw new TRPCError({
-            code: "CONFLICT",
-            message: `Los Albaranes del Cliente ${client.name} ya se están facturando, inténtalo de nuevo`,
-          });
-        }
-
-        const createdAt = new Date();
-        const newInvoice = (
-          await tx
-            .insert(dbTableInvoice)
-            .values({
-              accounted: false,
+          const deliveryNotes = await getDeliveryNotesToInvoice(
+            {
               clientId: client.id,
-              createdAt,
-              dueDate: addAppDays(createdAt, client.defaultPaymentMethod?.paymentDeadlineDays ?? 0),
-              paymentMethodId: client.defaultPaymentMethodId,
-              sent: false,
-            })
-            .returning()
-        ).at(0);
-        if (!newInvoice) {
-          throw new TRPCError({
-            code: "INTERNAL_SERVER_ERROR",
-            message: "Error al crear la Factura",
-          });
+              endDate: input.endDate !== null ? endOfAppDay(input.endDate) : undefined,
+              startDate: input.startDate !== null ? startOfAppDay(input.startDate) : undefined,
+            },
+            tx,
+          );
+          if (deliveryNotes.length === 0) {
+            throw new TRPCError({
+              code: "NOT_FOUND",
+              message: `No hay Albaranes del Cliente ${client.name} pendientes de facturar entre las fechas seleccionadas`,
+            });
+          }
+
+          const unpricedDeliveryNotes = await tx
+            .selectDistinct({ id: dbTableDeliveryNoteLine.deliveryNoteId })
+            .from(dbTableDeliveryNoteLine)
+            .leftJoin(dbTableSellOrderLine, eq(dbTableSellOrderLine.id, dbTableDeliveryNoteLine.sellOrderLineId))
+            .where(
+              and(
+                inArray(
+                  dbTableDeliveryNoteLine.deliveryNoteId,
+                  deliveryNotes.map((deliveryNote) => deliveryNote.id),
+                ),
+                isNull(dbTableDeliveryNoteLine.unitPrice),
+                isNull(dbTableSellOrderLine.partPrice),
+              ),
+            )
+            .orderBy(dbTableDeliveryNoteLine.deliveryNoteId);
+          if (unpricedDeliveryNotes.length > 0) {
+            throw new TRPCError({
+              code: "BAD_REQUEST",
+              message: `Los Albaranes ${unpricedDeliveryNotes.map((deliveryNote) => deliveryNote.id).join(", ")} tienen Líneas sin precio`,
+            });
+          }
+
+          const deliveryNoteIds = deliveryNotes.map((deliveryNote) => deliveryNote.id);
+          // Claimed before the Factura takes a number, so a conflict does not leave a gap in the numbering
+          const claimedDeliveryNotes = await tx
+            .select({ id: dbTableDeliveryNote.id })
+            .from(dbTableDeliveryNote)
+            .where(and(inArray(dbTableDeliveryNote.id, deliveryNoteIds), isNull(dbTableDeliveryNote.invoiceId)))
+            .for("update");
+          // Another Factura took some of them since they were listed
+          if (claimedDeliveryNotes.length !== deliveryNotes.length) {
+            throw new TRPCError({
+              code: "CONFLICT",
+              message: `Los Albaranes del Cliente ${client.name} ya se están facturando, inténtalo de nuevo`,
+            });
+          }
+
+          const createdAt = new Date();
+          const newInvoice = (
+            await tx
+              .insert(dbTableInvoice)
+              .values({
+                accounted: false,
+                clientId: client.id,
+                createdAt,
+                dueDate: addAppDays(createdAt, client.defaultPaymentMethod?.paymentDeadlineDays ?? 0),
+                paymentMethodId: client.defaultPaymentMethodId,
+                sent: false,
+              })
+              .returning()
+          ).at(0);
+          if (!newInvoice) {
+            throw new TRPCError({
+              code: "INTERNAL_SERVER_ERROR",
+              message: "Error al crear la Factura",
+            });
+          }
+
+          await tx
+            .update(dbTableDeliveryNote)
+            .set({ invoiceId: newInvoice.id })
+            .where(inArray(dbTableDeliveryNote.id, deliveryNoteIds));
+
+          return { item: newInvoice };
+        } catch (error) {
+          handleMutationError({ error });
         }
+      }),
+    ),
+  delete: adminProcedure
+    .meta({ writes: [dbTableDeliveryNote, dbTableInvoice] })
+    .input(requiredIdObjectSchema)
+    .mutation(async ({ ctx, input }) =>
+      ctx.db.transaction(async (tx) => {
+        try {
+          // Invoice numbers must be consecutive, so creating a Factura waits until the numbering is reset below
+          await tx.execute(sql`LOCK TABLE ${dbTableInvoice} IN SHARE ROW EXCLUSIVE MODE`);
 
-        await tx
-          .update(dbTableDeliveryNote)
-          .set({ invoiceId: newInvoice.id })
-          .where(inArray(dbTableDeliveryNote.id, deliveryNoteIds));
+          const invoice = await tx.query.dbTableInvoice.findFirst({ where: { id: input.id } });
+          // Prisma already has an accounted Factura, so its Albaranes would be invoiced and accounted twice
+          if (!invoice || invoice.accounted) {
+            throw new TRPCError({
+              code: "NOT_FOUND",
+              message: `Factura sin contabilizar con ID ${input.id} no encontrada, descontabilízala antes de eliminarla`,
+            });
+          }
+          // The Cliente would keep a Factura that no longer exists
+          if (invoice.sent) {
+            throw new TRPCError({ code: "BAD_REQUEST", message: INVOICE_NOT_DELETED_SENT_MESSAGE(invoice.id) });
+          }
+          const lastInvoice = await tx.query.dbTableInvoice.findFirst({ orderBy: { id: "desc" } });
+          if (lastInvoice && lastInvoice.id !== invoice.id) {
+            throw new TRPCError({
+              code: "BAD_REQUEST",
+              message: INVOICE_NOT_DELETED_NOT_LAST_MESSAGE(invoice.id, lastInvoice.id),
+            });
+          }
 
-        return { item: newInvoice };
-      } catch (error) {
-        handleMutationError({ error });
+          await tx
+            .update(dbTableDeliveryNote)
+            .set({ invoiceId: null })
+            .where(eq(dbTableDeliveryNote.invoiceId, input.id));
+          await tx.delete(dbTableInvoice).where(eq(dbTableInvoice.id, input.id));
+          // Also gives back the numbers of creations that failed after taking one
+          await tx.execute(
+            sql`SELECT setval(pg_get_serial_sequence(${getTableName(dbTableInvoice)}, ${dbTableInvoice.id.name}), COALESCE(MAX(${dbTableInvoice.id}), 0) + 1, false) FROM ${dbTableInvoice}`,
+          );
+
+          return { item: invoice };
+        } catch (error) {
+          handleMutationError({ error });
+        }
+      }),
+    ),
+  print: adminProcedure
+    .meta({ writes: [] })
+    .input(requiredIdObjectSchema)
+    .mutation(async ({ input }) => {
+      const invoice = await getInvoiceForDocument(input.id);
+      if (!invoice) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: `Factura con ID ${input.id} no encontrada`,
+        });
       }
-    }),
-  ),
-  delete: adminProcedure.input(requiredIdObjectSchema).mutation(async ({ ctx, input }) =>
-    ctx.db.transaction(async (tx) => {
-      try {
-        // Invoice numbers must be consecutive, so creating a Factura waits until the numbering is reset below
-        await tx.execute(sql`LOCK TABLE ${dbTableInvoice} IN SHARE ROW EXCLUSIVE MODE`);
 
-        const invoice = await tx.query.dbTableInvoice.findFirst({ where: { id: input.id } });
-        // Prisma already has an accounted Factura, so its Albaranes would be invoiced and accounted twice
-        if (!invoice || invoice.accounted) {
-          throw new TRPCError({
-            code: "NOT_FOUND",
-            message: `Factura sin contabilizar con ID ${input.id} no encontrada, descontabilízala antes de eliminarla`,
-          });
-        }
-        // The Cliente would keep a Factura that no longer exists
-        if (invoice.sent) {
-          throw new TRPCError({ code: "BAD_REQUEST", message: INVOICE_NOT_DELETED_SENT_MESSAGE(invoice.id) });
-        }
-        const lastInvoice = await tx.query.dbTableInvoice.findFirst({ orderBy: { id: "desc" } });
-        if (lastInvoice && lastInvoice.id !== invoice.id) {
-          throw new TRPCError({
-            code: "BAD_REQUEST",
-            message: INVOICE_NOT_DELETED_NOT_LAST_MESSAGE(invoice.id, lastInvoice.id),
-          });
-        }
-
-        await tx
-          .update(dbTableDeliveryNote)
-          .set({ invoiceId: null })
-          .where(eq(dbTableDeliveryNote.invoiceId, input.id));
-        await tx.delete(dbTableInvoice).where(eq(dbTableInvoice.id, input.id));
-        // Also gives back the numbers of creations that failed after taking one
-        await tx.execute(
-          sql`SELECT setval(pg_get_serial_sequence(${getTableName(dbTableInvoice)}, ${dbTableInvoice.id.name}), COALESCE(MAX(${dbTableInvoice.id}), 0) + 1, false) FROM ${dbTableInvoice}`,
-        );
-
-        return { item: invoice };
-      } catch (error) {
-        handleMutationError({ error });
+      const configuration = await getConfiguration();
+      if (!configuration) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "No se ha configurado los datos de la empresa",
+        });
       }
-    }),
-  ),
-  print: adminProcedure.input(requiredIdObjectSchema).mutation(async ({ input }) => {
-    const invoice = await getInvoiceForDocument(input.id);
-    if (!invoice) {
-      throw new TRPCError({
-        code: "NOT_FOUND",
-        message: `Factura con ID ${input.id} no encontrada`,
-      });
-    }
 
-    const configuration = await getConfiguration();
-    if (!configuration) {
-      throw new TRPCError({
-        code: "NOT_FOUND",
-        message: "No se ha configurado los datos de la empresa",
-      });
-    }
-
-    await printInvoice({
-      bankAccount: configuration.bankAccount,
-      client: invoice.client,
-      company: configuration,
-      date: formatDate(invoice.createdAt),
-      deliveryNotes: invoice.deliveryNotes.map((deliveryNote) => ({
-        deliveryDate: formatDate(deliveryNote.deliveryDate),
-        id: deliveryNote.id,
-        lines: deliveryNote.deliveryNoteLines.map((deliveryNoteLine) => ({
-          ...getSalesDocumentLine(deliveryNoteLine),
-          vatPercentage: deliveryNoteLine.vatPercentage,
+      await printInvoice({
+        bankAccount: configuration.bankAccount,
+        client: invoice.client,
+        company: configuration,
+        date: formatDate(invoice.createdAt),
+        deliveryNotes: invoice.deliveryNotes.map((deliveryNote) => ({
+          deliveryDate: formatDate(deliveryNote.deliveryDate),
+          id: deliveryNote.id,
+          lines: deliveryNote.deliveryNoteLines.map((deliveryNoteLine) => ({
+            ...getSalesDocumentLine(deliveryNoteLine),
+            vatPercentage: deliveryNoteLine.vatPercentage,
+          })),
         })),
-      })),
-      dueDate: formatDate(invoice.dueDate),
-      footnote: configuration.invoiceFootnote,
-      invoiceId: invoice.id,
-      paymentMethodName: invoice.paymentMethod?.name ?? null,
-    });
-  }),
+        dueDate: formatDate(invoice.dueDate),
+        footnote: configuration.invoiceFootnote,
+        invoiceId: invoice.id,
+        paymentMethodName: invoice.paymentMethod?.name ?? null,
+      });
+    }),
 });

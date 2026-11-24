@@ -33,66 +33,75 @@ function wherePartComponent({ parentPartId, componentPartId }: Omit<TPartCompone
 }
 
 export default router({
-  create: adminProcedure.input(partComponentSchema).mutation(async ({ ctx, input }) =>
-    ctx.db.transaction(async (tx) => {
-      try {
-        // Two concurrent inserts (A in B, B in A) would each pass the cycle check on their own snapshot
-        await tx.execute(sql`SELECT pg_advisory_xact_lock(${PART_COMPONENT_LOCK_KEY})`);
-        const [parentPart, componentPart] = await Promise.all([
-          getPartById(input.parentPartId, tx),
-          getPartById(input.componentPartId, tx),
-        ]);
-        if (!parentPart || parentPart.deletedAt !== null) {
-          throw new TRPCError({ code: "BAD_REQUEST", message: PART_SET_DELETED_ERROR_MESSAGE });
+  create: adminProcedure
+    .meta({ writes: [dbTablePartComponent] })
+    .input(partComponentSchema)
+    .mutation(async ({ ctx, input }) =>
+      ctx.db.transaction(async (tx) => {
+        try {
+          // Two concurrent inserts (A in B, B in A) would each pass the cycle check on their own snapshot
+          await tx.execute(sql`SELECT pg_advisory_xact_lock(${PART_COMPONENT_LOCK_KEY})`);
+          const [parentPart, componentPart] = await Promise.all([
+            getPartById(input.parentPartId, tx),
+            getPartById(input.componentPartId, tx),
+          ]);
+          if (!parentPart || parentPart.deletedAt !== null) {
+            throw new TRPCError({ code: "BAD_REQUEST", message: PART_SET_DELETED_ERROR_MESSAGE });
+          }
+          if (!componentPart || componentPart.deletedAt !== null) {
+            throw new TRPCError({ code: "BAD_REQUEST", message: PART_COMPONENT_DELETED_ERROR_MESSAGE });
+          }
+          if (input.parentPartId === input.componentPartId) {
+            throw new TRPCError({ code: "BAD_REQUEST", message: PART_COMPONENT_SELF_ERROR_MESSAGE });
+          }
+          if (await isPartInComponentTree({ partId: input.parentPartId, rootPartId: input.componentPartId }, tx)) {
+            throw new TRPCError({ code: "BAD_REQUEST", message: PART_COMPONENT_CYCLE_ERROR_MESSAGE });
+          }
+          const newPartComponent = (await tx.insert(dbTablePartComponent).values(input).returning()).at(0);
+          return { item: newPartComponent };
+        } catch (error) {
+          handleMutationError({ error, uniqueConstraints });
         }
-        if (!componentPart || componentPart.deletedAt !== null) {
-          throw new TRPCError({ code: "BAD_REQUEST", message: PART_COMPONENT_DELETED_ERROR_MESSAGE });
+      }),
+    ),
+  update: adminProcedure
+    .meta({ writes: [dbTablePartComponent] })
+    .input(partComponentSchema)
+    .mutation(async ({ ctx, input }) =>
+      ctx.db.transaction(async (tx) => {
+        try {
+          const updatedPartComponent = (
+            await tx
+              .update(dbTablePartComponent)
+              .set({ quantity: input.quantity })
+              .where(wherePartComponent(input))
+              .returning()
+          ).at(0);
+          if (!updatedPartComponent) {
+            throw new TRPCError({ code: "NOT_FOUND", message: "El Conjunto no contiene ese Artículo" });
+          }
+          return { item: updatedPartComponent };
+        } catch (error) {
+          handleMutationError({ error });
         }
-        if (input.parentPartId === input.componentPartId) {
-          throw new TRPCError({ code: "BAD_REQUEST", message: PART_COMPONENT_SELF_ERROR_MESSAGE });
+      }),
+    ),
+  delete: adminProcedure
+    .meta({ writes: [dbTablePartComponent] })
+    .input(partComponentKeySchema)
+    .mutation(async ({ ctx, input }) =>
+      ctx.db.transaction(async (tx) => {
+        try {
+          const deletedPartComponent = (
+            await tx.delete(dbTablePartComponent).where(wherePartComponent(input)).returning()
+          ).at(0);
+          if (!deletedPartComponent) {
+            throw new TRPCError({ code: "NOT_FOUND", message: "El Conjunto no contiene ese Artículo" });
+          }
+          return { item: deletedPartComponent };
+        } catch (error) {
+          handleMutationError({ error });
         }
-        if (await isPartInComponentTree({ partId: input.parentPartId, rootPartId: input.componentPartId }, tx)) {
-          throw new TRPCError({ code: "BAD_REQUEST", message: PART_COMPONENT_CYCLE_ERROR_MESSAGE });
-        }
-        const newPartComponent = (await tx.insert(dbTablePartComponent).values(input).returning()).at(0);
-        return { item: newPartComponent };
-      } catch (error) {
-        handleMutationError({ error, uniqueConstraints });
-      }
-    }),
-  ),
-  update: adminProcedure.input(partComponentSchema).mutation(async ({ ctx, input }) =>
-    ctx.db.transaction(async (tx) => {
-      try {
-        const updatedPartComponent = (
-          await tx
-            .update(dbTablePartComponent)
-            .set({ quantity: input.quantity })
-            .where(wherePartComponent(input))
-            .returning()
-        ).at(0);
-        if (!updatedPartComponent) {
-          throw new TRPCError({ code: "NOT_FOUND", message: "El Conjunto no contiene ese Artículo" });
-        }
-        return { item: updatedPartComponent };
-      } catch (error) {
-        handleMutationError({ error });
-      }
-    }),
-  ),
-  delete: adminProcedure.input(partComponentKeySchema).mutation(async ({ ctx, input }) =>
-    ctx.db.transaction(async (tx) => {
-      try {
-        const deletedPartComponent = (
-          await tx.delete(dbTablePartComponent).where(wherePartComponent(input)).returning()
-        ).at(0);
-        if (!deletedPartComponent) {
-          throw new TRPCError({ code: "NOT_FOUND", message: "El Conjunto no contiene ese Artículo" });
-        }
-        return { item: deletedPartComponent };
-      } catch (error) {
-        handleMutationError({ error });
-      }
-    }),
-  ),
+      }),
+    ),
 });

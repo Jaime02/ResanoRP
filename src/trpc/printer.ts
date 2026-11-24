@@ -55,87 +55,102 @@ async function getPrinter(db: TDatabase, printerId: number) {
 }
 
 export default router({
-  create: adminProcedure.input(createPrinterSchema).mutation(async ({ ctx, input }) =>
-    ctx.db.transaction(async (tx) => {
-      try {
-        const newPrinter = (
-          await tx.insert(dbTablePrinter).values(toPrinterRow(input)).returning(PUBLIC_PRINTER_COLUMNS)
-        ).at(0);
-        if (!newPrinter) {
-          throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Error al crear la Impresora" });
+  create: adminProcedure
+    .meta({ writes: [dbTablePrinter] })
+    .input(createPrinterSchema)
+    .mutation(async ({ ctx, input }) =>
+      ctx.db.transaction(async (tx) => {
+        try {
+          const newPrinter = (
+            await tx.insert(dbTablePrinter).values(toPrinterRow(input)).returning(PUBLIC_PRINTER_COLUMNS)
+          ).at(0);
+          if (!newPrinter) {
+            throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Error al crear la Impresora" });
+          }
+          return { item: newPrinter };
+        } catch (error) {
+          handleMutationError({ error });
         }
-        return { item: newPrinter };
+      }),
+    ),
+  update: adminProcedure
+    .meta({ writes: [dbTablePrinter] })
+    .input(updatePrinterSchema)
+    .mutation(async ({ ctx, input }) =>
+      ctx.db.transaction(async (tx) => {
+        try {
+          const { id, ...fields } = input;
+          const updatedPrinter = (
+            await tx
+              .update(dbTablePrinter)
+              .set(toPrinterRow(fields))
+              .where(eq(dbTablePrinter.id, id))
+              .returning(PUBLIC_PRINTER_COLUMNS)
+          ).at(0);
+          if (!updatedPrinter) {
+            throw new TRPCError({ code: "NOT_FOUND", message: PRINTER_NOT_FOUND_MESSAGE(id) });
+          }
+          return { item: updatedPrinter };
+        } catch (error) {
+          handleMutationError({ error });
+        }
+      }),
+    ),
+  delete: adminProcedure
+    .meta({ writes: [dbTablePrinter] })
+    .input(requiredIdObjectSchema)
+    .mutation(async ({ ctx, input }) =>
+      ctx.db.transaction(async (tx) => {
+        try {
+          const deletedPrinter = (
+            await tx.delete(dbTablePrinter).where(eq(dbTablePrinter.id, input.id)).returning(PUBLIC_PRINTER_COLUMNS)
+          ).at(0);
+          if (!deletedPrinter) {
+            throw new TRPCError({ code: "NOT_FOUND", message: PRINTER_NOT_FOUND_MESSAGE(input.id) });
+          }
+          return { item: deletedPrinter };
+        } catch (error) {
+          handleMutationError({ error });
+        }
+      }),
+    ),
+  ping: adminProcedure
+    .meta({ writes: [] })
+    .input(requiredIdObjectSchema)
+    .mutation(async ({ ctx, input }) => {
+      const printer = await getPrinter(ctx.db, input.id);
+      try {
+        await pingPrinter(printer);
       } catch (error) {
-        handleMutationError({ error });
+        logger.error(LogMessages.printerPingFailed, { error, printerId: printer.id });
+        throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: PRINTER_NOT_RESPONDING_MESSAGE(printer.name) });
       }
     }),
-  ),
-  update: adminProcedure.input(updatePrinterSchema).mutation(async ({ ctx, input }) =>
-    ctx.db.transaction(async (tx) => {
-      try {
-        const { id, ...fields } = input;
-        const updatedPrinter = (
-          await tx
-            .update(dbTablePrinter)
-            .set(toPrinterRow(fields))
-            .where(eq(dbTablePrinter.id, id))
-            .returning(PUBLIC_PRINTER_COLUMNS)
-        ).at(0);
-        if (!updatedPrinter) {
-          throw new TRPCError({ code: "NOT_FOUND", message: PRINTER_NOT_FOUND_MESSAGE(id) });
-        }
-        return { item: updatedPrinter };
-      } catch (error) {
-        handleMutationError({ error });
-      }
-    }),
-  ),
-  delete: adminProcedure.input(requiredIdObjectSchema).mutation(async ({ ctx, input }) =>
-    ctx.db.transaction(async (tx) => {
-      try {
-        const deletedPrinter = (
-          await tx.delete(dbTablePrinter).where(eq(dbTablePrinter.id, input.id)).returning(PUBLIC_PRINTER_COLUMNS)
-        ).at(0);
-        if (!deletedPrinter) {
-          throw new TRPCError({ code: "NOT_FOUND", message: PRINTER_NOT_FOUND_MESSAGE(input.id) });
-        }
-        return { item: deletedPrinter };
-      } catch (error) {
-        handleMutationError({ error });
-      }
-    }),
-  ),
-  ping: adminProcedure.input(requiredIdObjectSchema).mutation(async ({ ctx, input }) => {
-    const printer = await getPrinter(ctx.db, input.id);
-    try {
-      await pingPrinter(printer);
-    } catch (error) {
-      logger.error(LogMessages.printerPingFailed, { error, printerId: printer.id });
-      throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: PRINTER_NOT_RESPONDING_MESSAGE(printer.name) });
-    }
-  }),
-  print: procedure.input(printFileSchema).mutation(async ({ ctx, input }) => {
-    const printer = await getPrinter(ctx.db, input.printerId);
+  print: procedure
+    .meta({ writes: [] })
+    .input(printFileSchema)
+    .mutation(async ({ ctx, input }) => {
+      const printer = await getPrinter(ctx.db, input.printerId);
 
-    let pdf: Buffer;
-    try {
-      const response = await fetch(`${APP_URL}${input.filePath}`, {
-        headers: ctx.cookie === null ? undefined : { Cookie: ctx.cookie },
-      });
-      if (!response.ok) {
-        throw new Error(`The file request answered with HTTP ${response.status}`);
+      let pdf: Buffer;
+      try {
+        const response = await fetch(`${APP_URL}${input.filePath}`, {
+          headers: ctx.cookie === null ? undefined : { Cookie: ctx.cookie },
+        });
+        if (!response.ok) {
+          throw new Error(`The file request answered with HTTP ${response.status}`);
+        }
+        pdf = Buffer.from(await response.arrayBuffer());
+      } catch (error) {
+        logger.error(LogMessages.printerFileReadFailed, { error, filePath: input.filePath });
+        throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: PRINTER_FILE_UNAVAILABLE_MESSAGE });
       }
-      pdf = Buffer.from(await response.arrayBuffer());
-    } catch (error) {
-      logger.error(LogMessages.printerFileReadFailed, { error, filePath: input.filePath });
-      throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: PRINTER_FILE_UNAVAILABLE_MESSAGE });
-    }
 
-    try {
-      await printPdfOnPrinter(printer, pdf);
-    } catch (error) {
-      logger.error(LogMessages.printerPrintFailed, { error, printerId: printer.id });
-      throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: PRINTER_UNREACHABLE_MESSAGE(printer.name) });
-    }
-  }),
+      try {
+        await printPdfOnPrinter(printer, pdf);
+      } catch (error) {
+        logger.error(LogMessages.printerPrintFailed, { error, printerId: printer.id });
+        throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: PRINTER_UNREACHABLE_MESSAGE(printer.name) });
+      }
+    }),
 });

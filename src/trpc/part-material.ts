@@ -16,41 +16,47 @@ const uniqueConstraints = [
 ];
 
 export default router({
-  addMaterialToPart: adminProcedure.input(partMaterialSchema).mutation(async ({ ctx, input }) =>
-    ctx.db.transaction(async (tx) => {
-      try {
-        const newPartMaterial = (await tx.insert(dbTablePartMaterial).values(input).returning()).at(0);
-        return { item: newPartMaterial };
-      } catch (error) {
-        handleMutationError({ error, uniqueConstraints });
-      }
-    }),
-  ),
-  deleteMaterialFromPart: adminProcedure.input(partMaterialSchema).mutation(async ({ ctx, input }) =>
-    ctx.db.transaction(async (tx) => {
-      try {
-        const deletedPartMaterial = (
-          await tx
-            .delete(dbTablePartMaterial)
-            .where(
-              and(eq(dbTablePartMaterial.partId, input.partId), eq(dbTablePartMaterial.materialId, input.materialId)),
-            )
-            .returning()
-        ).at(0);
-        const updatedPart = await getPartById(input.partId, tx);
-        if (!updatedPart) {
-          throw new TRPCError({ code: "NOT_FOUND", message: `El Artículo con ID ${input.partId} no existe` });
+  addMaterialToPart: adminProcedure
+    .meta({ writes: [dbTablePartMaterial] })
+    .input(partMaterialSchema)
+    .mutation(async ({ ctx, input }) =>
+      ctx.db.transaction(async (tx) => {
+        try {
+          const newPartMaterial = (await tx.insert(dbTablePartMaterial).values(input).returning()).at(0);
+          return { item: newPartMaterial };
+        } catch (error) {
+          handleMutationError({ error, uniqueConstraints });
         }
-        if (!deletedPartMaterial) {
-          throw new TRPCError({
-            code: "NOT_FOUND",
-            message: `El Artículo "${updatedPart.description}" no utiliza el Material ${input.materialId}`,
-          });
+      }),
+    ),
+  deleteMaterialFromPart: adminProcedure
+    .meta({ writes: [dbTablePartMaterial] })
+    .input(partMaterialSchema)
+    .mutation(async ({ ctx, input }) =>
+      ctx.db.transaction(async (tx) => {
+        try {
+          const deletedPartMaterial = (
+            await tx
+              .delete(dbTablePartMaterial)
+              .where(
+                and(eq(dbTablePartMaterial.partId, input.partId), eq(dbTablePartMaterial.materialId, input.materialId)),
+              )
+              .returning()
+          ).at(0);
+          const updatedPart = await getPartById(input.partId, tx);
+          if (!updatedPart) {
+            throw new TRPCError({ code: "NOT_FOUND", message: `El Artículo con ID ${input.partId} no existe` });
+          }
+          if (!deletedPartMaterial) {
+            throw new TRPCError({
+              code: "NOT_FOUND",
+              message: `El Artículo "${updatedPart.description}" no utiliza el Material ${input.materialId}`,
+            });
+          }
+          return { item: deletedPartMaterial };
+        } catch (error) {
+          handleMutationError({ error });
         }
-        return { item: deletedPartMaterial };
-      } catch (error) {
-        handleMutationError({ error });
-      }
-    }),
-  ),
+      }),
+    ),
 });

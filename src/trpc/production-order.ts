@@ -10,7 +10,7 @@ import { getPartReferenceById, getPartReferencesByPartId } from "@/db/functions/
 import { getProductionOrderById } from "@/db/functions/production-order";
 import { getSellOrderById } from "@/db/functions/sell-order";
 import { getSellOrderLineById } from "@/db/functions/sell-order-line";
-import { dbTableProductionOrder } from "@/db/schema";
+import { dbTableMachine, dbTableMachineProductionOrderQueue, dbTableProductionOrder } from "@/db/schema";
 import { printTagPart } from "@/files/part-tag";
 import { handleMutationError } from "@/lib/handlers";
 import { getPartTagName, getTagSellOrder, PartTagSource } from "@/lib/part-tag";
@@ -60,149 +60,168 @@ async function assertSellOrderLineCanBeProduced(sellOrderLineId: number, partId:
 }
 
 export default router({
-  create: adminProcedure.input(createProductionOrderSchema).mutation(async ({ ctx, input }) =>
-    ctx.db.transaction(async (tx) => {
-      try {
-        const part = await getPartById(input.partId, tx);
-        if (!part) {
-          throw new TRPCError({ code: "NOT_FOUND", message: `Artículo con ID ${input.partId} no encontrado` });
-        }
-        if (part.deletedAt !== null) {
-          throw new TRPCError({ code: "BAD_REQUEST", message: `El Artículo "${part.description}" está eliminado` });
-        }
-        if (input.sellOrderLineId !== null) {
-          await assertSellOrderLineCanBeProduced(input.sellOrderLineId, input.partId, tx);
-        }
-        const newProductionOrder = (
-          await tx
-            .insert(dbTableProductionOrder)
-            .values({ ...input, createdAt: new Date() })
-            .returning()
-        ).at(0);
+  create: adminProcedure
+    .meta({ writes: [dbTableProductionOrder] })
+    .input(createProductionOrderSchema)
+    .mutation(async ({ ctx, input }) =>
+      ctx.db.transaction(async (tx) => {
+        try {
+          const part = await getPartById(input.partId, tx);
+          if (!part) {
+            throw new TRPCError({ code: "NOT_FOUND", message: `Artículo con ID ${input.partId} no encontrado` });
+          }
+          if (part.deletedAt !== null) {
+            throw new TRPCError({ code: "BAD_REQUEST", message: `El Artículo "${part.description}" está eliminado` });
+          }
+          if (input.sellOrderLineId !== null) {
+            await assertSellOrderLineCanBeProduced(input.sellOrderLineId, input.partId, tx);
+          }
+          const newProductionOrder = (
+            await tx
+              .insert(dbTableProductionOrder)
+              .values({ ...input, createdAt: new Date() })
+              .returning()
+          ).at(0);
 
-        if (!newProductionOrder) {
-          throw new TRPCError({
-            code: "INTERNAL_SERVER_ERROR",
-            message: "Error al crear la Orden de producción",
-          });
+          if (!newProductionOrder) {
+            throw new TRPCError({
+              code: "INTERNAL_SERVER_ERROR",
+              message: "Error al crear la Orden de producción",
+            });
+          }
+          return { item: newProductionOrder };
+        } catch (error) {
+          handleMutationError({ error });
         }
-        return { item: newProductionOrder };
-      } catch (error) {
-        handleMutationError({ error });
-      }
-    }),
-  ),
-  update: adminProcedure.input(updateProductionOrderSchema).mutation(async ({ ctx, input }) =>
-    ctx.db.transaction(async (tx) => {
-      try {
-        const updatedProductionOrder = (
-          await tx.update(dbTableProductionOrder).set(input).where(eq(dbTableProductionOrder.id, input.id)).returning()
-        ).at(0);
-        if (!updatedProductionOrder) {
-          throw new TRPCError({
-            code: "NOT_FOUND",
-            message: `Orden de producción con ID ${input.id} no encontrada`,
-          });
+      }),
+    ),
+  update: adminProcedure
+    .meta({ writes: [dbTableProductionOrder] })
+    .input(updateProductionOrderSchema)
+    .mutation(async ({ ctx, input }) =>
+      ctx.db.transaction(async (tx) => {
+        try {
+          const updatedProductionOrder = (
+            await tx
+              .update(dbTableProductionOrder)
+              .set(input)
+              .where(eq(dbTableProductionOrder.id, input.id))
+              .returning()
+          ).at(0);
+          if (!updatedProductionOrder) {
+            throw new TRPCError({
+              code: "NOT_FOUND",
+              message: `Orden de producción con ID ${input.id} no encontrada`,
+            });
+          }
+          return { item: updatedProductionOrder };
+        } catch (error) {
+          handleMutationError({ error });
         }
-        return { item: updatedProductionOrder };
-      } catch (error) {
-        handleMutationError({ error });
-      }
-    }),
-  ),
-  delete: adminProcedure.input(requiredIdObjectSchema).mutation(async ({ ctx, input }) =>
-    ctx.db.transaction(async (tx) => {
-      try {
-        const deletedProductionOrder = (
-          await tx
-            .update(dbTableProductionOrder)
-            .set({ deletedAt: new Date() })
-            .where(eq(dbTableProductionOrder.id, input.id))
-            .returning()
-        ).at(0);
-        if (!deletedProductionOrder) {
-          throw new TRPCError({
-            code: "NOT_FOUND",
-            message: `Orden de producción con ID ${input.id} no encontrada`,
-          });
+      }),
+    ),
+  delete: adminProcedure
+    .meta({ writes: [dbTableMachine, dbTableMachineProductionOrderQueue, dbTableProductionOrder] })
+    .input(requiredIdObjectSchema)
+    .mutation(async ({ ctx, input }) =>
+      ctx.db.transaction(async (tx) => {
+        try {
+          const deletedProductionOrder = (
+            await tx
+              .update(dbTableProductionOrder)
+              .set({ deletedAt: new Date() })
+              .where(eq(dbTableProductionOrder.id, input.id))
+              .returning()
+          ).at(0);
+          if (!deletedProductionOrder) {
+            throw new TRPCError({
+              code: "NOT_FOUND",
+              message: `Orden de producción con ID ${input.id} no encontrada`,
+            });
+          }
+          await removeProductionOrdersFromMachines([deletedProductionOrder.id], tx);
+          return { item: deletedProductionOrder };
+        } catch (error) {
+          handleMutationError({ error });
         }
-        await removeProductionOrdersFromMachines([deletedProductionOrder.id], tx);
-        return { item: deletedProductionOrder };
-      } catch (error) {
-        handleMutationError({ error });
-      }
-    }),
-  ),
-  restore: adminProcedure.input(requiredIdObjectSchema).mutation(async ({ ctx, input }) =>
-    ctx.db.transaction(async (tx) => {
-      try {
-        const restoredProductionOrder = (
-          await tx
-            .update(dbTableProductionOrder)
-            .set({ deletedAt: null })
-            .where(and(eq(dbTableProductionOrder.id, input.id), isNotNull(dbTableProductionOrder.deletedAt)))
-            .returning()
-        ).at(0);
-        if (!restoredProductionOrder) {
-          throw new TRPCError({
-            code: "NOT_FOUND",
-            message: `Orden de producción con ID ${input.id} no encontrada o no eliminada`,
-          });
+      }),
+    ),
+  restore: adminProcedure
+    .meta({ writes: [dbTableProductionOrder] })
+    .input(requiredIdObjectSchema)
+    .mutation(async ({ ctx, input }) =>
+      ctx.db.transaction(async (tx) => {
+        try {
+          const restoredProductionOrder = (
+            await tx
+              .update(dbTableProductionOrder)
+              .set({ deletedAt: null })
+              .where(and(eq(dbTableProductionOrder.id, input.id), isNotNull(dbTableProductionOrder.deletedAt)))
+              .returning()
+          ).at(0);
+          if (!restoredProductionOrder) {
+            throw new TRPCError({
+              code: "NOT_FOUND",
+              message: `Orden de producción con ID ${input.id} no encontrada o no eliminada`,
+            });
+          }
+          return { item: restoredProductionOrder };
+        } catch (error) {
+          handleMutationError({ error });
         }
-        return { item: restoredProductionOrder };
-      } catch (error) {
-        handleMutationError({ error });
+      }),
+    ),
+  printTag: procedure
+    .meta({ writes: [] })
+    .input(printTagPartProductionSchema)
+    .mutation(async ({ input }) => {
+      const productionOrder = await getProductionOrderById(input.productionOrderId);
+      if (!productionOrder) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: `Orden de producción con ID ${input.productionOrderId} no encontrada`,
+        });
       }
-    }),
-  ),
-  printTag: procedure.input(printTagPartProductionSchema).mutation(async ({ input }) => {
-    const productionOrder = await getProductionOrderById(input.productionOrderId);
-    if (!productionOrder) {
-      throw new TRPCError({
-        code: "NOT_FOUND",
-        message: `Orden de producción con ID ${input.productionOrderId} no encontrada`,
+
+      const part = await getPartById(productionOrder.partId);
+      if (!part) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: `Artículo con ID ${productionOrder.partId} no encontrado`,
+        });
+      }
+
+      const sellOrderLine =
+        productionOrder.sellOrderLineId !== null
+          ? await getSellOrderLineById(productionOrder.sellOrderLineId)
+          : undefined;
+      const sellOrder = sellOrderLine !== undefined ? await getSellOrderById(sellOrderLine.sellOrderId) : undefined;
+      let partReference: BasePartReference | undefined;
+      if (sellOrderLine?.partReferenceId != null) {
+        partReference = await getPartReferenceById(sellOrderLine.partReferenceId);
+      } else {
+        // Without a Pedido de venta the Referencia is only unambiguous when the Artículo has a single one
+        const partReferences = await getPartReferencesByPartId(part.id);
+        partReference = partReferences.length === 1 ? partReferences[0] : undefined;
+      }
+
+      const coating = part.coatingId !== null ? await getCoatingById(part.coatingId) : undefined;
+      // Without a Pedido de venta, the Cliente is the one of the Referencia, if it has one
+      const clientId = sellOrder?.clientId ?? partReference?.clientId;
+      const client = clientId != null ? await getClientById(clientId) : undefined;
+
+      await printTagPart({
+        clientName: client?.name,
+        coatingName: coating?.name,
+        partDescription: part.description,
+        reference: partReference?.reference,
+        sellOrders:
+          sellOrder !== undefined
+            ? [getTagSellOrder(sellOrder, sellOrderLine?.requestedDeliveryDate ?? null, Infinity)]
+            : [],
+        labelSize: input.labelSize,
+        tagGroups: [{ partQuantity: input.partQuantity, tagQuantity: 1 }],
+        tagName: getPartTagName(PartTagSource.ProductionOrder, productionOrder.id),
       });
-    }
-
-    const part = await getPartById(productionOrder.partId);
-    if (!part) {
-      throw new TRPCError({
-        code: "NOT_FOUND",
-        message: `Artículo con ID ${productionOrder.partId} no encontrado`,
-      });
-    }
-
-    const sellOrderLine =
-      productionOrder.sellOrderLineId !== null
-        ? await getSellOrderLineById(productionOrder.sellOrderLineId)
-        : undefined;
-    const sellOrder = sellOrderLine !== undefined ? await getSellOrderById(sellOrderLine.sellOrderId) : undefined;
-    let partReference: BasePartReference | undefined;
-    if (sellOrderLine?.partReferenceId != null) {
-      partReference = await getPartReferenceById(sellOrderLine.partReferenceId);
-    } else {
-      // Without a Pedido de venta the Referencia is only unambiguous when the Artículo has a single one
-      const partReferences = await getPartReferencesByPartId(part.id);
-      partReference = partReferences.length === 1 ? partReferences[0] : undefined;
-    }
-
-    const coating = part.coatingId !== null ? await getCoatingById(part.coatingId) : undefined;
-    // Without a Pedido de venta, the Cliente is the one of the Referencia, if it has one
-    const clientId = sellOrder?.clientId ?? partReference?.clientId;
-    const client = clientId != null ? await getClientById(clientId) : undefined;
-
-    await printTagPart({
-      clientName: client?.name,
-      coatingName: coating?.name,
-      partDescription: part.description,
-      reference: partReference?.reference,
-      sellOrders:
-        sellOrder !== undefined
-          ? [getTagSellOrder(sellOrder, sellOrderLine?.requestedDeliveryDate ?? null, Infinity)]
-          : [],
-      labelSize: input.labelSize,
-      tagGroups: [{ partQuantity: input.partQuantity, tagQuantity: 1 }],
-      tagName: getPartTagName(PartTagSource.ProductionOrder, productionOrder.id),
-    });
-  }),
+    }),
 });

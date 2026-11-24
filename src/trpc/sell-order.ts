@@ -8,6 +8,8 @@ import type { TDatabase } from "@/db";
 import { removeProductionOrdersFromMachines } from "@/db/functions/machine-production-order-queue";
 import {
   SELL_ORDER_REFERENCE_CONSTRAINT,
+  dbTableMachine,
+  dbTableMachineProductionOrderQueue,
   dbTableProductionOrder,
   dbTableSellOrder,
   dbTableSellOrderLine,
@@ -64,147 +66,162 @@ async function saveSellOrderFile(
 }
 
 export default router({
-  create: adminProcedure.input(createSellOrderFormDataSchema).mutation(async ({ ctx, input }) =>
-    removeOnRollback(async (createdPaths) =>
-      ctx.db.transaction(async (tx) => {
-        try {
-          const { sellOrderFile, ...sellOrder } = input;
-          const newSellOrder = (
-            await tx
-              .insert(dbTableSellOrder)
-              .values({ ...sellOrder, fileUploadedAt: sellOrderFile != null ? new Date() : null })
-              .returning()
-          ).at(0);
+  create: adminProcedure
+    .meta({ writes: [dbTableSellOrder] })
+    .input(createSellOrderFormDataSchema)
+    .mutation(async ({ ctx, input }) =>
+      removeOnRollback(async (createdPaths) =>
+        ctx.db.transaction(async (tx) => {
+          try {
+            const { sellOrderFile, ...sellOrder } = input;
+            const newSellOrder = (
+              await tx
+                .insert(dbTableSellOrder)
+                .values({ ...sellOrder, fileUploadedAt: sellOrderFile != null ? new Date() : null })
+                .returning()
+            ).at(0);
 
-          if (!newSellOrder) {
-            throw new TRPCError({
-              code: "INTERNAL_SERVER_ERROR",
-              message: "Error al crear el Pedido de venta",
-            });
-          }
+            if (!newSellOrder) {
+              throw new TRPCError({
+                code: "INTERNAL_SERVER_ERROR",
+                message: "Error al crear el Pedido de venta",
+              });
+            }
 
-          if (sellOrderFile != null) {
-            await saveSellOrderFile(newSellOrder, sellOrderFile, tx, createdPaths);
+            if (sellOrderFile != null) {
+              await saveSellOrderFile(newSellOrder, sellOrderFile, tx, createdPaths);
+            }
+            return { item: newSellOrder };
+          } catch (error) {
+            handleMutationError({ error, uniqueConstraints });
           }
-          return { item: newSellOrder };
-        } catch (error) {
-          handleMutationError({ error, uniqueConstraints });
-        }
-      }),
+        }),
+      ),
     ),
-  ),
-  update: adminProcedure.input(updateSellOrderFormDataSchema).mutation(async ({ ctx, input }) =>
-    removeOnRollback(async (createdPaths) =>
+  update: adminProcedure
+    .meta({ writes: [dbTableSellOrder] })
+    .input(updateSellOrderFormDataSchema)
+    .mutation(async ({ ctx, input }) =>
+      removeOnRollback(async (createdPaths) =>
+        ctx.db.transaction(async (tx) => {
+          try {
+            const { sellOrderFile, ...sellOrder } = input;
+            const updatedSellOrder = (
+              await tx
+                .update(dbTableSellOrder)
+                .set({ ...sellOrder, ...(sellOrderFile != null ? { fileUploadedAt: new Date() } : {}) })
+                .where(eq(dbTableSellOrder.id, input.id))
+                .returning()
+            ).at(0);
+            if (!updatedSellOrder) {
+              throw new TRPCError({
+                code: "NOT_FOUND",
+                message: `Pedido de venta con ID ${input.id} no encontrado`,
+              });
+            }
+            if (sellOrderFile != null) {
+              await saveSellOrderFile(updatedSellOrder, sellOrderFile, tx, createdPaths);
+            }
+            return { item: updatedSellOrder };
+          } catch (error) {
+            handleMutationError({ error, uniqueConstraints });
+          }
+        }),
+      ),
+    ),
+  delete: adminProcedure
+    .meta({ writes: [dbTableMachine, dbTableMachineProductionOrderQueue, dbTableSellOrder] })
+    .input(requiredIdObjectSchema)
+    .mutation(async ({ ctx, input }) =>
       ctx.db.transaction(async (tx) => {
         try {
-          const { sellOrderFile, ...sellOrder } = input;
-          const updatedSellOrder = (
+          const deletedSellOrder = (
             await tx
               .update(dbTableSellOrder)
-              .set({ ...sellOrder, ...(sellOrderFile != null ? { fileUploadedAt: new Date() } : {}) })
+              .set({ deletedAt: new Date() })
               .where(eq(dbTableSellOrder.id, input.id))
               .returning()
           ).at(0);
-          if (!updatedSellOrder) {
+          if (!deletedSellOrder) {
             throw new TRPCError({
               code: "NOT_FOUND",
               message: `Pedido de venta con ID ${input.id} no encontrado`,
             });
           }
-          if (sellOrderFile != null) {
-            await saveSellOrderFile(updatedSellOrder, sellOrderFile, tx, createdPaths);
+          const productionOrders = await tx
+            .select({ id: dbTableProductionOrder.id })
+            .from(dbTableProductionOrder)
+            .innerJoin(dbTableSellOrderLine, eq(dbTableProductionOrder.sellOrderLineId, dbTableSellOrderLine.id))
+            .where(eq(dbTableSellOrderLine.sellOrderId, input.id));
+          await removeProductionOrdersFromMachines(
+            productionOrders.map((productionOrder) => productionOrder.id),
+            tx,
+          );
+          return { item: deletedSellOrder };
+        } catch (error) {
+          handleMutationError({ error });
+        }
+      }),
+    ),
+  restore: adminProcedure
+    .meta({ writes: [dbTableSellOrder] })
+    .input(requiredIdSchema)
+    .mutation(async ({ ctx, input }) =>
+      ctx.db.transaction(async (tx) => {
+        try {
+          const restoredSellOrder = (
+            await tx
+              .update(dbTableSellOrder)
+              .set({ deletedAt: null })
+              .where(and(eq(dbTableSellOrder.id, input), isNotNull(dbTableSellOrder.deletedAt)))
+              .returning()
+          ).at(0);
+          if (!restoredSellOrder) {
+            throw new TRPCError({
+              code: "NOT_FOUND",
+              message: `Pedido de venta con ID ${input} no encontrado o no eliminado`,
+            });
           }
-          return { item: updatedSellOrder };
+          return { item: restoredSellOrder };
         } catch (error) {
           handleMutationError({ error, uniqueConstraints });
         }
       }),
     ),
-  ),
-  delete: adminProcedure.input(requiredIdObjectSchema).mutation(async ({ ctx, input }) =>
-    ctx.db.transaction(async (tx) => {
-      try {
-        const deletedSellOrder = (
-          await tx
-            .update(dbTableSellOrder)
-            .set({ deletedAt: new Date() })
-            .where(eq(dbTableSellOrder.id, input.id))
-            .returning()
-        ).at(0);
-        if (!deletedSellOrder) {
-          throw new TRPCError({
-            code: "NOT_FOUND",
-            message: `Pedido de venta con ID ${input.id} no encontrado`,
+  deleteFile: adminProcedure
+    .meta({ writes: [dbTableSellOrder] })
+    .input(requiredIdSchema)
+    .mutation(async ({ ctx, input: sellOrderId }) =>
+      ctx.db.transaction(async (tx) => {
+        try {
+          const updatedSellOrder = (
+            await tx
+              .update(dbTableSellOrder)
+              .set({ fileUploadedAt: null })
+              .where(eq(dbTableSellOrder.id, sellOrderId))
+              .returning()
+          ).at(0);
+          if (!updatedSellOrder) {
+            throw new TRPCError({
+              code: "NOT_FOUND",
+              message: `Pedido de venta con ID ${sellOrderId} no encontrado`,
+            });
+          }
+          const filePath = await getSellOrderPath({ clientId: updatedSellOrder.clientId, sellOrderId }, tx);
+          if (filePath === null) {
+            throw new TRPCError({
+              code: "NOT_FOUND",
+              message: `No se encontró la ruta del archivo para el Pedido de venta con ID ${sellOrderId}`,
+            });
+          }
+          await renameFile({
+            filePath,
+            newFileName: `DELETED_${dateToFileName(new Date())}.${sellOrderId}.pdf`,
           });
+          return { item: updatedSellOrder };
+        } catch (error) {
+          handleMutationError({ error });
         }
-        const productionOrders = await tx
-          .select({ id: dbTableProductionOrder.id })
-          .from(dbTableProductionOrder)
-          .innerJoin(dbTableSellOrderLine, eq(dbTableProductionOrder.sellOrderLineId, dbTableSellOrderLine.id))
-          .where(eq(dbTableSellOrderLine.sellOrderId, input.id));
-        await removeProductionOrdersFromMachines(
-          productionOrders.map((productionOrder) => productionOrder.id),
-          tx,
-        );
-        return { item: deletedSellOrder };
-      } catch (error) {
-        handleMutationError({ error });
-      }
-    }),
-  ),
-  restore: adminProcedure.input(requiredIdSchema).mutation(async ({ ctx, input }) =>
-    ctx.db.transaction(async (tx) => {
-      try {
-        const restoredSellOrder = (
-          await tx
-            .update(dbTableSellOrder)
-            .set({ deletedAt: null })
-            .where(and(eq(dbTableSellOrder.id, input), isNotNull(dbTableSellOrder.deletedAt)))
-            .returning()
-        ).at(0);
-        if (!restoredSellOrder) {
-          throw new TRPCError({
-            code: "NOT_FOUND",
-            message: `Pedido de venta con ID ${input} no encontrado o no eliminado`,
-          });
-        }
-        return { item: restoredSellOrder };
-      } catch (error) {
-        handleMutationError({ error, uniqueConstraints });
-      }
-    }),
-  ),
-  deleteFile: adminProcedure.input(requiredIdSchema).mutation(async ({ ctx, input: sellOrderId }) =>
-    ctx.db.transaction(async (tx) => {
-      try {
-        const updatedSellOrder = (
-          await tx
-            .update(dbTableSellOrder)
-            .set({ fileUploadedAt: null })
-            .where(eq(dbTableSellOrder.id, sellOrderId))
-            .returning()
-        ).at(0);
-        if (!updatedSellOrder) {
-          throw new TRPCError({
-            code: "NOT_FOUND",
-            message: `Pedido de venta con ID ${sellOrderId} no encontrado`,
-          });
-        }
-        const filePath = await getSellOrderPath({ clientId: updatedSellOrder.clientId, sellOrderId }, tx);
-        if (filePath === null) {
-          throw new TRPCError({
-            code: "NOT_FOUND",
-            message: `No se encontró la ruta del archivo para el Pedido de venta con ID ${sellOrderId}`,
-          });
-        }
-        await renameFile({
-          filePath,
-          newFileName: `DELETED_${dateToFileName(new Date())}.${sellOrderId}.pdf`,
-        });
-        return { item: updatedSellOrder };
-      } catch (error) {
-        handleMutationError({ error });
-      }
-    }),
-  ),
+      }),
+    ),
 });
