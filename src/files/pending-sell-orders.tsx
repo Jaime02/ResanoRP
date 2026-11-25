@@ -3,9 +3,10 @@ import { Fragment } from "react";
 import ResanoLogo from "@/components/images/ResanoLogo";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { renderPdf, WRAPPING_CELL_CLASS_NAME } from "@/files";
+import { formatPendingQuantity } from "@/lib/formatters";
 import { getSellOrderLineStatusDisplay } from "@/lib/sell-order-line";
 import { cn } from "@/lib/utils";
-import { DESCRIPTION_LABEL, PART_LABEL, PENDING_LABEL, QUANTITY_LABEL, STATUS_LABEL } from "@/messages/common";
+import { DESCRIPTION_LABEL, PART_LABEL, PENDING_LABEL, STATUS_LABEL } from "@/messages/common";
 import {
   DELIVERY_LABEL,
   MANUFACTURE_LABEL,
@@ -61,7 +62,6 @@ function PendingSellOrdersDocument({ clientName, date, lines, withCheckboxes }: 
             <TableHeader className="w-px">{STATUS_LABEL}</TableHeader>
             <TableHeader>{PART_LABEL}</TableHeader>
             <TableHeader>{DESCRIPTION_LABEL}</TableHeader>
-            <TableHeader className="text-right">{QUANTITY_LABEL}</TableHeader>
             <TableHeader className="text-right">{PENDING_LABEL}</TableHeader>
             <TableHeader className="w-px">{DELIVERY_LABEL}</TableHeader>
             {withCheckboxes && (
@@ -88,8 +88,7 @@ function PendingSellOrdersDocument({ clientName, date, lines, withCheckboxes }: 
                   <TableCell className={cn("w-px", statusClassName)}>{statusText}</TableCell>
                   <TableCell className="font-bold">{line.reference ?? ""}</TableCell>
                   <TableCell className={cn(WRAPPING_CELL_CLASS_NAME, "text-xs")}>{line.description ?? ""}</TableCell>
-                  <TableCell className="w-px text-right">{line.quantity}</TableCell>
-                  <TableCell className="w-px text-right">{line.pendingQuantity}</TableCell>
+                  <TableCell className="w-px text-right">{formatPendingQuantity(line)}</TableCell>
                   <TableCell className="w-px">{line.requestedDeliveryDate ?? ""}</TableCell>
                   {withCheckboxes && (
                     <>
@@ -105,7 +104,7 @@ function PendingSellOrdersDocument({ clientName, date, lines, withCheckboxes }: 
                 {hasNotes && (
                   <TableRow compact rowType="subrow" variant="plain" style={{ breakInside: "avoid" }}>
                     <TableCell />
-                    <TableCell colSpan={withCheckboxes ? 9 : 7} className={WRAPPING_CELL_CLASS_NAME}>
+                    <TableCell colSpan={withCheckboxes ? 8 : 6} className={WRAPPING_CELL_CLASS_NAME}>
                       <span className="font-semibold">{SELL_ORDER_NOTES_LABEL}</span> {line.notes}
                     </TableCell>
                   </TableRow>

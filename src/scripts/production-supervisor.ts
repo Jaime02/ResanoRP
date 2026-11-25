@@ -98,7 +98,7 @@ const services: Array<TService> = [
 ];
 
 // PowerSync never compacts its storage on its own, and every change keeps the operations it replaced, which every new
-// browser downloads. backup.cmd runs this once a night, next to the running service
+// browser downloads. backup.cmd, start.cmd and refresh.cmd run this next to the running service
 if (process.argv[2] === "compact") {
   const result = spawnSync(path.join(bin, "node.exe"), [powerSyncEntry, "compact"], {
     env: { ...process.env, ...powerSyncEnv },

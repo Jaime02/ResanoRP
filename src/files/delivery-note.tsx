@@ -1,5 +1,6 @@
 import path from "node:path";
 
+import { Separator } from "@/components/ui/separator";
 import { renderPdf } from "@/files";
 import { FieldBox, SalesDocumentHeader, SalesDocumentLinesTable } from "@/files/sales-document";
 import type { TSalesDocumentClient, TSalesDocumentCompany, TSalesDocumentLine } from "@/files/sales-document";
@@ -29,18 +30,18 @@ function DocumentFooter({
   totalInCents: number | null;
 }) {
   return (
-    <div
-      className="flex items-start justify-between gap-4 border-t border-border pt-2"
-      style={{ breakInside: "avoid" }}
-    >
-      {deliveryMethodName !== null && <span>Transporte: {deliveryMethodName}</span>}
-      {withPrices && (
-        <FieldBox
-          className="ml-auto"
-          fields={[{ label: TOTAL_LABEL, value: formatCents(totalInCents) }]}
-          valueClassName="text-right"
-        />
-      )}
+    <div className="flex flex-col gap-2" style={{ breakInside: "avoid" }}>
+      <Separator thickness="thin" />
+      <div className="flex items-start justify-between gap-4">
+        {deliveryMethodName !== null && <span>Transporte: {deliveryMethodName}</span>}
+        {withPrices && (
+          <FieldBox
+            className="ml-auto"
+            fields={[{ label: TOTAL_LABEL, value: formatCents(totalInCents) }]}
+            valueClassName="text-right"
+          />
+        )}
+      </div>
     </div>
   );
 }

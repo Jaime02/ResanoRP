@@ -126,15 +126,19 @@ export function SalesDocumentHeader({ title, fields, company, client }: SalesDoc
   return (
     <div className="flex flex-col gap-3">
       <div className="flex flex-row items-center justify-between gap-4">
-        <ResanoLogo className="h-14" />
-        <img alt="Applus" className="w-12" src={getPublicImageDataUri("Applus.webp")} />
+        <ResanoLogo className="h-12" />
+        <img alt="Applus" className="w-10" src={getPublicImageDataUri("Applus.webp")} />
         <span className="flex-1 text-center text-4xl font-bold tracking-wider uppercase">{title}</span>
         <FieldBox fields={fields} />
       </div>
       <div className="flex flex-row gap-3">
         <div className="flex flex-1 shrink-0 flex-col text-sm whitespace-nowrap">
           {company.address !== null && <span>{company.address}</span>}
-          <span>{[company.postalCode, company.city, company.province].filter(Boolean).join(" ")}</span>
+          <span>
+            {[company.postalCode, [company.city, company.province].filter(Boolean).join(", ")]
+              .filter(Boolean)
+              .join(" ")}
+          </span>
           {company.phone !== null && (
             <LogoLabelContainer>
               <PhoneIcon size={14} />
@@ -158,7 +162,11 @@ export function SalesDocumentHeader({ title, fields, company, client }: SalesDoc
           <span className="text-xl font-bold">{client.legalName}</span>
           <div className="flex flex-col">
             {client.address !== null && <span>{client.address}</span>}
-            <span>{[client.postalCode, client.city, client.province, client.country].filter(Boolean).join(" ")}</span>
+            <span>
+              {[client.postalCode, [client.city, client.province].filter(Boolean).join(", "), client.country]
+                .filter(Boolean)
+                .join(" ")}
+            </span>
             {client.taxId !== null && <span>CIF / NIF: {client.taxId}</span>}
           </div>
         </div>

@@ -12,6 +12,9 @@ if not exist venv\Scripts\python.exe (
 )
 venv\Scripts\python -m pip install -q -r src\db\requirements.txt || goto :fail
 venv\Scripts\python src\db\refresh_production.py || goto :fail
+
+echo Compacting PowerSync's storage
+bin\bun.exe run supervisor.ts compact || echo PowerSync's compaction failed
 pause
 exit /b 0
 

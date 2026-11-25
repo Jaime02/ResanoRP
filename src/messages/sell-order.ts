@@ -76,6 +76,7 @@ export const SELL_ORDER_REFERENCE_IN_USE_MESSAGE = "Esta referencia ya está en 
 export const SELL_ORDER_LINE_CREATED_MESSAGE = "Línea de Pedido creada";
 export const LINE_WITHOUT_REFERENCE_LABEL = "Línea sin Referencia";
 export const SHOW_PREPARED_LINES_LABEL = "Mostrar líneas preparadas";
+export const SHOW_TOTAL_QUANTITY_LABEL = "Mostrar cantidad total";
 export const WITH_COLUMNS_LABEL = "Con columnas";
 export const WITHOUT_COLUMNS_LABEL = "Sin columnas";
 export const SELL_ORDER_REFERENCE_TAKEN_MESSAGE = "El Cliente ya tiene un Pedido de venta con esa referencia";

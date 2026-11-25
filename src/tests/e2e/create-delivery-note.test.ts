@@ -24,7 +24,7 @@ import {
   dbTableSellOrder,
   dbTableSellOrderLine,
 } from "@/db/schema";
-import { formatDate, formatPrice } from "@/lib/formatters";
+import { formatDate, formatPendingQuantity, formatPrice } from "@/lib/formatters";
 import { getTagClientText, PartTagSource, TAG_BARE_QUANTITY_MIN_SELL_ORDERS } from "@/lib/part-tag";
 import { formatCents, getLineTotalInCents } from "@/lib/prices";
 import { groupStagedSellOrderLines, sortPendingSellOrderLines } from "@/lib/sell-order-line";
@@ -62,6 +62,7 @@ import {
   openCombobox,
 } from "@/tests/utils/components/combobox";
 import { assertFormLoaded } from "@/tests/utils/components/form";
+import { closePopover, openPopover } from "@/tests/utils/components/popover";
 import {
   assertTableRowCount,
   getDivDisabledMessage,
@@ -110,11 +111,13 @@ import { ToastType } from "@/types/toast";
 let tablePendingSellOrderLines: Locator;
 let tableStagedSellOrderLines: Locator;
 let buttonSubmitFormDeliveryNote: Locator;
+let buttonPendingSettings: Locator;
 
 test.beforeEach(({ page }) => {
   tablePendingSellOrderLines = page.getByTestId("table-pending-sell-orders");
   tableStagedSellOrderLines = page.getByTestId("table-staged-sell-order-lines");
   buttonSubmitFormDeliveryNote = getButtonSubmitFormDeliveryNote(page);
+  buttonPendingSettings = page.getByTestId("popover-pending-sell-order-lines-settings").getByTestId("popover-trigger");
 });
 
 // Waiting for a lock, either the one of the test or the one of another request
@@ -169,8 +172,16 @@ for (const selectedClient of clientsWithPendingLines) {
         await workflowOpenCreateDeliveryNoteForClient(page, selectedClient);
 
         await expect(sellOrderLineRow.getByTestId("pendingQuantity")).toHaveText(
-          String(pendingSellOrderLine.pendingQuantity),
+          formatPendingQuantity(pendingSellOrderLine),
         );
+
+        await expect(sellOrderLineRow.getByTestId("quantity")).toHaveCount(0);
+        await openPopover(buttonPendingSettings);
+        await page.getByTestId("checkbox-show-quantity").click();
+        await expect(sellOrderLineRow.getByTestId("quantity")).toHaveText(String(pendingSellOrderLine.quantity));
+        await page.getByTestId("checkbox-show-quantity").click();
+        await expect(sellOrderLineRow.getByTestId("quantity")).toHaveCount(0);
+        await closePopover(page, buttonPendingSettings);
 
         const stagedSellOrderLineRow = await workflowStageSingleSellOrderLine(page, pendingSellOrderLine.id);
         const inputStagedQuantity = getEditableCellById(stagedSellOrderLineRow, "quantity");
@@ -220,7 +231,7 @@ for (const selectedClient of clientsWithPendingLines) {
         await workflowOpenCreateDeliveryNoteForClient(page, selectedClient);
 
         await expect(sellOrderLineRow.getByTestId("pendingQuantity")).toHaveText(
-          String(pendingSellOrderLine.pendingQuantity),
+          formatPendingQuantity(pendingSellOrderLine),
         );
 
         const stagedSellOrderLineRow = await workflowStageSingleSellOrderLine(page, pendingSellOrderLine.id);
@@ -248,7 +259,10 @@ for (const selectedClient of clientsWithPendingLines) {
         );
 
         await expect(sellOrderLineRow.getByTestId("pendingQuantity")).toHaveText(
-          String(pendingSellOrderLine.pendingQuantity - quantityToStage),
+          formatPendingQuantity({
+            pendingQuantity: pendingSellOrderLine.pendingQuantity - quantityToStage,
+            quantity: pendingSellOrderLine.quantity,
+          }),
         );
 
         await expect(getDivDisabledMessage(tableStagedSellOrderLines)).toBeVisible();
@@ -269,7 +283,7 @@ for (const selectedClient of clientsWithPendingLines) {
         );
 
         await expect(sellOrderLineRow.getByTestId("pendingQuantity")).toHaveText(
-          String(pendingSellOrderLine.pendingQuantity),
+          formatPendingQuantity(pendingSellOrderLine),
         );
 
         // Deleting the delivery note removes its transaction, so the stock is back to what it was
@@ -900,10 +914,15 @@ for (const client of clientsWithPendingLines) {
         await expect(getTableRowByTestId(tablePendingSellOrderLines, earliestLine.id)).toHaveCount(0);
         await expect(
           getTableRowByTestId(tablePendingSellOrderLines, mockFirstLine.id).getByTestId("pendingQuantity"),
-        ).toHaveText(String(mockFirstLine.pendingQuantity - servedOfMockFirstLine));
+        ).toHaveText(
+          formatPendingQuantity({
+            pendingQuantity: mockFirstLine.pendingQuantity - servedOfMockFirstLine,
+            quantity: mockFirstLine.quantity,
+          }),
+        );
         await expect(
           getTableRowByTestId(tablePendingSellOrderLines, mockLastLine.id).getByTestId("pendingQuantity"),
-        ).toHaveText(String(mockLastLine.pendingQuantity));
+        ).toHaveText(formatPendingQuantity(mockLastLine));
       });
 
       await test.step("the tag of a served line lists its Pedido", async () => {
@@ -1223,12 +1242,15 @@ for (const client of clientsWithPendingLines) {
     const otherLineRow = getTableRowByTestId(tablePendingSellOrderLines, otherLine.id);
 
     await workflowOpenCreateDeliveryNoteForClient(page, client);
+    await openPopover(buttonPendingSettings);
     await expect(checkboxShowStagedLines).not.toBeChecked();
+    await closePopover(page, buttonPendingSettings);
     await workflowStageSingleSellOrderLine(page, stagedLine.id);
 
     await expect(stagedLineRow).toHaveCount(0);
     await expect(otherLineRow).toBeVisible();
 
+    await openPopover(buttonPendingSettings);
     await checkboxShowStagedLines.click();
     await expect(checkboxShowStagedLines).toBeChecked();
     await expect(stagedLineRow).toBeVisible();
@@ -1237,6 +1259,7 @@ for (const client of clientsWithPendingLines) {
     await page.getByText(SHOW_PREPARED_LINES_LABEL).click();
     await expect(checkboxShowStagedLines).not.toBeChecked();
     await expect(stagedLineRow).toHaveCount(0);
+    await closePopover(page, buttonPendingSettings);
     await getTableRowByTestId(tableStagedSellOrderLines, stagedLine.id).getByTestId("button-unstage").click();
     await expect(stagedLineRow).toBeVisible();
     await expect(otherLineRow).toBeVisible();

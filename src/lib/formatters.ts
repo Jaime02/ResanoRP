@@ -91,6 +91,10 @@ export function formatPartUnits(quantity: number): string {
   return `${quantity} ${quantity === 1 ? "unidad" : "unidades"}`;
 }
 
+export function formatPendingQuantity({ pendingQuantity, quantity }: { pendingQuantity: number; quantity: number }) {
+  return pendingQuantity === quantity ? String(quantity) : `${pendingQuantity}/${quantity}`;
+}
+
 export function formatMaterial({ width, rawMaterialName }: { width: string; rawMaterialName?: string | null }): string {
   return rawMaterialName != null ? `${width} | ${rawMaterialName}` : width;
 }

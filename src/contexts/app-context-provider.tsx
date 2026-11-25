@@ -22,9 +22,25 @@ import { ToastType } from "@/types/toast";
 
 const DEFAULT_TOAST_TIMEOUT = 5000; // 5 seconds
 
-// Stable references so useSyncExternalStore does not resubscribe on every render.
-const subscribeToStorage = (callback: () => void) => AppContextStorage.subscribe(callback);
-const getStorageSnapshot = () => AppContextStorage.readCookie();
+// The cookie is read again only when the storage notifies a change: something outside the page, like the browser
+// clearing it, can change it between the two reads React does in one render, and React reports that as an uncached
+// snapshot. Stable references so useSyncExternalStore does not resubscribe on every render.
+let storageSnapshot: string | undefined;
+let isStorageSnapshotStale = true;
+const subscribeToStorage = (callback: () => void) => {
+  isStorageSnapshotStale = true;
+  return AppContextStorage.subscribe(() => {
+    isStorageSnapshotStale = true;
+    callback();
+  });
+};
+const getStorageSnapshot = () => {
+  if (isStorageSnapshotStale) {
+    storageSnapshot = AppContextStorage.readCookie();
+    isStorageSnapshotStale = false;
+  }
+  return storageSnapshot;
+};
 
 const toaster = Toast.createToastManager();
 

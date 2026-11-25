@@ -81,7 +81,7 @@ export default function Backoffice({ errors }: BackofficeProps) {
         <p className="text-muted-foreground">{getLogLinesNote(BACKOFFICE_MAX_LINES)}</p>
         <ErrorsLog lines={errors} />
       </TabsContent>
-      <TabsContent value="users" className="mx-0">
+      <TabsContent value="users">
         <TableUser createUser={createUser} editUserId={editUserId} state={tableUserState} />
       </TabsContent>
     </Tabs>

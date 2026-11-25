@@ -21,6 +21,9 @@ if exist import (
 call :start-service ResanoRP || goto :fail
 call :wait-for-app || goto :fail
 
+echo Compacting PowerSync's storage
+bin\bun.exe run supervisor.ts compact || echo PowerSync's compaction failed
+
 powershell -NoProfile -ExecutionPolicy Bypass -File trust-cert.ps1 -CertPath caddy\caddy\pki\authorities\local\root.crt -RemoveOtherCaddyRoots
 if exist caddy\caddy\pki\authorities\local\root.crt copy /y caddy\caddy\pki\authorities\local\root.crt client\root.crt >nul
 echo ResanoRP is running

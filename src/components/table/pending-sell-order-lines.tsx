@@ -1,4 +1,4 @@
-import { CheckIcon, PlusIcon } from "lucide-react";
+import { CheckIcon, PlusIcon, SettingsIcon } from "lucide-react";
 import { useMemo, useState } from "react";
 
 import DialogBlueprintViewer from "@/components/dialog/blueprint-viewer";
@@ -22,7 +22,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { InfoPopoverTrigger } from "@/components/ui/info-popover";
 import { Label } from "@/components/ui/label";
 import { ModelActions } from "@/components/ui/model-actions";
-import { Popover, PopoverContent } from "@/components/ui/popover";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { useAppContext } from "@/contexts/app-context";
 import type { useStageSellOrderLinesForm } from "@/form/hooks/use-stage-sell-order-lines";
 import { tableToClipboard } from "@/lib/clipboard";
@@ -46,6 +46,7 @@ import {
   SELECT_CLIENT_FOR_PENDING_SELL_ORDERS_MESSAGE,
   SELL_ORDER_LABEL,
   SHOW_PREPARED_LINES_LABEL,
+  SHOW_TOTAL_QUANTITY_LABEL,
 } from "@/messages/sell-order";
 import { useQueryProductionOrderStatusesBySellOrderLineIds } from "@/queries/production-order";
 import type { TPendingSellOrderLine } from "@/queries/sell-order-line";
@@ -136,6 +137,7 @@ export function TablePendingSellOrderLines({
 }: TablePendingSellOrderLinesProps) {
   const { isAdmin } = useAppContext();
   const [showStagedLines, setShowStagedLines] = useState(false);
+  const [showQuantity, setShowQuantity] = useState(false);
   const [state, setState] = useState<TTableState | undefined>(INITIAL_STATE);
   const [stateClientId, setStateClientId] = useState(clientId);
   if (clientId !== stateClientId) {
@@ -200,10 +202,14 @@ export function TablePendingSellOrderLines({
           size: DEFAULT_DESCRIPTION_COLUMN_SIZE,
         },
       ),
-      columnHelper.accessor("quantity", {
-        header: QUANTITY_LABEL,
-        id: "quantity",
-      }),
+      ...(showQuantity
+        ? [
+            columnHelper.accessor("quantity", {
+              header: QUANTITY_LABEL,
+              id: "quantity",
+            }),
+          ]
+        : []),
       columnHelper.accessor("pendingQuantity", {
         header: PENDING_LABEL,
         id: "pendingQuantity",
@@ -258,7 +264,7 @@ export function TablePendingSellOrderLines({
         size: TWO_BUTTONS_ACTIONS_COLUMN_SIZE,
       }),
     ],
-    [hasNotes, stageSellOrderLine, stagedSellOrderLines, canStageSellOrderLine],
+    [hasNotes, showQuantity, stageSellOrderLine, stagedSellOrderLines, canStageSellOrderLine],
   );
 
   return (
@@ -274,16 +280,36 @@ export function TablePendingSellOrderLines({
       headerExtraComponents={
         <>
           {headerExtraComponents}
-          <div className="flex items-center gap-2">
-            <Checkbox
-              id="checkbox-show-staged-lines"
-              testId="checkbox-show-staged-lines"
-              checked={showStagedLines}
-              onCheckedChange={setShowStagedLines}
-            />
-            <Label className="cursor-pointer" onClick={() => setShowStagedLines(!showStagedLines)}>
-              {SHOW_PREPARED_LINES_LABEL}
-            </Label>
+          <div data-testid="popover-pending-sell-order-lines-settings">
+            <Popover>
+              <PopoverTrigger variant="secondary" size="icon">
+                <SettingsIcon />
+              </PopoverTrigger>
+              <PopoverContent>
+                <div className="flex items-center gap-2">
+                  <Checkbox
+                    id="checkbox-show-staged-lines"
+                    testId="checkbox-show-staged-lines"
+                    checked={showStagedLines}
+                    onCheckedChange={setShowStagedLines}
+                  />
+                  <Label className="cursor-pointer" onClick={() => setShowStagedLines(!showStagedLines)}>
+                    {SHOW_PREPARED_LINES_LABEL}
+                  </Label>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Checkbox
+                    id="checkbox-show-quantity"
+                    testId="checkbox-show-quantity"
+                    checked={showQuantity}
+                    onCheckedChange={setShowQuantity}
+                  />
+                  <Label className="cursor-pointer" onClick={() => setShowQuantity(!showQuantity)}>
+                    {SHOW_TOTAL_QUANTITY_LABEL}
+                  </Label>
+                </div>
+              </PopoverContent>
+            </Popover>
           </div>
           {isAdmin && <ButtonCopyPendingSellOrderLines lines={pendingSellOrderLines} />}
           <DialogPrintPendingSellOrders

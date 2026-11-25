@@ -232,9 +232,10 @@ waits for the next run that succeeds. `cleanup-backups.ps1` and `restore.cmd` on
 one as `backup.old.log`.
 
 Once the day's backup is in place, `backup.cmd` compacts PowerSync's storage (`bun run supervisor.ts compact`, which
-runs `entry.js compact` with the env of the PowerSync service). PowerSync never does it on its own: every change keeps
-the operations it replaced, and every new browser downloads all of them. A failed compaction is logged and leaves the
-backup as it is; `powersync_storage` is not in the backup, since PowerSync rebuilds it from the database.
+runs `entry.js compact` with the env of the PowerSync service). `start.cmd` (once the app answers) and `refresh.cmd`
+(after the refresh) do the same. PowerSync never does it on its own: every change keeps
+the operations it replaced, and every new browser downloads all of them. A failed compaction is reported and never
+stops the script, and in `backup.cmd` it leaves the backup as it is; `powersync_storage` is not in the backup, since PowerSync rebuilds it from the database.
 
 The backups are only on the server for now: copying them to another machine is a TODO in `backup.cmd`. A backup on
 the server alone is lost with its disk.
