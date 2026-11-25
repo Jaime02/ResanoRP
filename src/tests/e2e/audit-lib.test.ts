@@ -1,9 +1,10 @@
-import { expect, test } from "@playwright/test";
+import { expect } from "@playwright/test";
 import { max } from "drizzle-orm";
 
 import db from "@/db";
 import { dbTableDeliveryNoteLine, dbTableSellOrderLine } from "@/db/schema";
 import { AUDIT_REDACTED_VALUE, getAuditDocumentId, redactAuditInput } from "@/logging/audit";
+import { test } from "@/tests/utils/fixtures";
 
 test("the audit log hides the secrets and the files of an input", () => {
   const formData = new FormData();

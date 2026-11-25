@@ -55,12 +55,12 @@ export async function getPartComponentQuantity(parentPartId: number, componentPa
   )?.quantity;
 }
 
-export async function workflowCreatePartComponent(
+type TPartComponentInput = { parentPartId: number; componentPartId: number; quantity: number };
+
+export async function workflowSubmitPartComponent(
   page: Page,
-  { parentPartId, componentPartId, quantity }: { parentPartId: number; componentPartId: number; quantity: number },
-  expectedErrorMessage?: string,
+  { parentPartId, componentPartId, quantity }: TPartComponentInput,
 ) {
-  const previousQuantity = await getPartComponentQuantity(parentPartId, componentPartId);
   const tablePartComponents = await gotoPartComponents(page, parentPartId);
   await page.getByTestId("form-part").getByTestId("button-create-part-component").click();
   const dialog = page.getByTestId("dialog-create-part-component");
@@ -73,6 +73,17 @@ export async function workflowCreatePartComponent(
   await expect(dialogPickerPartContent).not.toBeVisible();
   await dialog.getByTestId("input-create-part-component-quantity").pressSequentially(String(quantity));
   await dialog.getByTestId("button-submit").click();
+  return { dialog, tablePartComponents };
+}
+
+export async function workflowCreatePartComponent(
+  page: Page,
+  partComponent: TPartComponentInput,
+  expectedErrorMessage?: string,
+) {
+  const { parentPartId, componentPartId, quantity } = partComponent;
+  const previousQuantity = await getPartComponentQuantity(parentPartId, componentPartId);
+  const { dialog, tablePartComponents } = await workflowSubmitPartComponent(page, partComponent);
   await expectSingleSuccessOrErrorToast(page, PART_COMPONENT_CREATED_MESSAGE, expectedErrorMessage);
 
   if (expectedErrorMessage !== undefined) {

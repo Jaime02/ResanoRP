@@ -61,6 +61,9 @@ import {
   CLIENT_REFERENCE_DESCRIPTION_LABEL,
   PART_FEATURE_CHECKED_DELETE_ERROR_MESSAGE,
   PART_FEATURE_CHECKED_RANGE_ERROR_MESSAGE,
+  PART_COMPONENT_DELETED_ERROR_MESSAGE,
+  PART_FEATURE_EDIT_VALIDATION_ERROR_MESSAGE,
+  PART_SET_DELETED_ERROR_MESSAGE,
   PART_COMPONENT_CYCLE_ERROR_MESSAGE,
   PART_COMPONENT_DUPLICATED_ERROR_MESSAGE,
   PART_COMPONENT_EDIT_VALIDATION_ERROR_MESSAGE,
@@ -141,7 +144,7 @@ import {
   expectUniqueViolationRejected,
   uniqueColumnsViolation,
 } from "@/tests/utils/errors-log";
-import { TestAnnotations, setUserMode, test } from "@/tests/utils/fixtures";
+import { TestAnnotations, inAnotherTab, setUserMode, test } from "@/tests/utils/fixtures";
 import {
   getMockClientParts,
   getMockActivePartSetsOfPart,
@@ -151,12 +154,14 @@ import {
   getPartInActiveSetsErrorMessage,
   getMockSellOrderById,
 } from "@/tests/utils/mock-data-utils";
+import { holdRequestWhile } from "@/tests/utils/trpc";
 import { workflowOpenEditDeliveryNote } from "@/tests/workflows/delivery-note";
 import { getMockPartMaterials } from "@/tests/workflows/material";
 import {
   getPartComponentQuantity,
   gotoPartComponents,
   workflowCreatePartComponent,
+  workflowSubmitPartComponent,
   workflowDeletePart,
   workflowDeletePartComponent,
   workflowRemovePartFromActiveSets,
@@ -1068,6 +1073,19 @@ test("the range of a feature that has quality checks cannot change but its name 
     getTableRowByTestId(formPart.getByTestId("table-part-features"), uncheckedFeature.id),
     "maxValue",
   );
+  // The cell only holds the edited value, so the page validates it against the stored minimum
+  expect(uncheckedFeature.minValue, "Wrong test set up: The Característica should have a minimum").not.toBeNull();
+  await inputUncheckedMax.fill(String(Number(uncheckedFeature.minValue) - 1).replace(".", ","));
+  await inputUncheckedMax.blur();
+  await expectSingleToast(page, {
+    title: PART_FEATURE_EDIT_VALIDATION_ERROR_MESSAGE,
+    type: ToastType.Error,
+  });
+  await expect(inputUncheckedMax).toHaveValue((uncheckedFeature.maxValue ?? "").replace(".", ","));
+  expect((await db.query.dbTablePartFeature.findFirst({ where: { id: uncheckedFeature.id } }))?.maxValue).toBe(
+    uncheckedFeature.maxValue,
+  );
+
   await inputUncheckedMax.fill("-0,25");
   await inputUncheckedMax.blur();
   await expectSingleSuccessToast(page, PART_FEATURE_EDITED_MESSAGE);
@@ -2546,3 +2564,35 @@ test("manage multi-level part sets", { annotation: TestAnnotations.ResetBlueprin
     await expect(getTooltipPartSet(deletedSetPart.id)).toHaveCount(1);
   });
 });
+
+test(
+  "a component cannot be added to a Conjunto or with an Artículo that another tab deletes meanwhile",
+  { annotation: TestAnnotations.ResetBlueprints },
+  async ({ page }) => {
+    const [setPart, componentPart, otherPart] = activeParts;
+    // Only a part out of every active Conjunto can be deleted
+    for (const part of [setPart, componentPart]) {
+      await workflowRemovePartFromActiveSets(page, part.id);
+    }
+    for (const [parentPart, childPart, deletedPart, errorMessage] of [
+      [setPart, otherPart, setPart, PART_SET_DELETED_ERROR_MESSAGE],
+      [otherPart, componentPart, componentPart, PART_COMPONENT_DELETED_ERROR_MESSAGE],
+    ] as const) {
+      await holdRequestWhile({
+        meanwhile: async () =>
+          inAnotherTab(page, async (anotherPage) => workflowDeletePart(anotherPage, deletedPart.id)),
+        page,
+        procedurePath: "partComponent.create",
+        send: async () => {
+          await workflowSubmitPartComponent(page, {
+            componentPartId: childPart.id,
+            parentPartId: parentPart.id,
+            quantity: 1,
+          });
+        },
+      });
+      await expectSingleToast(page, errorMessage);
+      expectRejectedMutation({ code: "BAD_REQUEST", message: errorMessage, procedurePath: "partComponent.create" });
+    }
+  },
+);

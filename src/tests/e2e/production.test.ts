@@ -11,6 +11,7 @@ import { formatDate } from "@/lib/formatters";
 import { getTagClientText } from "@/lib/part-tag";
 import { CLIENT_LABEL, NOTES_LABEL, QUANTITY_LABEL } from "@/messages/common";
 import {
+  ASSIGN_PRODUCTION_ORDER_REQUIRES_STOP_MESSAGE,
   PRODUCTION_ORDER_EDITED_MESSAGE,
   PRODUCTION_ORDER_PRIORITIZED_MESSAGE,
   PRODUCTION_ORDER_STOPPED_MESSAGE,
@@ -28,7 +29,7 @@ import {
 import { getTestId } from "@/tests/utils/components";
 import { InputElementType, getFormInputByLabel } from "@/tests/utils/components/form";
 import { getTableRowByTestId, getTableRowByPosition, getTableRows } from "@/tests/utils/components/table";
-import { expectSingleSuccessToast } from "@/tests/utils/components/toast";
+import { expectSingleSuccessToast, expectSingleToast } from "@/tests/utils/components/toast";
 import { TestAnnotations, test } from "@/tests/utils/fixtures";
 import {
   getMockClientById,
@@ -51,6 +52,7 @@ import {
 } from "@/tests/workflows/production";
 import { expectTagField, getTagSellOrderText } from "@/tests/workflows/tag";
 import type { BaseMachine } from "@/types/machine";
+import { ToastType } from "@/types/toast";
 
 const getMockQueue = (machine: BaseMachine) =>
   mockMachineProductionOrderQueues.filter((queue) => queue.machineId === machine.id);
@@ -150,6 +152,15 @@ test(
         expect(await getTestId(getTableRowByPosition(tableMachineProductionOrderQueue, 0))).toBe(
           lastProductionOrderInQueue.id,
         );
+
+        // Another Orden de producción cannot be started while the active one runs, it has to be stopped first
+        await getTableRowByTestId(tableMachineProductionOrderQueue, queuedProductionOrder.id)
+          .getByTestId("button-start-production-order")
+          .click();
+        await expectSingleToast(page, { title: ASSIGN_PRODUCTION_ORDER_REQUIRES_STOP_MESSAGE, type: ToastType.Info });
+        await expect(dialogContentStopProductionOrder).toBeVisible();
+        await expect(dialogContentMachineProductionOrderQueue).toBeHidden();
+        expect((await getMachineById(userMachine.id))?.activeProductionOrderId).toBe(activeProductionOrderId);
       });
 
       await test.step(`cancel stopping the production order of ${userMachine.name} when no tag has been printed`, async () => {

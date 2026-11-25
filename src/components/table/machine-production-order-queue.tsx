@@ -54,7 +54,6 @@ export default function TableMachineProductionOrderQueue({
   const onAssignProductionOrderButtonClick = useCallback(
     async (productionOrderId: number) => {
       if (activeProductionOrderId !== undefined) {
-        toaster.info({ title: ASSIGN_PRODUCTION_ORDER_REQUIRES_STOP_MESSAGE });
         await navigate({
           search: (prev) => ({
             ...prev,
@@ -63,6 +62,8 @@ export default function TableMachineProductionOrderQueue({
           }),
           to: ".",
         });
+        // The toasts are closed on a route change, so it has to be shown after the navigation
+        toaster.info({ title: ASSIGN_PRODUCTION_ORDER_REQUIRES_STOP_MESSAGE });
         return;
       }
 
