@@ -43,6 +43,7 @@ import {
   LINES_ADDED_TO_DELIVERY_NOTE_MESSAGE,
 } from "@/messages/delivery-note";
 import { INVOICE_CREATE_TITLE } from "@/messages/invoice";
+import { PART_RETURNED_MESSAGE } from "@/messages/part";
 import { DELIVERY_LABEL, SELL_ORDER_LINE_EDITED_MESSAGE, SHOW_PREPARED_LINES_LABEL } from "@/messages/sell-order";
 import { SellOrderStatus } from "@/schemas/sell-order";
 import {
@@ -619,7 +620,7 @@ for (const client of clientsWithPendingLines) {
 
       await page.goto(`/part/${partId}?tab=history`);
       await expect(
-        page.getByTestId("table-part-delivery-note-consumptions").getByText("Devueltos 170 artículos"),
+        page.getByTestId("table-part-delivery-note-consumptions").getByText(PART_RETURNED_MESSAGE(170)),
       ).toBeVisible();
     });
 

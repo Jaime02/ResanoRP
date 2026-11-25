@@ -1,9 +1,10 @@
 import z from "zod";
 
+import { REQUIRED_FIELD_MESSAGE } from "@/messages/common";
 import { decimalSchema, nullableIdSchema, positiveQuantitySchema, priceSchema, requiredIdSchema } from "@/schemas";
 
 const requiredDecimalSchema = (decimals: number) =>
-  decimalSchema(decimals).refine((value) => value !== "", "Campo obligatorio");
+  decimalSchema(decimals).refine((value) => value !== "", REQUIRED_FIELD_MESSAGE);
 
 const percentageSchema = requiredDecimalSchema(2).refine((value) => Number(value) <= 99, {
   error: "El porcentaje no puede ser mayor que 99",

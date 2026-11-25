@@ -40,6 +40,7 @@ import {
   PRICE_LABEL,
   QUANTITY_LABEL,
   NON_ZERO_QUANTITY_MESSAGE,
+  REQUIRED_FIELD_MESSAGE,
 } from "@/messages/common";
 import { PART_PRICE_CREATED_MESSAGE } from "@/messages/part-price";
 import { PRODUCTION_ORDER_DELETED_MESSAGE, PRODUCTION_ORDER_RESTORED_MESSAGE } from "@/messages/production-order";
@@ -302,7 +303,7 @@ test("manage the sell orders", { annotation: TestAnnotations.ResetSellOrders }, 
 
     const { dialogPickerPartContent, tablePickerPart } = await openPartPicker(page, pickerPart);
 
-    expect(await getTableRows(tablePickerPart).count()).toBe(clientParts.length);
+    await assertTableRowCount(tablePickerPart, clientParts.length);
 
     // Assert that the part picker is displaying the client parts
     const partRowIds = await Promise.all(
@@ -1000,7 +1001,7 @@ test("manage the sell order lines without part", async ({ page, db }) => {
   const inputQuantity = getFormInputByLabel(dialogCreateSellOrderLine, QUANTITY_LABEL, InputElementType.Number);
   const inputPartPrice = getFormInputByLabel(dialogCreateSellOrderLine, PRICE_LABEL, InputElementType.Number);
   const buttonSubmit = dialogCreateSellOrderLine.getByTestId("button-submit");
-  const requiredFieldErrors = dialogCreateSellOrderLine.getByText("Campo obligatorio");
+  const requiredFieldErrors = dialogCreateSellOrderLine.getByText(REQUIRED_FIELD_MESSAGE);
   const customLine = { description: "Portes", quantity: 3 };
   const customLinePartPrice = "12.5";
   let customSellOrderLineId: number;
@@ -1145,7 +1146,7 @@ test("manage the returns of a sell order", async ({ page }) => {
     await inputQuantity.pressSequentially("0");
     await inputQuantity.blur();
     await buttonSubmit.click();
-    await expect(dialogCreateSellOrderLine.getByText("La cantidad no puede ser 0")).toBeVisible();
+    await expect(dialogCreateSellOrderLine.getByText(NON_ZERO_QUANTITY_MESSAGE)).toBeVisible();
     await expect(dialogCreateSellOrderLine).toBeVisible();
   });
 

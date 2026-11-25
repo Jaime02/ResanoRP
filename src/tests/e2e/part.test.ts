@@ -52,6 +52,8 @@ import {
   QUANTITY_LABEL,
   DROP_FILE_PLACEHOLDER,
   REFERENCE_LABEL,
+  FILE_NAME_EMPTY_MESSAGE,
+  PAGE_OF_MESSAGE,
 } from "@/messages/common";
 import { MATERIALS_LABEL, MATERIAL_DELETED_MESSAGE } from "@/messages/material";
 import {
@@ -1842,11 +1844,11 @@ test("page through the compatible materials of a part", async ({ page, db }) => 
   const tablePager = tableCompatiblePartMaterials.locator("xpath=preceding-sibling::div[1]");
   const buttonNextPage = getTablePagerButton(tableCompatiblePartMaterials, NEXT_PAGE_LABEL);
 
-  await expect(tablePager.getByText("Página 1 de 2", { exact: true })).toBeVisible();
+  await expect(tablePager.getByText(PAGE_OF_MESSAGE(1, 2), { exact: true })).toBeVisible();
   await expectCompatibleMaterials(firstPageMaterials);
 
   await buttonNextPage.click();
-  await expect(tablePager.getByText("Página 2 de 2", { exact: true })).toBeVisible();
+  await expect(tablePager.getByText(PAGE_OF_MESSAGE(2, 2), { exact: true })).toBeVisible();
   await expect(buttonNextPage).toBeDisabled();
   await expectCompatibleMaterials(lastPageMaterials);
   expect(page.url()).not.toContain("table-compatible-part-materials");
@@ -1917,19 +1919,19 @@ test("filter the compatible materials of a part by their raw material, starting 
   await expect(buttonClearRawMaterial).not.toBeVisible();
 
   await getTablePagerButton(tableCompatiblePartMaterials, NEXT_PAGE_LABEL).click();
-  await expect(tablePager.getByText("Página 2 de 2", { exact: true })).toBeVisible();
+  await expect(tablePager.getByText(PAGE_OF_MESSAGE(2, 2), { exact: true })).toBeVisible();
 
   await selectComboboxOption(page, comboboxRawMaterial, pagedRawMaterial.name, String(pagedRawMaterial.id));
-  await expect(tablePager.getByText("Página 1 de 2", { exact: true })).toBeVisible();
+  await expect(tablePager.getByText(PAGE_OF_MESSAGE(1, 2), { exact: true })).toBeVisible();
   await expectCompatibleMaterials(pagedMaterials.slice(0, COMPATIBLE_MATERIALS_PAGE_SIZE));
 
   await getTablePagerButton(tableCompatiblePartMaterials, NEXT_PAGE_LABEL).click();
-  await expect(tablePager.getByText("Página 2 de 2", { exact: true })).toBeVisible();
+  await expect(tablePager.getByText(PAGE_OF_MESSAGE(2, 2), { exact: true })).toBeVisible();
 
   await buttonClearRawMaterial.click();
   await expect(buttonClearRawMaterial).not.toBeVisible();
   await assertComboboxValue(comboboxRawMaterial, null);
-  await expect(tablePager.getByText("Página 1 de 2", { exact: true })).toBeVisible();
+  await expect(tablePager.getByText(PAGE_OF_MESSAGE(1, 2), { exact: true })).toBeVisible();
   await expectCompatibleMaterials(allMaterials.slice(0, COMPATIBLE_MATERIALS_PAGE_SIZE));
 
   await selectComboboxOption(page, comboboxRawMaterial, singleRawMaterial.name, String(singleRawMaterial.id));
@@ -1991,7 +1993,7 @@ for (const missingField of ["width", "shape"] as const) {
       await selectComboboxOption(page, comboboxShape, shape.name, String(shape.id));
     }
     await page.getByRole("tab", { name: MATERIALS_LABEL }).click();
-    await expect(tablePager.getByText("Página 1 de 2", { exact: true })).toBeVisible();
+    await expect(tablePager.getByText(PAGE_OF_MESSAGE(1, 2), { exact: true })).toBeVisible();
     await expect(getTableRows(tableCompatiblePartMaterials)).toHaveCount(COMPATIBLE_MATERIALS_PAGE_SIZE);
     for (const [position, material] of materials.slice(0, COMPATIBLE_MATERIALS_PAGE_SIZE).entries()) {
       await expect(getTableRowByPosition(tableCompatiblePartMaterials, position)).toHaveAttribute(
@@ -2242,7 +2244,7 @@ test("create a part with its blueprint", { annotation: TestAnnotations.ResetBlue
   // A Plano without a name is not created, and neither is its Artículo
   await inputFileName.clear();
   await formPart.getByTestId("button-submit").click();
-  await expect(formPart.getByText("El nombre del archivo no puede estar vacío")).toBeVisible();
+  await expect(formPart.getByText(FILE_NAME_EMPTY_MESSAGE)).toBeVisible();
   await expect(page).toHaveURL("/part?createPart=true");
   expect(await getPartById(partId)).toBeUndefined();
 

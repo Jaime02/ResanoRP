@@ -25,6 +25,7 @@ import {
   CLIENT_INVOICE_EMAIL_CREATED_MESSAGE,
   CLIENT_CREATED_MESSAGE,
   INVOICE_EMAIL_DELETED_MESSAGE,
+  CLIENT_PRISMA_ACCOUNT_ERROR_MESSAGE,
 } from "@/messages/client";
 import {
   STATUS_DELETED_LABEL,
@@ -384,7 +385,7 @@ test("manage the clients", { annotation: TestAnnotations.ResetSellOrders }, asyn
       for (const invalidAccountingAccountId of ["7050001", "4300000001"]) {
         await inputAccountingAccountId.fill(invalidAccountingAccountId);
         await formClient.getByTestId("button-submit").click();
-        await expect(formClient.getByText("Debe empezar por 430 y tener como máximo 9 dígitos")).toBeVisible();
+        await expect(formClient.getByText(CLIENT_PRISMA_ACCOUNT_ERROR_MESSAGE)).toBeVisible();
         await expect(formClient.getByTestId("button-submit")).toBeDisabled();
       }
       expect(await getClientById(client.id)).toEqual(currentClient);

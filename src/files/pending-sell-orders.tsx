@@ -3,17 +3,9 @@ import { Fragment } from "react";
 import ResanoLogo from "@/components/images/ResanoLogo";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { renderPdf, WRAPPING_CELL_CLASS_NAME } from "@/files";
-import { FieldBox } from "@/files/sales-document";
 import { getSellOrderLineStatusDisplay } from "@/lib/sell-order-line";
 import { cn } from "@/lib/utils";
-import {
-  DATE_LABEL,
-  DESCRIPTION_LABEL,
-  PART_LABEL,
-  PENDING_LABEL,
-  QUANTITY_LABEL,
-  STATUS_LABEL,
-} from "@/messages/common";
+import { DESCRIPTION_LABEL, PART_LABEL, PENDING_LABEL, QUANTITY_LABEL, STATUS_LABEL } from "@/messages/common";
 import {
   DELIVERY_LABEL,
   MANUFACTURE_LABEL,
@@ -56,14 +48,14 @@ function PendingSellOrdersDocument({ clientName, date, lines, withCheckboxes }: 
           <span className="text-xl font-bold tracking-wider uppercase">{PENDING_SELL_ORDERS_TITLE}</span>
           <span className="text-lg font-bold">{clientName}</span>
         </div>
-        <FieldBox fields={[{ label: DATE_LABEL, value: date }]} />
+        <span className="text-sm">{date}</span>
       </div>
       <Table
         className="overflow-visible rounded-none border-0 text-sm"
         tableClassName="border-collapse border border-border [&_td]:border [&_td]:border-border [&_th]:border-y [&_th]:border-border [&_th]:align-middle [&_td]:p-1 [&_th]:p-1 [&_td]:leading-tight"
       >
         <TableHead className="table-header-group">
-          <TableRow>
+          <TableRow variant="plain">
             <TableHeader className="w-px text-center">#</TableHeader>
             <TableHeader>{SELL_ORDER_LABEL}</TableHeader>
             <TableHeader className="w-px">{STATUS_LABEL}</TableHeader>
@@ -86,7 +78,11 @@ function PendingSellOrdersDocument({ clientName, date, lines, withCheckboxes }: 
             const { statusText, statusClassName } = getSellOrderLineStatusDisplay(line.status);
             return (
               <Fragment key={line.id}>
-                <TableRow style={{ breakAfter: hasNotes ? "avoid" : undefined, breakInside: "avoid" }}>
+                <TableRow
+                  compact
+                  variant="plain"
+                  style={{ breakAfter: hasNotes ? "avoid" : undefined, breakInside: "avoid" }}
+                >
                   <TableCell className="w-px text-right text-xs">{index + 1}</TableCell>
                   <TableCell className="text-xs whitespace-nowrap">{line.sellOrderReference}</TableCell>
                   <TableCell className={cn("w-px", statusClassName)}>{statusText}</TableCell>
@@ -107,7 +103,7 @@ function PendingSellOrdersDocument({ clientName, date, lines, withCheckboxes }: 
                   )}
                 </TableRow>
                 {hasNotes && (
-                  <TableRow rowType="subrow" variant="subrow" style={{ breakInside: "avoid" }}>
+                  <TableRow compact rowType="subrow" variant="plain" style={{ breakInside: "avoid" }}>
                     <TableCell />
                     <TableCell colSpan={withCheckboxes ? 9 : 7} className={WRAPPING_CELL_CLASS_NAME}>
                       <span className="font-semibold">{SELL_ORDER_NOTES_LABEL}</span> {line.notes}

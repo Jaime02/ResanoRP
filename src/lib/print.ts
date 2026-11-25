@@ -36,11 +36,17 @@ export function printPdfUrl(url: string) {
       iframe.remove();
       return;
     }
-    iframeWindow.addEventListener("afterprint", () => {
+    try {
+      iframeWindow.addEventListener("afterprint", () => {
+        iframe.remove();
+      });
+      iframeWindow.focus();
+      iframeWindow.print();
+    } catch {
+      // Firefox shows the PDF in its own viewer, which a page cannot script, so the user prints it from a tab
       iframe.remove();
-    });
-    iframeWindow.focus();
-    iframeWindow.print();
+      window.open(url, "_blank");
+    }
   };
   document.body.append(iframe);
 }

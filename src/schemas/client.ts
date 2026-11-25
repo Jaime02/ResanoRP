@@ -1,5 +1,6 @@
 import { z } from "zod";
 
+import { CLIENT_PRISMA_ACCOUNT_ERROR_MESSAGE } from "@/messages/client";
 import {
   nameSchema,
   nullableDateSchema,
@@ -24,7 +25,7 @@ const baseClientSchema = z.object({
   // derived from its ID. The exported invoices write it in a 9 characters field
   prismaAccountingAccountId: z
     .string()
-    .regex(/^(430[0-9]{0,6})?$/, "Debe empezar por 430 y tener como máximo 9 dígitos")
+    .regex(/^(430[0-9]{0,6})?$/, CLIENT_PRISMA_ACCOUNT_ERROR_MESSAGE)
     .nullable()
     .transform((value) => (value === "" ? null : value)),
   province: stringSchema({ nullable: true }),

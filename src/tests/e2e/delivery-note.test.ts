@@ -24,6 +24,7 @@ import {
   DESCRIPTION_LABEL,
   PART_LABEL,
   QUANTITY_LABEL,
+  REQUIRED_FIELD_MESSAGE,
 } from "@/messages/common";
 import {
   DELIVERY_NOTE_NUMBER_LABEL,
@@ -65,7 +66,7 @@ import {
   openPartPicker,
   openPicker,
 } from "@/tests/utils/components/picker";
-import { getPopoverContent } from "@/tests/utils/components/popover";
+import { closePopover, getPopoverContent, openPopover } from "@/tests/utils/components/popover";
 import {
   assertTableRowCount,
   getDivDisabledMessage,
@@ -309,9 +310,7 @@ test("manage the delivery notes", { annotation: TestAnnotations.ResetTags }, asy
     const buttonClearFilters = popoverFilters.getByTestId("button-clear-filters");
     const pickerPart = getFormInputByLabel(getPopoverContent(page), PART_LABEL, InputElementType.Picker);
     const pickPartFilter = async (partId: number) => {
-      if (!(await pickerPart.isVisible())) {
-        await popoverFilters.getByTestId("popover-trigger").click();
-      }
+      await openPopover(popoverFilters.getByTestId("popover-trigger"));
       const { dialogPickerPartContent, tablePickerPart } = await openPartPicker(page, pickerPart);
       await getTableRowByTestId(tablePickerPart, partId).getByTestId("button-success").click();
       await expect(dialogPickerPartContent).not.toBeVisible();
@@ -356,11 +355,8 @@ test("manage the delivery notes", { annotation: TestAnnotations.ResetTags }, asy
     const secondPart = partsWithDeliveryNotes.at(-1)!;
 
     // Reopening the filters shows the active Artículo, and clearing the picker removes it but keeps the sorting
-    if (await pickerPart.isVisible()) {
-      await page.keyboard.press("Escape");
-      await expect(pickerPart).not.toBeVisible();
-    }
-    await popoverFilters.getByTestId("popover-trigger").click();
+    await closePopover(page, popoverFilters.getByTestId("popover-trigger"));
+    await openPopover(popoverFilters.getByTestId("popover-trigger"));
     await expect(pickerPart).toHaveAttribute("data-value", String(secondPart.id));
     await clearPicker(pickerPart);
     await expect(buttonClearFilters).toHaveCount(0);
@@ -813,7 +809,7 @@ test("manage the delivery notes", { annotation: TestAnnotations.ResetTags }, asy
         const { dialogPickerPartContent, tablePickerPart } = await openPartPicker(page, pickerPart);
         expect(await getPickerValue(pickerPart)).toBeNull();
 
-        expect(await getTableRows(tablePickerPart).count()).toBe(clientParts.length);
+        await assertTableRowCount(tablePickerPart, clientParts.length);
 
         // Assert that the part picker is displaying the client parts
         const partRowIds = await Promise.all(
@@ -852,7 +848,7 @@ test("manage the delivery notes", { annotation: TestAnnotations.ResetTags }, asy
           CLIENT_REFERENCE_DESCRIPTION_LABEL,
           InputElementType.Input,
         );
-        expect(await inputDescription.inputValue()).toBe(pickedPartReference.clientDescription);
+        await expect(inputDescription).toHaveValue(pickedPartReference.clientDescription);
 
         const inputQuantity = getFormInputByLabel(
           dialogCreateDeliveryNoteLine,
@@ -990,7 +986,7 @@ test("manage the delivery notes", { annotation: TestAnnotations.ResetTags }, asy
       const pickerPart = dialogCreateDeliveryNoteLine.getByTestId("picker-part");
       const inputDescription = getFormInputByLabel(dialogCreateDeliveryNoteLine, DESCRIPTION_LABEL);
       const buttonSubmit = dialogCreateDeliveryNoteLine.getByTestId("button-submit");
-      const requiredFieldErrors = dialogCreateDeliveryNoteLine.getByText("Campo obligatorio");
+      const requiredFieldErrors = dialogCreateDeliveryNoteLine.getByText(REQUIRED_FIELD_MESSAGE);
 
       await checkboxCustomLine.click();
       await expect(checkboxCustomLine).toBeChecked();

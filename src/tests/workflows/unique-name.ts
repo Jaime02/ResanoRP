@@ -2,7 +2,7 @@ import { expect } from "@playwright/test";
 import type { Locator, Page } from "@playwright/test";
 import type { PgTable } from "drizzle-orm/pg-core";
 
-import { NAME_LABEL } from "@/messages/common";
+import { NAME_LABEL, REQUIRED_FIELD_MESSAGE } from "@/messages/common";
 import { assertFormLoaded, getFormInputByLabel } from "@/tests/utils/components/form";
 import { expectSingleSuccessToast, expectSingleToast, getToasts } from "@/tests/utils/components/toast";
 import { expectUniqueViolation } from "@/tests/utils/db";
@@ -96,7 +96,7 @@ export async function workflowRejectCreateWithTakenName<T extends TNamedItem>({
   await openCreate();
   await fill(items[0], "   ");
   await buttonSubmit.click();
-  await expect(form.getByText("Campo obligatorio")).toHaveCount(1);
+  await expect(form.getByText(REQUIRED_FIELD_MESSAGE)).toHaveCount(1);
   await expect(getToasts(page)).toHaveCount(0);
   await closeCreate();
 

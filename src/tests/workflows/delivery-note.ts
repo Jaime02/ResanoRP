@@ -114,7 +114,7 @@ export async function workflowStageSingleSellOrderLine(page: Page, sellOrderLine
   const tableStagedSellOrderLines = page.getByTestId("table-staged-sell-order-lines");
   await expect(tableStagedSellOrderLines).toBeVisible();
   const stagedSellOrderLinesRows = getTableRows(tableStagedSellOrderLines);
-  expect(await stagedSellOrderLinesRows.count()).toBe(1);
+  await expect(stagedSellOrderLinesRows).toHaveCount(1);
   const stagedSellOrderLineRow = stagedSellOrderLinesRows.first();
   expect(await getTestId(stagedSellOrderLineRow)).toBe(sellOrderLineId);
   return stagedSellOrderLineRow;

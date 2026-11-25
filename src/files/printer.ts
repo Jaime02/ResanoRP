@@ -272,20 +272,17 @@ async function queueOnWindowsServer<T>(printer: TPrinterConnection, run: (shareP
   return job;
 }
 
-// With *, net reads the password from its input, so it never shows up in the arguments of the process
+// The password goes in the arguments because net use with * reads it from the console, never from a piped input
 async function runNetUse(printer: TPrinterConnection, sharePath: string) {
   return runProcess(
     "net",
     [
       "use",
       sharePath,
-      ...(printer.password === null ? [] : ["*"]),
+      ...(printer.password === null ? [] : [printer.password]),
       ...(printer.username === null ? [] : [`/user:${printer.username}`]),
     ],
-    {
-      input: printer.password === null ? undefined : Buffer.from(`${printer.password}\r\n`),
-      timeoutMs: PING_TIMEOUT_MS,
-    },
+    { timeoutMs: PING_TIMEOUT_MS },
   );
 }
 

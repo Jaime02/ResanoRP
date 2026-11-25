@@ -9,6 +9,7 @@ import { DateFormat, formatDate } from "@/lib/formatters";
 import { DATE_LABEL, UNKNOWN_LABEL } from "@/messages/common";
 import {
   ORIGIN_LABEL,
+  PART_RETURNED_MESSAGE,
   PART_TRANSACTION_MANUAL_UPDATE_LABEL,
   PART_TRANSACTION_STOCK_UPDATE_LABEL,
   STOCK_LABEL,
@@ -97,7 +98,7 @@ function TransactionTypeDisplay({ transaction }: { transaction: TPartStockTransa
       return `Fabricados ${transaction.quantity} artículos`;
     case "DeliveryNoteLine":
       return transaction.quantity < 0
-        ? `Devueltos ${-transaction.quantity} artículos`
+        ? PART_RETURNED_MESSAGE(-transaction.quantity)
         : `Servidos ${transaction.quantity} artículos`;
     case "PartStock":
       return PART_TRANSACTION_STOCK_UPDATE_LABEL;

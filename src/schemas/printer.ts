@@ -2,6 +2,7 @@ import { createSelectSchema } from "drizzle-orm/zod";
 import { z } from "zod";
 
 import { dbTablePrinter } from "@/db/schema";
+import { REQUIRED_FIELD_MESSAGE } from "@/messages/common";
 import { PRINTER_SHARE_NAME_INVALID_MESSAGE, PRINTER_HOST_INVALID_MESSAGE } from "@/messages/printer";
 import { nameFiltersSchema, nameSchema, requiredIdObjectSchema, requiredIdSchema, tableStateSchema } from "@/schemas";
 import {
@@ -12,15 +13,13 @@ import {
   PrinterKind,
 } from "@/types/printer";
 
-const REQUIRED_MESSAGE = "Campo obligatorio";
-
 // The password stays on the server, see the sync stream of the table
 export const printerSchema = createSelectSchema(dbTablePrinter, { kind: z.enum(PrinterKind) }).omit({ password: true });
 
 const hostSchema = z
-  .string({ error: REQUIRED_MESSAGE })
+  .string({ error: REQUIRED_FIELD_MESSAGE })
   .trim()
-  .min(1, REQUIRED_MESSAGE)
+  .min(1, REQUIRED_FIELD_MESSAGE)
   .regex(PRINTER_HOST_PATTERN, PRINTER_HOST_INVALID_MESSAGE);
 
 const emptyToNull = (value: string | null) => (value === "" ? null : value);
@@ -46,7 +45,7 @@ export const tagPrintIdSchema = z.object({ printId: z.uuid() });
 const printerFieldsSchema = z.object({
   address: hostSchema,
   forTags: z.boolean(),
-  kind: z.enum(PrinterKind, { error: REQUIRED_MESSAGE }),
+  kind: z.enum(PrinterKind, { error: REQUIRED_FIELD_MESSAGE }),
   labelLengthMm: labelSizeSchema,
   labelWidthMm: labelSizeSchema,
   name: nameSchema,
@@ -72,7 +71,7 @@ function requireFieldsOfKind(
   ];
   for (const field of requiredFields) {
     if (printer[field] === null) {
-      context.addIssue({ code: "custom", message: REQUIRED_MESSAGE, path: [field] });
+      context.addIssue({ code: "custom", message: REQUIRED_FIELD_MESSAGE, path: [field] });
     }
   }
 }

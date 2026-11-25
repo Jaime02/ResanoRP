@@ -27,6 +27,7 @@ import {
   LAST_PAGE_LABEL,
   NEXT_PAGE_LABEL,
   NO_DATA_MESSAGE,
+  PAGE_OF_MESSAGE,
   PREVIOUS_PAGE_LABEL,
 } from "@/messages/common";
 import type { TBaseModel, TTableState } from "@/schemas";
@@ -398,7 +399,10 @@ export default function BaseTable<TRow extends TBaseModel, TState extends TTable
                 <ChevronLeftIcon />
               </Button>
               <span className="min-w-[13ch] text-center text-sm whitespace-nowrap tabular-nums">
-                Página {table.getPageCount() > 0 ? table.state.pagination.pageIndex + 1 : 0} de {table.getPageCount()}
+                {PAGE_OF_MESSAGE(
+                  table.getPageCount() > 0 ? table.state.pagination.pageIndex + 1 : 0,
+                  table.getPageCount(),
+                )}
               </span>
               <Button
                 aria-label={NEXT_PAGE_LABEL}

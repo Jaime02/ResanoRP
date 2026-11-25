@@ -99,7 +99,12 @@ def rollback(backup_path: Path):
 def main():
     if IMPORT_PATH.exists():
         raise SystemExit(f"An import is already staged, remove {IMPORT_PATH} first")
-    if input("Replace all production data with Prisma + RAIO? Type YES: ").strip() != "YES":
+    while (answer := input("Replace all production data with Prisma + RAIO? (yes/no): ").strip().lower()) not in (
+        "yes",
+        "no",
+    ):
+        pass
+    if answer != "yes":
         raise SystemExit("Cancelled")
 
     backup_path = PRODUCTION_PATH / "backups" / datetime.now().strftime("%Y%m%d-%H%M%S")

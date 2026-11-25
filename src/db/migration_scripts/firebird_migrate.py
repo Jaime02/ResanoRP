@@ -13,7 +13,7 @@ from .connections import fetch_id, get_postgres_cursor, get_read_cursor, project
 from .logger import logger
 from .firebird_fetch import *
 from .models import Material
-from .raio_fetch import get_raio_part_by_reference
+from .raio_fetch import get_raio_part_by_reference, get_raio_production_orders
 from .raio_models import RaioPart
 from .secrets import (
     IGNORED_CLIENT_IDS,
@@ -117,7 +117,12 @@ def firebird_migrate_articulos(
     raw_materials: OldRefToNewId,
     materials: list[Material],
 ):
-    used_references = {resolve_articulo_reference(reference) for reference in get_used_clientes_and_articulos()[1]}
+    # RAIO orders can be for an Articulo that no Pedido de venta has yet, and skipping it loses the machine assignment
+    raio_order_references = {production_order.reference for production_order in get_raio_production_orders()}
+    used_references = {
+        resolve_articulo_reference(reference)
+        for reference in get_used_clientes_and_articulos()[1] | raio_order_references
+    }
     articulos = [
         a for a in fetch_articulos() if a.reference in used_references and a.reference not in IGNORED_PART_IDS
     ]

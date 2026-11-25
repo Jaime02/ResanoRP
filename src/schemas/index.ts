@@ -2,9 +2,14 @@ import { z } from "zod";
 import { zfd } from "zod-form-data";
 
 import { LoggerLevels } from "@/logging/types";
-import { NON_ZERO_QUANTITY_MESSAGE } from "@/messages/common";
+import {
+  FILE_NAME_EMPTY_MESSAGE,
+  NON_ZERO_QUANTITY_MESSAGE,
+  POSITIVE_QUANTITY_MESSAGE,
+  REQUIRED_FIELD_MESSAGE,
+} from "@/messages/common";
 
-export const requiredIdSchema = z.number({ error: "Campo obligatorio" }).int().positive();
+export const requiredIdSchema = z.number({ error: REQUIRED_FIELD_MESSAGE }).int().positive();
 export const nullableIdSchema = requiredIdSchema.nullable();
 export const optionalIdSchema = requiredIdSchema.optional();
 
@@ -20,7 +25,7 @@ interface SchemaFunctionProps {
 
 export const requiredDateSchema = z.preprocess(
   (value) => value ?? undefined,
-  z.coerce.date({ error: "Campo obligatorio" }),
+  z.coerce.date({ error: REQUIRED_FIELD_MESSAGE }),
 );
 export const nullableDateSchema = z.coerce.date().nullable();
 export type TBaseModel = {
@@ -38,7 +43,7 @@ export function stringSchema(
 ): z.ZodPipe<z.ZodNullable<z.ZodString>, z.ZodTransform<string | null, string | null>>;
 
 export function stringSchema({
-  errorMessage = "Campo obligatorio",
+  errorMessage = REQUIRED_FIELD_MESSAGE,
   nullable = false,
 }: SchemaFunctionProps | undefined = {}) {
   const schema = z.string({ error: errorMessage });
@@ -55,7 +60,7 @@ const sortSchema = z.object({
 export type TSort = z.infer<typeof sortSchema>;
 
 // Trimmed before it is checked, so a name of only spaces is empty and the unique index sees the name without them
-export const nameSchema = z.string({ error: "Campo obligatorio" }).trim().min(1, "Campo obligatorio");
+export const nameSchema = z.string({ error: REQUIRED_FIELD_MESSAGE }).trim().min(1, REQUIRED_FIELD_MESSAGE);
 
 const baseModelWithNameSchema = z.object({
   name: nameSchema,
@@ -88,7 +93,7 @@ export const quantitySchema = z
   .number({ error: "Introduce un número entero" })
   .int("La cantidad debe ser un número entero");
 
-export const positiveQuantitySchema = quantitySchema.gt(0, "La cantidad debe ser un número positivo");
+export const positiveQuantitySchema = quantitySchema.gt(0, POSITIVE_QUANTITY_MESSAGE);
 
 // A negative quantity is a return, which the old system also recorded as a Línea
 export const nonZeroQuantitySchema = quantitySchema.refine((quantity) => quantity !== 0, NON_ZERO_QUANTITY_MESSAGE);
@@ -96,7 +101,7 @@ export const nonZeroQuantitySchema = quantitySchema.refine((quantity) => quantit
 export const priceSchema = decimalSchema(3);
 
 export const vatPercentageSchema = z
-  .number({ error: "Campo obligatorio" })
+  .number({ error: REQUIRED_FIELD_MESSAGE })
   .int("El IVA debe ser un número entero")
   .gte(0, "El IVA no puede ser negativo")
   .lte(100, "El IVA no puede ser mayor que 100");
@@ -139,10 +144,10 @@ const MAX_FILE_NAME_BYTES = 255 - ".pdf".length;
 
 export const fileNameSchema = z
   .string()
-  .min(1, "El nombre del archivo no puede estar vacío")
+  .min(1, FILE_NAME_EMPTY_MESSAGE)
   .regex(/^[^<>:"/\\|?*]+$/, "Carácteres inválidos en el nombre del archivo")
   .transform((s) => s.replace(/(\.pdf|[ .])+$/i, ""))
-  .refine((name) => name.length > 0, { error: "El nombre del archivo no puede estar vacío" })
+  .refine((name) => name.length > 0, { error: FILE_NAME_EMPTY_MESSAGE })
   .refine((name) => new TextEncoder().encode(name).length <= MAX_FILE_NAME_BYTES, {
     error: "Nombre del archivo demasiado largo",
   })

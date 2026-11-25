@@ -66,6 +66,9 @@ const tableRowVariants = cva(
       variant: "default",
     },
     variants: {
+      compact: {
+        true: "[&>td]:h-auto",
+      },
       variant: {
         default: "bg-tr-background [tbody>&:nth-child(odd_of_[data-row-type=row])]:bg-blue-100/80",
         plain: "bg-transparent",
@@ -90,6 +93,7 @@ function TableRow({
   className,
   rowType = "row",
   variant,
+  compact,
   ...props
 }: TableRowProps) {
   return (
@@ -99,7 +103,7 @@ function TableRow({
       data-variant={variant}
       {...(selected ? { "data-selected": true } : {})}
       {...(highlightOnHover ? { "data-highlight-on-hover": true } : {})}
-      className={tableRowVariants({ className, variant })}
+      className={tableRowVariants({ className, compact, variant })}
       {...props}
     />
   );

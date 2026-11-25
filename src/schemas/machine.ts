@@ -2,6 +2,7 @@ import { createSelectSchema } from "drizzle-orm/zod";
 import { z } from "zod";
 
 import { dbTableMachine } from "@/db/schema";
+import { MACHINE_DIAMETER_RANGE_ERROR_MESSAGE } from "@/messages/machine";
 import { nameSchema, requiredIdObjectSchema, tableStateSchema } from "@/schemas";
 
 export const machineSchema = createSelectSchema(dbTableMachine);
@@ -24,7 +25,7 @@ function isValidDiameterRange({
   return minDiameter === null || maxDiameter === null || minDiameter <= maxDiameter;
 }
 const invalidDiameterRangeError = {
-  error: "El diámetro máximo no puede ser menor que el mínimo",
+  error: MACHINE_DIAMETER_RANGE_ERROR_MESSAGE,
   path: ["maxDiameter"],
 };
 

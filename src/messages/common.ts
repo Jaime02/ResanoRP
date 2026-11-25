@@ -73,3 +73,7 @@ export const PARTS_LABEL = "Artículos";
 export const ADD_PART_LABEL = "Añadir Artículo";
 export const ADMIN_ONLY_MESSAGE = "Esta acción solo la puede hacer el Administrador";
 export const NON_ZERO_QUANTITY_MESSAGE = "La cantidad no puede ser 0";
+export const REQUIRED_FIELD_MESSAGE = "Campo obligatorio";
+export const POSITIVE_QUANTITY_MESSAGE = "La cantidad debe ser un número positivo";
+export const FILE_NAME_EMPTY_MESSAGE = "El nombre del archivo no puede estar vacío";
+export const PAGE_OF_MESSAGE = (page: number, pageCount: number) => `Página ${page} de ${pageCount}`;

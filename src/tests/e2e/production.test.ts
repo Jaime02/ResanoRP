@@ -104,7 +104,7 @@ test(
         const newNotes = `Updated production order notes of ${userMachine.name}`;
         const inputNotes = getFormInputByLabel(formMachineProductionOrder, NOTES_LABEL, InputElementType.Textarea);
         await expect(inputNotes).toBeVisible();
-        expect(await inputNotes.inputValue()).toBe(dbProductionOrder.notes ?? "");
+        await expect(inputNotes).toHaveValue(dbProductionOrder.notes ?? "");
 
         await inputNotes.clear();
         await inputNotes.fill(newNotes);

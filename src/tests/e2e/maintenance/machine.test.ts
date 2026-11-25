@@ -9,6 +9,7 @@ import { NO_MACHINES_MESSAGE } from "@/messages/combobox";
 import { CLOSE_LABEL, STATUS_PENDING_LABEL, NAME_LABEL } from "@/messages/common";
 import {
   MACHINE_CREATE_TITLE,
+  MACHINE_DIAMETER_RANGE_ERROR_MESSAGE,
   MACHINE_DELETED_MESSAGE,
   MACHINE_RESTORED_MESSAGE,
   SHOW_DELETED_MACHINES_LABEL,
@@ -401,7 +402,7 @@ test("set the diameter range of the machines", async ({ page, toasts }) => {
       await getFormInputByLabel(formMachine, MACHINE_MAX_DIAMETER_LABEL).fill("20");
       await formMachine.getByTestId("button-submit").click();
 
-      await expect(formMachine.getByText("El diámetro máximo no puede ser menor que el mínimo")).toBeVisible();
+      await expect(formMachine.getByText(MACHINE_DIAMETER_RANGE_ERROR_MESSAGE)).toBeVisible();
       await expect(toasts).toHaveCount(0);
       const notUpdatedMachine = await getMachineById(machine.id);
       expect(notUpdatedMachine?.minDiameter).toBe(machine.minDiameter);

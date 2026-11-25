@@ -97,7 +97,6 @@ wrote once.
 ```bash
 bun run prepare-production               # build the app and gather everything into envs/production
 bun run bundle-production                # envs/production.zip, the whole folder
-bun run bundle-production -- --update    # envs/production-update.zip, without bin, browsers, powersync-service, .output, public and WinSW
 ```
 
 `prepare-production` (`src/scripts/prepare-production.ts`):
@@ -181,7 +180,7 @@ Stopping: `net stop ResanoRP` (app, PowerSync, Caddy), then `net stop ResanoRP-d
 the server. It needs Python 3.14 and its `py` launcher: newer versions have no prebuilt pyodbc or python-calamine. The first run creates `venv` and installs `src\db\requirements.txt`. The
 sources are `.env` keys: `FB_HOST`, `FB_DATABASE`, `FB_USER`, `FB_PASSWORD` (Prisma, read through its own database
 server: Firebird 1.5 and InterBase 7.5 both work), `RAIO_SERVER`, `RAIO_USER`, `RAIO_PASSWORD`, `RAIO_BLUEPRINT_ROOT_PATH` and `OFERTAS_ROOT_PATH`. After you
-type `YES`, `src\db\refresh_production.py`:
+answer `yes`, `src\db\refresh_production.py`:
 
 1. stops `ResanoRP` and dumps the database to `backups\<yyyyMMdd-HHmmss>\production.dump`,
 2. moves the data folders into that backup and leaves them empty,
@@ -219,9 +218,6 @@ a refresh, which builds the database from the bundle's `schema.sql`. So every de
 2. Server: `net stop ResanoRP` and `net stop ResanoRP-db` (Windows can not overwrite the binaries of a running
    process), unzip the new `production.zip` over `C:\ResanoRP` (it brings no machine folder, see section 3), run
    `start.cmd`, then `refresh.cmd`, both as administrator.
-
-For a change that needs no new build (only `.env`, the scripts, the migration or the PowerSync config), the update zip
-is enough: `bundle-production -- --update`, unzip it over the folder, `net stop ResanoRP` and `start.cmd`.
 
 ## 9. Backups and restore
 

@@ -22,7 +22,7 @@ import {
 import { formatPartDimension } from "@/lib/formatters";
 import { translatedEnums } from "@/lib/translations";
 import { BLUEPRINTS_EMPTY_MESSAGE } from "@/messages/blueprint";
-import { STATUS_PENDING_LABEL, PART_LABEL } from "@/messages/common";
+import { STATUS_PENDING_LABEL, PART_LABEL, POSITIVE_QUANTITY_MESSAGE } from "@/messages/common";
 import {
   PRODUCTION_ORDERS_LABEL,
   PRODUCTION_ORDER_NOT_ASSIGNABLE_MESSAGE,
@@ -60,6 +60,7 @@ import {
 } from "@/tests/utils/components/combobox";
 import { InputElementType, assertFormLoaded, getFormInputByLabel } from "@/tests/utils/components/form";
 import { openPartPicker } from "@/tests/utils/components/picker";
+import { openPopover } from "@/tests/utils/components/popover";
 import {
   assertTableRowCount,
   getTableNoDataRow,
@@ -325,9 +326,7 @@ test("filter production orders by unchecking and checking statuses", async ({ pa
   const buttonClearStatuses = popupStatusFilter.getByTestId("button-clear-filter-statuses");
   const getCheckboxStatus = (status: ProductionOrderStatus) => page.getByTestId(`checkbox-filter-statuses-${status}`);
   const toggleStatus = async (status: ProductionOrderStatus) => {
-    if (!(await getCheckboxStatus(status).isVisible())) {
-      await popupStatusFilter.getByTestId("popover-trigger").click();
-    }
+    await openPopover(popupStatusFilter.getByTestId("popover-trigger"));
     await getCheckboxStatus(status).click();
   };
 
@@ -1031,7 +1030,7 @@ test("create production orders by hand and from a sell order line", async ({ pag
     // Nothing is produced of a quantity of 0
     await inputQuantity.fill("0");
     await page.getByTestId("button-submit").click();
-    await expect(page.getByText("La cantidad debe ser un número positivo")).toBeVisible();
+    await expect(page.getByText(POSITIVE_QUANTITY_MESSAGE)).toBeVisible();
     expect(await getNewProductionOrders()).toEqual([]);
 
     await inputQuantity.fill("7");

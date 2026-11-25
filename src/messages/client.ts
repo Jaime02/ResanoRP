@@ -32,3 +32,4 @@ export const CLIENT_INVOICE_EMAIL_CREATED_MESSAGE = "Correo electrónico del cli
 export const CLIENT_INVOICE_EMAIL_TAKEN_MESSAGE = "El Cliente ya tiene ese correo de facturación";
 export const CLIENT_INVOICE_EMAIL_DELETED_CLIENT_MESSAGE =
   "No se pueden añadir correos de facturación a un Cliente eliminado";
+export const CLIENT_PRISMA_ACCOUNT_ERROR_MESSAGE = "Debe empezar por 430 y tener como máximo 9 dígitos";

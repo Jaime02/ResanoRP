@@ -15,3 +15,4 @@ export const VIEW_MACHINES_LABEL = "Ver Máquinas";
 export const MACHINE_EDIT_TITLE = "Editar Máquina";
 export const MACHINE_CREATED_MESSAGE = "Máquina creada";
 export const MACHINE_EDITED_MESSAGE = "Máquina editada";
+export const MACHINE_DIAMETER_RANGE_ERROR_MESSAGE = "El diámetro máximo no puede ser menor que el mínimo";

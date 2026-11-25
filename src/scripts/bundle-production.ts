@@ -2,11 +2,7 @@ import { execFileSync } from "node:child_process";
 import path from "node:path";
 
 const productionPath = "./envs/production";
-// --update leaves out what only changes when the app or its tools do, so a new .env or new scripts do not mean copying
-// the whole bundle again
-const isUpdate = process.argv.includes("--update");
-const bundlePath = isUpdate ? "./envs/production-update.zip" : "./envs/production.zip";
-const toolEntries = ["powersync-service", "bin", "browsers", ".output", "public", "resanorp-service.exe"];
+const bundlePath = "./envs/production.zip";
 // backups, caddy, pgdata, LOGS, the live data folders and the client's root.crt belong to the machine they were made on.
 // bin/downloads only caches the archives bin was extracted from
 const entries = [
@@ -14,7 +10,12 @@ const entries = [
   "Caddyfile",
   "trust-cert.ps1",
   "powersync",
-  ...(isUpdate ? [] : toolEntries),
+  "powersync-service",
+  "bin",
+  "browsers",
+  ".output",
+  "public",
+  "resanorp-service.exe",
   "start.cmd",
   "install.cmd",
   "backup.cmd",

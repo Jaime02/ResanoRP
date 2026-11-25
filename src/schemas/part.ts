@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { zfd } from "zod-form-data";
 
+import { FILE_NAME_EMPTY_MESSAGE } from "@/messages/common";
 import {
   decimalFilterSchema,
   fileNameSchema,
@@ -27,7 +28,7 @@ export const partSchema = basePartSchema.extend({
 });
 
 const blueprintFileNameRequiredError = {
-  error: "El nombre del archivo no puede estar vacío",
+  error: FILE_NAME_EMPTY_MESSAGE,
   path: ["fileName"],
 };
 
