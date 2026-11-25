@@ -27,7 +27,7 @@ largest tables: `delivery_note_line` 26,868, `sell_order_line` 22,594, `sell_ord
 
 Since `912b1ca` master is the Lite branch, and the `powersync` and `powersync-lite` branches were deleted. Electric's
 last commit is `240c4e0`. The SQLite branch's last measured commit, `83b60e4` (run 6), is on no branch: only the tag
-`bench-powersync-sqlite` keeps it, so the tag must be pushed (`git push origin bench-powersync-sqlite`).
+`bench-powersync-sqlite` keeps it.
 
 ## Files
 

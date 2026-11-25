@@ -82,8 +82,9 @@ case ${1:-} in
       -e "s#@(localhost|127\.0\.0\.1):[0-9]+/#@\1:$pg/#" \
       -e "s|^ENV_PATH.*|ENV_PATH = \"$stack_dir/env\"|" \
       "$SOURCE_ENV" > "$stack_dir/.env"
-    printf 'VITE_ELECTRIC_PORT = %s000\nBENCH_ENV_FILE = "%s"\nBENCH_IMAGE = "resanorp-app:bench-%s"\nAPP_IMAGE = "resanorp-app:bench-%s"\n' \
-      "$port" "$stack_dir/.env" "$name" "$name" >> "$stack_dir/.env"
+    # The Electric commits' compose files also publish Caddy's HTTP port, which the env files no longer set
+    printf 'VITE_CADDY_HTTP_PORT = %s080\nVITE_ELECTRIC_PORT = %s000\nBENCH_ENV_FILE = "%s"\nBENCH_IMAGE = "resanorp-app:bench-%s"\nAPP_IMAGE = "resanorp-app:bench-%s"\n' \
+      "$port" "$port" "$stack_dir/.env" "$name" "$name" >> "$stack_dir/.env"
 
     worktree "$name" "$ref"
     docker build -q -f "$WORKTREES/$name/docker/Dockerfile" --target production -t "resanorp-app:bench-$name" \
