@@ -7,7 +7,7 @@ import { cn } from "@/lib/utils";
 
 const BORDER_CLASS_NAME = "rounded-md border border-border";
 
-const tableVariants = cva("relative max-w-full border-collapse overflow-auto", {
+const tableVariants = cva("relative isolate max-w-full border-collapse overflow-auto", {
   defaultVariants: {
     variant: "default",
   },

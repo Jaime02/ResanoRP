@@ -24,7 +24,7 @@ import {
   dbTableSellOrder,
   dbTableSellOrderLine,
 } from "@/db/schema";
-import { formatDate, formatPendingQuantity, formatPrice } from "@/lib/formatters";
+import { formatDate, formatPrice } from "@/lib/formatters";
 import { getTagClientText, PartTagSource, TAG_BARE_QUANTITY_MIN_SELL_ORDERS } from "@/lib/part-tag";
 import { formatCents, getLineTotalInCents } from "@/lib/prices";
 import { groupStagedSellOrderLines, sortPendingSellOrderLines } from "@/lib/sell-order-line";
@@ -172,7 +172,7 @@ for (const selectedClient of clientsWithPendingLines) {
         await workflowOpenCreateDeliveryNoteForClient(page, selectedClient);
 
         await expect(sellOrderLineRow.getByTestId("pendingQuantity")).toHaveText(
-          formatPendingQuantity(pendingSellOrderLine),
+          String(pendingSellOrderLine.pendingQuantity),
         );
 
         await expect(sellOrderLineRow.getByTestId("quantity")).toHaveCount(0);
@@ -231,7 +231,7 @@ for (const selectedClient of clientsWithPendingLines) {
         await workflowOpenCreateDeliveryNoteForClient(page, selectedClient);
 
         await expect(sellOrderLineRow.getByTestId("pendingQuantity")).toHaveText(
-          formatPendingQuantity(pendingSellOrderLine),
+          String(pendingSellOrderLine.pendingQuantity),
         );
 
         const stagedSellOrderLineRow = await workflowStageSingleSellOrderLine(page, pendingSellOrderLine.id);
@@ -259,10 +259,7 @@ for (const selectedClient of clientsWithPendingLines) {
         );
 
         await expect(sellOrderLineRow.getByTestId("pendingQuantity")).toHaveText(
-          formatPendingQuantity({
-            pendingQuantity: pendingSellOrderLine.pendingQuantity - quantityToStage,
-            quantity: pendingSellOrderLine.quantity,
-          }),
+          String(pendingSellOrderLine.pendingQuantity - quantityToStage),
         );
 
         await expect(getDivDisabledMessage(tableStagedSellOrderLines)).toBeVisible();
@@ -283,7 +280,7 @@ for (const selectedClient of clientsWithPendingLines) {
         );
 
         await expect(sellOrderLineRow.getByTestId("pendingQuantity")).toHaveText(
-          formatPendingQuantity(pendingSellOrderLine),
+          String(pendingSellOrderLine.pendingQuantity),
         );
 
         // Deleting the delivery note removes its transaction, so the stock is back to what it was
@@ -914,15 +911,10 @@ for (const client of clientsWithPendingLines) {
         await expect(getTableRowByTestId(tablePendingSellOrderLines, earliestLine.id)).toHaveCount(0);
         await expect(
           getTableRowByTestId(tablePendingSellOrderLines, mockFirstLine.id).getByTestId("pendingQuantity"),
-        ).toHaveText(
-          formatPendingQuantity({
-            pendingQuantity: mockFirstLine.pendingQuantity - servedOfMockFirstLine,
-            quantity: mockFirstLine.quantity,
-          }),
-        );
+        ).toHaveText(String(mockFirstLine.pendingQuantity - servedOfMockFirstLine));
         await expect(
           getTableRowByTestId(tablePendingSellOrderLines, mockLastLine.id).getByTestId("pendingQuantity"),
-        ).toHaveText(formatPendingQuantity(mockLastLine));
+        ).toHaveText(String(mockLastLine.pendingQuantity));
       });
 
       await test.step("the tag of a served line lists its Pedido", async () => {

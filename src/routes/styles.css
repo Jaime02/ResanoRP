@@ -144,7 +144,9 @@
   --fade-right: 0px;
   --fade-size: calc(var(--row-height) / 2);
   --fade-color: color-mix(in srgb, black 15%, transparent);
-  --scroll-height: calc(var(--header-height, 0px) + var(--row-height) * var(--scroll-rows));
+  --scroll-height: calc(
+    var(--header-height, 0px) + var(--row-height) * var(--scroll-rows) + var(--subrows-height, 0px)
+  );
   max-height: var(--scroll-height);
   overflow-y: auto;
   /* Clips the rows to the rounded corners of the border overlay */

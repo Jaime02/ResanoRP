@@ -256,9 +256,10 @@ export default function BaseTable<TRow extends TBaseModel, TState extends TTable
 
   useLayoutEffect(() => {
     const head = tableRef.current?.tHead;
+    const body = tableRef.current?.tBodies[0];
     const scroller = tableRef.current?.parentElement;
     const root = rootRef.current;
-    if (!head || !scroller || !root) return;
+    if (!head || !body || !scroller || !root) return;
     // The fade overlay must not be taller than what is visible, or it adds empty scrollable space
     // borderBoxSize ignores transforms (a dialog opens scaled), unlike getBoundingClientRect, and unlike clientHeight it
     // is not rounded, which at fractional zoom levels can exceed the real height by a subpixel
@@ -267,13 +268,19 @@ export default function BaseTable<TRow extends TBaseModel, TState extends TTable
         const height = entry.borderBoxSize[0]?.blockSize ?? 0;
         if (entry.target === head) {
           root.style.setProperty("--header-height", `${height}px`);
+        } else if (entry.target === body) {
+          const subrowsHeight = Array.from(
+            body.querySelectorAll<HTMLElement>(":scope > tr[data-row-type='subrow']"),
+            (subrow) => subrow.offsetHeight,
+          ).reduce((total, subrowHeight) => total + subrowHeight, 0);
+          root.style.setProperty("--subrows-height", `${subrowsHeight}px`);
         } else {
           const scrollbarHeight = scroller.offsetHeight - scroller.clientHeight;
           scroller.style.setProperty("--viewport-height", `${height - scrollbarHeight}px`);
         }
       }
     });
-    [head, scroller].forEach((element) => resizeObserver.observe(element));
+    [head, body, scroller].forEach((element) => resizeObserver.observe(element));
     return () => resizeObserver.disconnect();
   }, []);
 

@@ -161,6 +161,9 @@ test("manage the delivery notes", { annotation: TestAnnotations.ResetTags }, asy
       const subrow = getTableSubrowById(tableDeliveryNotes, deliveryNote.id);
       await expect(subrow).toBeVisible();
       await assertFormLoaded(subrow);
+      await expect
+        .poll(async () => tableDeliveryNotes.evaluate((scroller) => scroller.scrollHeight - scroller.clientHeight))
+        .toBeLessThanOrEqual(0);
       await expect(getFormInputByLabel(subrow, DELIVERY_NOTE_NUMBER_LABEL, InputElementType.Number)).toHaveValue(
         String(deliveryNote.id),
       );

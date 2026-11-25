@@ -12,6 +12,8 @@ Do not run the tests unless explicitly required.
 
 Every time you change app behavior, labels or UI, update or add the tests that cover it in the same change, even if the user does not mention tests. Check `src/tests/` for tests, workflows and mock data that reference what you changed.
 
+Before every commit, and after every change to app code, grep `src/tests/` for the test ids, labels, formatters and components the diff touches, and read each assertion that uses them. Check it against the code as it will be committed: an expected value must come from the same function or constant the app renders on that screen (e.g. a formatter used only in a PDF does not apply to the on-screen table). Do not commit while an assertion and the app disagree.
+
 When writing tests:
 
 - Drive them through the user UI. Do not send custom HTTP or tRPC requests (`page.request`), force clicks or use similar hacks to reach states the UI cannot reach.
