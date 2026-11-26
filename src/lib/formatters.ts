@@ -2,6 +2,8 @@ import { APP_TIME_ZONE } from "@/lib/dates";
 import log from "@/logging/log";
 import { LogMessages, LoggerLevels } from "@/logging/types";
 import { INACTIVE_MATERIAL_DELETED_MESSAGE, INACTIVE_RAW_MATERIAL_DELETED_MESSAGE } from "@/messages/material";
+import { MATERIAL_LOT_QUANTITY_MESSAGE } from "@/messages/material-lot";
+import type { MaterialLotUnit } from "@/types/material-lot";
 import { isSharePrinterKind } from "@/types/printer";
 import type { PrinterKind } from "@/types/printer";
 
@@ -132,4 +134,27 @@ export function formatClientError(error: unknown): Record<string, unknown> {
 // A share is written as Windows writes it, \\address\share
 export function formatPrinterAddress(printer: { kind: PrinterKind; address: string; shareName: string | null }) {
   return isSharePrinterKind(printer.kind) ? `\\\\${printer.address}\\${printer.shareName ?? ""}` : printer.address;
+}
+
+export const MATERIAL_LOT_LABEL_SEPARATOR = " · ";
+
+export function formatUsedMaterialLot(materialLot: { heat: string | null; unit: MaterialLotUnit }, taken: number) {
+  return [materialLot.heat, MATERIAL_LOT_QUANTITY_MESSAGE(taken, materialLot.unit)]
+    .filter((part) => part !== null)
+    .join(MATERIAL_LOT_LABEL_SEPARATOR);
+}
+
+export function formatMaterialLot(materialLot: {
+  heat: string | null;
+  materialName: string;
+  remaining: number;
+  unit: MaterialLotUnit;
+}): string {
+  return [
+    materialLot.heat,
+    materialLot.materialName,
+    MATERIAL_LOT_QUANTITY_MESSAGE(materialLot.remaining, materialLot.unit),
+  ]
+    .filter((part) => part !== null)
+    .join(MATERIAL_LOT_LABEL_SEPARATOR);
 }

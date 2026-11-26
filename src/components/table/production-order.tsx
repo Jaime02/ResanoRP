@@ -330,7 +330,7 @@ export default function TableProductionOrder({
       columnHelper.display({
         cell: ({ row }) => (
           <ModelActions
-            {...(isAdmin && tableMode === TableMode.Editable
+            {...(tableMode === TableMode.Editable
               ? {
                   ...(getProductionOrderStatus(row.original) !== ProductionOrderStatus.Deleted && {
                     deleteButton: {

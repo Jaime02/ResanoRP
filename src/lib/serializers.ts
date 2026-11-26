@@ -26,6 +26,11 @@ import { DELIVERY_NOTES_LABEL } from "@/messages/delivery-note";
 import { DUE_DATE_LABEL } from "@/messages/invoice";
 import { MACHINE_MAX_DIAMETER_LABEL, MACHINE_MIN_DIAMETER_LABEL } from "@/messages/machine";
 import { RAW_MATERIAL_DENSITY_LABEL, RAW_MATERIAL_LABEL } from "@/messages/material";
+import {
+  HEAT_LABEL,
+  MATERIAL_LOT_QUANTITY_MESSAGE,
+  MATERIAL_LOT_RECEIVED_QUANTITY_LABEL,
+} from "@/messages/material-lot";
 import { PART_FEATURE_LABEL, CLIENT_DESCRIPTION_LABEL, CLIENT_REFERENCE_DESCRIPTION_LABEL } from "@/messages/part";
 import { BASE_LABEL, PENDING_PRICE_LABEL } from "@/messages/part-price";
 import { PRINTER_ADDRESS_LABEL, PRINTER_KIND_LABEL, PRINTER_KIND_LABELS } from "@/messages/printer";
@@ -38,6 +43,7 @@ import {
 } from "@/messages/sell-order";
 import type { TDeliveryNoteLine } from "@/queries/delivery-note";
 import type { TClientBlueprint } from "@/queries/part";
+import type { MaterialLotUnit } from "@/types/material-lot";
 
 declare const serialized: unique symbol;
 
@@ -266,4 +272,18 @@ export function serializePaymentMethod(paymentMethod: {
 
 export function serializeUser(user: { name: string; ip: string }): TSerializeOutput {
   return serialize({ [NAME_LABEL]: user.name, [IP_LABEL]: user.ip });
+}
+
+export function serializeMaterialLot(materialLot: {
+  heat: string | null;
+  receivedQuantity: number;
+  unit: MaterialLotUnit;
+}): TSerializeOutput {
+  return serialize({
+    [HEAT_LABEL]: materialLot.heat,
+    [MATERIAL_LOT_RECEIVED_QUANTITY_LABEL]: MATERIAL_LOT_QUANTITY_MESSAGE(
+      materialLot.receivedQuantity,
+      materialLot.unit,
+    ),
+  });
 }

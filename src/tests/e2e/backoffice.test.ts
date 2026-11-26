@@ -72,7 +72,6 @@ test("the Backoffice shows the audit log in a readable way and clears the errors
   openPage,
   baseURL,
 }) => {
-  const formConfiguration = page.getByTestId("form-configuration");
   const tableAuditLog = page.getByTestId("table-audit-log");
 
   const [firstVatPercentage, otherBrowserVatPercentage] = EDITED_VAT_PERCENTAGES;
@@ -81,7 +80,7 @@ test("the Backoffice shows the audit log in a readable way and clears the errors
     await page.goto("/maintenance?tab=configuration");
     await editVatPercentage(page, firstVatPercentage);
 
-    await formConfiguration.getByTestId("button-link-backoffice").click();
+    await page.getByTestId("button-link-backoffice").click();
     await expect(page).toHaveURL((url) => url.pathname === "/backoffice");
     await assertTableRowCount(tableAuditLog, 1);
   });

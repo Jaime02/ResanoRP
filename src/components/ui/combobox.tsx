@@ -17,6 +17,7 @@ export interface ComboboxProps<TItem extends TBaseModel> {
   items: Array<TItem>;
   activeItem: TItem | null;
   formatItem: (item: TItem | null) => string;
+  renderItem?: (item: TItem) => React.ReactNode;
   onValueChange?: (value: TItem | null) => void;
   loading?: boolean;
   readOnly?: boolean;
@@ -40,6 +41,7 @@ export function Combobox<TItem extends TBaseModel>({
   items,
   activeItem,
   formatItem,
+  renderItem,
   onValueChange,
   loading = false,
   readOnly = false,
@@ -88,9 +90,7 @@ export function Combobox<TItem extends TBaseModel>({
               className={cn("min-w-0 grow", !showChevron && !activeItem && "px-2")}
             >
               {activeItem ? (
-                <span className="truncate">
-                  <BaseCombobox.Value />
-                </span>
+                <span className="truncate">{renderItem?.(activeItem) ?? <BaseCombobox.Value />}</span>
               ) : (
                 placeholder
               )}
@@ -158,7 +158,7 @@ export function Combobox<TItem extends TBaseModel>({
                   role="option"
                   className="cursor-pointer rounded-sm p-2 select-none data-highlighted:bg-primary data-highlighted:text-white data-selected:not-data-highlighted:bg-secondary data-selected:not-data-highlighted:text-secondary-foreground"
                 >
-                  {formatItem(item)}
+                  {renderItem?.(item) ?? formatItem(item)}
                 </BaseCombobox.Item>
               )}
             </BaseCombobox.List>

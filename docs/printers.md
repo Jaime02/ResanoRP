@@ -11,7 +11,7 @@ The selector itself is `usePrintControls` (`src/components/print/use-print-contr
 
 ## Part tags
 
-A printer is either **for tags** (`forTags`, "Para etiquetas de pieza") or for every other document. The document dialogs only list the second ones, and the tag screens only the first ones, both with **Otra**.
+A printer is either **for tags** (`forTags`, "Para etiquetas de Artículos") or for every other document. The document dialogs only list the second ones, and the tag screens only the first ones, both with **Otra**.
 
 Tags are printed from three places, all with the same selector:
 
@@ -31,12 +31,12 @@ Code: `src/files/printer.ts` (encoders and transports), `src/trpc/printer.ts`, `
 | -------------------- | -------------------------------- | ------------------------------------------------- | ---------------------------------------------------------------------------- | ------------------ |
 | `ipp`                | Red (IPP)                        | IPP `Print-Job` over HTTP, port 631, `/ipp/print` | PWG raster (`image/pwg-raster`, 8-bit gray, 600 dpi)                         | `pwgraster`        |
 | `intermecShare`      | Compartida: Intermec (etiquetas) | SMB print share (`smbclient`)                     | Intermec Direct Protocol with the page as an embedded PCX image, 203 dpi     | `pcxmono`          |
-| `brotherShare`       | Compartida: Brother láser        | SMB print share (`smbclient`)                     | PJL/PCL made by the `brlaser` filter (`rastertobrlaser`), A4, 600 dpi, 1 bit | `cups`             |
+| `brotherShare`       | Compartida: Brother láser        | SMB print share (`smbclient`)                     | PJL/PCL of the `brlaser` driver, written by the app, A4, 600 dpi, 1 bit      | `pbmraw`           |
 | `tscRaw`             | Red: TSC (etiquetas)             | Raw TCP, port 9100 (`RAW_PRINT_PORT`)             | TSPL: `SIZE`, then per page `CLS`, `BITMAP` (1 bit, 203 dpi) and `PRINT 1,1` | `pbmraw`           |
 
-Why rasters and not PDF: the printers in use accept no PDF (see below), and a Windows share set to the RAW datatype bypasses the Windows driver, so the job must already be in the printer's own language. Ghostscript (installed in the Docker image together with `smbclient` and `printer-driver-brlaser`) converts the PDF.
+Why rasters and not PDF: the printers in use accept no PDF (see below), and a Windows share set to the RAW datatype bypasses the Windows driver, so the job must already be in the printer's own language. Ghostscript (installed in the Docker image together with `smbclient`) converts the PDF.
 
-On the native Windows server there is no `smbclient` or `brlaser`: a share is connected with `net use` (the password goes in its arguments: with `*` it reads it from the console, never from a piped input, and fails with error 86) and the Intermec job is copied to it with `copy /b`, while the Brother page goes through Ghostscript's `mswinpr2` and the Windows driver of the printer. Windows allows one user per server name in a logon session and the service's jobs all share one, so the jobs of a server run one at a time, and a connection refused because the server already has one (another user, or left by an earlier run) is dropped and made again once. Checked on a Windows dev machine against `\\127.0.0.1\IPC$` (reconnect, error 1219, queued jobs), not yet against the printers.
+On the native Windows server there is no `smbclient`: a share is connected with `net use` (the password goes in its arguments: with `*` it reads it from the console, never from a piped input, and fails with error 86) and the job is copied to it with `copy /b`, so the server needs no printer driver. Windows allows one user per server name in a logon session and the service's jobs all share one, so the jobs of a server run one at a time, and a connection refused because the server already has one (another user, or left by an earlier run) is dropped and made again once. Checked on a Windows dev machine against `\\127.0.0.1\IPC$` (reconnect, error 1219, queued jobs), not yet against the printers.
 
 ### Fields per printer
 
@@ -110,7 +110,11 @@ A desktop thermal-transfer label printer, 203 dpi, 108 mm maximum print width, w
 
 ### Brother HL-L2310D
 
-Listed by the open-source `brlaser` driver. The job is `cups` raster (1 bit, 600 dpi) converted by `/usr/lib/cups/filter/rastertobrlaser`. The output starts with NUL bytes and contains `@PJL SET PAPER = A4`.
+The app sends it the PCL dialect of the open-source `brlaser` driver, which lists this model. `brlaser` is a CUPS filter and the Windows server has no CUPS, so `pbmPagesToBrotherLaser` in `src/files/printer.ts` writes the same job from each page rasterized by Ghostscript (`pbmraw`, 1 bit, 600 dpi): 128 NUL bytes, a PJL header (`@PJL SET PAPER = A4`, portrait), then per page every line as the edits from the line above it, in blocks, starting again from a whole line every 64 lines.
+
+It is a port of `job.cc`, `line.cc` and `block.h` of Owl-Maintain/brlaser 6.2.7 (GPL), checked byte for byte against its `rastertobrlaser` on every PDF of `src/tests/mock-data` fed the same bitmap. `printer-lib.test.ts` keeps that check with the hash of the job `rastertobrlaser` wrote for `createBrotherTestPbm`. The paper size is always A4, as `brlaser` did for the raster Ghostscript gave it.
+
+The printer starts every line about 5 mm in from the left edge of the paper, and `brlaser` leaves that to the application: an albarán with 1 cm margins printed with 16 mm on the left and 6 mm on the right. So 5 mm of dots (`BROTHER_LEFT_OFFSET_MM`, cut in whole bytes) are cut from the left of every line. The top printed at about 15 mm, which may be the same offset downwards; it is not corrected.
 
 ### Not covered yet
 

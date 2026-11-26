@@ -74,7 +74,7 @@ rem The restore leaves out PowerSync's publication and grants, which init.sql cr
 %PSQL% -d %POSTGRES_DB% -f powersync\init.sql || exit /b 1
 pg_restore -h localhost -p %POSTGRES_PORT% -U %POSTGRES_USER% -d %POSTGRES_DB% --no-owner --no-publications --no-privileges import\prisma.dump || exit /b 1
 
-for %%f in (BLUEPRINTS SELL_ORDERS TAGS DELIVERY_NOTES INVOICES) do (
+for %%f in (BLUEPRINTS SELL_ORDERS TAGS DELIVERY_NOTES INVOICES MATERIAL_CERTIFICATES) do (
   if exist "import\%%f" (
     if exist "%%f" move "%%f" "%BACKUP_PATH%\%%f" >nul || exit /b 1
     move "import\%%f" "%%f" >nul || exit /b 1

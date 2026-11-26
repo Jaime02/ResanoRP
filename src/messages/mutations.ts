@@ -55,6 +55,12 @@ import {
   RAW_MATERIAL_RESTORED_MESSAGE,
 } from "@/messages/material";
 import {
+  MATERIAL_LOT_CREATED_MESSAGE,
+  MATERIAL_LOT_DELETED_MESSAGE,
+  MATERIAL_LOT_EDITED_MESSAGE,
+  MATERIAL_LOT_MOVED_MESSAGE,
+} from "@/messages/material-lot";
+import {
   PART_COMPONENT_CREATED_MESSAGE,
   PART_COMPONENT_DELETED_MESSAGE,
   PART_COMPONENT_EDITED_MESSAGE,
@@ -164,6 +170,10 @@ export const MUTATION_MESSAGES: Record<string, string | null> = {
   "material.create": MATERIAL_CREATED_MESSAGE,
   "material.delete": MATERIAL_DELETED_MESSAGE,
   "material.restore": MATERIAL_RESTORED_MESSAGE,
+  "materialLot.create": MATERIAL_LOT_CREATED_MESSAGE,
+  "materialLot.delete": MATERIAL_LOT_DELETED_MESSAGE,
+  "materialLot.move": MATERIAL_LOT_MOVED_MESSAGE,
+  "materialLot.update": MATERIAL_LOT_EDITED_MESSAGE,
   "part.createWithPartReference": PART_CREATED_MESSAGE,
   "part.delete": PART_DELETED_MESSAGE,
   "part.restore": PART_RESTORED_MESSAGE,

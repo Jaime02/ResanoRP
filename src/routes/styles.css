@@ -147,7 +147,7 @@
   --scroll-height: calc(
     var(--header-height, 0px) + var(--row-height) * var(--scroll-rows) + var(--subrows-height, 0px)
   );
-  max-height: var(--scroll-height);
+  max-height: var(--scroll-max-height, var(--scroll-height));
   overflow-y: auto;
   /* Clips the rows to the rounded corners of the border overlay */
   border-radius: var(--radius-md);

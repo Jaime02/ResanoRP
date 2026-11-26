@@ -48,7 +48,9 @@ export default function LayoutBlueprintViewer({
         renderHeader={(toolbar, disabled) => (
           <CardHeader className="w-full">
             <CardTitle>{blueprint.fileName}</CardTitle>
-            <CardAction>
+            <CardAction className="flex-wrap justify-end">
+              {navigation}
+              {toolbar}
               <ModelActions
                 {...(isAdmin
                   ? {
@@ -72,21 +74,17 @@ export default function LayoutBlueprintViewer({
                     }
                   : {})}
                 extraComponentsStart={
-                  <>
-                    {navigation}
-                    {toolbar}
-                    <Button
-                      testId="button-print-blueprint"
-                      size="icon"
-                      disabled={disabled}
-                      onClick={() => {
-                        // TODO
-                        console.log("Print blueprint");
-                      }}
-                    >
-                      <PrinterIcon />
-                    </Button>
-                  </>
+                  <Button
+                    testId="button-print-blueprint"
+                    size="icon"
+                    disabled={disabled}
+                    onClick={() => {
+                      // TODO
+                      console.log("Print blueprint");
+                    }}
+                  >
+                    <PrinterIcon />
+                  </Button>
                 }
               />
             </CardAction>

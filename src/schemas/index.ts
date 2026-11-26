@@ -46,7 +46,7 @@ export function stringSchema({
   errorMessage = REQUIRED_FIELD_MESSAGE,
   nullable = false,
 }: SchemaFunctionProps | undefined = {}) {
-  const schema = z.string({ error: errorMessage });
+  const schema = z.string({ error: errorMessage }).trim();
   if (nullable) {
     return schema.nullable().transform((val) => (val === "" ? null : val));
   }

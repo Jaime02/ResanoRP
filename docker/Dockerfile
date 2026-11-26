@@ -26,7 +26,7 @@ RUN bunx playwright@$(cat /tmp/playwright-version) install --with-deps chromium
 # another computer (src/files/printer.ts).
 FROM browsers AS ghostscript
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends ghostscript smbclient printer-driver-brlaser \
+    && apt-get install -y --no-install-recommends ghostscript smbclient \
     && rm -rf /var/lib/apt/lists/*
 
 FROM ghostscript AS prerelease

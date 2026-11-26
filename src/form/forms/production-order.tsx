@@ -69,7 +69,7 @@ export default function FormProductionOrder({
   showBlueprints = true,
 }: FormProductionOrderProps) {
   const dbClient = useDbClient();
-  const { isAdmin, showToastOnTransaction, showToastOnTRPCMutation } = useAppContext();
+  const { showToastOnTransaction, showToastOnTRPCMutation } = useAppContext();
   const { form, formMode, isLoading, productionOrder, sellOrderLine, validationSchema } = useProductionOrderForm({
     createSellOrderLineId,
     editProductionOrderId: productionOrderId,
@@ -87,7 +87,7 @@ export default function FormProductionOrder({
       children={(field) => <field.TextareaInput id="form-production-order-notes" label={NOTES_LABEL} />}
     />
   );
-  const checkboxFields = (formMode === FormMode.Create || (formMode === FormMode.Update && isAdmin)) && (
+  const checkboxFields = (formMode === FormMode.Create || formMode === FormMode.Update) && (
     <div className="flex flex-row gap-4">
       <form.AppField
         name="qualityControl"
@@ -129,7 +129,11 @@ export default function FormProductionOrder({
                       </ButtonLink>
                     </CardTitle>
                   </CardHeader>
-                  <PartFields part={productionOrderDetail?.part} />
+                  <PartFields
+                    part={productionOrderDetail?.part}
+                    productionOrderId={productionOrderDetail?.id}
+                    canTakeMaterial={formMode !== FormMode.ReadOnly}
+                  />
                 </Card>
                 <Card>
                   <CardHeader>
@@ -229,7 +233,7 @@ export default function FormProductionOrder({
                 <form.ButtonSubmit disableIfPristine={formMode !== FormMode.Create} />
               </div>
             )}
-            {isAdmin && productionOrder?.deletedAt && (
+            {productionOrder?.deletedAt && (
               <div className="flex w-full flex-row justify-end gap-2">
                 <ButtonRestoreModel
                   dialogTitle={PRODUCTION_ORDER_RESTORE_TITLE}

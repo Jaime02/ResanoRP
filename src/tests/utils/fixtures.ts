@@ -7,7 +7,7 @@ import { AppContextStorage, UserMode } from "@/contexts/app-context";
 import { cleanDatabase, type TDatabase } from "@/db";
 import { ADMIN_SESSION_COOKIE_NAME, getAdminSessionToken } from "@/lib/admin-session";
 import { errorsLogFilePath } from "@/logging/logger";
-import { resetBlueprints, resetSellOrders, resetTags } from "@/scripts/reset-env";
+import { resetBlueprints, resetMaterialCertificates, resetSellOrders, resetTags } from "@/scripts/reset-env";
 import { MOCK_INITIAL_DATE } from "@/tests/mock-data";
 import {
   LOG_TIMESTAMP_PATTERN,
@@ -38,6 +38,9 @@ export const TestAnnotations: Record<string, TestAnnotation> = {
 
   // Empty the generated tags before and after the test
   ResetTags: { type: "reset_tags" as const },
+
+  // Empty the uploaded certificates of the Lotes before and after the test
+  ResetMaterialCertificates: { type: "reset_material_certificates" as const },
 } as const;
 
 // Each worker runs a single test at a time, so the events expected by the current test can live in the module
@@ -102,6 +105,9 @@ export const test = base.extend<TestFixture>({
       if (hasAnnotation(testInfo, TestAnnotations.ResetTags)) {
         await resetTags();
       }
+      if (hasAnnotation(testInfo, TestAnnotations.ResetMaterialCertificates)) {
+        await resetMaterialCertificates();
+      }
 
       if (expectedErrorsLogEvents.length === 0) {
         expect(readErrorsLog(), `Errors log file (${errorsLogFilePath}) should be empty`).toEqual([]);
@@ -129,6 +135,9 @@ export const test = base.extend<TestFixture>({
 
       if (hasAnnotation(testInfo, TestAnnotations.ResetTags)) {
         await resetTags();
+      }
+      if (hasAnnotation(testInfo, TestAnnotations.ResetMaterialCertificates)) {
+        await resetMaterialCertificates();
       }
 
       fs.truncateSync(errorsLogFilePath);

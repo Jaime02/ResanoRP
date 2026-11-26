@@ -154,11 +154,49 @@ export function parseIntermecDirectProtocolJob(data: Buffer): Array<TIntermecLab
   return labels;
 }
 
-// The settings of the PJL header brlaser writes before the pages, like PAPER or RESOLUTION
+// The settings of the PJL header of a Brother job, like PAPER or RESOLUTION
 export function parseBrotherJobSettings(data: Buffer): Record<string, string> {
   return Object.fromEntries(
     [...data.toString("latin1").matchAll(/@PJL SET (\w+) = ([^\r\n]*)/g)].map(([, name, value]) => [name, value]),
   );
+}
+
+const BROTHER_TEST_BYTES_PER_ROW = 800;
+const BROTHER_TEST_HEIGHT = 300;
+const BROTHER_TEST_ROWS_PER_PATTERN = 25;
+
+// A raw PBM with every case of the Brother line encoding, in runs of rows: blank, solid, more changes than a line holds,
+// random bytes, one byte changed far into the line, and random runs. It is wider than a page, as no A4 line can have
+// that many changes
+export function createBrotherTestPbm() {
+  let seed = 1;
+  const random = () => {
+    seed = (seed * 1_103_515_245 + 12_345) % 2 ** 31;
+    return (seed >> 16) & 0xff;
+  };
+  const bits = Buffer.alloc(BROTHER_TEST_BYTES_PER_ROW * BROTHER_TEST_HEIGHT);
+  for (let row = 0; row < BROTHER_TEST_HEIGHT; row++) {
+    const line = bits.subarray(row * BROTHER_TEST_BYTES_PER_ROW, (row + 1) * BROTHER_TEST_BYTES_PER_ROW);
+    const patterns = [
+      () => undefined,
+      () => line.fill(0xff),
+      () => line.forEach((_, index) => (line[index] = index % 3 === 0 ? row : 0x0f)),
+      () => line.forEach((_, index) => (line[index] = random())),
+      () => {
+        bits.copy(line, 0, (row - 1) * BROTHER_TEST_BYTES_PER_ROW, row * BROTHER_TEST_BYTES_PER_ROW);
+        line[(row * 37) % BROTHER_TEST_BYTES_PER_ROW] = random();
+      },
+      () => {
+        for (let index = 0; index < BROTHER_TEST_BYTES_PER_ROW;) {
+          const end = Math.min(index + random() * 2, BROTHER_TEST_BYTES_PER_ROW);
+          line.fill(random(), index, end);
+          index = Math.max(end, index + 1);
+        }
+      },
+    ];
+    patterns[Math.floor(row / BROTHER_TEST_ROWS_PER_PATTERN) % patterns.length]();
+  }
+  return Buffer.concat([Buffer.from(`P4\n${BROTHER_TEST_BYTES_PER_ROW * 8} ${BROTHER_TEST_HEIGHT}\n`), bits]);
 }
 
 const PWG_SYNC_WORD = "RaS2";

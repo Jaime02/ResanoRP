@@ -52,7 +52,7 @@ exit /b 0
 :copy
 pg_dump -h localhost -p %POSTGRES_PORT% -U %POSTGRES_USER% -d %POSTGRES_DB% -Fc -f "%PARTIAL_PATH%\production.dump" || exit /b 1
 
-set "FOLDERS=SELL_ORDERS TAGS DELIVERY_NOTES INVOICES caddy"
+set "FOLDERS=SELL_ORDERS TAGS DELIVERY_NOTES INVOICES MATERIAL_CERTIFICATES caddy"
 rem The task runs at 02:00, so Sunday night is Monday
 if "%WEEKDAY%"=="1" set "FOLDERS=%FOLDERS% BLUEPRINTS"
 for %%f in (%FOLDERS%) do (

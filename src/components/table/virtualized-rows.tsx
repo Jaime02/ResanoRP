@@ -1,5 +1,5 @@
 import { defaultRangeExtractor, useVirtualizer } from "@tanstack/react-virtual";
-import { memo, useCallback, useLayoutEffect, useRef, useState } from "react";
+import { memo, useCallback, useLayoutEffect, useState } from "react";
 
 import { TABLE_ROW_HEIGHT_PX } from "@/components/table/row-height";
 
@@ -31,6 +31,17 @@ const VirtualizedRow = memo(function VirtualizedRow<TRow extends TVirtualizedRow
   return renderRow(row, rowIndex, measureElement);
 }) as <TRow extends TVirtualizedRow>(props: VirtualizedRowProps<TRow>) => React.ReactElement;
 
+// The table scrolls its own rows only while it has a max height, otherwise they scroll with the scroll container around
+// it. Picked by style rather than by overflow, which flips for a frame whenever the rendered rows change
+const getScrollElement = (tableScroller: HTMLElement | null | undefined) => {
+  if (!tableScroller || getComputedStyle(tableScroller).maxHeight !== "none") return tableScroller ?? null;
+  let ancestor = tableScroller.parentElement;
+  while (ancestor !== null && !["auto", "scroll"].includes(getComputedStyle(ancestor).overflowY)) {
+    ancestor = ancestor.parentElement;
+  }
+  return ancestor ?? (document.scrollingElement instanceof HTMLElement ? document.scrollingElement : null);
+};
+
 // Kept apart from BaseTable because the React Compiler skips memoizing any component that calls useVirtualizer
 export default function VirtualizedRows<TRow extends TVirtualizedRow>({
   rows,
@@ -38,11 +49,10 @@ export default function VirtualizedRows<TRow extends TVirtualizedRow>({
   renderRow,
 }: VirtualizedRowsProps<TRow>) {
   const [scrollMargin, setScrollMargin] = useState(0);
-  const scrollElementRef = useRef<HTMLElement | null>(null);
   // oxlint-disable-next-line react/incompatible-library
   const rowVirtualizer = useVirtualizer<HTMLElement, HTMLTableRowElement>({
     count: rows.length,
-    getScrollElement: () => (scrollElementRef.current ??= tbodyRef.current?.closest("table")?.parentElement ?? null),
+    getScrollElement: () => getScrollElement(tbodyRef.current?.closest("table")?.parentElement),
     estimateSize: () => TABLE_ROW_HEIGHT_PX,
     overscan: 10,
     scrollMargin,
@@ -80,7 +90,7 @@ export default function VirtualizedRows<TRow extends TVirtualizedRow>({
     );
     resizeObserver.observe(tbodyElement);
     return () => resizeObserver.disconnect();
-  }, [tbodyRef, rowVirtualizer]);
+  }, [tbodyRef, rowVirtualizer, rowVirtualizer.scrollElement]);
 
   const virtualRows = rowVirtualizer.getVirtualItems();
   const paddingTop = (virtualRows[0]?.start ?? scrollMargin) - scrollMargin;

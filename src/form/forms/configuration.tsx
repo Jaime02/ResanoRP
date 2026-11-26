@@ -1,7 +1,5 @@
-import ButtonLink from "@/components/ui/button-link";
 import { Card, CardHeader, CardTitle } from "@/components/ui/card";
 import { useFormContext } from "@/form";
-import { BACKOFFICE_LABEL } from "@/messages/backoffice";
 import { PHONE_LABEL } from "@/messages/client";
 import {
   ADDRESS_LABEL,
@@ -150,9 +148,6 @@ export default function FormConfiguration() {
           />
         </div>
       </Card>
-      <ButtonLink testId="button-link-backoffice" to="/backoffice" className="self-start">
-        {BACKOFFICE_LABEL}
-      </ButtonLink>
       {formMode !== FormMode.ReadOnly && (
         <form.ButtonSubmit className="self-end" customText={CONFIGURATION_EDIT_TITLE} />
       )}

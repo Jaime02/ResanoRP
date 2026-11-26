@@ -16,6 +16,7 @@ interface MaintenanceDialogProps extends Pick<
   className?: string;
   layoutClassName?: string;
   submitDisabled?: boolean;
+  disableSubmitIfPristine?: boolean;
   onClose?: () => void;
   children?: ReactNode;
 }
@@ -31,6 +32,7 @@ export default function MaintenanceDialog({
   className,
   layoutClassName,
   submitDisabled,
+  disableSubmitIfPristine,
   onClose,
   children,
 }: MaintenanceDialogProps) {
@@ -48,7 +50,7 @@ export default function MaintenanceDialog({
               {children}
             </div>
             <DialogFooter>
-              <form.ButtonSubmit disabled={submitDisabled} />
+              <form.ButtonSubmit disabled={submitDisabled} disableIfPristine={disableSubmitIfPristine} />
             </DialogFooter>
           </DialogContent>
         </form.AppForm>

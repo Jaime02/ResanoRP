@@ -13,6 +13,7 @@ import {
 } from "drizzle-orm/pg-core";
 import type { PgColumn } from "drizzle-orm/pg-core";
 
+import type { MaterialLotUnit } from "@/types/material-lot";
 import { PrinterKind } from "@/types/printer";
 
 // With time zone so PowerSync sends the offset, otherwise browsers parse the UTC values as local time
@@ -566,4 +567,47 @@ export const dbTableBlueprint = pgTable(
       .references(() => dbTablePart.id),
   },
   (table) => [index().on(table.partId)],
+);
+
+export const MATERIAL_LOT_RECEIVED_QUANTITY_CONSTRAINT = "material_lot_positive_received_quantity";
+// A Lote is one Colada of a Material received at once. Its packages are interchangeable, as traceability only follows
+// the Colada. What remains is the received quantity plus its movements, never stored, so it cannot drift from them
+export const dbTableMaterialLot = pgTable(
+  "material_lot",
+  {
+    hasCertificate: boolean("hasCertificate").notNull().default(false),
+    heat: text("heat"),
+    id: idType,
+    materialId: integer("materialId")
+      .notNull()
+      .references(() => dbTableMaterial.id),
+    receivedAt: datetimeType("receivedAt").notNull(),
+    receivedQuantity: integer("receivedQuantity").notNull(),
+    unit: text("unit").$type<MaterialLotUnit>().notNull(),
+  },
+  (table) => [
+    check(MATERIAL_LOT_RECEIVED_QUANTITY_CONSTRAINT, sql`${table.receivedQuantity} > 0`),
+    index().on(table.materialId),
+  ],
+);
+
+export const MATERIAL_LOT_MOVEMENT_USE_CONSTRAINT = "material_lot_movement_use_has_production_order";
+// Negative takes material out of the Lote, positive returns it. Zero records that an Orden de producción used the
+// Colada without taking stock, so it needs the order
+export const dbTableMaterialLotMovement = pgTable(
+  "material_lot_movement",
+  {
+    date: datetimeType("date").notNull(),
+    id: idType,
+    materialLotId: integer("materialLotId")
+      .notNull()
+      .references(() => dbTableMaterialLot.id),
+    productionOrderId: integer("productionOrderId").references(() => dbTableProductionOrder.id),
+    quantity: integer("quantity").notNull(),
+  },
+  (table) => [
+    check(MATERIAL_LOT_MOVEMENT_USE_CONSTRAINT, sql`${table.quantity} <> 0 OR ${table.productionOrderId} IS NOT NULL`),
+    index().on(table.materialLotId),
+    index().on(table.productionOrderId),
+  ],
 );

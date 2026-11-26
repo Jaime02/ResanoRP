@@ -48,6 +48,8 @@ export async function seedDatabase(db: TDatabase) {
       await tx.insert(schema.dbTablePartStock).values(removeRowId(mockData.mockPartStock));
       await tx.insert(schema.dbTableTreatmentShipment).values(removeRowId(mockData.mockTreatmentShipments));
       await tx.insert(schema.dbTableTreatmentReception).values(removeRowId(mockData.mockTreatmentReceptions));
+      await tx.insert(schema.dbTableMaterialLot).values(removeRowId(mockData.mockMaterialLots));
+      await tx.insert(schema.dbTableMaterialLotMovement).values(removeRowId(mockData.mockMaterialLotMovements));
 
       await tx.execute(sql`SET session_replication_role = 'origin';`);
     });

@@ -96,7 +96,7 @@ export default router({
         }
       }),
     ),
-  update: adminProcedure
+  update: procedure
     .meta({ writes: [dbTableProductionOrder] })
     .input(updateProductionOrderSchema)
     .mutation(async ({ ctx, input }) =>
@@ -121,7 +121,7 @@ export default router({
         }
       }),
     ),
-  delete: adminProcedure
+  delete: procedure
     .meta({ writes: [dbTableMachine, dbTableMachineProductionOrderQueue, dbTableProductionOrder] })
     .input(requiredIdObjectSchema)
     .mutation(async ({ ctx, input }) =>
@@ -147,7 +147,7 @@ export default router({
         }
       }),
     ),
-  restore: adminProcedure
+  restore: procedure
     .meta({ writes: [dbTableProductionOrder] })
     .input(requiredIdObjectSchema)
     .mutation(async ({ ctx, input }) =>

@@ -520,39 +520,43 @@ test("showing every production order renders the rows scrolled into view and exp
     tableProductionOrders.evaluate((element) => {
       const style = getComputedStyle(element);
       return {
-        size: style.getPropertyValue("--fade-size"),
         start: style.getPropertyValue("--fade-start"),
         end: style.getPropertyValue("--fade-end"),
       };
     });
 
-  await test.step("the table scrolls its own rows and only fades the edge with more to scroll", async () => {
+  await test.step("the table grows with its rows instead of scrolling or fading them", async () => {
     const table = tableProductionOrders;
-    await expect.poll(async () => table.evaluate((element) => element.scrollHeight > element.clientHeight)).toBe(true);
-    await expect.poll(async () => (await getFades()).end).toBe((await getFades()).size);
-    expect((await getFades()).start).toBe("0px");
+    await expect.poll(async () => table.evaluate((element) => element.scrollHeight > element.clientHeight)).toBe(false);
+    expect(await getFades()).toMatchObject({ start: "0px", end: "0px" });
+    await expect(lastRow).not.toHaveAttribute("data-index", String(productionOrdersCount - 1));
   });
 
-  await test.step("scrolling to the end renders the last production order", async () => {
+  await test.step("scrolling the page to the end renders the last production order", async () => {
     await getTableRows(tableProductionOrders).first().hover();
     // The rows are measured as they are rendered, so the end of the table moves away while scrolling to it
     await expect
       .poll(async () => {
         await page.mouse.wheel(0, 100_000);
-        return (await getFades()).end;
+        return lastRow.getAttribute("data-index");
       })
-      .toBe("0px");
-    await expect(lastRow).toHaveAttribute("data-index", String(productionOrdersCount - 1));
-    await expect.poll(async () => (await getFades()).start).toBe((await getFades()).size);
+      .toBe(String(productionOrdersCount - 1));
   });
 
   await test.step("a scrolled into view production order expands and collapses", async () => {
     const productionOrderId = Number(await lastRow.getAttribute("data-testid"));
     const subrow = getTableSubrowById(tableProductionOrders, productionOrderId);
+    const getWidth = async (locator: Locator) => locator.evaluate((element) => element.getBoundingClientRect().width);
+    const tableElement = tableProductionOrders.locator("table");
+    const dimensionCell = lastRow.getByTestId("dimension");
+    const dimensionCellWidth = await getWidth(dimensionCell);
     await lastRow.getByTestId("button-expander").click();
     await expect(subrow).toBeVisible();
+    const expandedTableWidth = await getWidth(tableElement);
     await lastRow.getByTestId("button-expander").click();
     await expect(subrow).not.toBeAttached();
+    expect(await getWidth(tableElement)).toBeGreaterThanOrEqual(expandedTableWidth);
+    expect(await getWidth(dimensionCell)).toBe(dimensionCellWidth);
   });
 });
 
@@ -1305,3 +1309,32 @@ test("only admins can copy the reference of a production order", async ({ page }
   await expect(getTableRows(tableProductionOrders).first()).toBeVisible();
   await expect(buttonsCopy).toHaveCount(0);
 });
+
+for (const [index, { userMode, machineId }] of [
+  { userMode: UserMode.User, machineId: undefined },
+  { userMode: UserMode.Machine, machineId: mockMachines[0].id },
+].entries()) {
+  test(`as ${userMode}, a production order can be edited, deleted and restored`, async ({ page }) => {
+    const productionOrder = (await getProductionOrdersByStatuses([ProductionOrderStatus.Pending])).filter(
+      ({ urgent }) => !urgent,
+    )[index];
+    await setUserMode(page, userMode, machineId);
+
+    await page.goto(`/production-order/${productionOrder.id}`);
+    await assertFormLoaded(page);
+    await page.getByTestId("form-production-order-urgent").click();
+    await page.getByTestId("button-submit").click();
+    await expectSingleSuccessToast(page, PRODUCTION_ORDER_EDITED_MESSAGE);
+    expect((await getProductionOrderById(productionOrder.id))?.urgent).toBe(true);
+
+    await gotoProductionOrdersWithStatuses(page, [ProductionOrderStatus.Pending]);
+    await expect(
+      getTableRowByTestId(tableProductionOrders, productionOrder.id).getByTestId("button-edit"),
+    ).toBeVisible();
+    await expect(
+      getTableRowByTestId(tableProductionOrders, productionOrder.id).getByTestId("button-restore"),
+    ).toHaveCount(0);
+    await workflowDeleteProductionOrder(page, productionOrder.id);
+    await workflowRestoreProductionOrder(page, productionOrder.id);
+  });
+}

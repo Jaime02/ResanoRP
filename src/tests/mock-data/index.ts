@@ -10,6 +10,8 @@ import type { BaseInvoice } from "@/types/invoice";
 import type { BaseMachine } from "@/types/machine";
 import type { BaseMachineProductionOrderQueue } from "@/types/machine-production-order-queue";
 import type { BaseMaterial } from "@/types/material";
+import { MaterialLotUnit } from "@/types/material-lot";
+import type { BaseMaterialLot, BaseMaterialLotMovement } from "@/types/material-lot";
 import type { BasePart } from "@/types/part";
 import type { BasePartComponent } from "@/types/part-component";
 import type { BasePartFeature } from "@/types/part-feature";
@@ -1415,5 +1417,69 @@ export const mockQualityChecks: Array<BaseQualityCheck> = [
     producedQuantity: 5,
     productionOrderId: 5,
     value: "12.05",
+  },
+];
+
+// Lote 3 is used up, and Lote 4 has no movements, so it is the only one that can be deleted
+export const mockMaterialLots: Array<BaseMaterialLot> = [
+  {
+    hasCertificate: false,
+    heat: "H-1001",
+    id: 1,
+    materialId: 1,
+    receivedAt: new Date(MOCK_INITIAL_DATE.getTime() - DAY_IN_MS * 10),
+    receivedQuantity: 3,
+    unit: MaterialLotUnit.Package,
+  },
+  {
+    hasCertificate: false,
+    heat: "H-2001",
+    id: 2,
+    materialId: 2,
+    receivedAt: new Date(MOCK_INITIAL_DATE.getTime() - DAY_IN_MS * 8),
+    receivedQuantity: 20,
+    unit: MaterialLotUnit.Bar,
+  },
+  {
+    hasCertificate: false,
+    heat: "H-1002",
+    id: 3,
+    materialId: 1,
+    receivedAt: new Date(MOCK_INITIAL_DATE.getTime() - DAY_IN_MS * 6),
+    receivedQuantity: 1,
+    unit: MaterialLotUnit.Package,
+  },
+  {
+    hasCertificate: false,
+    heat: "H-3001",
+    id: 4,
+    materialId: 3,
+    receivedAt: new Date(MOCK_INITIAL_DATE.getTime() - DAY_IN_MS * 4),
+    receivedQuantity: 10,
+    unit: MaterialLotUnit.Bar,
+  },
+];
+
+export const mockMaterialLotMovements: Array<BaseMaterialLotMovement> = [
+  {
+    date: new Date(MOCK_INITIAL_DATE.getTime() - DAY_IN_MS * 3),
+    id: 1,
+    materialLotId: 1,
+    productionOrderId: 1,
+    quantity: -1,
+  },
+  {
+    date: new Date(MOCK_INITIAL_DATE.getTime() - DAY_IN_MS * 3),
+    id: 2,
+    materialLotId: 3,
+    productionOrderId: 1,
+    quantity: -1,
+  },
+  {
+    date: new Date(MOCK_INITIAL_DATE.getTime() - DAY_IN_MS * 2),
+    id: 3,
+    materialLotId: 2,
+    productionOrderId: 1,
+    quantity: -4,
   },
 ];

@@ -33,7 +33,9 @@ export const RASTER_BITS_PER_COLOR = 8;
 
 // The label printers have 203 dpi heads and take 1-bit images
 export const LABEL_DPI = 203;
-const POINTS_PER_MM = 72 / 25.4;
+const POINTS_PER_INCH = 72;
+const POINTS_PER_MM = POINTS_PER_INCH / 25.4;
+const BITS_PER_BYTE = 8;
 export const INTERMEC_IMAGE_NAME = "RESANORP.1";
 
 // The TSC label printer reads TSPL on the raw port of its network card
@@ -41,11 +43,36 @@ export const RAW_PRINT_PORT = 9100;
 export const TSPL_BITMAP_OVERWRITE = 0;
 const PBM_HEADER_MAX_BYTES = 256;
 
-// The laser printer gets the 1-bit black raster its open source driver (brlaser) turns into the printer's language
+// The laser printer speaks the language of the open source brlaser driver (Owl-Maintain/brlaser 6.2.7: job.cc, line.cc
+// and block.h), written here because brlaser is a CUPS filter and the Windows server has no CUPS
 const BROTHER_DPI = 600;
-const CUPS_BLACK_COLOR_SPACE = 3;
-const BROTHER_BITS_PER_COLOR = 1;
-const BRLASER_FILTER_PATH = "/usr/lib/cups/filter/rastertobrlaser";
+// The HL-L2310D starts each line about 5 mm in from the paper edge, which brlaser leaves to the application: a page with
+// 1 cm margins printed with 16 mm on the left and 6 mm on the right. Cut in whole bytes of 8 dots
+const BROTHER_LEFT_OFFSET_MM = 5;
+const BROTHER_LEFT_OFFSET_BYTES = Math.round(
+  (BROTHER_LEFT_OFFSET_MM * POINTS_PER_MM * BROTHER_DPI) / POINTS_PER_INCH / BITS_PER_BYTE,
+);
+const BROTHER_JOB_START_PADDING_BYTES = 128;
+const PJL_UNIVERSAL_EXIT = "\x1b%-12345X";
+const BROTHER_JOB_SETTINGS = [
+  ["RAS1200MODE", "FALSE"],
+  ["RESOLUTION", String(BROTHER_DPI)],
+  ["ECONOMODE", "OFF"],
+  ["SOURCETRAY", "AUTO"],
+  ["MEDIATYPE", ""],
+  ["PAPER", "A4"],
+  ["PAGEPROTECT", "AUTO"],
+  ["ORIENTATION", "PORTRAIT"],
+];
+const BROTHER_LINES_PER_BAND = 64;
+const BROTHER_MAX_BLOCK_BYTES = 16_350;
+const BROTHER_MAX_LINE_EDITS = 254;
+const BROTHER_BLANK_LINE = 0xff;
+const BROTHER_OVERFLOW_BYTE = 255;
+const BROTHER_EDIT_FIELD_BITS = 7;
+const BROTHER_SUBSTITUTE = { countBits: 3, flag: 0 };
+const BROTHER_REPEAT = { countBits: 5, flag: 0x80 };
+const BROTHER_MIN_REPEAT_BYTES = 2;
 
 export const IPP_PORT = 631;
 export const IPP_PATH = "/ipp/print";
@@ -145,29 +172,30 @@ function getLabelSize(printer: TPrinterConnection) {
   return { labelLengthMm: printer.labelLengthMm, labelWidthMm: printer.labelWidthMm };
 }
 
-// Each page becomes the 1-bit image of one label, scaled to the labels the printer has loaded. The printer prints
-// across their width, so Ghostscript turns a page that is wider than tall to fit them
-async function pdfToLabelImages(printer: TPrinterConnection, pdf: Buffer, device: string) {
-  const { labelWidthMm, labelLengthMm } = getLabelSize(printer);
+async function pdfToPageImages(pdf: Buffer, deviceArguments: Array<string>) {
   return withTemporaryDirectory(async (directory) => {
     await runProcess(
       GHOSTSCRIPT_COMMAND,
-      [
-        ...GHOSTSCRIPT_ARGUMENTS,
-        `-sDEVICE=${device}`,
-        `-r${LABEL_DPI}`,
-        `-dDEVICEWIDTHPOINTS=${labelWidthMm * POINTS_PER_MM}`,
-        `-dDEVICEHEIGHTPOINTS=${labelLengthMm * POINTS_PER_MM}`,
-        "-dFIXEDMEDIA",
-        "-dPDFFitPage",
-        `-sOutputFile=${path.join(directory, "page-%04d")}`,
-        "-",
-      ],
+      [...GHOSTSCRIPT_ARGUMENTS, ...deviceArguments, `-sOutputFile=${path.join(directory, "page-%04d")}`, "-"],
       { input: pdf },
     );
     const pageFileNames = (await fs.readdir(directory)).sort();
     return Promise.all(pageFileNames.map(async (fileName) => fs.readFile(path.join(directory, fileName))));
   });
+}
+
+// Each page becomes the 1-bit image of one label, scaled to the labels the printer has loaded. The printer prints
+// across their width, so Ghostscript turns a page that is wider than tall to fit them
+async function pdfToLabelImages(printer: TPrinterConnection, pdf: Buffer, device: string) {
+  const { labelWidthMm, labelLengthMm } = getLabelSize(printer);
+  return pdfToPageImages(pdf, [
+    `-sDEVICE=${device}`,
+    `-r${LABEL_DPI}`,
+    `-dDEVICEWIDTHPOINTS=${labelWidthMm * POINTS_PER_MM}`,
+    `-dDEVICEHEIGHTPOINTS=${labelLengthMm * POINTS_PER_MM}`,
+    "-dFIXEDMEDIA",
+    "-dPDFFitPage",
+  ]);
 }
 
 async function pdfToIntermecDirectProtocol(printer: TPrinterConnection, pdf: Buffer) {
@@ -210,22 +238,127 @@ async function sendToRawPort(address: string, job: Buffer, timeoutMs: number) {
   });
 }
 
+// A number too big for its field goes on in the bytes after the edit, as 255s and the remainder
+function brotherOverflow(value: number) {
+  if (value < 0) return [];
+  return [
+    ...Array.from({ length: Math.floor(value / BROTHER_OVERFLOW_BYTE) }, () => BROTHER_OVERFLOW_BYTE),
+    value % BROTHER_OVERFLOW_BYTE,
+  ];
+}
+
+// An edit starts with a byte holding its kind, then how many bytes it skips and how many it writes
+function brotherEditHeader({ countBits, flag }: typeof BROTHER_SUBSTITUTE, offset: number, count: number) {
+  const maxCount = (1 << countBits) - 1;
+  const maxOffset = (1 << (BROTHER_EDIT_FIELD_BITS - countBits)) - 1;
+  return [
+    flag | (Math.min(offset, maxOffset) << countBits) | Math.min(count, maxCount),
+    ...brotherOverflow(offset - maxOffset),
+    ...brotherOverflow(count - maxCount),
+  ];
+}
+
+function brotherSubstitute(offset: number, bytes: Buffer) {
+  return [...brotherEditHeader(BROTHER_SUBSTITUTE, offset, bytes.length - 1), ...bytes];
+}
+
+// How many bytes are better written as they are than as a repeat, or left as they were on the line above
+function getBrotherSubstituteLength(line: Buffer, reference: Buffer, start: number, end: number) {
+  let previous = start;
+  for (let index = start; index + 1 < end; index++) {
+    if (line[index] === reference[index] && line[index + 1] === reference[index + 1]) return index - start;
+    if (line[index] === line[index + 1] && line[index] === line[previous]) return previous - start;
+    previous = index;
+  }
+  return end - start;
+}
+
+// A line is the edits that turn the line above it into it, or the whole line when there is no line above
+function encodeBrotherLine(line: Buffer, reference?: Buffer) {
+  if (line.every((byte) => byte === 0)) return [BROTHER_BLANK_LINE];
+  if (reference === undefined) return [1, ...brotherSubstitute(0, line)];
+
+  let end = line.length;
+  while (end > 0 && line[end - 1] === reference[end - 1]) end--;
+  const output = [0];
+  let editCount = 0;
+  let position = 0;
+  while (position < end) {
+    const start = position;
+    while (line[position] === reference[position]) position++;
+    const offset = position - start;
+    editCount++;
+    if (editCount === BROTHER_MAX_LINE_EDITS) {
+      output.push(...brotherSubstitute(offset, line.subarray(position, end)));
+      break;
+    }
+    const substituteLength = getBrotherSubstituteLength(line, reference, position, end);
+    if (substituteLength > 0) {
+      output.push(...brotherSubstitute(offset, line.subarray(position, position + substituteLength)));
+      position += substituteLength;
+      continue;
+    }
+    let repeatEnd = position + BROTHER_MIN_REPEAT_BYTES;
+    while (repeatEnd < end && line[repeatEnd] === line[position]) repeatEnd++;
+    output.push(
+      ...brotherEditHeader(BROTHER_REPEAT, offset, repeatEnd - position - BROTHER_MIN_REPEAT_BYTES),
+      line[position],
+    );
+    position = repeatEnd;
+  }
+  output[0] = editCount;
+  return output;
+}
+
+// The lines go in blocks, and every band of lines starts again from a whole line
+function brotherPage(pbm: Buffer, leftOffsetBytes: number) {
+  const { bits, bytesPerRow, height } = parsePbm(pbm);
+  const chunks = [Buffer.from("\x1b*b1030m")];
+  let block: Array<Array<number>> = [];
+  let blockBytes = 0;
+  const flush = () => {
+    if (blockBytes === 0) return;
+    chunks.push(
+      Buffer.from(`${blockBytes + 2}w`),
+      Buffer.from([0, block.length]),
+      ...block.map((line) => Buffer.from(line)),
+    );
+    block = [];
+    blockBytes = 0;
+  };
+
+  const getLine = (row: number) => bits.subarray(row * bytesPerRow + leftOffsetBytes, (row + 1) * bytesPerRow);
+  for (let row = 0; row < height; row++) {
+    let encoded = row % BROTHER_LINES_PER_BAND === 0 ? undefined : encodeBrotherLine(getLine(row), getLine(row - 1));
+    if (encoded === undefined || blockBytes + encoded.length >= BROTHER_MAX_BLOCK_BYTES) {
+      flush();
+      encoded = encodeBrotherLine(getLine(row));
+    }
+    block.push(encoded);
+    blockBytes += encoded.length;
+  }
+  flush();
+  chunks.push(Buffer.from("1030M\f"));
+  return Buffer.concat(chunks);
+}
+
+// The left offset is cut from every line, so the tests compare a job with none to the one brlaser writes
+export function pbmPagesToBrotherLaser(pbmPages: Array<Buffer>, leftOffsetBytes = 0) {
+  const settings = BROTHER_JOB_SETTINGS.map(([name, value]) => `@PJL SET ${name} = ${value}\n`).join("");
+  return Buffer.concat([
+    Buffer.alloc(BROTHER_JOB_START_PADDING_BYTES),
+    Buffer.from(`${PJL_UNIVERSAL_EXIT}@PJL\n@PJL JOB NAME="${IPP_USER_NAME}"\n`),
+    Buffer.from(`${PJL_UNIVERSAL_EXIT}@PJL\n${settings}@PJL ENTER LANGUAGE = PCL\n\x1bE\x1b&l1X\x1b&l0S`),
+    ...pbmPages.map((pbm) => brotherPage(pbm, leftOffsetBytes)),
+    Buffer.from(`${PJL_UNIVERSAL_EXIT}@PJL\n@PJL EOJ NAME="${IPP_USER_NAME}"\n${PJL_UNIVERSAL_EXIT}\n`),
+  ]);
+}
+
 async function pdfToBrotherLaser(pdf: Buffer) {
-  const raster = await runProcess(
-    GHOSTSCRIPT_COMMAND,
-    [
-      ...GHOSTSCRIPT_ARGUMENTS,
-      "-sDEVICE=cups",
-      `-r${BROTHER_DPI}`,
-      `-dcupsColorSpace=${CUPS_BLACK_COLOR_SPACE}`,
-      `-dcupsBitsPerColor=${BROTHER_BITS_PER_COLOR}`,
-      "-sOutputFile=-",
-      "-",
-    ],
-    { input: pdf },
+  return pbmPagesToBrotherLaser(
+    await pdfToPageImages(pdf, ["-sDEVICE=pbmraw", `-r${BROTHER_DPI}`]),
+    BROTHER_LEFT_OFFSET_BYTES,
   );
-  // A CUPS filter takes the job id, the user, the title, the copies and the options before its input
-  return runProcess(BRLASER_FILTER_PATH, ["1", IPP_USER_NAME, IPP_USER_NAME, "1", ""], { input: raster });
 }
 
 // smbclient reads the password from PASSWD, so it never shows up in the arguments of the process. Without one, -N
@@ -333,19 +466,6 @@ async function printOnWindowsShare(printer: TPrinterConnection, job: Buffer) {
   });
 }
 
-// brlaser is a CUPS filter and does not exist on Windows, so the page goes through the driver Windows has for the
-// printer instead of being made into its language here
-async function printOnWindowsDriver(printer: TPrinterConnection, pdf: Buffer) {
-  await queueOnWindowsServer(printer, async (sharePath) => {
-    await connectToWindowsShare(printer, sharePath);
-    await runProcess(
-      GHOSTSCRIPT_COMMAND,
-      [...GHOSTSCRIPT_ARGUMENTS, "-sDEVICE=mswinpr2", "-dNoCancel", `-sOutputFile=%printer%${sharePath}`, "-"],
-      { input: pdf },
-    );
-  });
-}
-
 async function printOnShare(printer: TPrinterConnection, job: Buffer) {
   if (IS_WINDOWS) {
     await printOnWindowsShare(printer, job);
@@ -418,10 +538,6 @@ export async function printPdfOnPrinter(printer: TPrinterConnection, pdf: Buffer
       await printOnShare(printer, await pdfToIntermecDirectProtocol(printer, pdf));
       return;
     case PrinterKind.BrotherShare:
-      if (IS_WINDOWS) {
-        await printOnWindowsDriver(printer, pdf);
-        return;
-      }
       await printOnShare(printer, await pdfToBrotherLaser(pdf));
       return;
     case PrinterKind.TscRaw:

@@ -331,7 +331,9 @@ async function assertWrites() {
     .flatMap(({ entry, rawInput }) => {
       const inputKey = getAuditInputKey(rawInput);
       const callWrites = writes.filter((write) => write.procedure === entry.path && write.inputKey === inputKey);
-      return callWrites.length === 0 && (declared[entry.path]?.length ?? 0) > 0
+      return callWrites.length === 0 &&
+        (declared[entry.path]?.length ?? 0) > 0 &&
+        MAY_WRITE_NOTHING[entry.path]?.(rawInput) !== true
         ? [`${entry.path}: no row written got the input it was sent: ${JSON.stringify(entry.input)}`]
         : findUnstoredValues(entry.path, rawInput, callWrites);
     });
@@ -354,6 +356,11 @@ function* getScalars(value: unknown, key = ""): Generator<[string, string | numb
 
 const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}/;
 
+// What succeeds without writing on purpose: a Colada the Orden de producción already moved is not recorded as used again
+const MAY_WRITE_NOTHING: Record<string, (rawInput: unknown) => boolean> = {
+  "materialLot.move": (rawInput) => (rawInput as { quantity?: unknown }).quantity === 0,
+};
+
 // What the server drops from the input on purpose: an Impresora only keeps the fields of its kind
 const INPUT_KEYS_DROPPED_BY_PROCEDURE: Record<string, Array<string>> = Object.fromEntries(
   ["printer.create", "printer.update"].map((procedurePath) => [
@@ -375,15 +382,15 @@ function isSameValue(sent: string | number | boolean, stored: unknown) {
 }
 
 // Every value that was sent must be in a row written with a column of the same name. The values that are not a column
-// of any written row, and the ones that are empty or a date, are left out, as the server stores them in its own way
+// of any written row, and the ones that are empty or only spaces or a date, are left out, as the server stores them in
+// its own way
 function findUnstoredValues(procedurePath: string, rawInput: unknown, writes: Array<TTracedWrite>) {
   // The row as it was before an update has the values the request sent back unchanged, whatever was stored
   const rows = writes.map(({ oldRow, newRow }) => newRow ?? oldRow).filter((row) => row !== null);
   const unstored: Array<string> = [];
   for (const [key, sent] of getScalars(rawInput)) {
     const isChecked =
-      sent !== "" &&
-      !(typeof sent === "string" && DATE_PATTERN.test(sent)) &&
+      !(typeof sent === "string" && (sent.trim() === "" || DATE_PATTERN.test(sent))) &&
       INPUT_KEYS_DROPPED_BY_PROCEDURE[procedurePath]?.includes(key) !== true;
     const rowsWithColumn = rows.filter((row) => key in row);
     if (isChecked && rowsWithColumn.length > 0 && !rowsWithColumn.some((row) => isSameValue(sent, row[key]))) {

@@ -39,6 +39,11 @@ export default async function resetEnv() {
     process.exit(1);
   }
 
+  if (process.env.MATERIAL_CERTIFICATE_ROOT_PATH === undefined) {
+    logger.crit("Environment variable MATERIAL_CERTIFICATE_ROOT_PATH is not set");
+    process.exit(1);
+  }
+
   if (process.env.NODE_ENV === "production") {
     logger.crit("resetEnv should not be run in production");
     process.exit(1);
@@ -81,6 +86,7 @@ export default async function resetEnv() {
   await resetTags();
   await resetDeliveryNotes();
   await resetInvoices();
+  await resetMaterialCertificates();
 
   if (process.env.DELETE_LOGS_ON_STARTUP === "true") {
     await emptyDirectory("LOGS", process.env.LOGS_PATH);
@@ -132,4 +138,8 @@ async function resetDeliveryNotes() {
 
 async function resetInvoices() {
   return emptyDirectory("INVOICES", process.env.INVOICE_ROOT_PATH!);
+}
+
+export async function resetMaterialCertificates() {
+  return emptyDirectory("MATERIAL_CERTIFICATES", process.env.MATERIAL_CERTIFICATE_ROOT_PATH!);
 }

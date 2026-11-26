@@ -10,7 +10,9 @@ import TableMaintenancePaymentMethod from "@/components/maintenance/table-paymen
 import TableMaintenancePrinter from "@/components/maintenance/table-printer";
 import TableMaintenanceRawMaterial from "@/components/maintenance/table-raw-material";
 import TableClient from "@/components/table/client";
+import ButtonLink from "@/components/ui/button-link";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { BACKOFFICE_LABEL } from "@/messages/backoffice";
 import {
   CLIENTS_LABEL,
   COATINGS_LABEL,
@@ -124,6 +126,9 @@ export default function OtherModels() {
       </TabsContent>
       <TabsContent value="configuration">
         <MaintenanceConfiguration />
+        <ButtonLink testId="button-link-backoffice" to="/backoffice" className="self-start">
+          {BACKOFFICE_LABEL}
+        </ButtonLink>
       </TabsContent>
     </Tabs>
   );

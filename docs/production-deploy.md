@@ -45,29 +45,29 @@ service 10 s after a crash and gives it 15 s to stop (`resanorp-service.xml`).
 `C:\ResanoRP` holds what the zip brings and what the machine creates. The machine's own folders are never in the zip,
 so unzipping a new version over the folder keeps them.
 
-| Path                                                                   | From    | What                                                                                                  |
-| ---------------------------------------------------------------------- | ------- | ----------------------------------------------------------------------------------------------------- |
-| `.output\`, `public\`                                                  | zip     | The built app                                                                                         |
-| `bin\`                                                                 | zip     | `bun.exe`, `node.exe`, `caddy.exe`, `postgres\` (PostgreSQL binaries)                                 |
-| `browsers\`                                                            | zip     | Playwright Chromium, which renders the tags and PDFs                                                  |
-| `powersync-service\`                                                   | zip     | `@powersync/service-image` installed with npm                                                         |
-| `powersync\`                                                           | zip     | `service.yaml`, `sync-config.yaml`, `init.sql` (copied from `docker/powersync`)                       |
-| `resanorp-service.exe`, `.xml`                                         | zip     | WinSW and its service definition                                                                      |
-| `supervisor.ts`                                                        | zip     | Copy of `src/scripts/production-supervisor.ts`                                                        |
-| `.env`, `Caddyfile`, `trust-cert.ps1`                                  | zip     | Configuration (section 4), copy of `docker/Caddyfile`, copy of `src/scripts/trust-cert.ps1`           |
-| `install.cmd`, `uninstall.cmd`, `start.cmd`                            | zip     | Section 6                                                                                             |
-| `refresh.cmd`, `schema.sql`, `src\db\`                                 | zip     | The data refresh and its migration (section 8)                                                        |
-| `venv\`                                                                | machine | Python packages for `refresh.cmd`                                                                     |
-| `backup.cmd`, `cleanup-backups.ps1`, `restore.cmd`                     | zip     | Section 9                                                                                             |
-| `client\setup.cmd`                                                     | zip     | Section 7                                                                                             |
-| `import\`                                                              | machine | A backup `start.cmd` swaps in, staged by `restore.cmd` or a failed refresh (section 8)                |
-| `pgdata\`                                                              | machine | The PostgreSQL cluster                                                                                |
-| `caddy\`, `caddy-config\`                                              | machine | Caddy's own certificate authority and state. Losing `caddy\` means every client must trust a new root |
-| `BLUEPRINTS\`, `SELL_ORDERS\`, `TAGS\`, `DELIVERY_NOTES\`, `INVOICES\` | machine | Files of the app                                                                                      |
-| `LOGS\`                                                                | machine | App logs                                                                                              |
-| `service-logs\`                                                        | machine | WinSW logs: the supervisor's output, with PowerSync and Caddy. Rolled at 10 MB, 5 files               |
-| `backups\`                                                             | machine | What a refresh or an import replaced (section 8)                                                      |
-| `client\root.crt`                                                      | machine | Written by `start.cmd` for the clients (section 7)                                                    |
+| Path                                                                                             | From    | What                                                                                                  |
+| ------------------------------------------------------------------------------------------------ | ------- | ----------------------------------------------------------------------------------------------------- |
+| `.output\`, `public\`                                                                            | zip     | The built app                                                                                         |
+| `bin\`                                                                                           | zip     | `bun.exe`, `node.exe`, `caddy.exe`, `postgres\` (PostgreSQL binaries)                                 |
+| `browsers\`                                                                                      | zip     | Playwright Chromium, which renders the tags and PDFs                                                  |
+| `powersync-service\`                                                                             | zip     | `@powersync/service-image` installed with npm                                                         |
+| `powersync\`                                                                                     | zip     | `service.yaml`, `sync-config.yaml`, `init.sql` (copied from `docker/powersync`)                       |
+| `resanorp-service.exe`, `.xml`                                                                   | zip     | WinSW and its service definition                                                                      |
+| `supervisor.ts`                                                                                  | zip     | Copy of `src/scripts/production-supervisor.ts`                                                        |
+| `.env`, `Caddyfile`, `trust-cert.ps1`                                                            | zip     | Configuration (section 4), copy of `docker/Caddyfile`, copy of `src/scripts/trust-cert.ps1`           |
+| `install.cmd`, `uninstall.cmd`, `start.cmd`                                                      | zip     | Section 6                                                                                             |
+| `refresh.cmd`, `schema.sql`, `src\db\`                                                           | zip     | The data refresh and its migration (section 8)                                                        |
+| `venv\`                                                                                          | machine | Python packages for `refresh.cmd`                                                                     |
+| `backup.cmd`, `cleanup-backups.ps1`, `restore.cmd`                                               | zip     | Section 9                                                                                             |
+| `client\setup.cmd`                                                                               | zip     | Section 7                                                                                             |
+| `import\`                                                                                        | machine | A backup `start.cmd` swaps in, staged by `restore.cmd` or a failed refresh (section 8)                |
+| `pgdata\`                                                                                        | machine | The PostgreSQL cluster                                                                                |
+| `caddy\`, `caddy-config\`                                                                        | machine | Caddy's own certificate authority and state. Losing `caddy\` means every client must trust a new root |
+| `BLUEPRINTS\`, `SELL_ORDERS\`, `TAGS\`, `DELIVERY_NOTES\`, `INVOICES\`, `MATERIAL_CERTIFICATES\` | machine | Files of the app                                                                                      |
+| `LOGS\`                                                                                          | machine | App logs                                                                                              |
+| `service-logs\`                                                                                  | machine | WinSW logs: the supervisor's output, with PowerSync and Caddy. Rolled at 10 MB, 5 files               |
+| `backups\`                                                                                       | machine | What a refresh or an import replaced (section 8)                                                      |
+| `client\root.crt`                                                                                | machine | Written by `start.cmd` for the clients (section 7)                                                    |
 
 The nightly backups go to `BACKUP_LOCAL_PATH` (`C:\ResanoRP-backups`), outside this folder.
 
@@ -222,7 +222,8 @@ a refresh, which builds the database from the bundle's `schema.sql`. So every de
 ## 9. Backups and restore
 
 The task `ResanoRP-backup` runs `backup.cmd` every night at 02:00 as SYSTEM. It writes `BACKUP_LOCAL_PATH\<yyyyMMdd>\`
-with the database (`production.dump`, `pg_dump -Fc`), `SELL_ORDERS`, `TAGS`, `DELIVERY_NOTES`, `INVOICES` and
+with the database (`production.dump`, `pg_dump -Fc`), `SELL_ORDERS`, `TAGS`, `DELIVERY_NOTES`, `INVOICES`,
+`MATERIAL_CERTIFICATES` and
 `caddy`, plus `BLUEPRINTS` on Sunday night (the Monday folder). The audit log is the `audit_log` table of the
 database, so a restore takes it back to the time of the backup. `cleanup-backups.ps1` then keeps every backup of the
 current week, the latest one of each of the three previous weeks, and the two newest blueprint copies. A run writes
@@ -256,9 +257,9 @@ the old one's.
 ## 10. Printing
 
 The app prints from the server, so the server must reach every printer configured in the app: the Windows print
-shares and the network printers. Without Docker there is no `smbclient` or `brlaser`: share jobs go through
-`net use` and `copy /b`, the Brother through Ghostscript's `mswinpr2` and the Windows driver of the printer, and every
-conversion needs `gswin64c` in the system PATH (section 6). The details are in `docs/printers.md`.
+shares and the network printers. Without Docker there is no `smbclient`: share jobs go through `net use` and
+`copy /b`, so the server needs no printer driver, and every conversion needs `gswin64c` in the system PATH (section 6).
+The details are in `docs/printers.md`.
 
 ## 11. Troubleshooting
 

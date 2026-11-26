@@ -50,6 +50,7 @@ export const LogMessages = {
   invalidFileName: "Invalid file name received",
   invalidId: "Invalid ID received",
   invoiceReadFailed: "Error reading Invoice file",
+  materialCertificateReadFailed: "Error reading Material Certificate file",
   mutationError: "Error en la mutación",
   notFoundRendered: "NotFound component rendered. This should not happen in production.",
   partFolderNotFound: "Part folder does not exist",

@@ -60,7 +60,7 @@ function TableFooter({ className, ...props }: React.ComponentProps<"tfoot">) {
 }
 
 const tableRowVariants = cva(
-  "border-b border-border [&[data-highlight-on-hover]]:transition-colors [&[data-highlight-on-hover]:not(:has(input:focus))]:hover:bg-accent [&[data-selected]]:outline-2 [&[data-selected]]:-outline-offset-2 [&[data-selected]]:outline-primary",
+  "border-b border-border [&[data-highlight-on-hover]]:transition-colors [&[data-highlight-on-hover]:not(:has(input:focus))]:hover:bg-accent [&[data-selected]]:outline-3 [&[data-selected]]:-outline-offset-3 [&[data-selected]]:outline-primary",
   {
     defaultVariants: {
       variant: "default",

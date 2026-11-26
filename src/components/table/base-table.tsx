@@ -89,6 +89,11 @@ interface BaseTableProps<TRow extends TBaseModel, TState extends TTableState> ex
 
 export type TBaseTableFeatures = typeof baseTableFeatures;
 
+// A table wider than its content gives the extra width only to columns without a `width`, so leaving it out of the
+// resizable ones makes them take that space while the rest stay as narrow as their content
+const getColumnSizeStyle = (canResize: boolean, size: string): React.CSSProperties =>
+  canResize ? { minWidth: size, maxWidth: size } : { width: size };
+
 export default function BaseTable<TRow extends TBaseModel, TState extends TTableState>({
   testId,
   tableMode = TableMode.ReadOnly,
@@ -243,6 +248,8 @@ export default function BaseTable<TRow extends TBaseModel, TState extends TTable
       root.style.translate = "";
       const isResizing = table.atoms.columnResizing.get().isResizingColumn !== false;
       resizeAnchorLeft = isResizing ? (resizeAnchorLeft ?? root.getBoundingClientRect().left) : undefined;
+      // A held width would stop a column from being resized narrower
+      tableRef.current?.style.removeProperty("min-width");
       Object.entries(getColumnSizeVars()).forEach(([name, value]) => tableRef.current?.style.setProperty(name, value));
       const hasResizedColumns = Object.keys(table.atoms.columnSizing.get()).length > 0;
       tableRef.current?.style.setProperty("max-width", hasResizedColumns ? "none" : "");
@@ -255,11 +262,16 @@ export default function BaseTable<TRow extends TBaseModel, TState extends TTable
   }, [table, getColumnSizeVars]);
 
   useLayoutEffect(() => {
-    const head = tableRef.current?.tHead;
-    const body = tableRef.current?.tBodies[0];
-    const scroller = tableRef.current?.parentElement;
+    const tableElement = tableRef.current;
+    const head = tableElement?.tHead;
+    const body = tableElement?.tBodies[0];
+    const scroller = tableElement?.parentElement;
     const root = rootRef.current;
-    if (!head || !body || !scroller || !root) return;
+    if (!tableElement || !head || !body || !scroller || !root) return;
+    // The table never narrows because its rows changed (another page, a collapsed subrow, virtualized rows), so the
+    // layout around it does not jump. It only gives the width back when it no longer fits, e.g. a narrower window
+    let tableWidth = 0;
+    let scrollerWidth = Infinity;
     // The fade overlay must not be taller than what is visible, or it adds empty scrollable space
     // borderBoxSize ignores transforms (a dialog opens scaled), unlike getBoundingClientRect, and unlike clientHeight it
     // is not rounded, which at fractional zoom levels can exceed the real height by a subpixel
@@ -274,13 +286,17 @@ export default function BaseTable<TRow extends TBaseModel, TState extends TTable
             (subrow) => subrow.offsetHeight,
           ).reduce((total, subrowHeight) => total + subrowHeight, 0);
           root.style.setProperty("--subrows-height", `${subrowsHeight}px`);
+        } else if (entry.target === tableElement) {
+          tableWidth = entry.borderBoxSize[0]?.inlineSize ?? 0;
         } else {
           const scrollbarHeight = scroller.offsetHeight - scroller.clientHeight;
           scroller.style.setProperty("--viewport-height", `${height - scrollbarHeight}px`);
+          scrollerWidth = entry.contentBoxSize[0]?.inlineSize ?? Infinity;
         }
       }
+      tableElement.style.minWidth = tableWidth > scrollerWidth ? "" : `${tableWidth}px`;
     });
-    [head, body, scroller].forEach((element) => resizeObserver.observe(element));
+    [head, body, scroller, tableElement].forEach((element) => resizeObserver.observe(element));
     return () => resizeObserver.disconnect();
   }, []);
 
@@ -324,10 +340,7 @@ export default function BaseTable<TRow extends TBaseModel, TState extends TTable
               key={cell.id}
               testId={cell.column.id}
               colSpan={spansExpanderCell ? 2 : undefined}
-              style={{
-                maxWidth: cell.column.getCanResize() ? size : undefined,
-                width: size,
-              }}
+              style={getColumnSizeStyle(cell.column.getCanResize(), size)}
               className={cn(
                 cell.column.columnDef.meta?.dataType !== undefined &&
                   [CellDataType.Number, CellDataType.Price, CellDataType.Decimal].includes(
@@ -368,6 +381,7 @@ export default function BaseTable<TRow extends TBaseModel, TState extends TTable
       style={Object.fromEntries([
         ["--row-height", `${TABLE_ROW_HEIGHT_PX}px`],
         ["--scroll-rows", String(scrollRowsCount)],
+        ...(state?.pagination === null ? [["--scroll-max-height", "none"]] : []),
       ])}
     >
       {((title !== undefined && title !== null) ||
@@ -448,10 +462,7 @@ export default function BaseTable<TRow extends TBaseModel, TState extends TTable
           <BaseTableHead
             table={table}
             hasRows={rows ? rows.length > 0 : false}
-            thStyle={(header) => ({
-              maxWidth: header.column.getCanResize() ? `var(--col-${header.index}-size)` : undefined,
-              width: `var(--col-${header.index}-size)`,
-            })}
+            thStyle={(header) => getColumnSizeStyle(header.column.getCanResize(), `var(--col-${header.index}-size)`)}
             onStateChange={navigateOnStateChange}
           />
         </CustomFiltersContext>

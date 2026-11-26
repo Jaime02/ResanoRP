@@ -33,6 +33,10 @@ streams:
     query: SELECT *, CAST(id AS TEXT) AS id FROM machine
   material:
     query: SELECT *, CAST(id AS TEXT) AS id FROM material
+  material_lot:
+    query: SELECT *, CAST(id AS TEXT) AS id FROM material_lot
+  material_lot_movement:
+    query: SELECT *, CAST(id AS TEXT) AS id FROM material_lot_movement
   part:
     query: SELECT *, CAST(id AS TEXT) AS id FROM part
   part_feature:

@@ -11,6 +11,7 @@ import invoiceRouter from "@/trpc/invoice";
 import machineRouter from "@/trpc/machine";
 import machineProductionOrderQueueRouter from "@/trpc/machine-production-order-queue";
 import materialRouter from "@/trpc/material";
+import materialLotRouter from "@/trpc/material-lot";
 import partRouter from "@/trpc/part";
 import partComponentRouter from "@/trpc/part-component";
 import partFeatureRouter from "@/trpc/part-feature";
@@ -42,6 +43,7 @@ export const appRouter = router({
   machine: machineRouter,
   machineProductionOrderQueue: machineProductionOrderQueueRouter,
   material: materialRouter,
+  materialLot: materialLotRouter,
   part: partRouter,
   partComponent: partComponentRouter,
   partFeature: partFeatureRouter,

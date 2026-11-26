@@ -77,7 +77,8 @@ def setup():
 
 
 def start_powersync():
-    docker_compose("up -d powersync")
+    # Stopping powersync in setup also stopped caddy and powersync-compact, which depend on it
+    docker_compose("up -d")
     tqdm.write("PowerSync started, it syncs the migrated data in about 30 seconds")
 
 

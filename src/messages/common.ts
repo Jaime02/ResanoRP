@@ -22,6 +22,7 @@ export const DELETE_LABEL = "Eliminar";
 export const DOWNLOAD_LABEL = "Descargar";
 export const BACK_LABEL = "Volver";
 export const GO_HOME_LABEL = "Ir a página de inicio";
+export const NOT_FOUND_TITLE = "Página no encontrada";
 export const RESTORE_LABEL = "Restaurar";
 export const PRINT_LABEL = "Imprimir";
 export const ACTIONS_LABEL = "Acciones";
@@ -75,5 +76,6 @@ export const ADMIN_ONLY_MESSAGE = "Esta acción solo la puede hacer el Administr
 export const NON_ZERO_QUANTITY_MESSAGE = "La cantidad no puede ser 0";
 export const REQUIRED_FIELD_MESSAGE = "Campo obligatorio";
 export const POSITIVE_QUANTITY_MESSAGE = "La cantidad debe ser un número positivo";
+export const NON_NEGATIVE_QUANTITY_MESSAGE = "La cantidad no puede ser negativa";
 export const FILE_NAME_EMPTY_MESSAGE = "El nombre del archivo no puede estar vacío";
 export const PAGE_OF_MESSAGE = (page: number, pageCount: number) => `Página ${page} de ${pageCount}`;

@@ -182,6 +182,8 @@ interface TRejectedMutation {
   // The message the client gets
   message: string;
   userConfig?: TClientUserConfig;
+  // Its input is FormData, which the client sends alone instead of in a batch
+  formData?: boolean;
   // The error the procedure logs before it is rejected, if it gets to run
   serverError?: Record<string, unknown> | null;
 }
@@ -192,13 +194,14 @@ export function rejectedMutationEvents({
   message,
   userConfig = ADMIN_USER_CONFIG,
   serverError = trpcError(code, message),
+  formData = false,
 }: TRejectedMutation): Array<TEvent> {
   const statusCode = getHTTPStatusCodeFromError(new TRPCError({ code }));
   return [
     ...(serverError === null ? [] : [mutationErrorEvent(serverError)]),
     ...(statusCode === UNLOGGED_HTTP_STATUS_CODE
       ? []
-      : [httpRequestFailedEvent("POST", statusCode, `/api/trpc/${procedurePath}?batch=1`)]),
+      : [httpRequestFailedEvent("POST", statusCode, `/api/trpc/${procedurePath}${formData ? "" : "?batch=1"}`)]),
     clientErrorEvent(message, { userConfig }),
   ];
 }

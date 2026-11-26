@@ -1,12 +1,18 @@
+import { createHash } from "node:crypto";
 import fs from "node:fs";
 
 import { expect, test } from "@playwright/test";
 
-import { IPP_PORT } from "@/files/printer";
+import { IPP_PORT, pbmPagesToBrotherLaser } from "@/files/printer";
 import { formatPrinterAddress } from "@/lib/formatters";
 import { BROWSER_PRINTER, getSelectedPrinter } from "@/lib/print";
 import { createPrinterSchema, printFileSchema } from "@/schemas/printer";
+import { createBrotherTestPbm } from "@/tests/utils/mock-printer";
 import { PrinterKind } from "@/types/printer";
+
+// SHA-256 of what the brlaser filter (rastertobrlaser of Owl-Maintain/brlaser 6.2.7) wrote for createBrotherTestPbm,
+// with "ResanoRP" as the job title
+const BRLASER_TEST_JOB_SHA256 = "d0204eee22579634ff7f3dc0e48d9e860086fec5d846153ca4ef807d5a8eafd8";
 
 const EMPTY_PRINTER = {
   address: "192.168.1.150",
@@ -96,6 +102,11 @@ test("the printer library", async () => {
     expect(formatPrinterAddress(networkLabelPrinter)).toBe(networkLabelPrinter.address);
     // A printer on the network has neither, so it ignores them
     expect(createPrinterSchema.safeParse({ ...EMPTY_PRINTER, labelWidthMm: null, shareName: null }).success).toBe(true);
+  });
+
+  await test.step("a Brother job is byte for byte the one brlaser writes", () => {
+    const job = pbmPagesToBrotherLaser([createBrotherTestPbm()]);
+    expect(createHash("sha256").update(job).digest("hex")).toBe(BRLASER_TEST_JOB_SHA256);
   });
 
   await test.step("the password of an Impresora never syncs to the browsers", () => {

@@ -23,7 +23,7 @@ export default function FieldLabel({ children, tooltipContent, labelFor, require
     <Label htmlFor={labelFor} className="min-h-6 max-w-full">
       {tooltipContent !== undefined ? (
         <Popover>
-          <InfoPopoverTrigger>{labelContent}</InfoPopoverTrigger>
+          <InfoPopoverTrigger data-testid="field-label-tooltip">{labelContent}</InfoPopoverTrigger>
           <PopoverContent>{tooltipContent}</PopoverContent>
         </Popover>
       ) : (

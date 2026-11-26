@@ -30,6 +30,8 @@ import {
   dbTableTreatmentReception,
   dbTableTreatmentShipment,
   dbTableQualityCheck,
+  dbTableMaterialLot,
+  dbTableMaterialLotMovement,
 } from "@/db/schema";
 
 export default defineRelations(
@@ -63,6 +65,8 @@ export default defineRelations(
     dbTableTreatmentReception,
     dbTableTreatmentShipment,
     dbTableQualityCheck,
+    dbTableMaterialLot,
+    dbTableMaterialLotMovement,
   },
   (r) => ({
     dbTableCoating: {
@@ -334,6 +338,21 @@ export default defineRelations(
       part: r.one.dbTablePart({
         from: r.dbTableBlueprint.partId,
         to: r.dbTablePart.id,
+        optional: false,
+      }),
+    },
+    dbTableMaterialLot: {
+      material: r.one.dbTableMaterial({
+        from: r.dbTableMaterialLot.materialId,
+        to: r.dbTableMaterial.id,
+        optional: false,
+      }),
+      movements: r.many.dbTableMaterialLotMovement(),
+    },
+    dbTableMaterialLotMovement: {
+      materialLot: r.one.dbTableMaterialLot({
+        from: r.dbTableMaterialLotMovement.materialLotId,
+        to: r.dbTableMaterialLot.id,
         optional: false,
       }),
     },

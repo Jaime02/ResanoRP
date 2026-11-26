@@ -107,7 +107,11 @@ export default function FormMachineProductionOrder({
                   </ButtonLink>
                 </CardTitle>
               </CardHeader>
-              <PartFields part={activeProductionOrder?.part} />
+              <PartFields
+                part={activeProductionOrder?.part}
+                productionOrderId={activeProductionOrder?.id}
+                canTakeMaterial
+              />
             </Card>
             <Card data-testid="form-machine-production-order">
               <CardHeader>
@@ -275,7 +279,7 @@ export default function FormMachineProductionOrder({
                   </CardTitle>
                 </CardHeader>
                 <CollapsibleContent className="flex flex-col gap-2">
-                  <PartFields part={activeProductionOrder?.part} />
+                  <PartFields part={activeProductionOrder?.part} productionOrderId={activeProductionOrder?.id} />
                   <Separator />
                   <Card variant="frameless">
                     <CardTitle level={3}>Orden de producción {activeProductionOrder?.id}</CardTitle>

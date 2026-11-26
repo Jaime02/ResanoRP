@@ -6,6 +6,7 @@ import FieldDateInput from "@/form/fields/date-input";
 import FieldDecimalInput from "@/form/fields/decimal-input";
 import FieldDeliveryMethodCombobox from "@/form/fields/delivery-method-combobox";
 import FieldFilesInput from "@/form/fields/file-input";
+import FieldMaterialLotUnitCombobox from "@/form/fields/material-lot-unit-combobox";
 import FieldNumberInput from "@/form/fields/number-input";
 import FieldPaymentMethodCombobox from "@/form/fields/payment-method-combobox";
 import FieldPickerPart from "@/form/fields/picker-part";
@@ -25,6 +26,7 @@ export const fieldComponents = {
   DecimalInput: FieldDecimalInput,
   DeliveryMethodCombobox: FieldDeliveryMethodCombobox,
   FilesInput: FieldFilesInput,
+  MaterialLotUnitCombobox: FieldMaterialLotUnitCombobox,
   NumberInput: FieldNumberInput,
   PaymentMethodCombobox: FieldPaymentMethodCombobox,
   PickerPart: FieldPickerPart,

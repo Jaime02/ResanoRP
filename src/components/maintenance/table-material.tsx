@@ -1,20 +1,24 @@
 import { useDbClient } from "@tanstack/react-db";
-import { FunnelIcon, PlusIcon } from "lucide-react";
-import { useMemo } from "react";
+import { FunnelIcon, PackageIcon, PlusIcon } from "lucide-react";
+import { useMemo, useState, type ComponentProps } from "react";
 
 import materialCollection from "@/collections/material";
 import ComboboxRawMaterial from "@/components/combobox/raw-material";
 import ComboboxShape from "@/components/combobox/shape";
 import DialogCreateMaterial from "@/components/dialog/create-material";
+import DialogMaterialLots from "@/components/dialog/material-lots";
+import ShapeIcon from "@/components/icons/shape";
 import PopoverDeletedFilter from "@/components/popover/deleted-filter";
 import type { PublicBaseTableProps } from "@/components/table/base-table";
 import BaseTable from "@/components/table/base-table";
 import { createTableColumnHelper } from "@/components/table/column-helper";
 import TooltipInactiveMaterial from "@/components/tooltip/inactive-material";
+import { Button } from "@/components/ui/button";
 import ButtonLink from "@/components/ui/button-link";
 import { ModelActions } from "@/components/ui/model-actions";
 import NumberInput from "@/components/ui/number-input";
 import { useAppContext } from "@/contexts/app-context";
+import { formatMaterial } from "@/lib/formatters";
 import { serializeMaterial } from "@/lib/serializers";
 import { ACTIONS_LABEL, SEARCH_PLACEHOLDER, SHAPE_LABEL, SIZE_LABEL } from "@/messages/common";
 import {
@@ -42,6 +46,7 @@ const columnHelper = createTableColumnHelper<TQueryMaterial>();
 export default function TableMaintenanceMaterial({ createMaterial, ...props }: TableMaintenanceMaterialProps) {
   const dbClient = useDbClient();
   const { showToastOnTransaction, showToastOnTRPCMutation } = useAppContext();
+  const [lotsMaterial, setLotsMaterial] = useState<ComponentProps<typeof DialogMaterialLots>["material"]>(undefined);
 
   const { data: materials, isLoading: isLoadingMaterials } = useQueryMaterials({
     filters: props.state?.filters,
@@ -72,6 +77,12 @@ export default function TableMaintenanceMaterial({ createMaterial, ...props }: T
         },
       }),
       columnHelper.accessor("width", {
+        cell: (info) => (
+          <span className="inline-flex items-center gap-1">
+            <ShapeIcon shapeName={info.row.original.shape?.name} />
+            {info.getValue()}
+          </span>
+        ),
         enableColumnFilter: true,
         header: SIZE_LABEL,
         meta: {
@@ -120,6 +131,25 @@ export default function TableMaintenanceMaterial({ createMaterial, ...props }: T
         cell: ({ row }) => (
           <ModelActions
             disabled={props.isLoading === true || isLoadingMaterials}
+            extraComponentsStart={
+              <Button
+                testId="button-material-lots"
+                size="icon"
+                variant="secondary"
+                onClick={() =>
+                  setLotsMaterial({
+                    id: row.original.id,
+                    name: formatMaterial({
+                      rawMaterialName: row.original.rawMaterial?.name,
+                      width: row.original.width,
+                    }),
+                    shapeName: row.original.shape?.name,
+                  })
+                }
+              >
+                <PackageIcon />
+              </Button>
+            }
             {...(row.original.deletedAt === null
               ? {
                   deleteButton: {
@@ -181,6 +211,7 @@ export default function TableMaintenanceMaterial({ createMaterial, ...props }: T
         {...props}
       />
       <DialogCreateMaterial open={createMaterial === true} />
+      <DialogMaterialLots material={lotsMaterial} onClose={() => setLotsMaterial(undefined)} />
     </>
   );
 }

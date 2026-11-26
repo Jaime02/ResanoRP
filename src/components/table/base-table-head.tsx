@@ -46,10 +46,14 @@ export default function BaseTableHead<TRow extends TBaseModel = TBaseModel>({
             return (
               <TableHeader key={header.id} style={thStyle?.(header)} canBeResized={canBeResized}>
                 <div className="flex flex-col items-start gap-2 overflow-clip whitespace-nowrap [overflow-clip-margin:4px]">
-                  <div className="flex items-center gap-1">
+                  <span className="font-semibold">
+                    {flexRender(header.column.columnDef.header, header.getContext())}
+                  </span>
+                  <div className="flex w-full items-center gap-1">
                     {header.column.getCanSort() && (
                       <Button
                         testId={`button-sort-${String(header.column.id)}`}
+                        className="shrink-0"
                         size="icon"
                         variant="secondary"
                         disabled={!hasRows}
@@ -63,18 +67,15 @@ export default function BaseTableHead<TRow extends TBaseModel = TBaseModel>({
                         })()}
                       </Button>
                     )}
-                    <span className="font-semibold">
-                      {flexRender(header.column.columnDef.header, header.getContext())}
-                    </span>
+                    {header.column.getCanFilter() && header.column.columnDef.meta?.dataType !== undefined && (
+                      <TableHeadFilter
+                        testId={`input-filter-${String(header.column.id)}`}
+                        table={table}
+                        header={header}
+                        onStateChange={onStateChange}
+                      />
+                    )}
                   </div>
-                  {header.column.getCanFilter() && header.column.columnDef.meta?.dataType !== undefined && (
-                    <TableHeadFilter
-                      testId={`input-filter-${String(header.column.id)}`}
-                      table={table}
-                      header={header}
-                      onStateChange={onStateChange}
-                    />
-                  )}
                 </div>
                 {canBeResized && (
                   <Button
