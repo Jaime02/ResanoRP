@@ -236,7 +236,9 @@ export function powerSyncCollectionOptions<TSchema extends z.ZodType<object>, TK
 
         const loadFromPostgres = async (request: TSubsetRequest) => {
           const rows = await loadTableSubsetFn({ data: request }).catch((error: unknown) => {
-            void log(LoggerLevels.error, LogMessages.tableSubsetLoadFailed, formatClientError(error));
+            // A page left while it loads cuts its fetch short, which fails as a TypeError
+            const level = error instanceof TypeError ? LoggerLevels.info : LoggerLevels.error;
+            void log(level, LogMessages.tableSubsetLoadFailed, formatClientError(error));
             return null;
           });
           if (rows === null) return untilSynced;

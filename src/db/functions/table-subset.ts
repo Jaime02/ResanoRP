@@ -59,8 +59,11 @@ export async function loadTableSubset(request: TSubsetRequest, isAdmin: boolean)
     const firstColumn = columnOf(first);
     const column = firstColumn ?? columnOf(second);
     const value = firstColumn === undefined ? first : second;
-    if (column === undefined || value.type !== "val") return refuse("not a column and a value");
-    return { column, reversed: firstColumn === undefined, value: value.value };
+    if (column === undefined || (value.type !== "val" && value.type !== "date")) {
+      return refuse("not a column and a value");
+    }
+    const reversed = firstColumn === undefined;
+    return { column, reversed, value: value.type === "date" ? new Date(value.value) : value.value };
   };
 
   const compile = (expression: TPlainExpression): SQL => {

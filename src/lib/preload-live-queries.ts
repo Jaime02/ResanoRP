@@ -32,8 +32,8 @@ export const preloadLiveQueries = createIsomorphicFn().server(
       ]);
       dbClient.hydrate(loadingDbClient.dehydrate({ shouldDehydrateCollection: () => false }));
     } catch (error) {
-      // The page still renders, and the browser loads the queries itself
-      await log(LoggerLevels.error, LogMessages.liveQueriesPreloadFailed, {
+      // The page still renders, and the browser loads the queries itself, as it does for a filter Postgres cannot answer
+      await log(LoggerLevels.info, LogMessages.liveQueriesPreloadFailed, {
         error: formatClientError(error),
       });
     } finally {

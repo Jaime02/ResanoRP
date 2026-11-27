@@ -22,6 +22,8 @@ export const Route = createFileRoute("/backoffice")({
     title: BACKOFFICE_LABEL,
   }),
   component: RouteComponent,
+  // The audit log starts at the month of the browser's clock, which the server's can be past
+  ssr: "data-only",
   staticData: { userModes: [UserMode.Admin] },
   validateSearch: routeSearchSchema,
   loader: async () => ({ errors: await getErrorsLogFn() }),

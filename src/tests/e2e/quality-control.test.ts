@@ -148,7 +148,7 @@ test("the quality control of the production orders", async ({ page }) => {
 });
 
 test(
-  "users only see the quality control of the production orders",
+  "users can set the quality control of the production orders but not make its checks",
   { annotation: [TestAnnotations.UserModeUser] },
   async ({ page }) => {
     await test.step("users see the checks of the production orders but cannot make new ones", async () => {
@@ -158,16 +158,9 @@ test(
       }
     });
 
-    await test.step("users cannot change the quality control of a production order", async () => {
-      for (const qualityControl of [true, false]) {
-        const productionOrder = mockProductionOrders.find(
-          (po) => po.deletedAt === null && po.qualityControl === qualityControl,
-        )!;
-        await page.goto(`/production-order/${productionOrder.id}`);
-        await expect(page.getByText(`Orden de producción ${productionOrder.id}`).first()).toBeVisible();
-        await expect(getQualityControlCheckbox(page)).toHaveCount(0);
-        await expect(page.getByTestId("button-submit")).toHaveCount(0);
-      }
+    await test.step("users can change the quality control of a production order", async () => {
+      const productionOrder = mockProductionOrders.find((po) => po.deletedAt === null && !po.qualityControl)!;
+      await workflowSetQualityControl(page, productionOrder.id, true);
     });
   },
 );

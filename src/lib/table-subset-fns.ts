@@ -9,12 +9,15 @@ import { ADMIN_SESSION_COOKIE_NAME, isAdminSession } from "@/lib/admin-session";
 export type TPlainExpression =
   | { type: "ref"; path: Array<string> }
   | { type: "val"; value?: unknown }
+  // The server function cannot send a Date made under a mocked clock, whose constructor is not the global Date
+  | { type: "date"; value: string }
   | { type: "func"; name: string; args: Array<TPlainExpression> };
 
 const expressionSchema: z.ZodType<TPlainExpression> = z.lazy(() =>
   z.discriminatedUnion("type", [
     z.object({ path: z.array(z.string()), type: z.literal("ref") }),
     z.object({ type: z.literal("val"), value: z.unknown() }),
+    z.object({ type: z.literal("date"), value: z.iso.datetime() }),
     z.object({ args: z.array(expressionSchema), name: z.string(), type: z.literal("func") }),
   ]),
 );
@@ -44,6 +47,7 @@ export function toPlainExpression(expression: IR.BasicExpression): TPlainExpress
     return { args: expression.args.map(toPlainExpression), name: expression.name, type: "func" };
   }
   if (expression.type === "ref") return { path: [...expression.path], type: "ref" };
+  if (expression.value instanceof Date) return { type: "date", value: expression.value.toISOString() };
   return { type: "val", value: expression.value };
 }
 
