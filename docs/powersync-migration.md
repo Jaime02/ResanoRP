@@ -411,6 +411,8 @@ table, and from then on every subset is answered from memory.
 
 ### Server rendering
 
+The rules for pages and loaders are in `docs/ssr.md`.
+
 `defaultSsr` is no longer set in `src/start.ts`, so the server renders every route. A route renders its rows on the
 server only if its loader preloads its live queries with `preloadLiveQueries` (`src/lib/preload-live-queries.ts`):
 they load in a `DbClient` of their own, and only their results are handed to the one rendering the request, so no other
@@ -423,7 +425,8 @@ query shows rows the browser does not have yet when it hydrates. A preload that 
   (`src/queries/part.ts`) with `useQueryPartTable`, because a component only picks a preloaded result up when it builds
   the same query.
 - A page without a loader is rendered by the server with its loading states, which costs 30–50 ms over data-only SSR
-  (below). Giving such a page `ssr: "data-only"` would avoid that.
+  (below). Giving such a page `ssr: "data-only"` would avoid that. The Backoffice has it, as its audit log note reads
+  the clock, which differs between the server and the browser.
 
 ### Measured
 
@@ -448,7 +451,7 @@ Milliseconds until the tables show data. The dump lacked 5 tables and a column o
 
 ### Not verified
 
-- The full e2e suite on this change. Only `table-subset-db.test.ts` ran.
+- The full e2e suite on this change ran in CI only, where it found the failures fixed in `96d4c43` and `f4bfbe0`.
 - The production orders (+27%) and treatment (+22%) cold-load regressions of the PoC (§12, runs 13, 25–26) are not
   fixed.
 - Pages other than the parts list and the part page were not measured with the server rendering, and no CPU or network
