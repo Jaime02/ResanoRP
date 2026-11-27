@@ -220,10 +220,22 @@ export function powerSyncCollectionOptions<TSchema extends z.ZodType<object>, TK
           .then(
             async () => {
               synced = true;
-              // A row deleted after Postgres answered never reaches this tab through PowerSync
-              const deleted = [...postgresKeys].filter((key) => !syncedKeys.has(key));
+              const loadedKeys = [...postgresKeys];
               postgresKeys.clear();
-              if (!active || deleted.length === 0) return;
+              if (loadedKeys.length === 0) return;
+              // A row deleted after Postgres answered never reaches this tab through PowerSync. Its synced checkpoint can
+              // be older than what Postgres answered, so a row it lacks is only gone once it has applied one requested
+              // after those reads
+              const confirmed = await client
+                .confirmWrites({ signal: controller.signal })
+                .then(async () => lastApplied)
+                .then(
+                  () => true,
+                  // Unconfirmed, the rows stay: a deleted one is shown until a reload, instead of hiding live ones
+                  () => false,
+                );
+              const deleted = loadedKeys.filter((key) => !syncedKeys.has(key));
+              if (!active || !confirmed || deleted.length === 0) return;
               begin();
               for (const key of deleted) write({ type: "delete", key });
               const applied = commit(controller.signal);
