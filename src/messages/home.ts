@@ -8,6 +8,7 @@ export const SELECT_MACHINE_TITLE = "Selecciona una Máquina";
 export const ADMIN_ACCESS_TITLE = "Acceso de Administrador";
 export const SELECT_USER_TYPE_TITLE = "Selecciona un tipo de Usuario";
 export const WRONG_PASSWORD_MESSAGE = "Contraseña incorrecta";
+export const ADMIN_LOGOUT_FAILED_MESSAGE = "No se ha podido cerrar la sesión de Administrador";
 export const ADMIN_LOGIN_LOCKED_MESSAGE = "Demasiados intentos fallidos, espera un minuto";
 export const ENTER_PASSWORD_LABEL = "Introduce la contraseña";
 export const LOGIN_LABEL = "Iniciar sesión";

@@ -72,7 +72,7 @@ export default function Navbar() {
               : UNKNOWN_MACHINE_LABEL}
         </span>
         {userMode !== undefined && (
-          <Button testId="button-logout" variant="destructive" size="icon" onClick={resetUserState}>
+          <Button testId="button-logout" variant="destructive" size="icon" onClick={() => void resetUserState()}>
             <LogOutIcon />
           </Button>
         )}

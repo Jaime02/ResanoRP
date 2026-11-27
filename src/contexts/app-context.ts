@@ -25,7 +25,7 @@ interface AppContextType {
   isDocumentHydrated: boolean;
   userMode?: UserMode;
   isAdmin: boolean;
-  setUserMode: (mode: UserMode | null) => void;
+  setUserMode: (mode: UserMode | null) => Promise<void>;
   toaster: {
     success: ToastFunction;
     error: ToastFunction;
@@ -34,7 +34,7 @@ interface AppContextType {
   userModeMachine?: BaseMachine;
   isLoadingUserModeMachine: boolean;
   setUserModeMachine: (machine: BaseMachine | null) => void;
-  resetUserState: () => void;
+  resetUserState: () => Promise<void>;
   showToastOnTRPCMutation: <TMutation extends TBaseMutationResult>(
     props: ShowToastOnTRPCMutationProps<TMutation>,
   ) => Promise<TMutation | null>;

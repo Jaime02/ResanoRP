@@ -1,5 +1,5 @@
 import { expect } from "@playwright/test";
-import type { Page } from "@playwright/test";
+import type { Page, Route } from "@playwright/test";
 import { eq } from "drizzle-orm";
 
 import { AppContextStorage, UserMode } from "@/contexts/app-context";
@@ -17,7 +17,12 @@ import {
   ADMIN_ONLY_MESSAGE,
 } from "@/messages/common";
 import { DELIVERY_NOTES_LABEL, DELIVERY_NOTE_CREATE_TITLE } from "@/messages/delivery-note";
-import { SERVE_PARTS_LABEL, WRONG_PASSWORD_MESSAGE, ENTER_PASSWORD_LABEL } from "@/messages/home";
+import {
+  ADMIN_LOGOUT_FAILED_MESSAGE,
+  SERVE_PARTS_LABEL,
+  WRONG_PASSWORD_MESSAGE,
+  ENTER_PASSWORD_LABEL,
+} from "@/messages/home";
 import { PART_CREATE_TITLE } from "@/messages/part";
 import {
   SELL_ORDER_CREATE_TITLE,
@@ -49,7 +54,12 @@ import {
   getTableRows,
 } from "@/tests/utils/components/table";
 import { expectSingleToast } from "@/tests/utils/components/toast";
-import { clientLogEvent, expectRejectedMutation, httpRequestFailedEvent } from "@/tests/utils/errors-log";
+import {
+  clientErrorEvent,
+  clientLogEvent,
+  expectRejectedMutation,
+  httpRequestFailedEvent,
+} from "@/tests/utils/errors-log";
 import { TestAnnotations, expectErrorsLog, inAnotherTab, setUserMode, test } from "@/tests/utils/fixtures";
 import {
   getMockClientById,
@@ -63,6 +73,11 @@ import { TRPC_URL } from "@/trpc/trpc-client";
 import { ToastType } from "@/types/toast";
 
 const activeMachines = mockMachines.filter((machine) => machine.deletedAt === null);
+
+// The default base of the server functions of TanStack Start, which the app keeps
+const SERVER_FUNCTIONS_URL = "**/_serverFn/**";
+// What fetch rejects with in Chromium when the request gets no response, like when the server is unreachable
+const FAILED_FETCH_MESSAGE = "Failed to fetch";
 
 async function openLoginDialog(page: Page) {
   await page.goto("/");
@@ -103,10 +118,30 @@ test("login with every user mode", { annotation: TestAnnotations.UserModeNull },
 
   await test.step("login as user", async () => {
     const dialogLogin = await openLoginDialog(page);
+    const buttonUser = dialogLogin.getByRole("button", { name: UserMode.User });
 
-    // Leaving the Administrador closes its session. The modes picked next have none to close
+    // The user mode is only saved once the admin session is closed, as the server takes the Administrador from it.
+    // The logout is the first POST to the server functions after picking a mode. The error log that follows gets through
+    let isLogoutFailed = false;
+    const failLogout = async (route: Route) => {
+      if (isLogoutFailed || route.request().method() !== "POST") {
+        await route.fallback();
+        return;
+      }
+      isLogoutFailed = true;
+      await route.abort();
+    };
+    await page.route(SERVER_FUNCTIONS_URL, failLogout);
+    expectErrorsLog(clientErrorEvent(FAILED_FETCH_MESSAGE, { userConfig: null }));
+    await buttonUser.click();
+    await expectSingleToast(page, { title: ADMIN_LOGOUT_FAILED_MESSAGE, type: ToastType.Error });
+    await expect(dialogLogin).toBeVisible();
+    await page.unroute(SERVER_FUNCTIONS_URL, failLogout);
+
+    // Leaving the Administrador closes its session, once even if the mode is picked again while it closes. The modes
+    // picked next have none to close
     expectAuditLog({ path: ADMIN_SESSION_AUDIT_PATHS.logout, ok: true });
-    await dialogLogin.getByRole("button", { name: UserMode.User }).click();
+    await buttonUser.dblclick();
 
     await expect(dialogLogin).not.toBeVisible();
 

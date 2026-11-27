@@ -86,7 +86,7 @@ export default function Login({ children }: { children: ReactNode }) {
         // The token cached before the session cannot sync the audit log
         forgetPowerSyncToken();
         resetForm(formAdminPassword);
-        setUserMode(UserMode.Admin);
+        await setUserMode(UserMode.Admin);
         setIsAdminLogin(false);
       } else if (result === AdminLoginResult.Locked) {
         toaster.error({ title: ADMIN_LOGIN_LOCKED_MESSAGE });
@@ -160,7 +160,7 @@ export default function Login({ children }: { children: ReactNode }) {
           <Button
             key={mode}
             className="justify-center"
-            onClick={() => (mode === UserMode.Admin ? setIsAdminLogin(true) : setUserMode(mode))}
+            onClick={() => (mode === UserMode.Admin ? setIsAdminLogin(true) : void setUserMode(mode))}
           >
             {userModeIcons[mode]}
             {mode}

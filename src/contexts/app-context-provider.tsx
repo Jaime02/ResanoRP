@@ -15,6 +15,7 @@ import { forgetPowerSyncToken } from "@/lib/powersync";
 import log from "@/logging/log";
 import { LogMessages, LoggerLevels } from "@/logging/types";
 import { ERROR_TITLE, UNKNOWN_ERROR_MESSAGE } from "@/messages/common";
+import { ADMIN_LOGOUT_FAILED_MESSAGE } from "@/messages/home";
 import { useQueryMachineById } from "@/queries/machine";
 import type { BaseMachine } from "@/types/machine";
 import type { TToast } from "@/types/toast";
@@ -45,8 +46,9 @@ const getStorageSnapshot = () => {
 const toaster = Toast.createToastManager();
 
 // The token of an admin session syncs the audit log, so the next sync request must get one without the session
-function closeAdminSession() {
-  void logoutAdminFn().then(forgetPowerSyncToken);
+async function closeAdminSession() {
+  await logoutAdminFn();
+  forgetPowerSyncToken();
 }
 
 export function AppContextProvider({ children }: { children: ReactNode }) {
@@ -81,36 +83,12 @@ export function AppContextProvider({ children }: { children: ReactNode }) {
     };
   }, [router]);
 
-  const setUserMode = useCallback(
-    (mode: UserMode | null) => {
-      new AppContextStorage(mode ?? undefined, persistedState.userModeMachineId).save();
-      if (mode !== UserMode.Admin) {
-        closeAdminSession();
-      }
-    },
-    [persistedState.userModeMachineId],
-  );
-
   const setSelectedMachine = useCallback(
     (machine: BaseMachine | null) => {
       new AppContextStorage(persistedState.userMode, machine?.id).save();
     },
     [persistedState.userMode],
   );
-
-  const resetUserState = useCallback(() => {
-    new AppContextStorage().save();
-    closeAdminSession();
-  }, []);
-
-  // A deleted Machine can no longer operate, so its session is closed and the user mode has to be picked again
-  const isUserModeMachineDeleted = !isLoadingUserModeMachine && userModeMachine?.deletedAt != null;
-
-  useEffect(() => {
-    if (isUserModeMachineDeleted) {
-      resetUserState();
-    }
-  }, [isUserModeMachineDeleted, resetUserState]);
 
   const addToast = useCallback((type: ToastType, timeout: number, options: ToastManagerAddOptions<TToast>) => {
     for (const activeToast of activeToasts.current) {
@@ -161,6 +139,55 @@ export function AppContextProvider({ children }: { children: ReactNode }) {
     (options: ToastManagerAddOptions<TToast>) => addToast(ToastType.Info, defaultTimeout, options),
     [addToast, defaultTimeout],
   );
+
+  const isClosingAdminSession = useRef(false);
+
+  // The server only takes the Administrador from its session cookie. Saving the new user mode before the logout
+  // answers would let a navigation abort the logout, and the browser would keep the session while it shows another mode.
+  // A pick made meanwhile is ignored, as its logout would still carry the session and close it a second time
+  const saveClosingAdminSession = useCallback(
+    async (storage: AppContextStorage) => {
+      if (isClosingAdminSession.current) return;
+      isClosingAdminSession.current = true;
+      try {
+        await closeAdminSession();
+      } catch (error) {
+        toasterError({ title: ADMIN_LOGOUT_FAILED_MESSAGE });
+        void log(LoggerLevels.error, LogMessages.clientError, { error });
+        return;
+      } finally {
+        isClosingAdminSession.current = false;
+      }
+      storage.save();
+    },
+    [toasterError],
+  );
+
+  const setUserMode = useCallback(
+    async (mode: UserMode | null) => {
+      const storage = new AppContextStorage(mode ?? undefined, persistedState.userModeMachineId);
+      if (mode === UserMode.Admin) {
+        storage.save();
+        return;
+      }
+      await saveClosingAdminSession(storage);
+    },
+    [persistedState.userModeMachineId, saveClosingAdminSession],
+  );
+
+  const resetUserState = useCallback(
+    async () => saveClosingAdminSession(new AppContextStorage()),
+    [saveClosingAdminSession],
+  );
+
+  // A deleted Machine can no longer operate, so its session is closed and the user mode has to be picked again
+  const isUserModeMachineDeleted = !isLoadingUserModeMachine && userModeMachine?.deletedAt != null;
+
+  useEffect(() => {
+    if (isUserModeMachineDeleted) {
+      void resetUserState();
+    }
+  }, [isUserModeMachineDeleted, resetUserState]);
 
   const showToastOnTRPCMutation = useCallback(
     async <TMutation extends TBaseMutationResult>({
