@@ -1,6 +1,9 @@
 import type { IR, LoadSubsetOptions } from "@tanstack/react-db";
 import { createServerFn } from "@tanstack/react-start";
+import { getCookie } from "@tanstack/react-start/server";
 import { z } from "zod";
+
+import { ADMIN_SESSION_COOKIE_NAME, isAdminSession } from "@/lib/admin-session";
 
 // A TanStack DB expression (IR.BasicExpression) as plain data, which a server function can receive
 export type TPlainExpression =
@@ -70,5 +73,5 @@ export const loadTableSubsetFn = createServerFn({ method: "POST" })
   .validator((data: unknown) => subsetRequestSchema.parse(data))
   .handler(async ({ data }) => {
     const { loadTableSubset } = await import("@/db/functions/table-subset");
-    return loadTableSubset(data);
+    return loadTableSubset(data, isAdminSession(getCookie(ADMIN_SESSION_COOKIE_NAME)));
   });

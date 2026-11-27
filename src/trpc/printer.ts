@@ -3,7 +3,7 @@ import { eq } from "drizzle-orm";
 import type { z } from "zod";
 
 import type { TDatabase } from "@/db";
-import { dbTablePrinter } from "@/db/schema";
+import { dbTablePrinter, PUBLIC_PRINTER_COLUMNS } from "@/db/schema";
 import { pingPrinter, printPdfOnPrinter } from "@/files/printer";
 import { handleMutationError } from "@/lib/handlers";
 import logger from "@/logging/logger";
@@ -21,19 +21,6 @@ import { isLabelPrinterKind, isSharePrinterKind } from "@/types/printer";
 
 // The documents are served by the app itself, so the server reads the file it previews the same way a browser does
 const APP_URL = `http://localhost:${process.env.PORT ?? "5173"}`;
-
-// Every column but the password, which never leaves the server
-const PUBLIC_PRINTER_COLUMNS = {
-  address: dbTablePrinter.address,
-  forTags: dbTablePrinter.forTags,
-  id: dbTablePrinter.id,
-  kind: dbTablePrinter.kind,
-  labelLengthMm: dbTablePrinter.labelLengthMm,
-  labelWidthMm: dbTablePrinter.labelWidthMm,
-  name: dbTablePrinter.name,
-  shareName: dbTablePrinter.shareName,
-  username: dbTablePrinter.username,
-};
 
 // Only a label printer has labels and only a share has a user, so switching a printer to another kind clears what it
 // had. An empty password keeps the stored one, as the form never shows it

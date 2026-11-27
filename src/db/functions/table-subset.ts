@@ -21,6 +21,12 @@ const ORDER_TYPES = new Set(["PgInteger", "PgTimestamp"]);
 const ORDER_OPERATORS: Partial<Record<string, string>> = { gt: ">", gte: ">=", lt: "<", lte: "<=" };
 const FLIPPED_OPERATORS: Partial<Record<string, string>> = { gt: "lt", gte: "lte", lt: "gt", lte: "gte" };
 
+// What docker/powersync/sync-config.yaml keeps from a client, which Postgres must not hand it either
+const ADMIN_ONLY_TABLES = new Set<PgTable>([dbSchema.dbTableAuditLog]);
+const PUBLIC_COLUMNS = new Map<PgTable, Record<string, PgColumn>>([
+  [dbSchema.dbTablePrinter, dbSchema.PUBLIC_PRINTER_COLUMNS],
+]);
+
 class UntranslatableError extends Error {}
 
 const refuse = (reason: string): never => {
@@ -39,10 +45,13 @@ const columnSql = (column: PgColumn) =>
  * filter keeps, or more than MAX_SUBSET_ROWS. An extra row is as wrong as a missing one, since a `not` turns one into
  * the other, so a filter is only translated where Postgres and TanStack DB compare the same values the same way
  */
-export async function loadTableSubset(request: TSubsetRequest) {
+export async function loadTableSubset(request: TSubsetRequest, isAdmin: boolean) {
   const dbTable = Object.values(dbSchema).find((value) => is(value, PgTable) && getTableName(value) === request.table);
   if (dbTable === undefined || !is(dbTable, PgTable)) throw new Error(`Unknown table ${request.table}`);
-  const columns: Partial<Record<string, PgColumn>> = getTableColumns(dbTable);
+  if (ADMIN_ONLY_TABLES.has(dbTable) && !isAdmin) return [];
+  // The filters only read these too, as a filter on another column would tell its value by the rows it keeps
+  const selectedColumns: Record<string, PgColumn> = PUBLIC_COLUMNS.get(dbTable) ?? getTableColumns(dbTable);
+  const columns: Partial<Record<string, PgColumn>> = selectedColumns;
 
   const columnOf = (expression: TPlainExpression) =>
     expression.type === "ref" && expression.path.length === 1 ? columns[expression.path[0]] : undefined;
@@ -114,7 +123,7 @@ export async function loadTableSubset(request: TSubsetRequest) {
 
     const select = async (conditions: Array<SQL | undefined>, limited: boolean) => {
       const present = conditions.filter((condition) => condition !== undefined);
-      let query = db.select().from(dbTable).$dynamic();
+      let query = db.select(selectedColumns).from(dbTable).$dynamic();
       if (present.length > 0) query = query.where(sql.join(present, sql` AND `));
       if (!limited || !exactOrder) return query.limit(MAX_SUBSET_ROWS + 1);
       return query

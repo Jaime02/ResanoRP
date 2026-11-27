@@ -4,10 +4,17 @@ import { getTableName } from "drizzle-orm";
 
 import db from "@/db";
 import { loadTableSubset, MAX_LOOKUP_KEYS } from "@/db/functions/table-subset";
-import { dbTableSellOrderLine } from "@/db/schema";
+import { dbTableAuditLog, dbTablePrinter, dbTableSellOrderLine } from "@/db/schema";
 import type { TSubsetRequest } from "@/lib/table-subset-fns";
 import { toPlainExpression } from "@/lib/table-subset-fns";
 import { test } from "@/tests/utils/fixtures";
+import {
+  getMockPrinterShareCredentials,
+  MOCK_LABELS_SHARE_NAME,
+  MOCK_PRINTER_SHARE_HOST,
+} from "@/tests/utils/mock-printer";
+import { MAINTENANCE_PRINTER_URL, workflowCreatePrinter } from "@/tests/workflows/printer";
+import { PrinterKind } from "@/types/printer";
 
 type TExpression = IR.BasicExpression;
 const ref = (column: string) => new IR.PropRef([column]);
@@ -20,11 +27,14 @@ test("the rows a query loads from Postgres before PowerSync brings its table", a
   const rows = await db.select().from(dbTableSellOrderLine);
   // The function returns the rows of whichever table it is asked for
   const load = async (where: TExpression | undefined, request: Partial<TSubsetRequest> = {}) =>
-    (await loadTableSubset({
-      table,
-      where: where === undefined ? undefined : toPlainExpression(where),
-      ...request,
-    })) as typeof rows | null;
+    (await loadTableSubset(
+      {
+        table,
+        where: where === undefined ? undefined : toPlainExpression(where),
+        ...request,
+      },
+      false,
+    )) as typeof rows | null;
   const ids = (subset: Array<{ id: number }>) => subset.map(({ id }) => id);
   const sorted = (subset: Array<{ id: number }>) => ids(subset).sort((a, b) => a - b);
   // TanStack DB's own evaluation of the filter over the whole table, as the collection applies it
@@ -115,5 +125,35 @@ test("the rows a query loads from Postgres before PowerSync brings its table", a
       orderBy: [{ direction: "asc", expression: toPlainExpression(ref("requestedDeliveryDate")), nulls: "first" }],
     });
     expect(sorted(byDate!)).toEqual(sorted(kept(where)));
+  });
+});
+
+test("Postgres keeps from a client what PowerSync keeps from it", async ({ page }) => {
+  // Only a shared printer keeps a password
+  const printer = {
+    ...getMockPrinterShareCredentials(),
+    address: MOCK_PRINTER_SHARE_HOST,
+    kind: PrinterKind.IntermecShare,
+    labelLengthMm: 107,
+    labelWidthMm: 52,
+    name: "Etiquetas",
+    shareName: MOCK_LABELS_SHARE_NAME,
+  };
+  await page.goto(MAINTENANCE_PRINTER_URL);
+  // Also writes the audit log
+  await workflowCreatePrinter(page, printer);
+
+  await test.step("a Impresora comes without its password, which no filter can read either", async () => {
+    const printers = await loadTableSubset({ table: getTableName(dbTablePrinter) }, true);
+    expect(printers).toEqual([expect.objectContaining({ name: printer.name })]);
+    expect(printers![0]).not.toHaveProperty(dbTablePrinter.password.name);
+    const where = toPlainExpression(fn("eq", ref(dbTablePrinter.password.name), val(printer.password)));
+    expect(await loadTableSubset({ table: getTableName(dbTablePrinter), where }, true)).toBeNull();
+  });
+
+  await test.step("only an admin session gets the audit log", async () => {
+    const request = { table: getTableName(dbTableAuditLog) };
+    expect(await loadTableSubset(request, false)).toEqual([]);
+    expect((await loadTableSubset(request, true))!.length).toBeGreaterThan(0);
   });
 });

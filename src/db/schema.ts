@@ -186,6 +186,19 @@ export const dbTablePrinter = pgTable("printer", {
   username: text("username"),
 });
 
+// Every column but the password, which never leaves the server
+export const PUBLIC_PRINTER_COLUMNS = {
+  address: dbTablePrinter.address,
+  forTags: dbTablePrinter.forTags,
+  id: dbTablePrinter.id,
+  kind: dbTablePrinter.kind,
+  labelLengthMm: dbTablePrinter.labelLengthMm,
+  labelWidthMm: dbTablePrinter.labelWidthMm,
+  name: dbTablePrinter.name,
+  shareName: dbTablePrinter.shareName,
+  username: dbTablePrinter.username,
+};
+
 // Written outside the transaction of the mutation it records, so a failed one is kept too. Only admins sync it, see its
 // stream
 export const dbTableAuditLog = pgTable("audit_log", {

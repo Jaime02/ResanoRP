@@ -55,7 +55,8 @@ Changing a printer to another kind clears the fields that kind does not use. The
 The password is stored in plain text in the `printer` table and is **server-only**:
 
 - The PowerSync stream `printer` in `docker/powersync/sync-config.yaml` lists the columns one by one and leaves it out. Never use `SELECT *` there.
-- tRPC returns `PUBLIC_PRINTER_COLUMNS`, the client schema has no `password`, and the edit form always starts with it empty.
+- tRPC returns `PUBLIC_PRINTER_COLUMNS` (`src/db/schema.ts`), the client schema has no `password`, and the edit form always starts with it empty.
+- The rows a query loads from Postgres before PowerSync brings the table (`loadTableSubset`) are only those columns, and its filters can read no other (`docs/powersync-migration.md` §13).
 - Saving with an empty password keeps the stored one.
 
 Credentials for seeded printers live only in the git-ignored `src/db/migration_scripts/secrets.py`.

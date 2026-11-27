@@ -753,6 +753,19 @@ export const mockSellOrderLines: Array<BaseSellOrderLine> = [
     requestedDeliveryDate: null,
     sellOrderId: 2,
   },
+  {
+    // Described by hand, without an Artículo. In the deleted sell order 6 and served, so no list of pending lines shows it
+    deletedAt: null,
+    description: "Id 11, described by hand",
+    id: 11,
+    notes: null,
+    partPrice: "4",
+    partReferenceId: null,
+    pendingQuantity: 0,
+    quantity: 2,
+    requestedDeliveryDate: null,
+    sellOrderId: 6,
+  },
 ];
 
 export const mockDeliveryNotes: Array<BaseDeliveryNote> = [
