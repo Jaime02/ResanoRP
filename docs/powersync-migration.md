@@ -30,7 +30,8 @@ applied it", whatever tables changed.
   keeps optimistic rows from flickering without the queue.
 - **Integer ids kept**: the app's own adapter (`src/collections/base.ts`) keys rows with each collection's `getKey`.
 - **Full SSR since 2026-11-27** (data-only SSR until then): the server renders every route. A route with a loader that
-  preloads its live queries (only the parts list) arrives with its rows, loaded from Postgres. See §13.
+  preloads its live queries (the parts list, and the part, delivery note and sell order pages) arrives with its rows,
+  loaded from Postgres. See §13.
 - **Collections are on-demand** since 2026-11-27 (eager until then), one Sync Stream per table: until PowerSync has
   brought a table, each query's rows come from Postgres. See §13.
 
@@ -131,7 +132,7 @@ mutation ──► optimistic row ──► tRPC ──► Drizzle tx ──► 
 
 | Issue                                                                                                                                                                                                                          | Status                                                            |
 | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------- |
-| Only the parts list is server-rendered with its rows (§13). Every other page is rendered by the server without data and shows it after hydration.                                                                              | Accepted.                                                         |
+| Only the parts list, the part, delivery note and sell order pages are server-rendered with their rows (§13). Every other page is rendered by the server without data and shows it after hydration.                             | Accepted.                                                         |
 | Every page load downloads its tables in full, per tab. Each row is held about three times in memory (oplog JSON, parsed row, app row).                                                                                         | Not measured against production data.                             |
 | The stream restarts whenever the leased tables change (a collection mounts, or one is collected after `gcTime`). It resumes from the buckets it holds, but a released table is downloaded again. Lite has no subscription TTL. | Watch navigation-heavy flows.                                     |
 | A pending checkpoint holds **every** incoming change of the tab, not only the written rows, until the service confirms it.                                                                                                     | Inherent to checkpoints.                                          |
@@ -338,18 +339,19 @@ production builds, one `pg_dump` (101,239 rows), targets interleaved, medians of
 "10 pages" is the sum of the page medians. Compare targets only within one file: machine load moved absolute times by
 up to 40% between runs.
 
-| Runs   | What                                                                                       | Result                                                                                    |
-| ------ | ------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------- |
-| 1, 6   | master, powersync (SQLite), lite; 6 is after the line status fix and rc.1.5                | cold 10 pages 9.8 / 168.7 / 24.3 s; session 7.8 / 21.5 / 6.2 s (run 6)                    |
-| 2-5    | compaction on lite (§10)                                                                   | 8.1-8.8 s uncompacted, 2.3-2.7 s compacted = fresh                                        |
-| 7, 8   | early sync request, builds swapped (§11)                                                   | reloads 3.2% sooner, first loads and navigation within noise; removed                     |
-| 9-12   | one graph run per checkpoint (§11)                                                         | production orders 2.64 → 2.06 s cold (11, 12), other pages -10% to +8%; kept              |
-| 13, 14 | progressive collections PoC                                                                | cold detail pages 0.27-0.37 s; production orders +27%, treatment +22% vs lite; not merged |
-| 15-22  | query fixes (`docs/query-performance.md`); 15 compares 27 query variants, all counts equal | see below                                                                                 |
-| 23, 24 | PoC rebased on the query fixes (busy machine: master's times 30% higher)                   | cold 10 pages 11.6 s (master 10.4, lite 23.7); session 3.6 s (master 7.8, lite 5.2)       |
-| 25, 26 | branch `progressive-collections`, the PoC rewritten on the query fixes                     | cold 10 pages 11.2 s (master 8.0, lite 19.0); session 2.9 s (master 6.1, lite 4.2)        |
-| 27     | vendored client against `@powersync/standalone-client`                                     | no difference                                                                             |
-| 29, 30 | `progressive-collections` with and without full SSR of the parts list, then swapped (§13)  | parts list cold 556 → 255 ms; part page, which has no loader, 305 → 333 ms                |
+| Runs   | What                                                                                       | Result                                                                                          |
+| ------ | ------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------- |
+| 1, 6   | master, powersync (SQLite), lite; 6 is after the line status fix and rc.1.5                | cold 10 pages 9.8 / 168.7 / 24.3 s; session 7.8 / 21.5 / 6.2 s (run 6)                          |
+| 2-5    | compaction on lite (§10)                                                                   | 8.1-8.8 s uncompacted, 2.3-2.7 s compacted = fresh                                              |
+| 7, 8   | early sync request, builds swapped (§11)                                                   | reloads 3.2% sooner, first loads and navigation within noise; removed                           |
+| 9-12   | one graph run per checkpoint (§11)                                                         | production orders 2.64 → 2.06 s cold (11, 12), other pages -10% to +8%; kept                    |
+| 13, 14 | progressive collections PoC                                                                | cold detail pages 0.27-0.37 s; production orders +27%, treatment +22% vs lite; not merged       |
+| 15-22  | query fixes (`docs/query-performance.md`); 15 compares 27 query variants, all counts equal | see below                                                                                       |
+| 23, 24 | PoC rebased on the query fixes (busy machine: master's times 30% higher)                   | cold 10 pages 11.6 s (master 10.4, lite 23.7); session 3.6 s (master 7.8, lite 5.2)             |
+| 25, 26 | branch `progressive-collections`, the PoC rewritten on the query fixes                     | cold 10 pages 11.2 s (master 8.0, lite 19.0); session 2.9 s (master 6.1, lite 4.2)              |
+| 27     | vendored client against `@powersync/standalone-client`                                     | no difference                                                                                   |
+| 29, 30 | `progressive-collections` with and without full SSR of the parts list, then swapped (§13)  | parts list cold 556 → 255 ms; part page, which has no loader, 305 → 333 ms                      |
+| 31, 32 | master with only the parts list preloaded against `ssr-loaders`, then swapped (§13)        | part cold 332 → 109 ms, delivery note 339 → 87, sell order 420 → 366; the other pages unchanged |
 
 PowerSync with SQLite was left out of the runs after 6: ~17 s on every first load while it fills SQLite.
 
@@ -421,9 +423,11 @@ query shows rows the browser does not have yet when it hydrates. A preload that 
 
 - On the server a collection never creates the PowerSync client, which needs `window`: it is ready at once and answers
   every subset from Postgres. A subset Postgres cannot answer exactly fails the preload instead of rendering wrong rows.
-- Only the parts list has such a loader (`src/routes/part/index.tsx`). It shares `partTableQueries`
-  (`src/queries/part.ts`) with `useQueryPartTable`, because a component only picks a preloaded result up when it builds
-  the same query.
+- Five loaders preload: the parts list (`src/routes/part/index.tsx`), the part, delivery note and sell order pages
+  (`$id.tsx` of each), and the root, for the machine of the user mode in the cookie. Each shares its query builder with
+  the hook of the component (`partTableQueries`, `partFormQuery`, `deliveryNoteByIdQuery`, `sellOrderByIdQuery`,
+  `machineByIdQuery`), because a component only picks a preloaded result up when it builds the same query. The sell
+  order page does not preload the production statuses of its lines, which the browser loads after it appears.
 - A page without a loader is rendered by the server with its loading states, which costs 30–50 ms over data-only SSR
   (below). Giving such a page `ssr: "data-only"` would avoid that. The Backoffice has it, as its audit log note reads
   the clock, which differs between the server and the browser.
@@ -447,7 +451,27 @@ Milliseconds until the tables show data. The dump lacked 5 tables and a column o
 
 - The parts list hydrates later (about 420 against 220 ms) and sends about 185 KB more, but shows its rows 300 ms
   sooner. Postgres first already took it from about 2.2 s (rows from PowerSync only) to 0.55 s.
-- The part page, which has no loader, is 30–50 ms slower with the server rendering on both stacks.
+- The part page, which had no loader then, was 30–50 ms slower with the server rendering on both stacks. The loaders of
+  runs 31 and 32 below fix that.
+
+Benchmark runs 31 and 32 (`benchmark/results/`), the same way, all ten pages: master, which preloads only the parts
+list, against `ssr-loaders`, then swapped. Milliseconds until the tables show data.
+
+| Page                 | Cold, master | Cold, loaders | Warm, master | Warm, loaders |
+| -------------------- | ------------ | ------------- | ------------ | ------------- |
+| delivery note        | 339          | 87            | 348          | 75            |
+| part                 | 332          | 109           | 368          | 82            |
+| sell order           | 420          | 366           | 478          | 430           |
+| parts list           | 242          | 233           | 212          | 220           |
+| sell orders          | 656          | 678           | 1020         | 934           |
+| invoicing            | 478          | 470           | 654          | 629           |
+| treatment            | 1774         | 1732          | 2217         | 2250          |
+| delivery notes       | 2032         | 2058          | 2462         | 2482          |
+| create delivery note | 2294         | 2260          | 2710         | 2736          |
+| production orders    | 2846         | 2947          | 4296         | 4178          |
+
+In-app navigation is unchanged on every page (ratio 0.96–1.04). The pages without a new loader are within noise. The
+slow list pages (delivery notes, create delivery note, production orders, treatment) still have no loader.
 
 ### Not verified
 

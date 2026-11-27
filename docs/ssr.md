@@ -6,8 +6,10 @@ PowerSync. The measurements and the reasoning behind this are in `docs/powersync
 
 ## What arrives with rows
 
-Only the parts list (`src/routes/part/index.tsx`). Its loader calls `preloadLiveQueries` with `partTableQueries`
-(`src/queries/part.ts`), which `useQueryPartTable` builds its query from too.
+The parts list, the part, delivery note and sell order pages, and the machine of the user mode (the root loader reads
+its id from the user mode cookie). Each loader calls `preloadLiveQueries` with a builder that the hook of the component
+builds its query from too: `partTableQueries`, `partFormQuery`, `deliveryNoteByIdQuery`, `sellOrderByIdQuery` and
+`machineByIdQuery` (`src/queries/`). The sell order page does not preload the production statuses of its lines.
 
 ## How a preload works
 
@@ -27,8 +29,9 @@ their results to the one rendering the request, so no other query renders rows t
 
 ## Adding a loader to a page
 
-1. Put the live query in a builder that returns `{ queryKey, query }`, and use it in the component's hook and in the
-   loader. A component only picks a preloaded result up when its query has the same key and builds the same query.
+1. Put the live query in a builder that returns `{ queryKey, query }` and takes a required id, and use it in the
+   component's hook and in the loader. A hook that may have no id yet wraps it in `optionalLiveQuery`
+   (`src/lib/preload-live-queries.ts`), which keeps its key and the query it builds. A component only picks a preloaded result up when its query has the same key and builds the same query.
 2. In the route: `loader: async ({ context }) => { await preloadLiveQueries(context.dbClient, [builder()]); }`.
 3. Every subset the query asks for must be one `loadTableSubset` can answer (see `docs/powersync-migration.md` §13),
    or the preload fails and the page gains nothing.

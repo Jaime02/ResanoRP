@@ -1,0 +1,79 @@
+sell orders: done
+delivery notes: done
+parts: done
+production orders: done
+invoicing: done
+treatment: done
+create delivery note: done
+sell order: done
+delivery note: done
+part: done
+navigation run 1: done
+navigation run 2: done
+navigation run 3: done
+navigation run 4: done
+navigation run 5: done
+┌────┬──────────────────────┬────────────┬─────────┬─────────┬───────────┬─────────────┬─────────┬──────────────┬────────────┐
+│    │ page                 │ mode       │ target  │ data ms │ min-max   │ hydrated ms │ sent KB │ page heap MB │ row counts │
+├────┼──────────────────────┼────────────┼─────────┼─────────┼───────────┼─────────────┼─────────┼──────────────┼────────────┤
+│  0 │ sell orders          │ cold       │ base    │ 664     │ 637-812   │ 216         │ 8651    │ 78           │ 13022      │
+│  1 │ sell orders          │ cold       │ loaders │ 689     │ 626-719   │ 204         │ 8654    │ 78           │ 13022      │
+│  2 │ sell orders          │ warm       │ base    │ 639     │ 588-1012  │ 176         │ 6567    │ 78           │ 13022      │
+│  3 │ sell orders          │ warm       │ loaders │ 915     │ 604-1464  │ 212         │ 6567    │ 78           │ 13022      │
+│  4 │ sell orders          │ navigation │ base    │ 555     │ 538-590   │ -           │ 6599    │ 78           │ 13022      │
+│  5 │ sell orders          │ navigation │ loaders │ 547     │ 526-618   │ -           │ 6593    │ 78           │ 13022      │
+│  6 │ delivery notes       │ cold       │ base    │ 2063    │ 2033-2240 │ 219         │ 9027    │ 128          │ 8342       │
+│  7 │ delivery notes       │ cold       │ loaders │ 2045    │ 2035-2311 │ 225         │ 9035    │ 128          │ 8342       │
+│  8 │ delivery notes       │ warm       │ base    │ 2529    │ 2380-2547 │ 243         │ 6973    │ 128          │ 8342       │
+│  9 │ delivery notes       │ warm       │ loaders │ 2470    │ 2321-2517 │ 233         │ 6971    │ 128          │ 8342       │
+│ 10 │ delivery notes       │ navigation │ base    │ 601     │ 571-648   │ -           │ 4357    │ 126          │ 8342       │
+│ 11 │ delivery notes       │ navigation │ loaders │ 623     │ 518-660   │ -           │ 4352    │ 126          │ 8342       │
+│ 12 │ parts                │ cold       │ base    │ 241     │ 203-305   │ 415         │ 8453    │ 144          │ 3647       │
+│ 13 │ parts                │ cold       │ loaders │ 225     │ 212-269   │ 383         │ 8465    │ 144          │ 3647       │
+│ 14 │ parts                │ warm       │ base    │ 212     │ 200-360   │ 396         │ 6399    │ 147          │ 3647       │
+│ 15 │ parts                │ warm       │ loaders │ 239     │ 193-261   │ 428         │ 6399    │ 146          │ 3647       │
+│ 16 │ parts                │ navigation │ base    │ 306     │ 291-329   │ -           │ 743     │ 130          │ 3647       │
+│ 17 │ parts                │ navigation │ loaders │ 305     │ 284-309   │ -           │ 743     │ 131          │ 3647       │
+│ 18 │ production orders    │ cold       │ base    │ 2877    │ 2825-3112 │ 247         │ 7541    │ 136          │ 48         │
+│ 19 │ production orders    │ cold       │ loaders │ 3050    │ 2828-3367 │ 272         │ 7524    │ 135          │ 48         │
+│ 20 │ production orders    │ warm       │ base    │ 4324    │ 3970-4521 │ 263         │ 5281    │ 138          │ 48         │
+│ 21 │ production orders    │ warm       │ loaders │ 4061    │ 4021-4517 │ 265         │ 5284    │ 138          │ 48         │
+│ 22 │ production orders    │ navigation │ base    │ 1002    │ 906-1015  │ -           │ 243     │ 146          │ 48         │
+│ 23 │ production orders    │ navigation │ loaders │ 943     │ 917-1009  │ -           │ 243     │ 146          │ 48         │
+│ 24 │ invoicing            │ cold       │ base    │ 484     │ 431-522   │ 211         │ 8017    │ 133          │ 4698       │
+│ 25 │ invoicing            │ cold       │ loaders │ 488     │ 428-513   │ 213         │ 8026    │ 133          │ 4698       │
+│ 26 │ invoicing            │ warm       │ base    │ 662     │ 590-721   │ 229         │ 6006    │ 133          │ 4698       │
+│ 27 │ invoicing            │ warm       │ loaders │ 644     │ 625-868   │ 257         │ 6007    │ 133          │ 4698       │
+│ 28 │ invoicing            │ navigation │ base    │ 389     │ 376-412   │ -           │ 1579    │ 142          │ 4698       │
+│ 29 │ invoicing            │ navigation │ loaders │ 386     │ 383-428   │ -           │ 1578    │ 142          │ 4698       │
+│ 30 │ treatment            │ cold       │ base    │ 1777    │ 1722-1843 │ 219         │ 5377    │ 120          │ 0,3        │
+│ 31 │ treatment            │ cold       │ loaders │ 1748    │ 1692-1817 │ 215         │ 5390    │ 120          │ 0,3        │
+│ 32 │ treatment            │ warm       │ base    │ 2244    │ 2132-2618 │ 232         │ 3372    │ 120          │ 0,3        │
+│ 33 │ treatment            │ warm       │ loaders │ 2322    │ 2092-2358 │ 225         │ 3373    │ 120          │ 0,3        │
+│ 34 │ treatment            │ navigation │ base    │ 417     │ 385-431   │ -           │ 24      │ 155          │ 0,3        │
+│ 35 │ treatment            │ navigation │ loaders │ 415     │ 392-429   │ -           │ 24      │ 155          │ 0,3        │
+│ 36 │ create delivery note │ cold       │ base    │ 2268    │ 2227-2401 │ 270         │ 9381    │ 138          │ 0,0,8342   │
+│ 37 │ create delivery note │ cold       │ loaders │ 2253    │ 2227-2743 │ 282         │ 9384    │ 138          │ 0,0,8342   │
+│ 38 │ create delivery note │ warm       │ base    │ 2710    │ 2673-2749 │ 285         │ 7255    │ 138          │ 0,0,8342   │
+│ 39 │ create delivery note │ warm       │ loaders │ 2663    │ 2603-2849 │ 272         │ 7255    │ 138          │ 0,0,8342   │
+│ 40 │ create delivery note │ navigation │ base    │ 205     │ 195-215   │ -           │ 42      │ 143          │ 0,0,8342   │
+│ 41 │ create delivery note │ navigation │ loaders │ 212     │ 200-217   │ -           │ 42      │ 143          │ 0,0,8342   │
+│ 42 │ sell order           │ cold       │ base    │ 425     │ 382-449   │ 221         │ 5436    │ 139          │ 1          │
+│ 43 │ sell order           │ cold       │ loaders │ 367     │ 353-455   │ 276         │ 5280    │ 139          │ 1          │
+│ 44 │ sell order           │ warm       │ base    │ 479     │ 469-624   │ 234         │ 3475    │ 139          │ 1          │
+│ 45 │ sell order           │ warm       │ loaders │ 438     │ 435-544   │ 297         │ 3197    │ 139          │ 1          │
+│ 46 │ sell order           │ navigation │ base    │ 164     │ 154-166   │ -           │ 4       │ 141          │ 1          │
+│ 47 │ sell order           │ navigation │ loaders │ 160     │ 148-172   │ -           │ 4       │ 141          │ 1          │
+│ 48 │ delivery note        │ cold       │ base    │ 338     │ 321-361   │ 222         │ 6633    │ 119          │ 1          │
+│ 49 │ delivery note        │ cold       │ loaders │ 88      │ 84-110    │ 257         │ 6646    │ 119          │ 1          │
+│ 50 │ delivery note        │ warm       │ base    │ 345     │ 334-493   │ 220         │ 4590    │ 119          │ 1          │
+│ 51 │ delivery note        │ warm       │ loaders │ 74      │ 68-129    │ 243         │ 4598    │ 119          │ 1          │
+│ 52 │ delivery note        │ navigation │ base    │ 69      │ 67-73     │ -           │ 12      │ 140          │ 1          │
+│ 53 │ delivery note        │ navigation │ loaders │ 71      │ 63-74     │ -           │ 12      │ 140          │ 1          │
+│ 54 │ part                 │ cold       │ base    │ 350     │ 322-390   │ 238         │ 7257    │ 139          │ 1          │
+│ 55 │ part                 │ cold       │ loaders │ 102     │ 100-119   │ 251         │ 7258    │ 139          │ 1          │
+│ 56 │ part                 │ warm       │ base    │ 368     │ 351-497   │ 251         │ 5200    │ 139          │ 1          │
+│ 57 │ part                 │ warm       │ loaders │ 85      │ 71-131    │ 261         │ 5189    │ 138          │ 1          │
+│ 58 │ part                 │ navigation │ base    │ 76      │ 72-79     │ -           │ 3       │ 140          │ 1          │
+│ 59 │ part                 │ navigation │ loaders │ 72      │ 64-74     │ -           │ 3       │ 140          │ 1          │
+└────┴──────────────────────┴────────────┴─────────┴─────────┴───────────┴─────────────┴─────────┴──────────────┴────────────┘
