@@ -17,6 +17,7 @@ import {
 import { mockMaterials, mockRawMaterials, mockShapes } from "@/tests/mock-data";
 import { openAndConfirmAlertDialog } from "@/tests/utils/components/alert-dialog";
 import {
+  assertComboboxValue,
   clickInComboboxOption,
   fillComboboxFilter,
   getClearComboboxButton,
@@ -54,24 +55,30 @@ async function getMaterial(db: TDatabase, id: number) {
   return db.query.dbTableMaterial.findFirst({ where: { id } });
 }
 
-async function fillMaterialForm(page: Page, material: (typeof mockMaterials)[number]) {
+function getMaterialFormInputs(page: Page) {
   const dialogCreateMaterial = page.getByTestId("dialog-create-material");
+  return {
+    comboboxRawMaterial: getFormInputByLabel(dialogCreateMaterial, RAW_MATERIAL_LABEL, InputElementType.Combobox),
+    comboboxShape: getFormInputByLabel(dialogCreateMaterial, SHAPE_LABEL, InputElementType.Combobox),
+    inputWidth: dialogCreateMaterial.locator("#input-width-create-material"),
+  };
+}
+
+async function fillMaterialForm(page: Page, material: (typeof mockMaterials)[number]) {
   const rawMaterial = mockRawMaterials.find((mockRawMaterial) => mockRawMaterial.id === material.rawMaterialId);
   const shape = mockShapes.find((mockShape) => mockShape.id === material.shapeId);
   expect(rawMaterial).toBeDefined();
   expect(shape).toBeDefined();
+  const { comboboxRawMaterial, comboboxShape, inputWidth } = getMaterialFormInputs(page);
 
-  const comboboxRawMaterial = getFormInputByLabel(dialogCreateMaterial, RAW_MATERIAL_LABEL, InputElementType.Combobox);
   await openCombobox(comboboxRawMaterial);
   await fillComboboxFilter(page, rawMaterial!.name);
   await clickInComboboxOption(page, rawMaterial!.name);
 
-  const comboboxShape = getFormInputByLabel(dialogCreateMaterial, SHAPE_LABEL, InputElementType.Combobox);
   await openCombobox(comboboxShape);
   await fillComboboxFilter(page, shape!.name);
   await clickInComboboxOption(page, shape!.name);
 
-  const inputWidth = dialogCreateMaterial.locator("#input-width-create-material");
   await inputWidth.clear();
   await inputWidth.pressSequentially(material.width);
 }
@@ -168,6 +175,11 @@ test("manage the Materiales", async ({ page, db }) => {
     for (const material of activeMaterials) {
       await page.getByRole("button", { name: MATERIAL_CREATE_TITLE }).click();
       await expect(dialogCreateMaterial).toBeVisible();
+      // It opens empty, without the combination of the Material rejected before
+      const { comboboxRawMaterial, comboboxShape, inputWidth } = getMaterialFormInputs(page);
+      await assertComboboxValue(comboboxRawMaterial, null);
+      await assertComboboxValue(comboboxShape, null);
+      await expect(inputWidth).toHaveValue("");
       await fillMaterialForm(page, material);
       await dialogCreateMaterial.getByTestId("button-submit").click();
 

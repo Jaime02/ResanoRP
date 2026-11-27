@@ -12,6 +12,7 @@ interface DialogCreateMaterialProps {
 }
 
 export default function DialogCreateMaterial({ open }: DialogCreateMaterialProps) {
+  const isOpen = open === true;
   const navigate = useNavigate();
 
   const onClose = useCallback(
@@ -23,12 +24,12 @@ export default function DialogCreateMaterial({ open }: DialogCreateMaterialProps
     [navigate],
   );
 
-  const { form, validationSchema, isLoading } = useCreateMaterialForm({ onSubmit: onClose });
+  const { form, validationSchema, isLoading } = useCreateMaterialForm({ open: isOpen, onSubmit: onClose });
 
   return (
     <MaintenanceDialog
       testId="dialog-create-material"
-      open={open === true}
+      open={isOpen}
       form={form}
       formMode={FormMode.Create}
       onClose={onClose}

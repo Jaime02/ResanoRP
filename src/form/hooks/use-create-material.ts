@@ -2,6 +2,7 @@ import { useSelector } from "@tanstack/react-store";
 
 import { useAppContext } from "@/contexts/app-context";
 import { useAppForm } from "@/form";
+import useResetForm from "@/form/hooks/use-reset-form";
 import { MATERIAL_CREATED_MESSAGE } from "@/messages/material";
 import type { TCreateMaterial } from "@/schemas/material";
 import { createMaterialSchema } from "@/schemas/material";
@@ -19,10 +20,11 @@ const defaultMaterialFormData: {
 };
 
 interface UseCreateMaterialFormProps {
+  open: boolean;
   onSubmit?: (material: BaseMaterialSerialized) => Promise<void>;
 }
 
-export default function useCreateMaterialForm({ onSubmit }: UseCreateMaterialFormProps) {
+export default function useCreateMaterialForm({ open, onSubmit }: UseCreateMaterialFormProps) {
   const { showToastOnTRPCMutation } = useAppContext();
 
   const form = useAppForm({
@@ -39,6 +41,9 @@ export default function useCreateMaterialForm({ onSubmit }: UseCreateMaterialFor
       onChange: createMaterialSchema,
     },
   });
+
+  // Each time it opens, so a Material does not start with the combination of the last one, created or rejected
+  useResetForm(form, open);
 
   const isLoading = useSelector(form.store, (state) => state.isSubmitting);
 
