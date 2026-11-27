@@ -259,7 +259,6 @@ export default function TableProductionOrder({
                           size: row.original.assignedMachines.length === 0 ? undefined : "icon",
                           variant: "success",
                         }}
-                        take={50}
                       />
                     )}
                   {row.original.assignedMachines.length > 0 && (
@@ -318,7 +317,6 @@ export default function TableProductionOrder({
               onValueChange={(machine) => onChange(machine?.id ?? null)}
               placeholder={<FunnelIcon />}
               showChevron={false}
-              take={50}
               nullable
               triggerProps={{ variant: "secondary" }}
               className="w-fit"

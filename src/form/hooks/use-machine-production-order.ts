@@ -51,7 +51,7 @@ export default function useMachineProductionOrderForm({
       });
     },
     validators: {
-      onSubmit: updateMachineProductionOrderSchema,
+      onChange: updateMachineProductionOrderSchema,
     },
   });
 

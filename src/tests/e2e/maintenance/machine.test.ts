@@ -400,9 +400,9 @@ test("set the diameter range of the machines", async ({ page, toasts }) => {
 
       await getFormInputByLabel(formMachine, MACHINE_MIN_DIAMETER_LABEL).fill("50");
       await getFormInputByLabel(formMachine, MACHINE_MAX_DIAMETER_LABEL).fill("20");
-      await formMachine.getByTestId("button-submit").click();
 
       await expect(formMachine.getByText(MACHINE_DIAMETER_RANGE_ERROR_MESSAGE)).toBeVisible();
+      await expect(formMachine.getByTestId("button-submit")).toBeDisabled();
       await expect(toasts).toHaveCount(0);
       const notUpdatedMachine = await getMachineById(machine.id);
       expect(notUpdatedMachine?.minDiameter).toBe(machine.minDiameter);
@@ -439,7 +439,6 @@ test("set the diameter range of the machines", async ({ page, toasts }) => {
       for (const label of [MACHINE_MIN_DIAMETER_LABEL, MACHINE_MAX_DIAMETER_LABEL]) {
         const inputDiameter = getFormInputByLabel(formMachine, label);
         await inputDiameter.fill("0");
-        await formMachine.getByTestId("button-submit").click();
         await expect(formMachine.getByTestId("button-submit")).toBeDisabled();
         await expect(toasts).toHaveCount(0);
         expect(await getMachineById(machine.id)).toMatchObject({ maxDiameter: null, minDiameter: null });

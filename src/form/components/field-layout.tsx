@@ -33,15 +33,17 @@ export default function FieldLayout({
     </FieldLabel>
   );
 
+  const errorMessage = field.state.meta.errors.at(0)?.message;
+
   return (
-    <FieldLayoutContainer className={className}>
+    <FieldLayoutContainer className={className} invalid={typeof errorMessage === "string"} fieldName={field.name}>
       {labelPosition === "start" && labelElement}
       {children}
       {labelPosition === "end" && labelElement}
-      {!hideError && field.state.meta.isTouched && typeof field.state.meta.errors.at(0)?.message === "string" && (
+      {!hideError && typeof errorMessage === "string" && field.state.meta.isTouched && (
         <span className="mt-1 flex flex-row gap-1 font-bold text-red-500">
           <TriangleAlertIcon />
-          {field.state.meta.errors.at(0).message}
+          {errorMessage}
         </span>
       )}
     </FieldLayoutContainer>

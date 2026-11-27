@@ -181,7 +181,6 @@ test(
       await assertMaterialLotForm(page, null);
       const invalidValues = { receivedQuantity: 0 };
       await workflowFillMaterialLotForm(page, invalidValues);
-      await dialogMaterialLotForm.getByTestId("button-submit").click();
       await assertFormSchemaErrors(dialogMaterialLotForm, materialLotFormSchema, {
         ...invalidValues,
         heat: null,
@@ -512,7 +511,6 @@ test("take and return the stock of a Lote without an Orden de producción", asyn
     await expect(getFieldLabelTooltip(dialog, QUANTITY_LABEL)).toHaveCount(0);
     await expect(dialog.getByTestId("button-submit")).toBeDisabled();
     await getMaterialMovementQuantityInput(dialog).fill("0");
-    await dialog.getByTestId("button-submit").click();
     await assertFormSchemaErrors(dialog, takeSchema, { materialLotId: materialLot.id, quantity: 0 });
     await workflowCloseDialog(dialog);
     expect(await getNewDbMaterialLotMovements(db)).toEqual([]);

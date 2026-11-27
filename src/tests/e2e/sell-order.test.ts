@@ -26,6 +26,7 @@ import { isSameAppDay } from "@/lib/dates";
 import { formatPrice } from "@/lib/formatters";
 import { clampPendingQuantity } from "@/lib/sell-order-line";
 import { LogMessages } from "@/logging/types";
+import { SELECT_PART_PLACEHOLDER } from "@/messages/combobox";
 import {
   STATUS_COMPLETED_LABEL,
   STATUS_DELETED_LABEL,
@@ -40,7 +41,6 @@ import {
   PRICE_LABEL,
   QUANTITY_LABEL,
   NON_ZERO_QUANTITY_MESSAGE,
-  REQUIRED_FIELD_MESSAGE,
 } from "@/messages/common";
 import { PART_PRICE_CREATED_MESSAGE } from "@/messages/part-price";
 import { PRODUCTION_ORDER_DELETED_MESSAGE, PRODUCTION_ORDER_RESTORED_MESSAGE } from "@/messages/production-order";
@@ -86,7 +86,12 @@ import {
   selectComboboxOption,
 } from "@/tests/utils/components/combobox";
 import { setInputFiles } from "@/tests/utils/components/file-input";
-import { InputElementType, assertFormLoaded, getFormInputByLabel } from "@/tests/utils/components/form";
+import {
+  InputElementType,
+  assertFormLoaded,
+  getFormInputByLabel,
+  getInvalidFields,
+} from "@/tests/utils/components/form";
 import {
   assertPickerPartKeepsNullClientParts,
   clearPicker,
@@ -170,6 +175,7 @@ test("manage the sell orders", { annotation: TestAnnotations.ResetSellOrders }, 
     await fillComboboxFilter(page, newSellOrderClient.name.substring(0, 4));
     await clickInComboboxOption(page, newSellOrderClient.name);
     await assertComboboxValue(comboboxClient, String(newSellOrderClient.id));
+    await expect(getFormInputByLabel(page, CLIENT_REFERENCE_LABEL)).toBeFocused();
 
     const comboboxPaymentMethod = getFormInputByLabel(page, PAYMENT_METHOD_LABEL, InputElementType.Combobox);
     await expect(comboboxPaymentMethod).toBeVisible();
@@ -1001,7 +1007,7 @@ test("manage the sell order lines without part", async ({ page, db }) => {
   const inputQuantity = getFormInputByLabel(dialogCreateSellOrderLine, QUANTITY_LABEL, InputElementType.Number);
   const inputPartPrice = getFormInputByLabel(dialogCreateSellOrderLine, PRICE_LABEL, InputElementType.Number);
   const buttonSubmit = dialogCreateSellOrderLine.getByTestId("button-submit");
-  const requiredFieldErrors = dialogCreateSellOrderLine.getByText(REQUIRED_FIELD_MESSAGE);
+  const invalidFields = getInvalidFields(dialogCreateSellOrderLine);
   const customLine = { description: "Portes", quantity: 3 };
   const customLinePartPrice = "12.5";
   let customSellOrderLineId: number;
@@ -1054,20 +1060,24 @@ test("manage the sell order lines without part", async ({ page, db }) => {
     await inputQuantity.pressSequentially(String(customLine.quantity));
     await inputQuantity.press("Enter");
     await inputPartPrice.pressSequentially("4.5");
-    await buttonSubmit.click();
     // Only the part is missing
-    await expect(requiredFieldErrors).toHaveCount(1);
+    await expect(buttonSubmit).toBeDisabled();
+    await expect(invalidFields).toHaveCount(1);
+    await expect(getFormInputByLabel(invalidFields, SELECT_PART_PLACEHOLDER, InputElementType.Picker)).toHaveCount(1);
 
-    // The part, its error and its price go away with the switch, as they would block or misprice the line
+    // The part, its error and its price go away with the switch, as they would block or misprice the line. The description is the one missing now
     await checkboxCustomLine.click();
     await expect(checkboxCustomLine).toBeChecked();
     await expect(pickerPart).toHaveCount(0);
     await expect(getDivDisabledMessage(dialogCreateSellOrderLine.getByTestId("card-part-prices"))).toBeVisible();
-    await expect(requiredFieldErrors).toHaveCount(0);
+    await expect(invalidFields).toHaveCount(1);
+    await expect(getFormInputByLabel(invalidFields, DESCRIPTION_LABEL)).toHaveCount(1);
+    await expect(buttonSubmit).toBeDisabled();
     await expect(inputPartPrice).toHaveValue("");
 
     // Like a line with part, its price can be left for when it is calculated
     await inputDescription.fill(customLine.description);
+    await expect(invalidFields).toHaveCount(0);
     await expect(buttonSubmit).toBeEnabled();
     await buttonSubmit.click();
     await expect(dialogCreateSellOrderLine).not.toBeVisible();
@@ -1094,11 +1104,17 @@ test("manage the sell order lines without part", async ({ page, db }) => {
     await workflowOpenCreateSellOrderLine(page, sellOrder.id);
     await checkboxCustomLine.click();
     await inputDescription.fill(customLine.description);
+    await inputQuantity.pressSequentially(String(customLine.quantity));
+    await expect(buttonSubmit).toBeEnabled();
 
+    // The complete line without part is checked again as a line with part, which misses its part
     await checkboxCustomLine.click();
     await expect(checkboxCustomLine).not.toBeChecked();
     await expect(pickerPart).toBeVisible();
     expect(await getPickerValue(pickerPart)).toBeNull();
+    await expect(invalidFields).toHaveCount(1);
+    await expect(getFormInputByLabel(invalidFields, SELECT_PART_PLACEHOLDER, InputElementType.Picker)).toHaveCount(1);
+    await expect(buttonSubmit).toBeDisabled();
 
     await checkboxCustomLine.click();
     await expect(inputDescription).toHaveValue("");
@@ -1145,8 +1161,8 @@ test("manage the returns of a sell order", async ({ page }) => {
     await getFormInputByLabel(dialogCreateSellOrderLine, DESCRIPTION_LABEL).fill(returnLine.description);
     await inputQuantity.pressSequentially("0");
     await inputQuantity.blur();
-    await buttonSubmit.click();
     await expect(dialogCreateSellOrderLine.getByText(NON_ZERO_QUANTITY_MESSAGE)).toBeVisible();
+    await expect(buttonSubmit).toBeDisabled();
     await expect(dialogCreateSellOrderLine).toBeVisible();
   });
 

@@ -13,6 +13,7 @@ interface FieldFileInputProps extends Omit<DropzoneProps, "filterFieldName" | "o
   label: string;
   layoutClassName?: string;
   onValueChange?: (files: Array<File>) => void;
+  onFilesCleared?: () => void;
   allowMultipleFiles?: boolean;
 }
 
@@ -22,6 +23,7 @@ export default function FieldFilesInput({
   label,
   layoutClassName,
   onValueChange,
+  onFilesCleared,
   ...props
 }: FieldFileInputProps) {
   const field = useFieldContext<File | Array<File> | null>();
@@ -38,7 +40,10 @@ export default function FieldFilesInput({
           onValueChange?.(acceptedFiles);
           field.handleChange(props.allowMultipleFiles === true ? acceptedFiles : acceptedFiles[0]);
         }}
-        onClear={() => field.handleChange(props.allowMultipleFiles === true ? [] : null)}
+        onClear={() => {
+          onFilesCleared?.();
+          field.handleChange(props.allowMultipleFiles === true ? [] : null);
+        }}
         onError={(error) => void log(LoggerLevels.debug, LogMessages.dropzoneError, { error })}
         src={field.state.value}
         disabled={readOnly}

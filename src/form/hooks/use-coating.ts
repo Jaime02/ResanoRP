@@ -3,6 +3,7 @@ import { useSelector } from "@tanstack/react-store";
 import { useAppContext } from "@/contexts/app-context";
 import { useAppForm } from "@/form";
 import useResetForm from "@/form/hooks/use-reset-form";
+import { resetForm } from "@/form/utils";
 import { COATING_CREATED_MESSAGE, COATING_EDITED_MESSAGE } from "@/messages/coating";
 import { useQueryCoatingById } from "@/queries/coating";
 import { createModelWithNameSchema, updateModelWithNameSchema } from "@/schemas";
@@ -55,12 +56,12 @@ export default function useCoatingForm({ requestedFormMode, editCoatingId, onSub
         onSuccess: { title: formMode === FormMode.Create ? COATING_CREATED_MESSAGE : COATING_EDITED_MESSAGE },
         onSubmit: async (item) => {
           await onSubmit?.(item);
-          if (formMode === FormMode.Create) formApi.reset();
+          if (formMode === FormMode.Create) resetForm(formApi);
         },
       });
     },
     validators: {
-      onSubmit: validationSchema,
+      onChange: validationSchema,
     },
   });
 

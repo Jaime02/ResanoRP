@@ -101,7 +101,7 @@ export default function useProductionOrderForm({
       });
     },
     validators: {
-      onSubmit: validationSchema,
+      onChange: validationSchema,
     },
   });
 

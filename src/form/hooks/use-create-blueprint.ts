@@ -33,7 +33,7 @@ export default function useCreateBlueprintForm({ partId, onSubmit }: UseCreateBl
       }),
     validators: {
       // @ts-expect-error FormData validation does not work currently
-      onSubmit: createBlueprintFormDataSchema,
+      onChange: createBlueprintFormDataSchema,
     },
   });
 

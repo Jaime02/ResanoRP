@@ -4,6 +4,7 @@ import { ErrorMessageOverlay } from "@/components/ui/error-message-overlay";
 import { LoadingOverlay } from "@/components/ui/loading-overlay";
 import type { BaseFormContextProps } from "@/form/context";
 import { BaseFormContext } from "@/form/context";
+import useValidateForm from "@/form/hooks/use-validate-form";
 import { cn } from "@/lib/utils";
 import { FormMode } from "@/types";
 
@@ -26,6 +27,8 @@ export function FormContextProvider({
   className,
   children,
 }: FormContextProps) {
+  useValidateForm(form, validationSchema);
+
   return (
     <BaseFormContext value={{ form, formMode, isLoading, validationSchema }}>
       <form.AppForm>

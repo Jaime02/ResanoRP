@@ -6,6 +6,7 @@ import { createTableColumnHelper } from "@/components/table/column-helper";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { FormContextProvider } from "@/form";
 import useCreateQualityCheckForm from "@/form/hooks/use-create-quality-check";
+import { resetForm } from "@/form/utils";
 import { NOTES_LABEL, SAVE_LABEL } from "@/messages/common";
 import { PART_FEATURE_LABEL, PART_FEATURE_MAX_VALUE_LABEL, PART_FEATURE_MIN_VALUE_LABEL } from "@/messages/part";
 import {
@@ -40,7 +41,7 @@ export default function DialogQualityCheck({ productionOrderId, partFeatures }: 
 
   const onOpenChange = (open: boolean) => {
     setIsOpen(open);
-    form.reset();
+    resetForm(form);
   };
 
   const columns = useMemo(

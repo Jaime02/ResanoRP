@@ -52,6 +52,8 @@ import {
   QUANTITY_LABEL,
   DROP_FILE_PLACEHOLDER,
   REFERENCE_LABEL,
+  CLIENT_LABEL,
+  REQUIRED_FIELD_MESSAGE,
   FILE_NAME_EMPTY_MESSAGE,
   PAGE_OF_MESSAGE,
 } from "@/messages/common";
@@ -126,7 +128,12 @@ import {
   selectComboboxOption,
 } from "@/tests/utils/components/combobox";
 import { setInputFiles } from "@/tests/utils/components/file-input";
-import { InputElementType, assertFormLoaded, getFormInputByLabel } from "@/tests/utils/components/form";
+import {
+  InputElementType,
+  assertFormLoaded,
+  getFormInputByLabel,
+  getInvalidFields,
+} from "@/tests/utils/components/form";
 import { openPartPicker } from "@/tests/utils/components/picker";
 import { getPopoverContent } from "@/tests/utils/components/popover";
 import {
@@ -173,6 +180,7 @@ import { workflowOpenSellOrderLinePartPicker } from "@/tests/workflows/sell-orde
 import type { BaseMaterial } from "@/types/material";
 import { COMPATIBLE_MATERIALS_PAGE_SIZE } from "@/types/material";
 import type { BasePart } from "@/types/part";
+import { CREATE_PART_BUTTON_TEST_ID } from "@/types/part";
 import { PART_PRODUCTION_HISTORY_PAGE_SIZE } from "@/types/part-production";
 import { ToastType } from "@/types/toast";
 
@@ -502,6 +510,22 @@ test("manage the parts", { annotation: TestAnnotations.ResetBlueprints }, async 
       await page.goto("/part?createPart=true");
       // The page opened after creating it must not take the new Artículo for a missing one while it syncs
       const countGetPartByIdQueryErrors = await countTestIdInsertions(page, "dialog-error-get-part-by-id-query");
+      await assertFormLoaded(formPart);
+
+      // The required fields are marked from the start, but their error only shows once they are touched
+      const invalidFields = getInvalidFields(formPart);
+      const requiredFields = [
+        getFormInputByLabel(invalidFields, REFERENCE_LABEL),
+        getFormInputByLabel(invalidFields, CLIENT_REFERENCE_DESCRIPTION_LABEL),
+        getFormInputByLabel(invalidFields, CLIENT_LABEL, InputElementType.Combobox),
+        getFormInputByLabel(invalidFields, DESCRIPTION_LABEL),
+      ];
+      await expect(invalidFields).toHaveCount(requiredFields.length);
+      for (const requiredField of requiredFields) {
+        await expect(requiredField).toHaveCount(1);
+      }
+      await expect(formPart.getByText(REQUIRED_FIELD_MESSAGE)).toHaveCount(0);
+      await expect(formPart.getByTestId("button-submit")).toBeDisabled();
 
       const newReference = `REF-12345-${index}`;
       const newClientDescription = `${newReference} Client description`;
@@ -512,6 +536,7 @@ test("manage the parts", { annotation: TestAnnotations.ResetBlueprints }, async 
 
       await getFormInputByLabel(formPart, REFERENCE_LABEL).fill(newReference);
       await getFormInputByLabel(formPart, CLIENT_REFERENCE_DESCRIPTION_LABEL).fill(newClientDescription);
+      await expect(getFormInputByLabel(formPart, DESCRIPTION_LABEL)).toHaveValue(newClientDescription);
 
       const clientReferenceCombobox = formPart.getByTestId("combobox-client");
       await openCombobox(clientReferenceCombobox);
@@ -522,6 +547,7 @@ test("manage the parts", { annotation: TestAnnotations.ResetBlueprints }, async 
       await formPart.getByTestId("input-width").pressSequentially(newWidth);
       await formPart.getByTestId("input-length").pressSequentially(newLength);
 
+      await expect(invalidFields).toHaveCount(0);
       await formPart.getByTestId("button-submit").click();
 
       await expect(page).toHaveURL(`/part/${newPartId}`);
@@ -562,6 +588,7 @@ test("manage the parts", { annotation: TestAnnotations.ResetBlueprints }, async 
       await getFormInputByLabel(formPart, CLIENT_REFERENCE_DESCRIPTION_LABEL).fill(
         `${newReference} Client description`,
       );
+      await expect(getFormInputByLabel(formPart, DESCRIPTION_LABEL)).toHaveValue(newDescription);
 
       await openCombobox(formPart.getByTestId("combobox-client"));
       await clickInComboboxOption(page, client.name);
@@ -873,6 +900,8 @@ test("list, create, edit and delete the features of every part", async ({ page, 
     const newFeature = `Característica nueva de ${part.id}`;
     await formPart.getByTestId("button-create-part-feature").click();
     await expect(dialogCreatePartFeature).toBeVisible();
+    // The form is validated as it opens, so the missing Característica is marked before anything is typed
+    await expect(getFormInputByLabel(getInvalidFields(dialogCreatePartFeature), PART_FEATURE_LABEL)).toHaveCount(1);
     await getFormInputByLabel(dialogCreatePartFeature, PART_FEATURE_LABEL).fill(newFeature);
     await dialogCreatePartFeature.getByTestId("button-submit").click();
     await expect(dialogCreatePartFeature).toBeHidden();
@@ -2091,7 +2120,7 @@ for (const userMode of [UserMode.Admin, UserMode.User]) {
       await (isAdmin
         ? expect(getFormInputByLabel(formPart, DESCRIPTION_LABEL)).toBeEditable()
         : expect(getFormInputByLabel(formPart, DESCRIPTION_LABEL)).not.toBeEditable());
-      await expectShown(page.getByTestId("button-create-part"), isAdmin);
+      await expectShown(page.getByTestId(CREATE_PART_BUTTON_TEST_ID), isAdmin);
       await expectShown(formPart.getByTestId("button-submit"), isAdmin);
       await expectShown(formPart.getByTestId("button-add-reference"), isAdmin);
       await expectShown(tablePartReferences.getByTestId("button-edit"), isAdmin && partReferencesCount > 0);
@@ -2234,17 +2263,22 @@ test("create a part with its blueprint", { annotation: TestAnnotations.ResetBlue
   await clickInComboboxOption(page, activeClients[0].name);
 
   const inputFileName = getFormInputByLabel(formPart, NAME_LABEL);
-  await setInputFiles(
-    page,
-    getFormInputByLabel(formPart, BLUEPRINT_LABEL, InputElementType.File),
-    path.join(MOCK_DATA_PATH, "sample.pdf"),
-  );
+  const inputBlueprintFile = getFormInputByLabel(formPart, BLUEPRINT_LABEL, InputElementType.File);
+  const blueprintPath = path.join(MOCK_DATA_PATH, "sample.pdf");
+  await setInputFiles(page, inputBlueprintFile, blueprintPath);
+  await expect(inputFileName).toHaveValue("sample");
+
+  // Clearing the Plano clears its name too
+  await inputBlueprintFile.getByTestId("button-clear").click();
+  await expect(inputBlueprintFile).toHaveText(DROP_FILE_PLACEHOLDER);
+  await expect(inputFileName).toHaveValue("");
+  await setInputFiles(page, inputBlueprintFile, blueprintPath);
   await expect(inputFileName).toHaveValue("sample");
 
   // A Plano without a name is not created, and neither is its Artículo
   await inputFileName.clear();
-  await formPart.getByTestId("button-submit").click();
   await expect(formPart.getByText(FILE_NAME_EMPTY_MESSAGE)).toBeVisible();
+  await expect(formPart.getByTestId("button-submit")).toBeDisabled();
   await expect(page).toHaveURL("/part?createPart=true");
   expect(await getPartById(partId)).toBeUndefined();
 

@@ -53,7 +53,7 @@ export default function useCreateDeliveryNoteLineForm({ deliveryNoteId, onSubmit
     },
     validators: {
       // @ts-expect-error partId and partPriceId are part of the form but not in the schema
-      onSubmit: validationSchema,
+      onChange: validationSchema,
     },
   });
 

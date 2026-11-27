@@ -66,7 +66,7 @@ export default function usePaymentMethodForm({ formMode, editPaymentMethodId, on
       });
     },
     validators: {
-      onSubmit: validationSchema,
+      onChange: validationSchema,
     },
   });
 

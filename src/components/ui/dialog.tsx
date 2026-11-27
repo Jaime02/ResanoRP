@@ -16,7 +16,7 @@ function Dialog({ ...props }: React.ComponentProps<typeof BaseDialog.Root>) {
 function DialogTrigger({
   ...props
 }: React.ComponentProps<typeof BaseDialog.Trigger> & React.ComponentProps<typeof Button>) {
-  return <BaseDialog.Trigger render={(_props) => <Button {..._props} />} {...props} />;
+  return <BaseDialog.Trigger render={<Button />} {...props} />;
 }
 
 function DialogPortal({ ...props }: React.ComponentProps<typeof BaseDialog.Portal>) {
@@ -50,16 +50,19 @@ function DialogContent({
           "fixed top-[50%] left-[50%] flex max-h-[98vh] w-max max-w-[98vw] translate-x-[-50%] translate-y-[-50%] flex-col rounded-lg bg-background shadow-dialog transition-all duration-200 outline-none data-ending-style:scale-90 data-ending-style:opacity-0 data-starting-style:scale-90 data-starting-style:opacity-0",
           className,
         )}
+        data-loading={isLoading}
         {...props}
-        render={(popupProps, { open }) => (
-          <div {...popupProps} data-loading={isLoading && open}>
-            <div className="relative flex max-h-full min-h-0 flex-1 flex-col items-center gap-3 overflow-auto p-4">
-              {children}
-              {isLoading && open && <LoadingOverlay />}
+      >
+        <div className="relative flex max-h-full min-h-0 flex-1 flex-col items-center gap-3 overflow-auto p-4">
+          {children}
+          {isLoading && (
+            // A dialog closed by its own submission fades out while the submission ends
+            <div className="contents [[data-closed]_&]:hidden">
+              <LoadingOverlay />
             </div>
-          </div>
-        )}
-      />
+          )}
+        </div>
+      </BaseDialog.Popup>
     </DialogPortal>
   );
 }
@@ -86,7 +89,7 @@ function DialogFooter({ className, ...props }: React.ComponentProps<"div">) {
 }
 
 function DialogTitle({ ...props }: React.ComponentProps<typeof BaseDialog.Title>) {
-  return <BaseDialog.Title render={(_props) => <Header level={2} {..._props} />} {...props} />;
+  return <BaseDialog.Title render={<Header level={2} />} {...props} />;
 }
 
 function DialogDescription({ className, ...props }: React.ComponentProps<typeof BaseDialog.Description>) {
@@ -96,11 +99,11 @@ function DialogDescription({ className, ...props }: React.ComponentProps<typeof 
 function DialogClose() {
   return (
     <BaseDialog.Close
-      render={(_props) => (
-        <Button testId="button-close" variant="secondary" size="icon" aria-label={CLOSE_LABEL} {..._props}>
+      render={
+        <Button testId="button-close" variant="secondary" size="icon" aria-label={CLOSE_LABEL}>
           <XIcon />
         </Button>
-      )}
+      }
     />
   );
 }

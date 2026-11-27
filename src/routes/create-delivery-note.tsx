@@ -24,6 +24,7 @@ import { Separator } from "@/components/ui/separator";
 import { UserMode, useAppContext } from "@/contexts/app-context";
 import { FormContextProvider } from "@/form";
 import { StageSellOrderLinesFormMode, useStageSellOrderLinesForm } from "@/form/hooks/use-stage-sell-order-lines";
+import { resetForm } from "@/form/utils";
 import {
   ADD_LINES_LABEL,
   ADD_LINES_TO_DELIVERY_NOTE_INVOICED_MESSAGE,
@@ -276,7 +277,7 @@ function RouteComponent() {
             <AlertDialogFooter>
               <AlertDialogAction
                 onClick={() => {
-                  form.reset();
+                  resetForm(form);
                   setIsOpenDialogConfirmationCancelDeliveryNote(false);
                 }}
               >

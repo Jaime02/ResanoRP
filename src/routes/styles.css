@@ -207,6 +207,49 @@
   }
 }
 
+/* Fades the top and bottom of a flex column list only where there is more to scroll; the gap is cancelled out in the overlays so that they do not add space */
+@utility list-scroll {
+  --fade-start: 0px;
+  --fade-end: 0px;
+  --fade-size: 1rem;
+  --fade-color: color-mix(in srgb, black 25%, transparent);
+  --list-gap: 0.25rem;
+  gap: var(--list-gap);
+  overflow-y: auto;
+  animation:
+    fade-start linear both,
+    fade-end linear both;
+  animation-timeline: scroll(self), scroll(self);
+  animation-range:
+    0 var(--fade-size),
+    calc(100% - var(--fade-size)) 100%;
+
+  &::before,
+  &::after {
+    content: "";
+    display: block;
+    position: sticky;
+    z-index: 1;
+    flex-shrink: 0;
+    border-radius: var(--radius-md);
+    pointer-events: none;
+  }
+
+  &::before {
+    top: 0;
+    height: var(--fade-start);
+    margin-bottom: calc((var(--fade-start) + var(--list-gap)) * -1);
+    background: linear-gradient(var(--fade-color), transparent);
+  }
+
+  &::after {
+    bottom: 0;
+    height: var(--fade-end);
+    margin-top: calc((var(--fade-end) + var(--list-gap)) * -1);
+    background: linear-gradient(transparent, var(--fade-color));
+  }
+}
+
 body {
   font-feature-settings: "zero";
   font-variant-numeric: slashed-zero;

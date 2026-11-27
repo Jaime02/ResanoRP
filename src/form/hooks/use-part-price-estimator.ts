@@ -101,7 +101,7 @@ export default function usePartPriceEstimatorForm({ partId, part, isLoadingPart 
       });
     },
     validators: {
-      onSubmit: partPriceEstimationFormSchema,
+      onChange: partPriceEstimationFormSchema,
     },
   });
 

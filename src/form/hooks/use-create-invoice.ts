@@ -3,6 +3,7 @@ import { useEffect, useMemo } from "react";
 
 import { useAppContext } from "@/contexts/app-context";
 import { useAppForm } from "@/form";
+import { resetForm } from "@/form/utils";
 import { endOfAppDay, startOfAppDay } from "@/lib/dates";
 import { getDeliveryNoteLineUnitPrice, getLinesTotalInCents } from "@/lib/prices";
 import { INVOICE_CREATED_MESSAGE } from "@/messages/invoice";
@@ -36,11 +37,11 @@ export default function useCreateInvoiceForm({ onSubmit }: UseCreateInvoiceFormP
         onSubmit,
       });
       if (result !== null) {
-        formApi.reset();
+        resetForm(formApi);
       }
     },
     validators: {
-      onSubmit: formCreateInvoiceSchema,
+      onChange: formCreateInvoiceSchema,
     },
   });
 

@@ -96,7 +96,7 @@ export default function useMaterialLotForm({
       });
     },
     validators: {
-      onSubmit: materialLotFormSchema,
+      onChange: materialLotFormSchema,
     },
   });
 

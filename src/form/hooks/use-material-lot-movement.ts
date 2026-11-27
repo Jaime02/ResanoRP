@@ -45,7 +45,7 @@ export default function useMaterialLotMovementForm({
       });
     },
     validators: {
-      onSubmit: validationSchema,
+      onChange: validationSchema,
     },
   });
 

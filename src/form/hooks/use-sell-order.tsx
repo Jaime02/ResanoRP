@@ -124,7 +124,7 @@ export default function useSellOrderForm({
     },
     validators: {
       // @ts-expect-error The schemas parse the FormData sent to the server, whose types differ from the form values
-      onSubmit: validationSchema,
+      onChange: validationSchema,
     },
   });
 

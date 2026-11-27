@@ -24,7 +24,6 @@ import {
   DESCRIPTION_LABEL,
   PART_LABEL,
   QUANTITY_LABEL,
-  REQUIRED_FIELD_MESSAGE,
 } from "@/messages/common";
 import {
   DELIVERY_NOTE_NUMBER_LABEL,
@@ -57,7 +56,12 @@ import {
   selectComboboxOption,
 } from "@/tests/utils/components/combobox";
 import { getDateInputValue } from "@/tests/utils/components/date-input";
-import { InputElementType, assertFormLoaded, getFormInputByLabel } from "@/tests/utils/components/form";
+import {
+  InputElementType,
+  assertFormLoaded,
+  getFormInputByLabel,
+  getInvalidFields,
+} from "@/tests/utils/components/form";
 import {
   assertPickerPartKeepsNullClientParts,
   clearPicker,
@@ -989,7 +993,7 @@ test("manage the delivery notes", { annotation: TestAnnotations.ResetTags }, asy
       const pickerPart = dialogCreateDeliveryNoteLine.getByTestId("picker-part");
       const inputDescription = getFormInputByLabel(dialogCreateDeliveryNoteLine, DESCRIPTION_LABEL);
       const buttonSubmit = dialogCreateDeliveryNoteLine.getByTestId("button-submit");
-      const requiredFieldErrors = dialogCreateDeliveryNoteLine.getByText(REQUIRED_FIELD_MESSAGE);
+      const invalidFields = getInvalidFields(dialogCreateDeliveryNoteLine);
 
       await checkboxCustomLine.click();
       await expect(checkboxCustomLine).toBeChecked();
@@ -1012,8 +1016,9 @@ test("manage the delivery notes", { annotation: TestAnnotations.ResetTags }, asy
         QUANTITY_LABEL,
         InputElementType.Number,
       ).pressSequentially(String(customLine.quantity));
-      await buttonSubmit.click();
-      await expect(requiredFieldErrors).toHaveCount(1);
+      await expect(buttonSubmit).toBeDisabled();
+      await expect(invalidFields).toHaveCount(1);
+      await expect(getFormInputByLabel(invalidFields, DESCRIPTION_LABEL)).toHaveCount(1);
 
       await inputDescription.fill(customLine.description);
       await inputUnitPrice.pressSequentially(customLine.unitPrice);

@@ -10,6 +10,7 @@ import { Card, CardFooter, CardTitle } from "@/components/ui/card";
 import LoadingSpinner from "@/components/ui/loading-spinner";
 import { UserMode, useAppContext } from "@/contexts/app-context";
 import { FormContextProvider, useAppForm } from "@/form";
+import { resetForm } from "@/form/utils";
 import { AdminLoginResult } from "@/lib/admin-login";
 import { loginAdminFn } from "@/lib/admin-session-fns";
 import { forgetPowerSyncToken } from "@/lib/powersync";
@@ -84,7 +85,7 @@ export default function Login({ children }: { children: ReactNode }) {
       if (result === AdminLoginResult.Ok) {
         // The token cached before the session cannot sync the audit log
         forgetPowerSyncToken();
-        formAdminPassword.reset();
+        resetForm(formAdminPassword);
         setUserMode(UserMode.Admin);
         setIsAdminLogin(false);
       } else if (result === AdminLoginResult.Locked) {
@@ -138,7 +139,7 @@ export default function Login({ children }: { children: ReactNode }) {
               <Button
                 variant="outline"
                 onClick={() => {
-                  formAdminPassword.reset();
+                  resetForm(formAdminPassword);
                   setIsAdminLogin(false);
                 }}
               >

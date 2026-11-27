@@ -58,7 +58,12 @@ import {
   openCombobox,
   selectComboboxOption,
 } from "@/tests/utils/components/combobox";
-import { InputElementType, assertFormLoaded, getFormInputByLabel } from "@/tests/utils/components/form";
+import {
+  InputElementType,
+  assertFormLoaded,
+  getFormInputByLabel,
+  getInvalidFields,
+} from "@/tests/utils/components/form";
 import { openPartPicker } from "@/tests/utils/components/picker";
 import { openPopover } from "@/tests/utils/components/popover";
 import {
@@ -547,7 +552,7 @@ test("showing every production order renders the rows scrolled into view and exp
     const productionOrderId = Number(await lastRow.getAttribute("data-testid"));
     const subrow = getTableSubrowById(tableProductionOrders, productionOrderId);
     const getWidth = async (locator: Locator) => locator.evaluate((element) => element.getBoundingClientRect().width);
-    const tableElement = tableProductionOrders.locator("table");
+    const tableElement = tableProductionOrders.locator(":scope > table");
     const dimensionCell = lastRow.getByTestId("dimension");
     const dimensionCellWidth = await getWidth(dimensionCell);
     await lastRow.getByTestId("button-expander").click();
@@ -1017,6 +1022,9 @@ test("create production orders by hand and from a sell order line", async ({ pag
     )!;
     await page.goto("/create-production-order");
     await assertFormLoaded(page);
+    // An untouched form can be created as it is, but not without its part
+    await expect(getFormInputByLabel(getInvalidFields(page), PART_LABEL, InputElementType.Picker)).toHaveCount(1);
+    await expect(page.getByTestId("button-submit")).toBeDisabled();
 
     const { dialogPickerPartContent, tablePickerPart } = await openPartPicker(
       page,
@@ -1033,8 +1041,8 @@ test("create production orders by hand and from a sell order line", async ({ pag
     await assertBlueprintsShown(part.id);
     // Nothing is produced of a quantity of 0
     await inputQuantity.fill("0");
-    await page.getByTestId("button-submit").click();
     await expect(page.getByText(POSITIVE_QUANTITY_MESSAGE)).toBeVisible();
+    await expect(page.getByTestId("button-submit")).toBeDisabled();
     expect(await getNewProductionOrders()).toEqual([]);
 
     await inputQuantity.fill("7");

@@ -32,14 +32,11 @@ function CollapsibleTrigger({ ...props }: React.ComponentProps<typeof BaseCollap
   return (
     <BaseCollapsible.Trigger
       {...props}
-      render={(_props, state) => (
-        <Button size="icon" {..._props}>
-          <ChevronRightIcon
-            {...(state.open ? { "data-open": true } : {})}
-            className="transition-all ease-out data-open:rotate-90"
-          />
+      render={
+        <Button size="icon">
+          <ChevronRightIcon className="transition-all ease-out [[data-panel-open]>&]:rotate-90" />
         </Button>
-      )}
+      }
     />
   );
 }

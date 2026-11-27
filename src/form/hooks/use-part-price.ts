@@ -88,7 +88,7 @@ export default function usePartPriceForm({
     },
     validators: {
       // @ts-expect-error
-      onSubmit: validationSchema,
+      onChange: validationSchema,
     },
   });
 

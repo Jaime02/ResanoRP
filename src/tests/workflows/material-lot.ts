@@ -335,7 +335,8 @@ export async function assertMaterialMovementLotOptions(page: Page, dialog: Locat
   for (const optionText of optionTexts) {
     await expect(options.filter({ hasText: optionText })).toHaveCount(1);
   }
-  await page.keyboard.press("Escape");
+  // A quick click can leave the trigger focused, and Escape from it closes the dialog along with the list
+  await page.getByTestId("combobox-input-filter").press("Escape");
   await expect(page.getByTestId("combobox-list")).not.toBeVisible();
 }
 

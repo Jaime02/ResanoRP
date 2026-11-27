@@ -6,13 +6,17 @@ import { IPP_PORT } from "@/files/printer";
 import { AUDIT_REDACTED_VALUE } from "@/logging/audit";
 import { LoggerLevels, LogMessages } from "@/logging/types";
 import {
+  PRINTER_ADDRESS_LABEL,
   PRINTER_CREATED_MESSAGE,
+  PRINTER_LABEL_LENGTH_LABEL,
+  PRINTER_LABEL_WIDTH_LABEL,
+  PRINTER_SHARE_NAME_LABEL,
   PRINTER_NOT_RESPONDING_MESSAGE,
   PRINTER_PASSWORD_LABEL,
   PRINTER_REACHABLE_MESSAGE,
 } from "@/messages/printer";
 import { readAuditLog } from "@/tests/utils/audit-log";
-import { assertFormLoaded, getFormInputByLabel } from "@/tests/utils/components/form";
+import { assertFormLoaded, getFormInputByLabel, getInvalidFields } from "@/tests/utils/components/form";
 import { filterByExactText, getTableRows } from "@/tests/utils/components/table";
 import { expectSingleSuccessToast, expectSingleToast } from "@/tests/utils/components/toast";
 import { rejectedMutationEvents } from "@/tests/utils/errors-log";
@@ -34,6 +38,7 @@ import {
   workflowDeletePrinter,
   workflowEditPrinter,
   workflowFillPrinter,
+  workflowSubmitPrinter,
   workflowOpenCreatePrinter,
   workflowPingPrinter,
 } from "@/tests/workflows/printer";
@@ -41,6 +46,8 @@ import { PrinterKind } from "@/types/printer";
 
 test("manage the Impresoras", async ({ page, db }) => {
   const dialogCreateEditPrinter = getDialogCreateEditPrinter(page);
+  const buttonSubmit = dialogCreateEditPrinter.getByTestId("button-submit");
+  const invalidFields = getInvalidFields(dialogCreateEditPrinter);
   const printer = { address: MOCK_PRINTER_HOST, name: "Oficina" };
 
   await page.goto(MAINTENANCE_PRINTER_URL);
@@ -55,13 +62,14 @@ test("manage the Impresoras", async ({ page, db }) => {
       " ",
     ]) {
       await workflowFillPrinter(page, { address, name: printer.name });
-      await expect(dialogCreateEditPrinter).toBeVisible();
+      await expect(getFormInputByLabel(invalidFields, PRINTER_ADDRESS_LABEL)).toHaveCount(1);
+      await expect(buttonSubmit).toBeDisabled();
     }
     expect(await db.select().from(dbTablePrinter).orderBy(dbTablePrinter.id)).toHaveLength(0);
   });
 
   await test.step("create an Impresora, trimming its fields, and check that it answers", async () => {
-    await workflowFillPrinter(page, { address: ` ${printer.address} `, name: ` ${printer.name} ` });
+    await workflowSubmitPrinter(page, { address: ` ${printer.address} `, name: ` ${printer.name} ` });
     await expect(dialogCreateEditPrinter).not.toBeVisible();
     await expectSingleSuccessToast(page, PRINTER_CREATED_MESSAGE);
     await workflowCreatePrinter(page, { address: MOCK_REJECTING_PRINTER_HOST, name: "Taller" });
@@ -123,16 +131,23 @@ test("manage the Impresoras", async ({ page, db }) => {
       kind: labelPrinter.kind,
       name: labelPrinter.name,
     });
-    await expect(dialogCreateEditPrinter).toBeVisible();
+    const fieldsOfKind = [PRINTER_SHARE_NAME_LABEL, PRINTER_LABEL_WIDTH_LABEL, PRINTER_LABEL_LENGTH_LABEL];
+    await expect(invalidFields).toHaveCount(fieldsOfKind.length);
+    for (const label of fieldsOfKind) {
+      await expect(getFormInputByLabel(invalidFields, label)).toHaveCount(1);
+    }
+    await expect(buttonSubmit).toBeDisabled();
     // The share is only its name, not the path Windows writes
     await workflowFillPrinter(page, {
       ...labelPrinter,
       shareName: `\\\\${MOCK_PRINTER_SHARE_HOST}\\${MOCK_LABELS_SHARE_NAME}`,
     });
-    await expect(dialogCreateEditPrinter).toBeVisible();
+    await expect(invalidFields).toHaveCount(1);
+    await expect(getFormInputByLabel(invalidFields, PRINTER_SHARE_NAME_LABEL)).toHaveCount(1);
+    await expect(buttonSubmit).toBeDisabled();
     expect(await getLabelPrinter()).toBeUndefined();
 
-    await workflowFillPrinter(page, labelPrinter);
+    await workflowSubmitPrinter(page, labelPrinter);
     await expect(dialogCreateEditPrinter).not.toBeVisible();
     await expectSingleSuccessToast(page, PRINTER_CREATED_MESSAGE);
     expect(await getLabelPrinter()).toMatchObject(labelPrinter);

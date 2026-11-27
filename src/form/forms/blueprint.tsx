@@ -22,6 +22,7 @@ export function FormCreateBlueprint() {
     },
     [form],
   );
+  const onBlueprintFileCleared = useCallback(() => form.setFieldValue("fileName", null), [form]);
 
   return (
     <div className="flex w-full flex-col gap-3">
@@ -33,6 +34,7 @@ export function FormCreateBlueprint() {
             label={BLUEPRINT_LABEL}
             accept={{ "application/pdf": [] }}
             onValueChange={onBlueprintFileSelected}
+            onFilesCleared={onBlueprintFileCleared}
           />
         )}
       />

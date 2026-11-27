@@ -51,7 +51,7 @@ export default function useConfigurationForm({ formMode }: UseConfigurationFormP
       });
     },
     validators: {
-      onSubmit: validationSchema,
+      onChange: validationSchema,
     },
   });
 

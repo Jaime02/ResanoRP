@@ -71,7 +71,7 @@ export default function useRawMaterialForm({
       });
     },
     validators: {
-      onSubmit: validationSchema,
+      onChange: validationSchema,
     },
   });
 

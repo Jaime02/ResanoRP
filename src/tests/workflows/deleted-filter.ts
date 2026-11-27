@@ -3,7 +3,7 @@ import type { Locator, Page } from "@playwright/test";
 
 import { openAndConfirmAlertDialog } from "@/tests/utils/components/alert-dialog";
 import { getPopoverContent } from "@/tests/utils/components/popover";
-import { assertTableRowCount, getTableRowByTestId } from "@/tests/utils/components/table";
+import { assertTableRowCount, getTableRowByTestId, getTableRows } from "@/tests/utils/components/table";
 import { expectSingleSuccessToast, expectSingleToast } from "@/tests/utils/components/toast";
 import { expectUniqueViolationRejected, type TUniqueViolation } from "@/tests/utils/errors-log";
 
@@ -11,6 +11,30 @@ export enum EditButtonVisibility {
   Always = "always",
   OnlyActive = "onlyActive",
   Never = "never",
+}
+
+enum RowAction {
+  Delete = "button-delete",
+  Restore = "button-restore",
+  Edit = "button-edit",
+}
+
+type TRowActions = Record<RowAction, number>;
+
+// A single call reads the actions of every row, as one assertion per row and action made the loops of the tests slow
+async function readRowActions(table: Locator): Promise<Record<string, TRowActions>> {
+  return Object.fromEntries(
+    await getTableRows(table).evaluateAll(
+      (rows, actions) =>
+        rows.map((row) => [
+          row.dataset.testid,
+          Object.fromEntries(
+            actions.map((action) => [action, row.querySelectorAll(`[data-testid='${action}']`).length]),
+          ),
+        ]),
+      Object.values(RowAction),
+    ),
+  );
 }
 
 interface DeletedFilterTableParams {
@@ -78,22 +102,29 @@ export async function workflowDeletedFilterAndRestore({
 
   // Every row shows the actions of its state, and the deleted ones are only listed when asked for
   const assertRows = async (showDeleted: boolean) => {
-    for (const id of ids) {
-      const row = getTableRowByTestId(table, id);
-      const isDeleted = deletedIds.has(id);
-      if (isDeleted && !showDeleted) {
-        await expect(row, `Row ${id}`).toHaveCount(0);
-        continue;
-      }
-      await expect(row, `Row ${id}`).toBeVisible();
-      await expect(row.getByTestId("button-delete"), `Row ${id}`).toHaveCount(isDeleted ? 0 : 1);
-      await expect(row.getByTestId("button-restore"), `Row ${id}`).toHaveCount(isDeleted ? 1 : 0);
-      const hasEditButton =
-        editButton === EditButtonVisibility.Always || (editButton === EditButtonVisibility.OnlyActive && !isDeleted);
-      await expect(row.getByTestId("button-edit"), `Row ${id}`).toHaveCount(hasEditButton ? 1 : 0);
-      await assertRow?.(row, isDeleted);
+    const shownIds = ids.filter((id) => showDeleted || !deletedIds.has(id));
+    const expectedRowActions = Object.fromEntries(
+      shownIds.map((id): [string, TRowActions] => {
+        const isDeleted = deletedIds.has(id);
+        const hasEditButton =
+          editButton === EditButtonVisibility.Always || (editButton === EditButtonVisibility.OnlyActive && !isDeleted);
+        return [
+          String(id),
+          {
+            [RowAction.Delete]: isDeleted ? 0 : 1,
+            [RowAction.Restore]: isDeleted ? 1 : 0,
+            [RowAction.Edit]: hasEditButton ? 1 : 0,
+          },
+        ];
+      }),
+    );
+    await expect
+      .poll(async () => readRowActions(table), { message: "Every row should have the actions of its state" })
+      .toEqual(expectedRowActions);
+    for (const id of shownIds) {
+      await assertRow?.(getTableRowByTestId(table, id), deletedIds.has(id));
     }
-    await assertTableRowCount(table, ids.filter((id) => showDeleted || !deletedIds.has(id)).length);
+    await assertTableRowCount(table, shownIds.length);
   };
 
   for (const id of ids) {
@@ -101,7 +132,7 @@ export async function workflowDeletedFilterAndRestore({
     await page.goto(url);
     await assertRows(false);
 
-    await openAndConfirmAlertDialog(page, row.getByTestId("button-delete"), "dialog-delete-model-content");
+    await openAndConfirmAlertDialog(page, row.getByTestId(RowAction.Delete), "dialog-delete-model-content");
     await expectSingleSuccessToast(page, deletedToastTitle);
     deletedIds.add(id);
     await assertRows(false);
@@ -117,7 +148,7 @@ export async function workflowDeletedFilterAndRestore({
     await assertRows(true);
 
     // Cancelling the restore keeps it deleted
-    await row.getByTestId("button-restore").click();
+    await row.getByTestId(RowAction.Restore).click();
     const dialogRestore = page.getByTestId("dialog-restore-model-content");
     await expect(dialogRestore).toBeVisible();
     await dialogRestore.getByTestId("button-close").click();
@@ -125,14 +156,14 @@ export async function workflowDeletedFilterAndRestore({
     await assertRows(true);
     expect(await getDeletedAt(id)).toBeInstanceOf(Date);
 
-    await openAndConfirmAlertDialog(page, row.getByTestId("button-restore"), "dialog-restore-model-content");
+    await openAndConfirmAlertDialog(page, row.getByTestId(RowAction.Restore), "dialog-restore-model-content");
     await expectSingleSuccessToast(page, restoredToastTitle);
     deletedIds.delete(id);
     await assertRows(true);
     expect(await getDeletedAt(id)).toBeNull();
 
     // Deleting it while the deleted ones are listed keeps its row, which can be restored again
-    await openAndConfirmAlertDialog(page, row.getByTestId("button-delete"), "dialog-delete-model-content");
+    await openAndConfirmAlertDialog(page, row.getByTestId(RowAction.Delete), "dialog-delete-model-content");
     await expectSingleSuccessToast(page, deletedToastTitle);
     deletedIds.add(id);
     await assertRows(true);
@@ -159,18 +190,18 @@ export async function workflowRestoreTaken({
   const row = getTableRowByTestId(table, id);
 
   await page.goto(url);
-  await openAndConfirmAlertDialog(page, row.getByTestId("button-delete"), "dialog-delete-model-content");
+  await openAndConfirmAlertDialog(page, row.getByTestId(RowAction.Delete), "dialog-delete-model-content");
   await expectSingleSuccessToast(page, deletedToastTitle);
   await expect(row).toHaveCount(0);
 
   await insertDuplicate();
   await toggleDeletedFilter(page, table, filterLabel, true);
 
-  await openAndConfirmAlertDialog(page, row.getByTestId("button-restore"), "dialog-restore-model-content");
+  await openAndConfirmAlertDialog(page, row.getByTestId(RowAction.Restore), "dialog-restore-model-content");
   await expectSingleToast(page, errorMessage);
   expectUniqueViolationRejected(uniqueViolation, errorMessage);
 
-  await expect(row.getByTestId("button-restore")).toBeVisible();
-  await expect(row.getByTestId("button-delete")).toHaveCount(0);
+  await expect(row.getByTestId(RowAction.Restore)).toBeVisible();
+  await expect(row.getByTestId(RowAction.Delete)).toHaveCount(0);
   expect(await getDeletedAt(id)).toBeInstanceOf(Date);
 }

@@ -4,6 +4,7 @@ import { useCallback, useState } from "react";
 import { useAppContext } from "@/contexts/app-context";
 import { useAppForm } from "@/form";
 import useResetForm from "@/form/hooks/use-reset-form";
+import { resetForm } from "@/form/utils";
 import { SELL_ORDER_LINE_CREATED_MESSAGE } from "@/messages/sell-order";
 import { createCustomSellOrderLineSchema, createPartSellOrderLineSchema } from "@/schemas/sell-order-line";
 import type { TCreateSellOrderLine } from "@/schemas/sell-order-line";
@@ -53,13 +54,13 @@ export default function useCreateSellOrderLineForm({ sellOrderId, onSubmit }: Us
         onSuccess: { title: SELL_ORDER_LINE_CREATED_MESSAGE },
         onSubmit: async (item) => {
           await onSubmit?.(item);
-          formApi.reset();
+          resetForm(formApi);
         },
       });
     },
     validators: {
       // @ts-expect-error partId and partPriceId are part of the form but do not appear in the schema and are not submitted
-      onSubmit: validationSchema,
+      onChange: validationSchema,
     },
   });
 

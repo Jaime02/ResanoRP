@@ -85,7 +85,11 @@ export async function workflowFillPrinter(page: Page, printer: TPrinterFields) {
   if (printer.forTags !== undefined) {
     await dialog.getByTestId("dialog-create-edit-printer-for-tags").setChecked(printer.forTags);
   }
-  await dialog.getByTestId("button-submit").click();
+}
+
+export async function workflowSubmitPrinter(page: Page, printer: TPrinterFields) {
+  await workflowFillPrinter(page, printer);
+  await getDialogCreateEditPrinter(page).getByTestId("button-submit").click();
 }
 
 export async function workflowOpenCreatePrinter(page: Page) {
@@ -96,7 +100,7 @@ export async function workflowOpenCreatePrinter(page: Page) {
 // Expects the maintenance page of the Impresoras to be open
 export async function workflowCreatePrinter(page: Page, printer: TPrinterFields) {
   await workflowOpenCreatePrinter(page);
-  await workflowFillPrinter(page, printer);
+  await workflowSubmitPrinter(page, printer);
   await expect(getDialogCreateEditPrinter(page)).not.toBeVisible();
   await expectSingleSuccessToast(page, PRINTER_CREATED_MESSAGE);
   await expect(await findPrinterRow(page, printer.name)).toContainText(getPrinterAddress(printer));
@@ -105,7 +109,7 @@ export async function workflowCreatePrinter(page: Page, printer: TPrinterFields)
 export async function workflowEditPrinter(page: Page, currentName: string, printer: TPrinterFields) {
   await (await findPrinterRow(page, currentName)).getByTestId("button-edit").click();
   await assertFormLoaded(getDialogCreateEditPrinter(page));
-  await workflowFillPrinter(page, printer);
+  await workflowSubmitPrinter(page, printer);
   await expect(getDialogCreateEditPrinter(page)).not.toBeVisible();
   await expectSingleSuccessToast(page, PRINTER_EDITED_MESSAGE);
   await expect(await findPrinterRow(page, printer.name)).toContainText(getPrinterAddress(printer));

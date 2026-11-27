@@ -3,6 +3,7 @@ import { useSelector } from "@tanstack/react-store";
 import { useAppContext } from "@/contexts/app-context";
 import { useAppForm } from "@/form";
 import useResetForm from "@/form/hooks/use-reset-form";
+import { resetForm } from "@/form/utils";
 import { CLIENT_CREATED_MESSAGE, CLIENT_EDITED_MESSAGE, CLIENT_INVOICE_EMAIL_CREATED_MESSAGE } from "@/messages/client";
 import { useQueryClientById } from "@/queries/client";
 import type { TCreateClient, TUpdateClient } from "@/schemas/client";
@@ -98,7 +99,7 @@ export default function useClientForm({ requestedFormMode, editClientId, onSubmi
       });
     },
     validators: {
-      onSubmit: validationSchema,
+      onChange: validationSchema,
     },
   });
   const isMutatingClient = useSelector(form.store, (state) => state.isSubmitting);
@@ -118,7 +119,7 @@ export default function useClientForm({ requestedFormMode, editClientId, onSubmi
         },
       });
       if (!mutationResult) return;
-      formApi.reset();
+      resetForm(formApi);
     },
     validators: {
       onChange: createClientInvoiceEmailSchema,

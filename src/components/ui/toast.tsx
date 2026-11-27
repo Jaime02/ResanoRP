@@ -35,17 +35,11 @@ export function ToastList() {
               <div className="flex items-center gap-2">
                 <Toast.Title data-testid="toast-title" className="grow font-bold text-nowrap" />
                 <Toast.Close
-                  render={(props) => (
-                    <Button
-                      data-testid="button-close"
-                      size="icon"
-                      aria-label={CLOSE_LABEL}
-                      variant="outline"
-                      {...props}
-                    >
+                  render={
+                    <Button data-testid="button-close" size="icon" aria-label={CLOSE_LABEL} variant="outline">
                       <XIcon className="text-black" />
                     </Button>
-                  )}
+                  }
                 />
               </div>
               <Toast.Description className="max-w-150 wrap-break-word whitespace-pre-line" />

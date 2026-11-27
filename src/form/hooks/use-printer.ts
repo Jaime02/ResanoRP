@@ -3,6 +3,7 @@ import { useSelector } from "@tanstack/react-store";
 import { useAppContext } from "@/contexts/app-context";
 import { useAppForm } from "@/form";
 import useResetForm from "@/form/hooks/use-reset-form";
+import { resetForm } from "@/form/utils";
 import { PRINTER_CREATED_MESSAGE, PRINTER_EDITED_MESSAGE } from "@/messages/printer";
 import { useQueryPrinterById } from "@/queries/printer";
 import { createPrinterSchema, updatePrinterSchema } from "@/schemas/printer";
@@ -83,12 +84,12 @@ export default function usePrinterForm({ formMode, editPrinterId, onSubmit }: Us
         },
         onSubmit: async (item) => {
           await onSubmit?.(item);
-          if (formMode === FormMode.Create) formApi.reset();
+          if (formMode === FormMode.Create) resetForm(formApi);
         },
       });
     },
     validators: {
-      onSubmit: validationSchema,
+      onChange: validationSchema,
     },
   });
 

@@ -36,7 +36,7 @@ export default function useCreateMaterialForm({ onSubmit }: UseCreateMaterialFor
       });
     },
     validators: {
-      onSubmit: createMaterialSchema,
+      onChange: createMaterialSchema,
     },
   });
 

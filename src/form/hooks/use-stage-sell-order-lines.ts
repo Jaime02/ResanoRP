@@ -92,15 +92,8 @@ export function useStageSellOrderLinesForm({ defaultClientId, onSubmit }: UseSta
     validators: {
       // @ts-expect-error Incompatible types between the schemas and Form fields
       onChange: validationSchema,
-      // @ts-expect-error Incompatible types between the schemas and Form fields
-      onSubmit: validationSchema,
     },
   });
-
-  useEffect(() => {
-    // The validity was computed with the schema of the other mode
-    void form.validate("change");
-  }, [form, validationSchema]);
 
   const clientId = useSelector(form.store, (state) => state.values.clientId);
   const stagedSellOrderLines = useSelector(form.store, (state) => state.values.stagedSellOrderLines);

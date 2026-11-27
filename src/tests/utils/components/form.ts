@@ -55,15 +55,21 @@ export async function assertFormLoaded(element: Page | Locator): Promise<void> {
   );
 }
 
-// The form shows each error its schema gives for the values, as many times as the fields that get it
+export function getInvalidFields(container: Page | Locator) {
+  return container.locator("[data-invalid]");
+}
+
+// The form marks each field its schema rejects for the values and cannot be submitted. Only the touched ones show their error message
 export async function assertFormSchemaErrors(container: Locator, schema: z.ZodType, values: unknown) {
   const result = schema.safeParse(values);
   expect(result.success, "Wrong test set up: The schema should reject the values").toBe(false);
-  const messageCounts = new Map<string, number>();
-  for (const issue of result.error!.issues) {
-    messageCounts.set(issue.message, (messageCounts.get(issue.message) ?? 0) + 1);
+  const rejectedFields = new Set(result.error!.issues.map((issue) => issue.path.join(".")));
+  await expect(getInvalidFields(container)).toHaveCount(rejectedFields.size);
+  for (const fieldName of rejectedFields) {
+    await expect(
+      getInvalidFields(container).and(container.locator(`[data-field-name="${fieldName}"]`)),
+      fieldName,
+    ).toHaveCount(1);
   }
-  for (const [message, count] of messageCounts) {
-    await expect(container.getByText(message, { exact: true })).toHaveCount(count);
-  }
+  await expect(container.getByTestId("button-submit")).toBeDisabled();
 }

@@ -106,7 +106,7 @@ export default function usePartForm({ requestedFormMode, partId, skipQueries = f
       });
     },
     validators: {
-      onSubmit: validationSchema,
+      onChange: validationSchema,
     },
   });
 

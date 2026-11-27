@@ -1,6 +1,6 @@
 import { useNavigate } from "@tanstack/react-router";
 import { PlusIcon, TriangleAlertIcon } from "lucide-react";
-import { useCallback } from "react";
+import { useCallback, useRef } from "react";
 
 import DialogCreateBlueprint from "@/components/dialog/create-blueprint";
 import LayoutBlueprint from "@/components/pdf/layout-blueprint-viewer";
@@ -92,6 +92,7 @@ export default function FormPart({
 }: FormPartProps) {
   const navigate = useNavigate();
   const { isAdmin, showToastOnTRPCMutation } = useAppContext();
+  const lastMirroredDescription = useRef<string | null>(null);
 
   const handleTabChange = useCallback(
     (value: string) => {
@@ -129,6 +130,16 @@ export default function FormPart({
               />
               <form.AppField
                 name="reference.clientDescription"
+                listeners={{
+                  onChange: () => {
+                    const clientDescription = form.getFieldValue("reference.clientDescription") ?? null;
+                    const description = form.getFieldValue("description");
+                    if (description == null || description === "" || description === lastMirroredDescription.current) {
+                      form.setFieldValue("description", clientDescription);
+                      lastMirroredDescription.current = clientDescription;
+                    }
+                  },
+                }}
                 children={(field) => (
                   <field.TextInput
                     id="dialog-create-edit-part-reference-client-description"

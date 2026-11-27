@@ -16,14 +16,11 @@ function AlertDialog({ ...props }: React.ComponentProps<typeof BaseAlertDialog.R
 }
 
 function AlertDialogAction({
+  testId = "button-action",
+  variant = "destructive",
   ...props
 }: React.ComponentProps<typeof BaseAlertDialog.Close> & React.ComponentProps<typeof Button>) {
-  return (
-    <BaseAlertDialog.Close
-      render={(_props) => <Button testId="button-action" variant="destructive" {..._props} />}
-      {...props}
-    />
-  );
+  return <BaseAlertDialog.Close render={<Button testId={testId} variant={variant} />} {...props} />;
 }
 
 function AlertDialogTitle({ ...props }: React.ComponentProps<typeof DialogTitle>) {

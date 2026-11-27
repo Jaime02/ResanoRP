@@ -3,6 +3,7 @@ import { useSelector } from "@tanstack/react-store";
 import { useAppContext } from "@/contexts/app-context";
 import { useAppForm } from "@/form";
 import useResetForm from "@/form/hooks/use-reset-form";
+import { resetForm } from "@/form/utils";
 import { DELIVERY_METHOD_CREATED_MESSAGE, DELIVERY_METHOD_EDITED_MESSAGE } from "@/messages/delivery-method";
 import { useQueryDeliveryMethodById } from "@/queries/delivery-method";
 import { createModelWithNameSchema, updateModelWithNameSchema } from "@/schemas";
@@ -65,12 +66,12 @@ export default function useDeliveryMethodForm({
         },
         onSubmit: async (item) => {
           await onSubmit?.(item);
-          if (formMode === FormMode.Create) formApi.reset();
+          if (formMode === FormMode.Create) resetForm(formApi);
         },
       });
     },
     validators: {
-      onSubmit: validationSchema,
+      onChange: validationSchema,
     },
   });
 

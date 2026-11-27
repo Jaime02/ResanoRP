@@ -4,6 +4,7 @@ import { useState } from "react";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { FormContextProvider } from "@/form";
 import useSendPartTreatmentForm from "@/form/hooks/use-send-part-treatment";
+import { resetForm } from "@/form/utils";
 import { PART_LABEL, QUANTITY_LABEL } from "@/messages/common";
 import { SEND_LABEL, SEND_PART_TO_TREATMENT_WITHOUT_ORDER_TITLE, SEND_WITHOUT_ORDER_LABEL } from "@/messages/treatment";
 import type { TPartFilters } from "@/schemas/part";
@@ -20,7 +21,7 @@ export default function DialogSendPartTreatment() {
 
   const onOpenChange = (open: boolean) => {
     setIsOpen(open);
-    form.reset();
+    resetForm(form);
   };
 
   return (

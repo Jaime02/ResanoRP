@@ -3,6 +3,7 @@ import { useSelector } from "@tanstack/react-store";
 import { useAppContext } from "@/contexts/app-context";
 import { useAppForm } from "@/form";
 import useResetForm from "@/form/hooks/use-reset-form";
+import { resetForm } from "@/form/utils";
 import { PART_REFERENCE_CREATED_MESSAGE, PART_REFERENCE_EDITED_MESSAGE } from "@/messages/part";
 import type { TCreatePartReference, TUpdatePartReference } from "@/schemas/part-reference";
 import { createPartReferenceSchema, updatePartReferenceSchema } from "@/schemas/part-reference";
@@ -81,12 +82,12 @@ export default function usePartReferenceForm({
         },
         onSubmit: async (item) => {
           await onSubmit?.(item);
-          if (formMode === FormMode.Create) formApi.reset();
+          if (formMode === FormMode.Create) resetForm(formApi);
         },
       });
     },
     validators: {
-      onSubmit: validationSchema,
+      onChange: validationSchema,
     },
   });
 

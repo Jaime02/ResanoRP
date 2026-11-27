@@ -96,7 +96,7 @@ export default function useDeliveryNoteForm({
     },
     validators: {
       // @ts-expect-error The form uses the clientId value, but it is not part of the Update schema
-      onSubmit: validationSchema,
+      onChange: validationSchema,
     },
   });
 

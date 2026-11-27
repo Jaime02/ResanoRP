@@ -1,9 +1,11 @@
 import { Combobox as BaseCombobox } from "@base-ui/react/combobox";
 import { ChevronDownIcon, XIcon } from "lucide-react";
+import { useRef } from "react";
 
 import TooltipDeleted from "@/components/tooltip/deleted";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { getNextFocusableElement } from "@/form/utils";
 import { cn } from "@/lib/utils";
 import { SELECT_OPTION_PLACEHOLDER } from "@/messages/combobox";
 import { CLEAR_SELECTION_LABEL, FILTER_PLACEHOLDER, NO_RESULTS_MESSAGE, STATUS_DELETED_LABEL } from "@/messages/common";
@@ -47,7 +49,7 @@ export function Combobox<TItem extends TBaseModel>({
   readOnly = false,
   filter,
   onFilterChange,
-  take = 10,
+  take = 25,
   nullable = true,
   showChevron = true,
   placeholder = SELECT_OPTION_PLACEHOLDER,
@@ -58,6 +60,9 @@ export function Combobox<TItem extends TBaseModel>({
 }: ComboboxProps<TItem>) {
   const hiddenItemsCount = Math.max(items.length - take, 0);
   const visibleItems = items.slice(0, take);
+  const rootRef = useRef<HTMLDivElement>(null);
+  const popupRef = useRef<HTMLDivElement>(null);
+  const itemSelectedRef = useRef(false);
 
   return (
     <BaseCombobox.Root
@@ -69,10 +74,14 @@ export function Combobox<TItem extends TBaseModel>({
         itemValue !== null && selectedValue !== null && itemValue.id === selectedValue.id
       }
       onValueChange={onValueChange}
+      onOpenChange={(open, { reason }) => {
+        itemSelectedRef.current = !open && reason === "item-press";
+      }}
       disabled={loading}
       readOnly={readOnly}
     >
       <div
+        ref={rootRef}
         data-testid={testId}
         data-value={activeItem?.id}
         data-loading={loading || undefined}
@@ -124,7 +133,17 @@ export function Combobox<TItem extends TBaseModel>({
       </div>
       <BaseCombobox.Portal>
         <BaseCombobox.Positioner className="outline-none" sideOffset={4}>
-          <BaseCombobox.Popup className="flex max-h-(--available-height) w-fit max-w-(--available-width) origin-(--transform-origin) flex-col gap-1 rounded-lg bg-background p-2 shadow-dialog transition-[transform,scale,opacity] duration-100 data-ending-style:scale-95 data-ending-style:opacity-0 data-starting-style:scale-95 data-starting-style:opacity-0">
+          <BaseCombobox.Popup
+            ref={popupRef}
+            finalFocus={() => {
+              const nextElement =
+                itemSelectedRef.current && rootRef.current ? getNextFocusableElement(rootRef.current) : undefined;
+              itemSelectedRef.current = false;
+              // Past the last field the next element is in this popup, which is closing
+              return nextElement && popupRef.current?.contains(nextElement) !== true ? nextElement : true;
+            }}
+            className="flex max-h-(--available-height) w-fit max-w-(--available-width) origin-(--transform-origin) flex-col gap-1 rounded-lg bg-background p-2 shadow-dialog transition-[transform,scale,opacity] duration-100 data-ending-style:scale-95 data-ending-style:opacity-0 data-starting-style:scale-95 data-starting-style:opacity-0"
+          >
             {popupHeader}
             {(items.length > 0 || (filter !== undefined && filter !== "")) && (
               <BaseCombobox.Input
@@ -149,7 +168,7 @@ export function Combobox<TItem extends TBaseModel>({
             </BaseCombobox.Empty>
             <BaseCombobox.List
               data-testid="combobox-list"
-              className="flex min-h-0 scroll-py-2 flex-col gap-1 overflow-y-auto overscroll-contain outline-0 data-empty:p-0"
+              className="list-scroll flex min-h-0 scroll-py-2 flex-col overscroll-contain outline-0 data-empty:p-0"
             >
               {(item: TItem) => (
                 <BaseCombobox.Item

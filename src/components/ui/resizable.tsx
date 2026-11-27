@@ -21,7 +21,7 @@ function ResizablePanel({ ...props }: React.ComponentProps<typeof ResizablePrimi
 function ResizablePanelSeparator({ className, ...props }: React.ComponentProps<typeof ResizablePrimitive.Separator>) {
   return (
     <ResizablePrimitive.Separator {...props} className="focus-visible:outline-none">
-      <Button size="unstyled" className={cn("z-10 h-full w-5 justify-center", className)}>
+      <Button size="unstyled" variant="secondary" className={cn("z-10 h-full w-5 justify-center", className)}>
         <EllipsisVerticalIcon />
       </Button>
     </ResizablePrimitive.Separator>

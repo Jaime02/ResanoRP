@@ -95,7 +95,7 @@ export async function workflowRejectCreateWithTakenName<T extends TNamedItem>({
   // A name of only spaces is no name
   await openCreate();
   await fill(items[0], "   ");
-  await buttonSubmit.click();
+  await expect(buttonSubmit).toBeDisabled();
   await expect(form.getByText(REQUIRED_FIELD_MESSAGE)).toHaveCount(1);
   await expect(getToasts(page)).toHaveCount(0);
   await closeCreate();

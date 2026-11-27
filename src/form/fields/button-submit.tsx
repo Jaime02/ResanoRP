@@ -3,6 +3,7 @@ import { LoaderIcon, PlusIcon, SaveIcon } from "lucide-react";
 import type { ButtonProps } from "@/components/ui/button";
 import { Button } from "@/components/ui/button";
 import { useFormContext } from "@/form/context";
+import useValidateForm from "@/form/hooks/use-validate-form";
 import { CREATE_LABEL, SAVE_LABEL } from "@/messages/common";
 import { FormMode } from "@/types";
 
@@ -21,7 +22,11 @@ export default function ButtonSubmit({
   testId = "button-submit",
   ...props
 }: ButtonSubmitProps) {
-  const { form, formMode, isLoading } = useFormContext();
+  const { form, formMode, isLoading, validationSchema } = useFormContext();
+  // A field loses its errors when it unmounts, so the form is validated again each time its fields mount with this
+  // button, as in a dialog that opens
+  useValidateForm(form, validationSchema);
+
   return (
     <form.Subscribe
       selector={(state) => [state.canSubmit, state.isValid, state.isSubmitting, state.isPristine, state.isDefaultValue]}

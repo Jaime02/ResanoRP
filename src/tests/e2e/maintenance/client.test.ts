@@ -384,7 +384,6 @@ test("manage the clients", { annotation: TestAnnotations.ResetSellOrders }, asyn
       const inputAccountingAccountId = getFormInputByLabel(formClient, PRISMA_ACCOUNTING_ACCOUNT_LABEL);
       for (const invalidAccountingAccountId of ["7050001", "4300000001"]) {
         await inputAccountingAccountId.fill(invalidAccountingAccountId);
-        await formClient.getByTestId("button-submit").click();
         await expect(formClient.getByText(CLIENT_PRISMA_ACCOUNT_ERROR_MESSAGE)).toBeVisible();
         await expect(formClient.getByTestId("button-submit")).toBeDisabled();
       }
@@ -429,7 +428,6 @@ test("manage the clients", { annotation: TestAnnotations.ResetSellOrders }, asyn
     await getFormInputByLabel(dialogCreateClient, PHONE_LABEL).fill(newClient.phone);
 
     // The address, postal code and CIF are required to account the invoices of the Cliente
-    await dialogCreateClient.getByTestId("button-submit").click();
     await expect(dialogCreateClient.getByTestId("button-submit")).toBeDisabled();
     await expect(dialogCreateClient).toBeVisible();
     expect(await getClientById(NEW_CLIENT_ID)).toBeUndefined();

@@ -250,10 +250,14 @@ test("the Usuarios of the Backoffice name an IP in the header and in the audit l
   const spanCurrentUserName = page.getByTestId("span-current-user-name");
   const userName = "Juan";
   const otherIp = "10.0.0.1";
+  const buttonSubmitUser = dialogCreateEditUser.getByTestId("button-submit");
   const fillUser = async (name: string, ip: string) => {
     await getFormInputByLabel(dialogCreateEditUser, NAME_LABEL).fill(name);
     await getFormInputByLabel(dialogCreateEditUser, IP_LABEL).fill(ip);
-    await dialogCreateEditUser.getByTestId("button-submit").click();
+  };
+  const submitUser = async (name: string, ip: string) => {
+    await fillUser(name, ip);
+    await buttonSubmitUser.click();
   };
   const openCreateUser = async () => {
     await page.getByRole("button", { name: USER_CREATE_TITLE }).click();
@@ -266,8 +270,9 @@ test("the Usuarios of the Backoffice name an IP in the header and in the audit l
     await openCreateUser();
     await fillUser(userName, "not an ip");
     await expect(dialogCreateEditUser.getByText(USER_IP_INVALID_MESSAGE)).toBeVisible();
+    await expect(buttonSubmitUser).toBeDisabled();
 
-    await fillUser(userName, otherIp);
+    await submitUser(userName, otherIp);
     await expect(dialogCreateEditUser).not.toBeVisible();
     await expectSingleSuccessToast(page, USER_CREATED_MESSAGE);
     await expect(await findTableRowByText(tableUser, userName)).toBeVisible();
@@ -281,7 +286,7 @@ test("the Usuarios of the Backoffice name an IP in the header and in the audit l
   await test.step("the IP of this browser shows its name at once in the header and in the audit log", async () => {
     await (await findTableRowByText(tableUser, userName)).getByTestId("button-edit").click();
     await assertFormLoaded(dialogCreateEditUser);
-    await fillUser(userName, browserIp);
+    await submitUser(userName, browserIp);
     await expectSingleSuccessToast(page, USER_EDITED_MESSAGE);
     await expect(spanCurrentUserName).toHaveText(userName);
 
@@ -297,7 +302,7 @@ test("the Usuarios of the Backoffice name an IP in the header and in the audit l
   await test.step("an IP has a single Usuario", async () => {
     await page.getByRole("tab", { name: USERS_LABEL }).click();
     await openCreateUser();
-    await fillUser("Ana", browserIp);
+    await submitUser("Ana", browserIp);
     await expectSingleToast(page, USER_IP_TAKEN_MESSAGE);
     expectUniqueViolationRejected(
       uniqueColumnsViolation(USER_IP_CONSTRAINT, dbTableUser, [[dbTableUser.ip, browserIp]]),

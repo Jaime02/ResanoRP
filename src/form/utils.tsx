@@ -1,4 +1,11 @@
+import type { AnyFormApi } from "@tanstack/react-form";
 import * as z from "zod";
+
+// A reset clears every error and validates nothing, so the empty form would look valid until its first change
+export function resetForm(form: AnyFormApi) {
+  form.reset();
+  void form.validate("change");
+}
 
 function unwrapPipe(schema: z.core.$ZodType): z.core.$ZodType {
   let current = schema;
@@ -18,7 +25,7 @@ function isNotRequired(schema: z.core.$ZodType): boolean {
   }
 
   if (current instanceof z.ZodPipe) {
-    return isNotRequired(current.def.in);
+    return isNotRequired(current.def.in instanceof z.ZodTransform ? current.def.out : current.def.in);
   }
 
   if (current instanceof z.ZodUnion) {
@@ -69,20 +76,23 @@ export function isFieldRequired(fieldPath: string, schema?: z.core.$ZodType): bo
   return !isNotRequired(current);
 }
 
+export function getNextFocusableElement(element: HTMLElement) {
+  return Array.from(
+    document.querySelectorAll<HTMLElement>('input,select,textarea,button,[tabindex]:not([tabindex="-1"])'),
+  ).find(
+    (el) =>
+      !el.hasAttribute("disabled") &&
+      el.getAttribute("aria-hidden") !== "true" &&
+      !el.hasAttribute("inert") &&
+      !element.contains(el) &&
+      (element.compareDocumentPosition(el) & Node.DOCUMENT_POSITION_FOLLOWING) !== 0,
+  );
+}
+
 export function goToNextFocusableElement(ref: React.RefObject<HTMLElement | null> | undefined, e: React.KeyboardEvent) {
   if (e.key === "Enter" && ref?.current) {
     e.preventDefault();
     ref.current.blur();
-
-    const focusable = Array.from(
-      document.querySelectorAll<HTMLElement>('input,select,textarea,button,[tabindex]:not([tabindex="-1"])'),
-    ).filter(
-      (el) => !el.hasAttribute("disabled") && el.getAttribute("aria-hidden") !== "true" && !el.hasAttribute("inert"),
-    );
-
-    const index = focusable.indexOf(ref.current);
-    if (index > -1 && index + 1 < focusable.length) {
-      focusable[index + 1].focus();
-    }
+    getNextFocusableElement(ref.current)?.focus();
   }
 }

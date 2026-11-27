@@ -2,6 +2,8 @@ import type { AnyFormApi } from "@tanstack/react-form";
 import { deepEqual } from "fast-equals";
 import { useLayoutEffect, useRef } from "react";
 
+import { resetForm } from "@/form/utils";
+
 // Compared by value, live query rows are new objects whenever any of their related rows sync
 export default function useResetForm(form: AnyFormApi, ...resetKeys: Array<unknown>) {
   const lastResetKeys = useRef<Array<unknown> | null>(null);
@@ -10,6 +12,6 @@ export default function useResetForm(form: AnyFormApi, ...resetKeys: Array<unkno
   useLayoutEffect(() => {
     if (lastResetKeys.current !== null && deepEqual(lastResetKeys.current, resetKeys)) return;
     lastResetKeys.current = resetKeys;
-    form.reset();
+    resetForm(form);
   });
 }

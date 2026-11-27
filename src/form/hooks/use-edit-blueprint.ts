@@ -32,7 +32,7 @@ export default function useEditBlueprintForm({ blueprint, onSubmit }: UseEditBlu
       }),
     validators: {
       // @ts-expect-error partId is in the form but does not have to be validated
-      onSubmit: updateBlueprintSchema,
+      onChange: updateBlueprintSchema,
     },
   });
 

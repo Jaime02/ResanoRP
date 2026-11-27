@@ -5,3 +5,5 @@ import type { SerializeDateFields } from "@/types";
 
 export type BasePart = InferSelectModel<typeof dbTablePart>;
 export type BasePartSerialized = SerializeDateFields<BasePart>;
+
+export const CREATE_PART_BUTTON_TEST_ID = "button-create-part";

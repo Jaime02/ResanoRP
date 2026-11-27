@@ -18,6 +18,7 @@ import {
 } from "@/messages/common";
 import { DELIVERY_NOTES_LABEL, DELIVERY_NOTE_CREATE_TITLE } from "@/messages/delivery-note";
 import { SERVE_PARTS_LABEL, WRONG_PASSWORD_MESSAGE, ENTER_PASSWORD_LABEL } from "@/messages/home";
+import { PART_CREATE_TITLE } from "@/messages/part";
 import {
   SELL_ORDER_CREATE_TITLE,
   SELL_ORDER_STATUS_CLIENT_DELETED_LABEL,
@@ -40,6 +41,7 @@ import {
 } from "@/tests/mock-data";
 import { expectAuditLog, expectAuditedRequest } from "@/tests/utils/audit-log";
 import { assertFormLoaded, getFormInputByLabel } from "@/tests/utils/components/form";
+import { openPartPicker } from "@/tests/utils/components/picker";
 import {
   assertTableRowCount,
   getTableNoDataRow,
@@ -247,6 +249,17 @@ for (const { userMode, machineId, allowedPaths, blockedPaths } of [
       await page.goto(path);
       await expect(page, path).toHaveURL((url) => url.pathname === path);
     }
+
+    // Only the Administrador creates Artículos, in another tab so the form behind the picker keeps its values
+    await page.goto("/treatment");
+    const { dialogPickerPartContent } = await openPartPicker(page, page.getByTestId("picker-treatment-history-part"));
+    const linkCreatePart = dialogPickerPartContent.getByRole("link", { name: PART_CREATE_TITLE });
+    await expect(linkCreatePart).toBeVisible({ visible: userMode === UserMode.Admin });
+    if (userMode === UserMode.Admin) {
+      await expect(linkCreatePart).toHaveAttribute("href", "/part?createPart=true");
+      await expect(linkCreatePart).toHaveAttribute("target", "_blank");
+    }
+
     for (const sellOrder of mockSellOrders) {
       await assertSellOrderPage(page, sellOrder.id, userMode);
     }

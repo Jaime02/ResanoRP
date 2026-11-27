@@ -45,7 +45,7 @@ export default function useUserForm({ formMode, editUserId, onSubmit }: UseUserF
       });
     },
     validators: {
-      onSubmit: validationSchema,
+      onChange: validationSchema,
     },
   });
 

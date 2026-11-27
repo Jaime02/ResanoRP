@@ -62,7 +62,7 @@ export default function useMachineForm({ requestedFormMode, editMachineId, onSub
       });
     },
     validators: {
-      onSubmit: validationSchema,
+      onChange: validationSchema,
     },
   });
 
