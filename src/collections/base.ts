@@ -41,6 +41,28 @@ type TPowerSyncOptions<TSchema extends z.ZodType<object>, TKey extends string | 
     streams?: ReadonlyArray<StreamSubscription>;
   };
 
+// The tables of a checkpoint finish syncing together, and one checkpoint requested after all their Postgres reads
+// confirms every one of them. A request per table made the machine pages fail their own mutations' checkpoints
+const confirmingTables: Array<(confirmed: boolean) => void> = [];
+async function confirmAfterPostgresReads(client: ReturnType<typeof getPowerSyncClient>) {
+  return new Promise<boolean>((resolve) => {
+    confirmingTables.push(resolve);
+    if (confirmingTables.length > 1) return;
+    setTimeout(() => {
+      const waiting = confirmingTables.splice(0);
+      void client
+        .confirmWrites({ signal: AbortSignal.timeout(SYNC_TIMEOUT_MS) })
+        .then(
+          () => true,
+          () => false,
+        )
+        .then((confirmed) => {
+          for (const resolveTable of waiting) resolveTable(confirmed);
+        });
+    });
+  });
+}
+
 function logSyncError(error: unknown) {
   void log(LoggerLevels.error, LogMessages.powerSyncSyncFailed, formatClientError(error));
 }
@@ -220,10 +242,16 @@ export function powerSyncCollectionOptions<TSchema extends z.ZodType<object>, TK
           .then(
             async () => {
               synced = true;
-              // A row deleted after Postgres answered never reaches this tab through PowerSync
-              const deleted = [...postgresKeys].filter((key) => !syncedKeys.has(key));
+              const loadedKeys = [...postgresKeys];
               postgresKeys.clear();
-              if (!active || deleted.length === 0) return;
+              if (loadedKeys.length === 0) return;
+              // A row deleted after Postgres answered never reaches this tab through PowerSync. Its synced checkpoint can
+              // be older than what Postgres answered, so a row it lacks is only gone once it has applied one requested
+              // after those reads. Unconfirmed, the rows stay: a deleted one is shown until a reload, instead of hiding
+              // live ones
+              const confirmed = await confirmAfterPostgresReads(client);
+              const deleted = loadedKeys.filter((key) => !syncedKeys.has(key));
+              if (!active || !confirmed || deleted.length === 0) return;
               begin();
               for (const key of deleted) write({ type: "delete", key });
               const applied = commit(controller.signal);
