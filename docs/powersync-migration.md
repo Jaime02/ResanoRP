@@ -394,11 +394,6 @@ function `loadTableSubsetFn` (`src/lib/table-subset-fns.ts`) compiles the query'
 (`loadTableSubset`, `src/db/functions/table-subset.ts`). PowerSync's first changes then replace those rows with the whole
 table, and from then on every subset is answered from memory.
 
-- Once the table has synced, a row Postgres answered that PowerSync did not bring was deleted meanwhile, and is removed.
-  PowerSync's first checkpoint can be older than the Postgres read (replication lags, e.g. right after the test reset
-  reseeds the database), so the removal first waits for `confirmWrites`: a checkpoint requested after those reads.
-  Without it a row vanished and came back 1-2 s later, and a form showing it reset under the user's typing.
-
 - `loadTableSubset` answers `null` for a filter Postgres would not keep exactly the same rows for (numerics, text order,
   functions it does not translate, `in` with more than `MAX_LOOKUP_KEYS` keys) or for more than `MAX_SUBSET_ROWS` rows.
   The query then waits for PowerSync. An extra row is as wrong as a missing one, since a `not` turns one into the other.
