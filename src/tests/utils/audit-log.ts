@@ -77,6 +77,7 @@ export function setReleasedSession(procedurePath: string, isAdmin: boolean) {
   releasedSessions.set(procedurePath, isAdmin);
 }
 const trackedContexts = new WeakSet<BrowserContext>();
+const interceptedContexts = new WeakSet<BrowserContext>();
 
 // Oldest first, in the shape of the entry the app wrote: the columns it left empty are undefined
 export async function readAuditLog(): Promise<Array<TAuditLogEntry>> {
@@ -108,7 +109,13 @@ export async function resetAuditLog() {
 
 // Chromium leaves out of the request it reports the bytes of a file picked from disk, so the test keeps the files it
 // picked to know what was uploaded
-export function recordPickedFiles(files: TPickedFiles) {
+export async function recordPickedFiles(context: BrowserContext, files: TPickedFiles) {
+  // Only an intercepted request keeps the body of its upload, which the check reads. A route turns off the HTTP cache of
+  // its context, which then downloads the whole app on every page load, so only the contexts that upload get it
+  if (!interceptedContexts.has(context)) {
+    interceptedContexts.add(context);
+    await context.route(`**${TRPC_URL}/**`, async (route) => route.fallback());
+  }
   for (const file of [files].flat()) {
     const picked =
       typeof file === "string"
@@ -150,8 +157,6 @@ export async function trackAuditedMutations(context: BrowserContext) {
     successToastTitles.push(title);
   });
   await context.addInitScript(observeSuccessToasts, { binding: TOAST_BINDING, type: ToastType.Success });
-  // Only an intercepted request keeps the body of its upload, which the check reads
-  await context.route(`**${TRPC_URL}/**`, async (route) => route.fallback());
   context.on("request", (request) => {
     if (request.method() === "POST" && new URL(request.url()).pathname.startsWith(`${TRPC_URL}/`)) {
       unansweredMutations.add(request);

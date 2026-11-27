@@ -8,6 +8,6 @@ export async function setInputFiles(page: Page, input: Locator, filePath: TPicke
   const fileChooserPromise = page.waitForEvent("filechooser");
   await input.click();
   const fileChooser = await fileChooserPromise;
-  recordPickedFiles(filePath);
+  await recordPickedFiles(page.context(), filePath);
   await fileChooser.setFiles(filePath);
 }
