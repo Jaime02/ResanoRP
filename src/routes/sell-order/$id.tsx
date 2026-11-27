@@ -5,8 +5,9 @@ import ButtonLink from "@/components/ui/button-link";
 import SiblingControls from "@/components/ui/sibling-controls";
 import { UserMode, useAppContext } from "@/contexts/app-context";
 import FormSellOrder from "@/form/forms/sell-order";
+import { preloadLiveQueries } from "@/lib/preload-live-queries";
 import { SELL_ORDER_CREATE_TITLE, VIEW_SELL_ORDERS_LABEL } from "@/messages/sell-order";
-import { useQuerySellOrderNavigationIds } from "@/queries/sell-order";
+import { sellOrderByIdQuery, useQuerySellOrderNavigationIds } from "@/queries/sell-order";
 import { optionalIdSchema } from "@/schemas";
 import { FormMode } from "@/types";
 
@@ -23,6 +24,9 @@ export const Route = createFileRoute("/sell-order/$id")({
   beforeLoad: ({ params }) => ({
     title: `Pedido de venta ${params.id}`,
   }),
+  loader: async ({ context, params }) => {
+    await preloadLiveQueries(context.dbClient, [sellOrderByIdQuery(params.id)]);
+  },
   component: RouteComponent,
   params: routeParamsSchema,
   staticData: { userModes: [UserMode.Admin, UserMode.User, UserMode.Machine] },

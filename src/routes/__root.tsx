@@ -10,7 +10,9 @@ import { ToastList } from "@/components/ui/toast";
 import { AppContextProvider } from "@/contexts/app-context-provider";
 import { AppContextStorage, UserMode } from "@/contexts/app-context-storage";
 import { ADMIN_SESSION_COOKIE_NAME, isAdminSession } from "@/lib/admin-session";
+import { preloadLiveQueries } from "@/lib/preload-live-queries";
 import { getRequestIpFn } from "@/lib/request-ip-fns";
+import { machineByIdQuery } from "@/queries/machine";
 
 import appCss from "./styles.css?url";
 
@@ -55,7 +57,16 @@ export const Route = createRootRouteWithContext<RouteContext>()({
     return { userStateCookie };
   },
   // The IP of a browser does not change while it is open, so it is only asked once
-  loader: async () => ({ ip: await getRequestIpFn() }),
+  loader: async ({ context }) => {
+    const { userModeMachineId } = AppContextStorage.parse(context.userStateCookie);
+    const [ip] = await Promise.all([
+      getRequestIpFn(),
+      userModeMachineId === undefined
+        ? undefined
+        : preloadLiveQueries(context.dbClient, [machineByIdQuery(userModeMachineId)]),
+    ]);
+    return { ip };
+  },
   staleTime: Infinity,
   component: RootComponent,
   shellComponent: RootDocument,

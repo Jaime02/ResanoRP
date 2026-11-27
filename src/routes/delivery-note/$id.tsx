@@ -7,7 +7,9 @@ import { useAppContext } from "@/contexts/app-context";
 import { FormContextProvider } from "@/form";
 import FormDeliveryNote from "@/form/forms/delivery-note";
 import useDeliveryNoteForm from "@/form/hooks/use-delivery-note";
+import { preloadLiveQueries } from "@/lib/preload-live-queries";
 import { DELIVERY_NOTE_FETCH_ERROR_MESSAGE, DELIVERY_NOTE_FETCH_ERROR_TITLE } from "@/messages/delivery-note";
+import { deliveryNoteByIdQuery } from "@/queries/delivery-note";
 import { optionalIdSchema } from "@/schemas";
 import { FormMode } from "@/types";
 
@@ -23,6 +25,9 @@ export const Route = createFileRoute("/delivery-note/$id")({
   beforeLoad: ({ params }) => ({
     title: `Albarán ${params.id}`,
   }),
+  loader: async ({ context, params }) => {
+    await preloadLiveQueries(context.dbClient, [deliveryNoteByIdQuery(params.id)]);
+  },
   component: RouteComponent,
   params: routeParamsSchema,
   validateSearch: routeSearchSchema,

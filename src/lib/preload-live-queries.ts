@@ -1,13 +1,23 @@
 import { DbClient } from "@tanstack/react-db";
-import type { LiveQueryOptions } from "@tanstack/react-db";
+import type { InitialQueryBuilder, LiveQueryOptions } from "@tanstack/react-db";
 import { createIsomorphicFn } from "@tanstack/react-start";
 
 import { formatClientError } from "@/lib/formatters";
 import log from "@/logging/log";
 import { LogMessages, LoggerLevels } from "@/logging/types";
 
-// Electric retries a shape it cannot reach forever, which would hang the whole server render
+// A slow Postgres subset would otherwise hold back the whole server render
 const PRELOAD_TIMEOUT_MS = 5000;
+
+/**
+ * The live query a loader preloads, for a hook that may have nothing to query yet. With options it keeps their key and
+ * builds the same query, so it picks up the preloaded result
+ */
+export function optionalLiveQuery<TQuery>(
+  options: { queryKey: Array<unknown>; query: (q: InitialQueryBuilder) => TQuery } | undefined,
+) {
+  return { queryKey: options?.queryKey ?? [], query: (q: InitialQueryBuilder) => options?.query(q) };
+}
 
 /**
  * Lets the server render the given live queries with their rows. A component only picks a result up when it builds

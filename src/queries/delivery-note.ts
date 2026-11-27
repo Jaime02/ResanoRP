@@ -10,6 +10,7 @@ import partCollection from "@/collections/part";
 import partReferenceCollection from "@/collections/part-reference";
 import sellOrderCollection from "@/collections/sell-order";
 import sellOrderLineCollection from "@/collections/sell-order-line";
+import { optionalLiveQuery } from "@/lib/preload-live-queries";
 import type { TSort } from "@/schemas";
 import type { TDeliveryNoteFilters } from "@/schemas/delivery-note";
 import { getFilterValue } from "@/schemas/utils";
@@ -170,10 +171,19 @@ export function useQueryDeliveryNoteById({
   deliveryNoteId?: number;
   skip?: boolean;
 }) {
-  return useLiveQuery((query) => {
-    if (deliveryNoteId === undefined || skip) return undefined;
-    return deliveryNoteSelectProjection({ query, filters: [{ id: "id", value: deliveryNoteId }] }).findOne();
-  });
+  return useLiveQuery(
+    optionalLiveQuery(skip || deliveryNoteId === undefined ? undefined : deliveryNoteByIdQuery(deliveryNoteId)),
+  );
+}
+
+// Shared with the loader that preloads the delivery note page on the server, which only matches a query built the same
+// way
+export function deliveryNoteByIdQuery(deliveryNoteId: number) {
+  return {
+    queryKey: ["deliveryNoteById", deliveryNoteId],
+    query: (query: InitialQueryBuilder) =>
+      deliveryNoteSelectProjection({ query, filters: [{ id: "id", value: deliveryNoteId }] }).findOne(),
+  };
 }
 
 export type TDeliveryNote = NonNullable<ReturnType<typeof useQueryDeliveryNoteById>["data"]>;

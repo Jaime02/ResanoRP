@@ -7,8 +7,10 @@ import ButtonLink from "@/components/ui/button-link";
 import { useAppContext } from "@/contexts/app-context";
 import FormPart from "@/form/forms/part";
 import usePartForm from "@/form/hooks/use-part";
+import { preloadLiveQueries } from "@/lib/preload-live-queries";
 import { PART_LABEL } from "@/messages/common";
 import { PART_CREATE_TITLE, PART_FETCH_ERROR_MESSAGE, PART_FETCH_ERROR_TITLE, VIEW_PARTS_LABEL } from "@/messages/part";
+import { partFormQuery } from "@/queries/part";
 import { optionalIdSchema, stringSchema } from "@/schemas";
 import { FormMode } from "@/types";
 import { CREATE_PART_BUTTON_TEST_ID } from "@/types/part";
@@ -31,6 +33,9 @@ export const Route = createFileRoute("/part/$id")({
   beforeLoad: () => ({
     title: PART_LABEL,
   }),
+  loader: async ({ context, params }) => {
+    await preloadLiveQueries(context.dbClient, [partFormQuery(params.id)]);
+  },
   component: RouteComponent,
   params: routeParamsSchema,
   validateSearch: routeSearchSchema,

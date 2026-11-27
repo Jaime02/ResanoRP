@@ -20,6 +20,7 @@ import rawMaterialCollection from "@/collections/raw-material";
 import sellOrderCollection from "@/collections/sell-order";
 import sellOrderLineCollection from "@/collections/sell-order-line";
 import shapeCollection from "@/collections/shape";
+import { optionalLiveQuery } from "@/lib/preload-live-queries";
 import { getAccentInsensitiveLikePattern, includesIgnoringAccents } from "@/lib/utils";
 import { partComponentsQuery } from "@/queries/part-component";
 import { buildStockLedger } from "@/queries/part-stock";
@@ -278,13 +279,19 @@ function partSelectProjection({
   return partsRequireMaterialJoin(filters) ? projected.distinct() : projected;
 }
 
+// Shared with the loader that preloads the part page on the server, which only matches a query built the same way
+export function partFormQuery(partId: number) {
+  return {
+    queryKey: ["partForm", partId],
+    query: (query: InitialQueryBuilder) =>
+      partSelectProjection({ query, filters: [{ id: "deletedAt", value: true }] })
+        .where(({ part }) => eq(part.id, partId))
+        .findOne(),
+  };
+}
+
 export function useQueryPartForm({ partId, skip = false }: { partId?: number; skip?: boolean }) {
-  const result = useLiveQuery((query) => {
-    if (skip || partId === undefined) return undefined;
-    return partSelectProjection({ query, filters: [{ id: "deletedAt", value: true }] })
-      .where(({ part }) => eq(part.id, partId))
-      .findOne();
-  });
+  const result = useLiveQuery(optionalLiveQuery(skip || partId === undefined ? undefined : partFormQuery(partId)));
 
   // Replace the raw transaction streams with the computed running-balance ledger.
   const data = useMemo(() => {

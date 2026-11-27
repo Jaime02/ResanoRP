@@ -24,6 +24,7 @@ import paymentMethodCollection from "@/collections/payment-method";
 import sellOrderCollection from "@/collections/sell-order";
 import sellOrderLineCollection from "@/collections/sell-order-line";
 import { endOfAppDay, startOfAppDay } from "@/lib/dates";
+import { optionalLiveQuery } from "@/lib/preload-live-queries";
 import { includesIgnoringAccents } from "@/lib/utils";
 import type { TSort } from "@/schemas";
 import { SellOrderStatus } from "@/schemas/sell-order";
@@ -201,13 +202,21 @@ function sellOrderSelectProjection(
   }));
 }
 
+// Shared with the loader that preloads the sell order page on the server, which only matches a query built the same way
+export function sellOrderByIdQuery(sellOrderId: number) {
+  return {
+    queryKey: ["sellOrderById", sellOrderId],
+    query: (q: InitialQueryBuilder) =>
+      sellOrderSelectProjection(q)
+        .where(({ sellOrder }) => eq(sellOrder.id, sellOrderId))
+        .findOne(),
+  };
+}
+
 export function useQuerySellOrder({ editSellOrderId, skip = false }: { editSellOrderId?: number; skip?: boolean }) {
-  return useLiveQuery((q) => {
-    if (skip || editSellOrderId === undefined) return undefined;
-    return sellOrderSelectProjection(q)
-      .where(({ sellOrder }) => eq(sellOrder.id, editSellOrderId))
-      .findOne();
-  });
+  return useLiveQuery(
+    optionalLiveQuery(skip || editSellOrderId === undefined ? undefined : sellOrderByIdQuery(editSellOrderId)),
+  );
 }
 
 export function useQuerySellOrders({

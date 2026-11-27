@@ -1,3 +1,4 @@
+import type { InitialQueryBuilder } from "@tanstack/react-db";
 import { useLiveQuery, and, gte, inArray, isNull, lte, not, or, eq, materialize, sum } from "@tanstack/react-db";
 
 import blueprintCollection from "@/collections/blueprint";
@@ -11,6 +12,7 @@ import productionOrderCollection from "@/collections/production-order";
 import sellOrderCollection from "@/collections/sell-order";
 import sellOrderLineCollection from "@/collections/sell-order-line";
 import shapeCollection from "@/collections/shape";
+import { optionalLiveQuery } from "@/lib/preload-live-queries";
 import { includesIgnoringAccents } from "@/lib/utils";
 import type { TSort } from "@/schemas";
 import type { TMachineFilters } from "@/schemas/machine";
@@ -68,16 +70,20 @@ export function useQueryMachines({ filters, sorts }: TBaseQueryProps<TMachineFil
   });
 }
 
+// Shared with the root loader, which preloads the machine of the user mode on the server
+export function machineByIdQuery(id: number) {
+  return {
+    queryKey: ["machineById", id],
+    query: (q: InitialQueryBuilder) =>
+      q
+        .from({ machine: machineCollection })
+        .where(({ machine }) => eq(machine.id, id))
+        .findOne(),
+  };
+}
+
 export function useQueryMachineById(id?: number) {
-  return useLiveQuery({
-    query: (q) =>
-      id === undefined
-        ? undefined
-        : q
-            .from({ machine: machineCollection })
-            .where(({ machine }) => eq(machine.id, id))
-            .findOne(),
-  });
+  return useLiveQuery(optionalLiveQuery(id === undefined ? undefined : machineByIdQuery(id)));
 }
 
 export function useQueryMachineProductionOrderQueue({ machineId }: { machineId?: number }) {
