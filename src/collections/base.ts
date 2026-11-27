@@ -95,6 +95,21 @@ export function powerSyncCollectionOptions<TSchema extends z.ZodType<object>, TK
     sync: {
       rowUpdateMode: "full",
       sync: ({ begin, write, commit, markReady, fail, truncate }) => {
+        // A server render has no PowerSync, so its queries only load from Postgres. One Postgres cannot answer exactly
+        // fails its preload, and the browser loads it instead of rendering wrong rows
+        if (import.meta.env.SSR) {
+          markReady();
+          return {
+            loadSubset: async (options: LoadSubsetOptions) => {
+              const rows = await loadTableSubsetFn({ data: toSubsetRequest(table, options) });
+              if (rows === null) throw new Error(`Postgres cannot load this subset of ${table}`);
+              begin();
+              for (const row of rows) write({ type: "update", value: row as TRow });
+              const applied = commit();
+              if (applied !== true) await applied;
+            },
+          };
+        }
         const client = getPowerSyncClient();
         const controller = new AbortController();
         // A deleted row only arrives with its PowerSync id, which is not the key of the tables keyed by other columns
@@ -259,8 +274,8 @@ export function powerSyncCollectionOptions<TSchema extends z.ZodType<object>, TK
   };
 }
 
-// Each DbClient materializes its own Collection from the descriptor. Only the browser's does: the server renders no
-// component that reads one
+// Each DbClient materializes its own Collection from the descriptor: the browser's syncs from PowerSync, and the one of
+// each server render loads from Postgres
 export function powerSyncCollection<TConfig extends CollectionConfig<any, any, any, any>>(
   table: string,
   createConfig: (baseOptions: ReturnType<typeof baseCollectionOptions>, dbClient: DbClient) => TConfig,

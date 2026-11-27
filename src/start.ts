@@ -15,8 +15,5 @@ const csrfMiddleware = createCsrfMiddleware({
 });
 
 export const startInstance = createStart(() => ({
-  // The collections read the browser's PowerSync database, which the server does not have. beforeLoad still runs on the
-  // server, so it can check and renew the user mode cookie
-  defaultSsr: "data-only",
   requestMiddleware: [csrfMiddleware, loggingMiddleware],
 }));
