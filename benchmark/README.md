@@ -152,6 +152,7 @@ swapped pair.
 | `25-progressive-collections.txt`, `26-…-swapped.txt` | 11-15 | `master`, `lite` and `prog`: branch `progressive-collections` (`79b6df9`..`9f0bf6f` on the query fixes), then swapped      | cold 10 pages 11.2 s (master 8.0, lite 19.0); navigation 2.9 s (6.1, 4.2) |
 | `27-standalone-client.txt`                           | 11-15 | `old` (vendored client) against `new` (`@powersync/standalone-client`, `64bd007`), one run, not swapped                    | no difference: cold 21.6 / 21.9 s, navigation 4.65 / 4.64 s               |
 | `28-virtualization.txt`                              | 11-21 | `tools/virtualization.ts`: one build (master `51f474e` + the scroll container and row memo fixes) with virtualization on and off | 48 rows: no gain. 2,761 rows: scroll 16.7 / 433 ms frames, pin 44 / 872 ms |
+| `29-progressive-ssr-parts.txt`, `30-…-swapped.txt`   | 11-27 | parts list and part page: `prog` (`progressive-collections` on master `49d0820`, with subset access rules) against `ssr` (the same, full SSR, master's parts loader, server collections loading only from Postgres), then swapped. The dump was patched with the missing tables first (Traps) | parts list cold 556 → 255 ms, warm 560 → 210; part page (no loader) cold 305 → 333, warm 253 → 304 |
 
 PowerSync with SQLite (`powersync`) was left out after run 6: ~17 s on every first load while it fills SQLite.
 
@@ -268,3 +269,7 @@ Progressive collections (master's on-demand subsets and the PoC's Postgres subse
   `BENCH_IMAGE=resanorp-app:bench-<other> docker compose -p resanorp-bench-<name> ... up -d --wait app-bench` (the
   `compose` function of `stack.sh` shows the full arguments).
 - A docker build running during a measurement inflates it by ~30%.
+- `bench-anon.dump` predates the tables `audit_log`, `material_lot`, `material_lot_movement`, `printer` and `user` and
+  the column `client.splitSellOrdersInDeliveryNotes`. PowerSync's streams do not notice, but a build that loads subsets
+  from Postgres fails every query and silently waits for PowerSync. Check the app's logs for `Failed query`, and give
+  every stack the same missing DDL from `drizzle-kit export`, or regenerate the dump with `stack.sh dump`.

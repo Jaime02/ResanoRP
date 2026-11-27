@@ -29,9 +29,10 @@ applied it", whatever tables changed.
   used. After each write the client requests a checkpoint (PowerSync's "checkpoint requests" pattern), which is what
   keeps optimistic rows from flickering without the queue.
 - **Integer ids kept**: the app's own adapter (`src/collections/base.ts`) keys rows with each collection's `getKey`.
-- **Data-only SSR** (`defaultSsr: "data-only"` in `src/start.ts`): the server runs `beforeLoad` and renders the shell;
-  every route component, root included, renders in the browser only (TanStack wraps it in `ClientOnly`).
-- **Every collection is eager**, one Sync Stream per table.
+- **Full SSR since 2026-11-27** (data-only SSR until then): the server renders every route. A route with a loader that
+  preloads its live queries (only the parts list) arrives with its rows, loaded from Postgres. See §13.
+- **Collections are on-demand** since 2026-11-27 (eager until then), one Sync Stream per table: until PowerSync has
+  brought a table, each query's rows come from Postgres. See §13.
 
 ## 3. How it works
 
@@ -130,7 +131,7 @@ mutation ──► optimistic row ──► tRPC ──► Drizzle tx ──► 
 
 | Issue                                                                                                                                                                                                                          | Status                                                            |
 | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------- |
-| No server-rendered data: pages render after hydration and sync.                                                                                                                                                                | Accepted.                                                         |
+| Only the parts list is server-rendered with its rows (§13). Every other page is rendered by the server without data and shows it after hydration.                                                                              | Accepted.                                                         |
 | Every page load downloads its tables in full, per tab. Each row is held about three times in memory (oplog JSON, parsed row, app row).                                                                                         | Not measured against production data.                             |
 | The stream restarts whenever the leased tables change (a collection mounts, or one is collected after `gcTime`). It resumes from the buckets it holds, but a released table is downloaded again. Lite has no subscription TTL. | Watch navigation-heavy flows.                                     |
 | A pending checkpoint holds **every** incoming change of the tab, not only the written rows, until the service confirms it.                                                                                                     | Inherent to checkpoints.                                          |
@@ -159,7 +160,7 @@ vendored client driven by Bun). No e2e run.
 | Every page load downloads its tables again; stream restarts on lease changes                     | True (code).                                                                                                                                                                          |
 | `awaitSynced` returns at once when idle                                                          | True (code).                                                                                                                                                                          |
 | Multi-tab                                                                                        | Correct but not shared: each tab has its own client id, connection and memory.                                                                                                        |
-| `@tanstack/db` `getServerSnapshot` patch (React #423)                                            | Unreachable under data-only SSR: no live query renders during hydration (`Match.js` wraps components in `ClientOnly`). Kept until an e2e run without it passes.                       |
+| `@tanstack/db` `getServerSnapshot` patch (React #423)                                            | Needed again: the app uses full SSR since 2026-11-27 (§13), the case it was written for.                                                                                              |
 | Cold start with a production-sized database                                                      | Not verified.                                                                                                                                                                         |
 | Existing volumes switching replication to `powersync_role` (slot created by the superuser)       | Not verified; slots have no owner, so expected to work.                                                                                                                               |
 
@@ -348,6 +349,7 @@ up to 40% between runs.
 | 23, 24 | PoC rebased on the query fixes (busy machine: master's times 30% higher)                   | cold 10 pages 11.6 s (master 10.4, lite 23.7); session 3.6 s (master 7.8, lite 5.2)       |
 | 25, 26 | branch `progressive-collections`, the PoC rewritten on the query fixes                     | cold 10 pages 11.2 s (master 8.0, lite 19.0); session 2.9 s (master 6.1, lite 4.2)        |
 | 27     | vendored client against `@powersync/standalone-client`                                     | no difference                                                                             |
+| 29, 30 | `progressive-collections` with and without full SSR of the parts list, then swapped (§13)  | parts list cold 556 → 255 ms; part page, which has no loader, 305 → 333 ms                |
 
 PowerSync with SQLite was left out of the runs after 6: ~17 s on every first load while it fills SQLite.
 
@@ -377,4 +379,72 @@ Milliseconds until the tables show data.
   ahead only on sell orders and delivery notes. The query fixes took Lite's session from 4.40 to 3.73 s.
 - **Memory**: the page heap is 75-146 MB on Lite against 15-82 MB on master.
 - **Closing the cold-load gap**: only the progressive collections PoC did (§11, `docs/query-performance.md` §7), at the
-  cost of the production orders and treatment regressions and 2-4 MB more sent per load.
+  cost of the production orders and treatment regressions and 2-4 MB more sent per load. It is merged since
+  2026-11-27 (§13).
+
+## 13. Rows from Postgres first, and server rendering (2026-11-27)
+
+### Rows from Postgres until PowerSync has the table
+
+Collections run in TanStack DB's on-demand mode (`src/collections/base.ts`). Each query asks its collection for the
+subset of rows it reads (`loadSubset`). Until PowerSync has brought the table, the subset comes from Postgres: the server
+function `loadTableSubsetFn` (`src/lib/table-subset-fns.ts`) compiles the query's filter, order and limit to SQL
+(`loadTableSubset`, `src/db/functions/table-subset.ts`). PowerSync's first changes then replace those rows with the whole
+table, and from then on every subset is answered from memory.
+
+- `loadTableSubset` answers `null` for a filter Postgres would not keep exactly the same rows for (numerics, text order,
+  functions it does not translate, `in` with more than `MAX_LOOKUP_KEYS` keys) or for more than `MAX_SUBSET_ROWS` rows.
+  The query then waits for PowerSync. An extra row is as wrong as a missing one, since a `not` turns one into the other.
+- **Access rules.** The server function is reachable by any browser, so it keeps back what the sync config does:
+  `audit_log` returns no rows to a request without an admin session, and `printer` only returns
+  `PUBLIC_PRINTER_COLUMNS` (`src/db/schema.ts`, shared with the printer router). A filter or sort can only read those
+  columns, since one on the password would tell its value by the rows it keeps. A new rule in
+  `docker/powersync/sync-config.yaml` needs the same rule in `table-subset.ts`.
+- **Tests:** `src/tests/e2e/table-subset-db.test.ts` checks every translated filter against TanStack DB's own evaluation
+  of it, the filters that must wait for PowerSync, limits with their ties, and both access rules. The mock data has a
+  sell order line described by hand (id 11) for the text filters.
+
+### Server rendering
+
+`defaultSsr` is no longer set in `src/start.ts`, so the server renders every route. A route renders its rows on the
+server only if its loader preloads its live queries with `preloadLiveQueries` (`src/lib/preload-live-queries.ts`):
+they load in a `DbClient` of their own, and only their results are handed to the one rendering the request, so no other
+query shows rows the browser does not have yet when it hydrates. A preload that fails or takes over 5 s is logged
+(`liveQueriesPreloadFailed`), and the page renders without the rows.
+
+- On the server a collection never creates the PowerSync client, which needs `window`: it is ready at once and answers
+  every subset from Postgres. A subset Postgres cannot answer exactly fails the preload instead of rendering wrong rows.
+- Only the parts list has such a loader (`src/routes/part/index.tsx`). It shares `partTableQueries`
+  (`src/queries/part.ts`) with `useQueryPartTable`, because a component only picks a preloaded result up when it builds
+  the same query.
+- A page without a loader is rendered by the server with its loading states, which costs 30–50 ms over data-only SSR
+  (below). Giving such a page `ssr: "data-only"` would avoid that.
+
+### Measured
+
+Benchmark runs 29 and 30 (`benchmark/results/`), the parts list and the part page only. Production builds of
+`progressive-collections` without and with the server rendering, on the benchmark data. The two builds took turns load by
+load, then their images were swapped between the stacks; each cell is the average of the two runs' medians of 5 loads.
+Milliseconds until the tables show data. The dump lacked 5 tables and a column of the schema, which each stack got from
+`drizzle-kit export` first (see the traps of `benchmark/README.md`).
+
+| Page, mode                    | Postgres first | + server rendering |
+| ----------------------------- | -------------- | ------------------ |
+| parts list, cold              | 556            | 255                |
+| parts list, warm              | 560            | 210                |
+| parts list, in-app navigation | 450            | 430                |
+| part page, cold               | 305            | 333                |
+| part page, warm               | 253            | 304                |
+| part page, in-app navigation  | 71             | 69                 |
+
+- The parts list hydrates later (about 420 against 220 ms) and sends about 185 KB more, but shows its rows 300 ms
+  sooner. Postgres first already took it from about 2.2 s (rows from PowerSync only) to 0.55 s.
+- The part page, which has no loader, is 30–50 ms slower with the server rendering on both stacks.
+
+### Not verified
+
+- The full e2e suite on this change. Only `table-subset-db.test.ts` ran.
+- The production orders (+27%) and treatment (+22%) cold-load regressions of the PoC (§12, runs 13, 25–26) are not
+  fixed.
+- Pages other than the parts list and the part page were not measured with the server rendering, and no CPU or network
+  throttling was used.

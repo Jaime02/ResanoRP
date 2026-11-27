@@ -171,7 +171,8 @@ Details, numbers and the benchmark setup are in `docs/powersync-migration.md` §
 - **Rejected:** compression (the service already compresses by `Accept-Encoding`); leasing a page's streams when the router
   is created (first loads got slower); an early sync request replayed from the document (3% on reloads, 110 lines tied to
   the client's request format); optimising row conversion (2–3% of a load).
-- **Proof of concept, not merged** (branch `poc/progressive-collections`, local): collections in on-demand mode answered
+- **Proof of concept, merged 2026-11-27 with access rules and server rendering of the parts list** (branch
+  `poc/progressive-collections`, then `progressive-collections`; `docs/powersync-migration.md` §13): collections in on-demand mode answered
   first from Postgres by a server function, and replaced by the PowerSync stream when it lands. Cold detail pages went
   from 1.4–2.0 s to 270–370 ms, the same as master (whose speed comes from on-demand subsets, not from server rendering),
   and the in-app navigation session from 4.7 s to 4.2 s. It made production orders (+27%) and treatment (+22%) cold loads
