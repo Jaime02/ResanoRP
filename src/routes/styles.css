@@ -255,7 +255,9 @@ body {
   font-variant-numeric: slashed-zero;
 }
 
-input,
-textarea {
-  caret-color: var(--color-primary);
+@layer base {
+  input,
+  textarea {
+    caret-color: var(--color-primary);
+  }
 }

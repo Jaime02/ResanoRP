@@ -24,7 +24,7 @@ export function Input({ testId, className, isValid = true, value, ...props }: In
         "h-10 w-base-input max-w-full px-3 py-2",
         "border-2 border-primary disabled:border disabled:border-border",
         props.readOnly === true
-          ? "cursor-not-allowed border-border bg-muted"
+          ? "cursor-not-allowed border-border bg-muted caret-transparent"
           : "bg-background shadow-md transition-[color,box-shadow] focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/70",
         className,
       )}

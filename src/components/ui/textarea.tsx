@@ -17,7 +17,7 @@ export function Textarea({ className, isValid = true, ...props }: TextareaProps)
         "flex field-sizing-content min-h-10 w-base-input max-w-full px-3 py-1.5",
         "border-2 border-primary disabled:border disabled:border-border",
         props.readOnly === true || props.disabled === true
-          ? "cursor-not-allowed border-border bg-muted"
+          ? "cursor-not-allowed border-border bg-muted caret-transparent"
           : "bg-background shadow-md transition-[color,box-shadow] focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/70",
         className,
       )}
