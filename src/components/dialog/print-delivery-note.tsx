@@ -47,19 +47,25 @@ export default function DialogPrintDeliveryNote({ deliveryNoteId, iconOnly = fal
   const [previewUrl, setPreviewUrl] = useState<string>();
   const [isLoading, setIsLoading] = useState(false);
 
-  async function generate(printWithPrices: boolean, copies: number) {
+  // The file of an earlier print stays on disk, so a print that failed gives no file to open
+  async function generate(printWithPrices: boolean, copies: number): Promise<string | undefined> {
     setIsLoading(true);
+    let url: string | undefined;
     await showToastOnTRPCMutation({
       mutation: trpc.deliveryNote.print.mutate({ copies, id: deliveryNoteId, withPrices: printWithPrices }),
+      onSubmit: async () => {
+        url = getDeliveryNoteFileUrl(deliveryNoteId, copies, printWithPrices);
+      },
     });
     setIsLoading(false);
-    return getDeliveryNoteFileUrl(deliveryNoteId, copies, printWithPrices);
+    return url;
   }
 
   async function openPreview(printWithPrices: boolean) {
     isOpeningPreviewRef.current = true;
     setIsAskingForPrices(false);
     const url = await generate(printWithPrices, 1);
+    if (url === undefined) return;
     setWithPrices(printWithPrices);
     setPreviewUrl(url);
   }

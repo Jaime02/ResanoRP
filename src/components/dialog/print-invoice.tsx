@@ -29,8 +29,11 @@ export default function DialogPrintInvoice({ invoiceId }: DialogPrintInvoiceProp
 
   const openPreview = useCallback(async () => {
     setIsLoading(true);
-    await showToastOnTRPCMutation({ mutation: trpc.invoice.print.mutate({ id: invoiceId }) });
-    setPreviewUrl(getInvoiceFileUrl(invoiceId));
+    await showToastOnTRPCMutation({
+      mutation: trpc.invoice.print.mutate({ id: invoiceId }),
+      // The file of an earlier print stays on disk, even the one of a deleted Factura whose number was given again
+      onSubmit: async () => setPreviewUrl(getInvoiceFileUrl(invoiceId)),
+    });
     setIsLoading(false);
   }, [invoiceId, showToastOnTRPCMutation]);
 
