@@ -48,13 +48,8 @@ import {
   mockSellOrders,
 } from "@/tests/mock-data";
 import { countTestIdInsertions, getTestId } from "@/tests/utils/components";
-import {
-  assertComboboxValue,
-  clickInComboboxOption,
-  getClearComboboxButton,
-  openCombobox,
-  selectComboboxOption,
-} from "@/tests/utils/components/combobox";
+import { closeDialog } from "@/tests/utils/components/alert-dialog";
+import { assertComboboxValue, getClearComboboxButton, selectComboboxOption } from "@/tests/utils/components/combobox";
 import { getDateInputValue } from "@/tests/utils/components/date-input";
 import {
   InputElementType,
@@ -125,8 +120,7 @@ test("manage the delivery notes", { annotation: TestAnnotations.ResetTags }, asy
     await expect(dialogCreateEditDeliveryNote).not.toBeVisible();
     const dialogGetDeliveryNoteByIdQueryError = page.getByTestId("dialog-error-get-delivery-note-by-id-query");
     await expect(dialogGetDeliveryNoteByIdQueryError).toBeVisible();
-    await dialogGetDeliveryNoteByIdQueryError.getByTestId("button-close").click();
-    await expect(dialogGetDeliveryNoteByIdQueryError).not.toBeVisible();
+    await closeDialog(dialogGetDeliveryNoteByIdQueryError);
     await expect(page).toHaveURL("/delivery-note");
   });
 
@@ -135,8 +129,7 @@ test("manage the delivery notes", { annotation: TestAnnotations.ResetTags }, asy
 
     const dialogGetDeliveryNoteByIdQueryError = page.getByTestId("dialog-error-get-delivery-note-by-id-query");
     await expect(dialogGetDeliveryNoteByIdQueryError).toBeVisible();
-    await dialogGetDeliveryNoteByIdQueryError.getByTestId("button-close").click();
-    await expect(dialogGetDeliveryNoteByIdQueryError).not.toBeVisible();
+    await closeDialog(dialogGetDeliveryNoteByIdQueryError);
     await expect(page).toHaveURL("/delivery-note");
   });
 
@@ -250,7 +243,6 @@ test("manage the delivery notes", { annotation: TestAnnotations.ResetTags }, asy
       const partRow = getTableRowByTestId(tablePickerPart, part.id);
       await expect(partRow).toBeVisible();
       const buttonSelectPart = partRow.getByTestId("button-success");
-      await expect(buttonSelectPart).toBeVisible();
       await buttonSelectPart.click();
       await expect(dialogPickerPartContent).not.toBeVisible();
 
@@ -287,8 +279,7 @@ test("manage the delivery notes", { annotation: TestAnnotations.ResetTags }, asy
       expect(expectedDeliveryNotes.length, `Client ${client.id} should have delivery notes`).toBeGreaterThan(0);
       expect(expectedDeliveryNotes.length).toBeLessThan(mockDeliveryNotes.length);
 
-      await openCombobox(comboboxFilterClient);
-      await clickInComboboxOption(page, client.name);
+      await selectComboboxOption(page, comboboxFilterClient, client.name);
       await assertComboboxValue(comboboxFilterClient, String(client.id));
 
       await assertTableRowCount(tableDeliveryNotes, expectedDeliveryNotes.length);
@@ -433,8 +424,7 @@ test("manage the delivery notes", { annotation: TestAnnotations.ResetTags }, asy
         await popoverTriggerPartFilters.click();
         // Scoped to the popover, as the Cliente column of the delivery notes table has its own client filter
         const comboboxFilterClient = getPopoverContent(page).getByTestId("combobox-filter-client");
-        await openCombobox(comboboxFilterClient);
-        await clickInComboboxOption(page, filterClient.name);
+        await selectComboboxOption(page, comboboxFilterClient, filterClient.name);
         // The popover stays open when the filter changes, so more filters can be set in a row
         await assertComboboxValue(comboboxFilterClient, String(filterClient.id));
         await expect(buttonClearPartFilters).toBeVisible();
@@ -705,7 +695,7 @@ test("manage the delivery notes", { annotation: TestAnnotations.ResetTags }, asy
       const actualDate = await getDateInputValue(
         getFormInputByLabel(dialogCreateEditDeliveryNote, DATE_LABEL, InputElementType.Date),
       );
-      expect(actualDate).toBeDefined();
+      expect(actualDate).not.toBeNull();
       expect(isSameAppDay(actualDate!, deliveryNote.deliveryDate!)).toBeTruthy();
 
       await assertComboboxValue(

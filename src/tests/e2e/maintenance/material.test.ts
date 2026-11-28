@@ -15,13 +15,14 @@ import {
   MATERIAL_CREATED_MESSAGE,
 } from "@/messages/material";
 import { mockMaterials, mockRawMaterials, mockShapes } from "@/tests/mock-data";
-import { openAndConfirmAlertDialog } from "@/tests/utils/components/alert-dialog";
+import { closeDialog, openAndConfirmAlertDialog } from "@/tests/utils/components/alert-dialog";
 import {
   assertComboboxValue,
   clickInComboboxOption,
   fillComboboxFilter,
   getClearComboboxButton,
   openCombobox,
+  selectComboboxOption,
 } from "@/tests/utils/components/combobox";
 import { InputElementType, getFormInputByLabel } from "@/tests/utils/components/form";
 import { assertTableRowCount, getTableNoDataRow, getTableRowByTestId } from "@/tests/utils/components/table";
@@ -109,8 +110,7 @@ test("manage the Materiales", async ({ page, db }) => {
 
     const comboboxShapeFilter = tableMaterial.getByTestId("combobox-filter-shape");
     for (const shape of mockShapes) {
-      await openCombobox(comboboxShapeFilter);
-      await clickInComboboxOption(page, shape.name);
+      await selectComboboxOption(page, comboboxShapeFilter, shape.name);
       await expectVisibleMaterials(
         activeMaterials.filter((material) => material.shapeId === shape.id).map(({ id }) => id),
       );
@@ -194,8 +194,7 @@ test("manage the Materiales", async ({ page, db }) => {
         MATERIAL_COMBINATION_CONSTRAINT,
       );
 
-      await dialogCreateMaterial.getByTestId("button-close").click();
-      await expect(dialogCreateMaterial).not.toBeVisible();
+      await closeDialog(dialogCreateMaterial);
     }
   });
 

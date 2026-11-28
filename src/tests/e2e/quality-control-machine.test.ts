@@ -8,8 +8,7 @@ import { getQualityChecksOfProductionOrder } from "@/db/functions/quality-check"
 import { dbTableProductionOrder } from "@/db/schema";
 import { ProductionOrderStatus } from "@/schemas/production-order";
 import { mockMachineProductionOrderQueues } from "@/tests/mock-data";
-import { expectSingleToast } from "@/tests/utils/components/toast";
-import { expectRejectedMutation } from "@/tests/utils/errors-log";
+import { expectRejectedToast } from "@/tests/utils/errors-log";
 import { test } from "@/tests/utils/fixtures";
 import { holdRequestWhile } from "@/tests/utils/trpc";
 import { workflowCreatePartFeature, workflowDeletePartFeature } from "@/tests/workflows/part";
@@ -284,8 +283,7 @@ for (const { name, message, tableStaysMounted, setUp, change } of rejectedCheckC
       meanwhile: async () => change({ adminPage, db, setUpResult }),
     });
 
-    await expectSingleToast(page, message);
-    expectRejectedMutation({
+    await expectRejectedToast(page, {
       code: "BAD_REQUEST",
       message,
       procedurePath: "qualityCheck.create",

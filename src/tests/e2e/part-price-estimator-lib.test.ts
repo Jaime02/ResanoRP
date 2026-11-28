@@ -84,22 +84,14 @@ test("the part price estimator library", async () => {
     expect(withWaste).toBeCloseTo(withoutWaste / 0.8);
 
     // It is null when something needed is missing
-    expect(getEstimatorCalculatedMaterialCost(baseValues, undefined)).toBeNull();
-    expect(
-      getEstimatorCalculatedMaterialCost(baseValues, {
-        ...roundMaterial,
-        rawMaterial: { density: null, price: "2" },
-      }),
-    ).toBeNull();
-    expect(
-      getEstimatorCalculatedMaterialCost(baseValues, {
-        ...roundMaterial,
-        rawMaterial: { density: "8", price: null },
-      }),
-    ).toBeNull();
-    expect(
-      getEstimatorCalculatedMaterialCost(baseValues, { ...roundMaterial, shape: { name: "ID-5 Otro" } }),
-    ).toBeNull();
+    for (const material of [
+      undefined,
+      { ...roundMaterial, rawMaterial: { density: null, price: "2" } },
+      { ...roundMaterial, rawMaterial: { density: "8", price: null } },
+      { ...roundMaterial, shape: { name: "ID-5 Otro" } },
+    ]) {
+      expect(getEstimatorCalculatedMaterialCost(baseValues, material)).toBeNull();
+    }
     expect(getEstimatorCalculatedMaterialCost({ ...baseValues, partLength: null }, roundMaterial)).toBeNull();
     expect(getEstimatorCalculatedMaterialCost({ ...baseValues, wastePercentage: "" }, roundMaterial)).toBeNull();
   });

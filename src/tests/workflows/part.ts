@@ -8,18 +8,14 @@ import {
   PART_DELETED_MESSAGE,
   PART_FEATURE_CREATED_MESSAGE,
   PART_FEATURE_DELETED_MESSAGE,
-  PART_FEATURE_LABEL,
+  PART_FEATURE_FORM_LABEL,
 } from "@/messages/part";
 import { openAndConfirmAlertDialog } from "@/tests/utils/components/alert-dialog";
 import { assertFormLoaded, getFormInputByLabel } from "@/tests/utils/components/form";
 import { openPartPicker } from "@/tests/utils/components/picker";
 import { getEditableCellById, getTableRowByTestId } from "@/tests/utils/components/table";
-import {
-  expectSingleSuccessOrErrorToast,
-  expectSingleSuccessToast,
-  expectSingleToast,
-} from "@/tests/utils/components/toast";
-import { expectRejectedMutation } from "@/tests/utils/errors-log";
+import { expectSingleSuccessOrErrorToast, expectSingleSuccessToast } from "@/tests/utils/components/toast";
+import { expectRejectedToast } from "@/tests/utils/errors-log";
 import { getMockActivePartSetsOfPart } from "@/tests/utils/mock-data-utils";
 
 export async function workflowDeletePart(page: Page, partId: number, expectedErrorMessage?: string) {
@@ -31,8 +27,11 @@ export async function workflowDeletePart(page: Page, partId: number, expectedErr
   await openAndConfirmAlertDialog(page, rowPart.getByTestId("button-delete"), "dialog-delete-model-content");
 
   if (expectedErrorMessage !== undefined) {
-    await expectSingleToast(page, expectedErrorMessage);
-    expectRejectedMutation({ code: "BAD_REQUEST", message: expectedErrorMessage, procedurePath: "part.delete" });
+    await expectRejectedToast(page, {
+      code: "BAD_REQUEST",
+      message: expectedErrorMessage,
+      procedurePath: "part.delete",
+    });
     await expect(rowPart).toBeVisible();
     expect((await getPartById(partId))?.deletedAt).toBeNull();
     return;
@@ -126,7 +125,7 @@ export async function workflowCreatePartFeature(page: Page, partId: number, feat
   await page.getByTestId("form-part").getByTestId("button-create-part-feature").click();
   const dialogCreatePartFeature = page.getByTestId("dialog-create-part-feature");
   await expect(dialogCreatePartFeature).toBeVisible();
-  await getFormInputByLabel(dialogCreatePartFeature, PART_FEATURE_LABEL).fill(feature);
+  await getFormInputByLabel(dialogCreatePartFeature, PART_FEATURE_FORM_LABEL).fill(feature);
   await dialogCreatePartFeature.getByTestId("button-submit").click();
   await expect(dialogCreatePartFeature).toBeHidden();
   await expectSingleSuccessToast(page, PART_FEATURE_CREATED_MESSAGE);

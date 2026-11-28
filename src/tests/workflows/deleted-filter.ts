@@ -1,9 +1,9 @@
 import { expect } from "@playwright/test";
 import type { Locator, Page } from "@playwright/test";
 
-import { openAndConfirmAlertDialog } from "@/tests/utils/components/alert-dialog";
+import { closeDialog, openAndConfirmAlertDialog } from "@/tests/utils/components/alert-dialog";
 import { getPopoverContent } from "@/tests/utils/components/popover";
-import { assertTableRowCount, getTableRowByTestId, getTableRows } from "@/tests/utils/components/table";
+import { assertTableRowCount, findTableRow, getTableRowByTestId, getTableRows } from "@/tests/utils/components/table";
 import { expectSingleSuccessToast, expectSingleToast } from "@/tests/utils/components/toast";
 import { expectUniqueViolationRejected, type TUniqueViolation } from "@/tests/utils/errors-log";
 
@@ -53,11 +53,14 @@ interface WorkflowDeletedFilterAndRestoreParams extends DeletedFilterTableParams
   assertRow?: (row: Locator, isDeleted: boolean) => Promise<void>;
 }
 
-interface WorkflowRestoreTakenParams extends DeletedFilterTableParams {
+interface WorkflowRejectRestoreOfTakenParams extends Omit<DeletedFilterTableParams, "url"> {
   id: number;
-  insertDuplicate: () => Promise<unknown>;
   uniqueViolation: TUniqueViolation;
   errorMessage: string;
+}
+
+interface WorkflowRestoreTakenParams extends DeletedFilterTableParams, WorkflowRejectRestoreOfTakenParams {
+  insertDuplicate: () => Promise<unknown>;
   deletedToastTitle: string;
 }
 
@@ -151,8 +154,7 @@ export async function workflowDeletedFilterAndRestore({
     await row.getByTestId(RowAction.Restore).click();
     const dialogRestore = page.getByTestId("dialog-restore-model-content");
     await expect(dialogRestore).toBeVisible();
-    await dialogRestore.getByTestId("button-close").click();
-    await expect(dialogRestore).not.toBeVisible();
+    await closeDialog(dialogRestore);
     await assertRows(true);
     expect(await getDeletedAt(id)).toBeInstanceOf(Date);
 
@@ -195,7 +197,30 @@ export async function workflowRestoreTaken({
   await expect(row).toHaveCount(0);
 
   await insertDuplicate();
+  await workflowRejectRestoreOfTaken({
+    page,
+    tableTestId,
+    filterLabel,
+    getDeletedAt,
+    id,
+    uniqueViolation,
+    errorMessage,
+  });
+}
+
+// The page shows the table, with the item deleted and another active one with its name
+export async function workflowRejectRestoreOfTaken({
+  page,
+  tableTestId,
+  filterLabel,
+  getDeletedAt,
+  id,
+  uniqueViolation,
+  errorMessage,
+}: WorkflowRejectRestoreOfTakenParams) {
+  const table = page.getByTestId(tableTestId);
   await toggleDeletedFilter(page, table, filterLabel, true);
+  const row = await findTableRow(table, getTableRowByTestId(table, id));
 
   await openAndConfirmAlertDialog(page, row.getByTestId(RowAction.Restore), "dialog-restore-model-content");
   await expectSingleToast(page, errorMessage);

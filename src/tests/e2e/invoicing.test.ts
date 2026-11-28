@@ -27,7 +27,6 @@ import {
   INVOICE_NOT_SENT_UNPRICED_MESSAGE,
   INVOICE_CREATED_MESSAGE,
 } from "@/messages/invoice";
-import { SELL_ORDER_LINE_EDITED_MESSAGE } from "@/messages/sell-order";
 import {
   MOCK_INITIAL_DATE,
   mockClientInvoiceEmails,
@@ -51,8 +50,8 @@ import {
   getTableRows,
   getTableSubrowById,
 } from "@/tests/utils/components/table";
-import { expectSingleToast, expectSingleSuccessToast } from "@/tests/utils/components/toast";
-import { expectRejectedMutation } from "@/tests/utils/errors-log";
+import { expectSingleSuccessToast } from "@/tests/utils/components/toast";
+import { expectRejectedToast } from "@/tests/utils/errors-log";
 import { TestAnnotations, inAnotherTab, test } from "@/tests/utils/fixtures";
 import {
   getMockClientById,
@@ -81,6 +80,7 @@ import {
   workflowDeleteInvoice,
   workflowPickInvoiceClient,
 } from "@/tests/workflows/invoice";
+import { workflowEditSellOrderLineCell } from "@/tests/workflows/sell-order";
 import { PENDING_DELIVERY_NOTES_PAGE_SIZE } from "@/types/invoice";
 
 let tableInvoices: Locator;
@@ -583,8 +583,7 @@ test("create, change and delete invoices", async ({ page, db }) => {
       getTableRowByTestId(tableInvoices, remainingInvoices[0].id).getByTestId("button-delete"),
       "dialog-delete-model-content",
     );
-    await expectSingleToast(page, notLastMessage);
-    expectRejectedMutation({ code: "BAD_REQUEST", message: notLastMessage, procedurePath: "invoice.delete" });
+    await expectRejectedToast(page, { code: "BAD_REQUEST", message: notLastMessage, procedurePath: "invoice.delete" });
 
     await workflowDeleteInvoice(page, deletedInvoice.id);
 
@@ -687,8 +686,7 @@ test("an invoice is not created while its delivery notes have lines without pric
   await dialogCreateInvoice.getByTestId("button-submit").click();
 
   const unpricedMessage = `Los Albaranes ${unpricedDeliveryNoteIds.join(", ")} tienen Líneas sin precio`;
-  await expectSingleToast(page, unpricedMessage);
-  expectRejectedMutation({ code: "BAD_REQUEST", message: unpricedMessage, procedurePath: "invoice.create" });
+  await expectRejectedToast(page, { code: "BAD_REQUEST", message: unpricedMessage, procedurePath: "invoice.create" });
   await expect(dialogCreateInvoice).toBeVisible();
 
   expect(await getInvoices()).toHaveLength(mockInvoices.length);
@@ -708,8 +706,7 @@ test(
 
     await workflowOpenEditDeliveryNote(page, deliveryNote.id);
     await workflowEditDeliveryNoteLineQuantity(page, deliveryNoteLine.id, deliveryNoteLine.quantity + 1);
-    await expectSingleToast(page, forbiddenMessage);
-    expectRejectedMutation({
+    await expectRejectedToast(page, {
       code: "FORBIDDEN",
       message: forbiddenMessage,
       procedurePath: "deliveryNoteLine.update",
@@ -721,8 +718,7 @@ test(
       quantity: 1,
     });
     await buttonSubmitLine.click();
-    await expectSingleToast(page, forbiddenMessage);
-    expectRejectedMutation({
+    await expectRejectedToast(page, {
       code: "FORBIDDEN",
       message: forbiddenMessage,
       procedurePath: "deliveryNoteLine.create",
@@ -755,12 +751,7 @@ test("changing the price of a sell order line marks the invoices that take it to
   const inputPartPrice = getTableRowByTestId(formSellOrder.getByTestId("table-sell-order-line"), sellOrderLine.id)
     .getByTestId("partPrice")
     .getByTestId("input-part-price");
-  const changePartPrice = async (partPrice: string) => {
-    await inputPartPrice.clear();
-    await inputPartPrice.pressSequentially(partPrice);
-    await inputPartPrice.press("Enter");
-    await expectSingleSuccessToast(page, SELL_ORDER_LINE_EDITED_MESSAGE);
-  };
+  const changePartPrice = async (partPrice: string) => workflowEditSellOrderLineCell(page, inputPartPrice, partPrice);
 
   // The same price typed with more trailing zeros does not change the Factura
   await changePartPrice(`${sellOrderLine.partPrice}0`);
@@ -814,8 +805,7 @@ test("an invoice is not sent while its delivery notes have lines without price",
   const rowInvoice = getTableRowByTestId(tableInvoices, invoiceId);
   await rowInvoice.getByTestId("button-send-invoice").click();
   const notSentMessage = INVOICE_NOT_SENT_UNPRICED_MESSAGE([unpricedLine.deliveryNoteId]);
-  await expectSingleToast(page, notSentMessage);
-  expectRejectedMutation({ code: "BAD_REQUEST", message: notSentMessage, procedurePath: "invoice.send" });
+  await expectRejectedToast(page, { code: "BAD_REQUEST", message: notSentMessage, procedurePath: "invoice.send" });
   // The email is not handed over either
   expect(downloads).toHaveLength(0);
   await expect(rowInvoice.getByTestId("checkbox-sent")).not.toBeChecked();
@@ -854,8 +844,7 @@ test("an invoice is not created from the delivery notes another tab invoices mea
   });
 
   const noPendingMessage = `No hay Albaranes del Cliente ${client.name} pendientes de facturar entre las fechas seleccionadas`;
-  await expectSingleToast(page, noPendingMessage);
-  expectRejectedMutation({ code: "NOT_FOUND", message: noPendingMessage, procedurePath: "invoice.create" });
+  await expectRejectedToast(page, { code: "NOT_FOUND", message: noPendingMessage, procedurePath: "invoice.create" });
   await expect(dialogCreateInvoice).toBeVisible();
 
   // Every Albarán is only in the Factura of the other tab

@@ -60,6 +60,14 @@ export function getTableNoDataRow(table: Locator): Locator {
   return table.locator(":scope > table > tbody > tr[data-testid='tr-no-data']");
 }
 
+export function getTableHeaderCells(table: Locator): Locator {
+  return table.locator(":scope > table > thead > tr > th");
+}
+
+export function getTableResizeHandles(table: Locator): Locator {
+  return getTableHeaderCells(table).locator("[data-testid^='button-resize-']");
+}
+
 export function getEditableCellById(row: Locator, testId: string): Locator {
   return row.getByTestId(testId).getByTestId("editable-cell-input");
 }

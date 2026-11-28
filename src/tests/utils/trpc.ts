@@ -13,7 +13,7 @@ export type TProcedurePath<TRecord extends TRPCRouterRecord, TPrefix extends str
       : never;
 }[keyof TRecord & string];
 
-interface HoldRequestWhileParams {
+export interface HoldRequestWhileParams {
   page: Page;
   procedurePath: TProcedurePath<AppRouter["_def"]["record"]>;
   send: () => Promise<void>;

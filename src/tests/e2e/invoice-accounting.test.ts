@@ -42,10 +42,9 @@ import {
 import { getFormInputByLabel, assertFormLoaded } from "@/tests/utils/components/form";
 import { getTableRowByTestId } from "@/tests/utils/components/table";
 import { expectSingleToast, expectSingleSuccessToast } from "@/tests/utils/components/toast";
-import { expectRejectedMutation, type TErrorCode } from "@/tests/utils/errors-log";
+import { expectRejectedMutation, type TErrorCode, holdRequestAndExpectRejection } from "@/tests/utils/errors-log";
 import { test } from "@/tests/utils/fixtures";
 import { getMockClientById, getMockPaymentMethodById, getMockSellOrderLineById } from "@/tests/utils/mock-data-utils";
-import { holdRequestWhile } from "@/tests/utils/trpc";
 import { workflowOpenEditDeliveryNote } from "@/tests/workflows/delivery-note";
 import {
   confirmAccountInvoices,
@@ -323,16 +322,19 @@ test("account the invoices into the file for Prisma", async ({ page, db }) => {
     );
 
     const downloads = trackDownloads(page);
-    await confirmAccountInvoices(page);
+    const expectNothingAccounted = async (message: string) => {
+      await confirmAccountInvoices(page);
+      await expectSingleToast(page, message);
+      expectAccountRejected(message);
+      expect(downloads).toHaveLength(0);
+      for (const invoice of await getInvoices()) {
+        expect(invoice.accounted, `Factura ${invoice.id}`).toBe(
+          mockInvoices.find(({ id }) => id === invoice.id)!.accounted,
+        );
+      }
+    };
     const withoutAccountMessage = INVOICES_NOT_ACCOUNTED_WITHOUT_ACCOUNT_MESSAGE([clientWithoutAccount.name]);
-    await expectSingleToast(page, withoutAccountMessage);
-    expectAccountRejected(withoutAccountMessage);
-    expect(downloads).toHaveLength(0);
-    for (const invoice of await getInvoices()) {
-      expect(invoice.accounted, `Factura ${invoice.id}`).toBe(
-        mockInvoices.find(({ id }) => id === invoice.id)!.accounted,
-      );
-    }
+    await expectNothingAccounted(withoutAccountMessage);
 
     // Once the Cliente has its account the pending Facturas are accounted
     await page.goto(`/client/${clientWithoutAccount.id}`);
@@ -371,18 +373,10 @@ test("account the invoices into the file for Prisma", async ({ page, db }) => {
       .where(eq(dbTableSellOrderLine.id, linkedSellOrderLine.id));
 
     await page.goto("/invoicing");
-    await confirmAccountInvoices(page);
     const unpricedMessage = INVOICES_NOT_ACCOUNTED_UNPRICED_MESSAGE(
       [unpricedLine.deliveryNoteId, linkedLine.deliveryNoteId].sort((a, b) => a - b),
     );
-    await expectSingleToast(page, unpricedMessage);
-    expectAccountRejected(unpricedMessage);
-    expect(downloads).toHaveLength(0);
-    for (const invoice of await getInvoices()) {
-      expect(invoice.accounted, `Factura ${invoice.id}`).toBe(
-        mockInvoices.find(({ id }) => id === invoice.id)!.accounted,
-      );
-    }
+    await expectNothingAccounted(unpricedMessage);
 
     await db
       .update(dbTableDeliveryNoteLine)
@@ -407,18 +401,10 @@ test("account the invoices into the file for Prisma", async ({ page, db }) => {
       .where(eq(dbTableSellOrderLine.id, sellOrderLine.id));
 
     await page.goto("/invoicing");
-    await confirmAccountInvoices(page);
     const amountTooLargeMessage = INVOICES_NOT_ACCOUNTED_AMOUNT_TOO_LARGE_MESSAGE(formatCents(MAX_AMOUNT_IN_CENTS), [
       invoiceWithAmountTooLarge.id,
     ]);
-    await expectSingleToast(page, amountTooLargeMessage);
-    expectAccountRejected(amountTooLargeMessage);
-    expect(downloads).toHaveLength(0);
-    for (const invoice of await getInvoices()) {
-      expect(invoice.accounted, `Factura ${invoice.id}`).toBe(
-        mockInvoices.find(({ id }) => id === invoice.id)!.accounted,
-      );
-    }
+    await expectNothingAccounted(amountTooLargeMessage);
 
     await db
       .update(dbTableSellOrderLine)
@@ -532,13 +518,14 @@ test("account the invoices into the file for Prisma", async ({ page, db }) => {
       await db.update(dbTableInvoice).set({ accounted }).where(eq(dbTableInvoice.id, otherAccountedInvoice.id));
     };
     const notAccountedMessage = `Factura contabilizada con ID ${otherAccountedInvoice.id} no encontrada`;
-    await holdRequestWhile({
+    await holdRequestAndExpectRejection({
       page,
       procedurePath: "invoice.unaccount",
       send: async () => workflowUnaccountInvoice(page, otherAccountedInvoice.id, notAccountedMessage),
       meanwhile: async () => setOtherAccounted(false),
+      code: "NOT_FOUND",
+      message: notAccountedMessage,
     });
-    expectRejectedMutation({ code: "NOT_FOUND", message: notAccountedMessage, procedurePath: "invoice.unaccount" });
     await setOtherAccounted(true);
 
     // Cancelling the confirmation changes nothing

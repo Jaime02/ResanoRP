@@ -6,7 +6,7 @@ import { UserMode } from "@/contexts/app-context";
 import { getMachineById } from "@/db/functions/machine";
 import { MACHINE_NAME_CONSTRAINT, dbTableMachine, dbTablePartProduction } from "@/db/schema";
 import { NO_MACHINES_MESSAGE } from "@/messages/combobox";
-import { CLOSE_LABEL, STATUS_PENDING_LABEL, NAME_LABEL } from "@/messages/common";
+import { CLOSE_LABEL, NAME_LABEL, NOT_AVAILABLE_MESSAGE, STATUS_PENDING_LABEL } from "@/messages/common";
 import {
   MACHINE_CREATE_TITLE,
   MACHINE_DIAMETER_RANGE_ERROR_MESSAGE,
@@ -26,7 +26,7 @@ import {
   mockMachines,
   mockPartProduction,
 } from "@/tests/mock-data";
-import { openAndConfirmAlertDialog } from "@/tests/utils/components/alert-dialog";
+import { closeDialog, openAndConfirmAlertDialog } from "@/tests/utils/components/alert-dialog";
 import { assertFormLoaded, getFormInputByLabel } from "@/tests/utils/components/form";
 import {
   assertTableRowCount,
@@ -41,7 +41,7 @@ import { test } from "@/tests/utils/fixtures";
 import {
   EditButtonVisibility,
   workflowDeletedFilterAndRestore,
-  workflowRestoreTaken,
+  workflowRejectRestoreOfTaken,
 } from "@/tests/workflows/deleted-filter";
 import { workflowCreateMachine, workflowDeleteMachine, workflowEditMachine } from "@/tests/workflows/machine";
 import { workflowRejectCreateWithTakenName, workflowRejectRenameToTakenName } from "@/tests/workflows/unique-name";
@@ -70,7 +70,7 @@ test.beforeEach(({ page }) => {
   tableMachineProductionHistory = page.getByTestId("table-machine-production-history");
 });
 
-test("manage the machines", async ({ page, db }) => {
+test("manage the machines", async ({ page, db, toasts }) => {
   const newMachineName = "ID-4 Fresadora";
   const openCreateMachine = async () => {
     await page.getByRole("button", { name: MACHINE_CREATE_TITLE }).click();
@@ -135,260 +135,16 @@ test("manage the machines", async ({ page, db }) => {
     await expect(dialogCreateMachine).toBeVisible();
   });
 
-  await test.step("create a new machine", async () => {
-    await workflowCreateMachine(page, NEW_MACHINE_ID, newMachineName);
-  });
-
-  await test.step("update the name of every machine", async () => {
-    for (const machine of activeMachines) {
-      const updatedName = `${machine.name} actualizado`;
-
-      await workflowEditMachine(page, machine.id, machine.name, updatedName);
-
-      await formMachine.getByRole("button", { name: VIEW_MACHINES_LABEL }).click();
-
-      await expect(tableMaintenanceMachine.getByText(updatedName, { exact: true })).toBeVisible();
-      await expect(tableMaintenanceMachine.getByText(machine.name, { exact: true })).not.toBeVisible();
-    }
-
-    expect(
-      await db.query.dbTableMachine.findMany({ columns: { id: true, name: true }, orderBy: { id: "asc" } }),
-    ).toEqual([
-      ...mockMachines.map(({ id, name, deletedAt }) => ({
-        id,
-        name: deletedAt === null ? `${name} actualizado` : name,
-      })),
-      { id: NEW_MACHINE_ID, name: newMachineName },
-    ]);
-  });
-
-  await test.step("keep the name of a Máquina unique while it is not deleted", async () => {
-    const machines = await db.query.dbTableMachine.findMany({
-      orderBy: { id: "asc" },
-      where: { deletedAt: { isNull: true } },
-    });
-    expect(machines).toHaveLength(activeMachines.length + 1);
-
-    await page.goto(MAINTENANCE_MACHINE_URL);
-    await workflowRejectCreateWithTakenName({
-      page,
-      items: machines,
-      form: dialogCreateMachine,
-      openCreate: openCreateMachine,
-      closeCreate: async () => {
-        await dialogCreateMachine.getByTestId("button-close").click();
-        await expect(dialogCreateMachine).not.toBeVisible();
-      },
-      insertDuplicate: async (name) => db.insert(dbTableMachine).values({ name }),
-      constraintName: MACHINE_NAME_CONSTRAINT,
-      table: dbTableMachine,
-      errorMessage: NAME_TAKEN_MESSAGE,
-    });
-
-    await workflowRejectRenameToTakenName({
-      page,
-      items: machines,
-      form: formMachine,
-      openEdit: async (machine) => {
-        await page.goto(`/machine/${machine.id}`);
-      },
-      getName: async (id) => (await getMachineById(id))?.name,
-      table: dbTableMachine,
-      constraintName: MACHINE_NAME_CONSTRAINT,
-      errorMessage: NAME_TAKEN_MESSAGE,
-    });
-
-    for (const machine of machines) {
-      // Deleting a Máquina frees its name, also typed with spaces around it...
-      await workflowDeleteMachine(page, machine.id, machine.name);
-
-      await openCreateMachine();
-      await getFormInputByLabel(dialogCreateMachine, NAME_LABEL).fill(`  ${machine.name}  `);
-      await dialogCreateMachine.getByTestId("button-submit").click();
-
-      await expect(dialogCreateMachine).not.toBeVisible();
-      await expectSingleSuccessToast(page, MACHINE_CREATED_MESSAGE);
-      await expect(tableMaintenanceMachine.getByText(machine.name, { exact: true })).toBeVisible();
-
-      // ...so the deleted Máquina can no longer be restored
-      await page.goto(`/machine/${machine.id}`);
-      await assertFormLoaded(formMachine);
-      await openAndConfirmAlertDialog(page, formMachine.getByTestId("button-restore"), "dialog-restore-model-content");
-      await expectSingleToast(page, NAME_TAKEN_MESSAGE);
-      expectUniqueViolationRejected(
-        uniqueNameViolation(MACHINE_NAME_CONSTRAINT, dbTableMachine, machine.name),
-        NAME_TAKEN_MESSAGE,
-      );
-
-      expect((await getMachineById(machine.id))?.deletedAt).toBeInstanceOf(Date);
-    }
-  });
-});
-
-test("delete every machine, emptying its queue but keeping what it produced, and restore it", async ({ page, db }) => {
-  expect(
-    activeMachines.some(
-      (machine) =>
-        machine.activeProductionOrderId !== null &&
-        mockMachineProductionOrderQueues.filter((queue) => queue.machineId === machine.id).length > 1,
-    ),
-    "Wrong test set up: Some Máquina should work on an Orden de producción and have others queued",
-  ).toBe(true);
-
-  const deletedMachineIds = new Set(mockMachines.filter((machine) => machine.deletedAt !== null).map(({ id }) => id));
-  const getActiveMachines = () => mockMachines.filter((machine) => !deletedMachineIds.has(machine.id));
-  const tableProductionOrder = page.getByTestId("table-production-order");
-  const inProductionState = { filters: [{ id: "statuses", value: [ProductionOrderStatus.InProduction] }] };
-  const productionOrderInProductionUrl = `/production-order?${new URLSearchParams({ "table-production-order": JSON.stringify(inProductionState) })}`;
-
-  for (const machine of activeMachines) {
-    await workflowDeleteMachine(page, machine.id, machine.name);
-    deletedMachineIds.add(machine.id);
-
-    for (const otherMachine of getActiveMachines()) {
-      await expect(tableMaintenanceMachine.getByText(otherMachine.name, { exact: true })).toBeVisible();
-    }
-
-    // Its queue is emptied and it stops working on its Orden de producción...
-    expect(
-      await db.query.dbTableMachine.findMany({
-        columns: { activeProductionOrderId: true, id: true },
-        orderBy: { id: "asc" },
-      }),
-    ).toEqual(
-      mockMachines.map(({ activeProductionOrderId, id }) => ({
-        activeProductionOrderId: deletedMachineIds.has(id) ? null : activeProductionOrderId,
-        id,
-      })),
-    );
-    expect(
-      (
-        await db.query.dbTableMachineProductionOrderQueue.findMany({
-          columns: { machineId: true, productionOrderId: true },
-        })
-      ).sort(compareQueues),
-    ).toEqual(
-      mockMachineProductionOrderQueues
-        .filter((queue) => !deletedMachineIds.has(queue.machineId))
-        .map(({ machineId, productionOrderId }) => ({ machineId, productionOrderId }))
-        .sort(compareQueues),
-    );
-
-    // ...but what it produced is kept
-    expect(
-      await db.query.dbTablePartProduction.findMany({ columns: { id: true, machineId: true }, orderBy: { id: "asc" } }),
-    ).toEqual(mockPartProduction.map(({ id, machineId }) => ({ id, machineId })));
-
-    await page.goto("/production-order");
-    for (const queue of mockMachineProductionOrderQueues.filter((mockQueue) => mockQueue.machineId === machine.id)) {
-      await expect(
-        getTableRowByTestId(tableProductionOrder, queue.productionOrderId).getByTestId(
-          `div-assigned-machine-${machine.id}`,
-        ),
-      ).toHaveCount(0);
-    }
-    if (machine.activeProductionOrderId !== null) {
-      await expect(
-        getTableRowByTestId(tableProductionOrder, machine.activeProductionOrderId).getByTestId("status"),
-      ).toHaveText(STATUS_PENDING_LABEL);
-    }
-
-    // Only the Órdenes de producción of the remaining Máquinas are still in production
-    const inProductionOrderIds = new Set(
-      getActiveMachines().flatMap(({ activeProductionOrderId }) =>
-        activeProductionOrderId === null ? [] : [activeProductionOrderId],
-      ),
-    );
-    await page.goto(productionOrderInProductionUrl);
-    await assertTableRowCount(tableProductionOrder, inProductionOrderIds.size);
-
-    await page.goto(`/machine/${machine.id}`);
-    await assertFormLoaded(formMachine);
-
-    // A deleted machine is read only until it is restored
-    await expect(formMachine.getByText(MACHINE_DELETED_MESSAGE, { exact: true })).toBeVisible();
-    await expect(formMachine.getByTestId("button-submit")).toHaveCount(0);
-
-    // The restore dialog lists the machine, and cancelling it keeps the machine deleted
-    await formMachine.getByTestId("button-restore").click();
-    const dialogRestoreMachine = page.getByTestId("dialog-restore-model-content");
-    await expect(dialogRestoreMachine).toContainText(machine.name);
-    await dialogRestoreMachine.getByTestId("button-close").click();
-    await expect(dialogRestoreMachine).not.toBeVisible();
-    await expect(formMachine.getByText(MACHINE_DELETED_MESSAGE, { exact: true })).toBeVisible();
-    expect((await getMachineById(machine.id))?.deletedAt).toBeInstanceOf(Date);
-
-    await openAndConfirmAlertDialog(page, formMachine.getByTestId("button-restore"), "dialog-restore-model-content");
-    await expectSingleSuccessToast(page, MACHINE_RESTORED_MESSAGE);
-
-    await expect(formMachine.getByText(MACHINE_DELETED_MESSAGE, { exact: true })).not.toBeVisible();
-    await expect(formMachine.getByTestId("button-submit")).toBeVisible();
-
-    // Restoring it does not bring its queue nor its Orden de producción back
-    const restoredMachine = await getMachineById(machine.id);
-    expect(restoredMachine?.deletedAt).toBeNull();
-    expect(restoredMachine?.activeProductionOrderId).toBeNull();
-    expect(
-      await db.query.dbTableMachineProductionOrderQueue.findMany({ where: { machineId: machine.id } }),
-    ).toHaveLength(0);
-  }
-});
-
-test("close the session of every Machine that is deleted while in use", async ({ page, openPage }) => {
-  for (const [index, machine] of activeMachines.entries()) {
-    const remainingMachines = activeMachines.slice(index + 1);
-    const machinePage = await openPage({ machineId: machine.id, userMode: UserMode.Machine });
-    await machinePage.goto("/production");
-
-    await expect(machinePage.getByTestId("span-current-user-mode")).toHaveText(machine.name);
-    await expect(machinePage.getByTestId("form-login")).not.toBeVisible();
-
-    await workflowDeleteMachine(page, machine.id, machine.name);
-
-    // The session is closed and the user mode has to be picked again
-    await expect(machinePage.getByTestId("form-login")).toBeVisible();
-    await expect(machinePage.getByTestId("span-current-user-mode")).toBeEmpty();
-    await expect(machinePage).toHaveURL("/");
-
-    // The deleted Machine is no longer selectable, only the remaining ones are
-    await machinePage.getByRole("button", { name: UserMode.Machine }).click();
-    const dialogMachineSelection = machinePage.getByTestId("form-machine-selection");
-    await expect(dialogMachineSelection).toBeVisible();
-    const machineButtons = dialogMachineSelection.getByRole("button");
-    await expect(machineButtons).toHaveCount(remainingMachines.length);
-    for (const remainingMachine of remainingMachines) {
-      await expect(filterByExactText(machineButtons, remainingMachine.name)).toHaveCount(1);
-    }
-    await expect(filterByExactText(machineButtons, machine.name)).toHaveCount(0);
-    if (remainingMachines.length === 0) {
-      await expect(dialogMachineSelection.getByText(NO_MACHINES_MESSAGE)).toBeVisible();
-    }
-  }
-});
-
-test("set the diameter range of the machines", async ({ page, toasts }) => {
-  const newMachineName = "ID-4 Fresadora";
-
-  await test.step("create a machine with only a minimum diameter", async () => {
-    await page.goto("/maintenance?tab=machine&createMachine=true");
-    await expect(dialogCreateMachine).toBeVisible();
-
-    await getFormInputByLabel(dialogCreateMachine, NAME_LABEL).fill(newMachineName);
-    await getFormInputByLabel(dialogCreateMachine, MACHINE_MIN_DIAMETER_LABEL).fill("15");
-    await dialogCreateMachine.getByTestId("button-submit").click();
-
-    await expect(dialogCreateMachine).not.toBeVisible();
-    await expectSingleSuccessToast(page, MACHINE_CREATED_MESSAGE);
-    const createdMachine = await getMachineById(NEW_MACHINE_ID);
-    expect(createdMachine?.name).toBe(newMachineName);
-    expect(createdMachine?.minDiameter).toBe(15);
-    expect(createdMachine?.maxDiameter).toBeNull();
+  await test.step("create a new machine with only a minimum diameter", async () => {
+    await workflowCreateMachine(page, NEW_MACHINE_ID, newMachineName, 15);
 
     // The delete dialog lists the diameters of the machine
     await (await findTableRowByText(tableMaintenanceMachine, newMachineName)).getByTestId("button-delete").click();
     const dialogDeleteMachine = page.getByTestId("dialog-delete-model-content");
-    await expect(dialogDeleteMachine).toContainText(/Diámetro mínimo:\s*15/);
-    await expect(dialogDeleteMachine).toContainText(/Diámetro máximo:\s*No disponible/);
+    await expect(dialogDeleteMachine).toContainText(new RegExp(String.raw`${MACHINE_MIN_DIAMETER_LABEL}:\s*15`));
+    await expect(dialogDeleteMachine).toContainText(
+      new RegExp(String.raw`${MACHINE_MAX_DIAMETER_LABEL}:\s*${NOT_AVAILABLE_MESSAGE}`),
+    );
     await dialogDeleteMachine.getByRole("button", { name: CLOSE_LABEL }).click();
     await expect(dialogDeleteMachine).not.toBeVisible();
   });
@@ -446,6 +202,254 @@ test("set the diameter range of the machines", async ({ page, toasts }) => {
       }
     });
   }
+
+  await test.step("update the name of every machine", async () => {
+    for (const machine of activeMachines) {
+      const updatedName = `${machine.name} actualizado`;
+
+      await workflowEditMachine(page, machine.id, machine.name, updatedName);
+
+      await formMachine.getByRole("button", { name: VIEW_MACHINES_LABEL }).click();
+
+      await expect(tableMaintenanceMachine.getByText(updatedName, { exact: true })).toBeVisible();
+      await expect(tableMaintenanceMachine.getByText(machine.name, { exact: true })).not.toBeVisible();
+    }
+
+    expect(
+      await db.query.dbTableMachine.findMany({ columns: { id: true, name: true }, orderBy: { id: "asc" } }),
+    ).toEqual([
+      ...mockMachines.map(({ id, name, deletedAt }) => ({
+        id,
+        name: deletedAt === null ? `${name} actualizado` : name,
+      })),
+      { id: NEW_MACHINE_ID, name: newMachineName },
+    ]);
+  });
+
+  await test.step("keep the name of a Máquina unique while it is not deleted", async () => {
+    const machines = await db.query.dbTableMachine.findMany({
+      orderBy: { id: "asc" },
+      where: { deletedAt: { isNull: true } },
+    });
+    expect(machines).toHaveLength(activeMachines.length + 1);
+
+    await page.goto(MAINTENANCE_MACHINE_URL);
+    await workflowRejectCreateWithTakenName({
+      page,
+      items: machines,
+      form: dialogCreateMachine,
+      openCreate: openCreateMachine,
+      closeCreate: async () => {
+        await closeDialog(dialogCreateMachine);
+      },
+      insertDuplicate: async (name) => db.insert(dbTableMachine).values({ name }),
+      constraintName: MACHINE_NAME_CONSTRAINT,
+      table: dbTableMachine,
+      errorMessage: NAME_TAKEN_MESSAGE,
+    });
+
+    await workflowRejectRenameToTakenName({
+      page,
+      items: machines,
+      form: formMachine,
+      openEdit: async (machine) => {
+        await page.goto(`/machine/${machine.id}`);
+      },
+      getName: async (id) => (await getMachineById(id))?.name,
+      table: dbTableMachine,
+      constraintName: MACHINE_NAME_CONSTRAINT,
+      errorMessage: NAME_TAKEN_MESSAGE,
+    });
+
+    for (const machine of machines) {
+      // Deleting a Máquina frees its name, also typed with spaces around it...
+      await workflowDeleteMachine(page, machine.id, machine.name);
+
+      await openCreateMachine();
+      await getFormInputByLabel(dialogCreateMachine, NAME_LABEL).fill(`  ${machine.name}  `);
+      await dialogCreateMachine.getByTestId("button-submit").click();
+
+      await expect(dialogCreateMachine).not.toBeVisible();
+      await expectSingleSuccessToast(page, MACHINE_CREATED_MESSAGE);
+      await expect(tableMaintenanceMachine.getByText(machine.name, { exact: true })).toBeVisible();
+
+      // ...so the deleted Máquina can no longer be restored
+      await page.goto(`/machine/${machine.id}`);
+      await assertFormLoaded(formMachine);
+      await openAndConfirmAlertDialog(page, formMachine.getByTestId("button-restore"), "dialog-restore-model-content");
+      await expectSingleToast(page, NAME_TAKEN_MESSAGE);
+      expectUniqueViolationRejected(
+        uniqueNameViolation(MACHINE_NAME_CONSTRAINT, dbTableMachine, machine.name),
+        NAME_TAKEN_MESSAGE,
+      );
+
+      expect((await getMachineById(machine.id))?.deletedAt).toBeInstanceOf(Date);
+    }
+  });
+
+  await test.step("a deleted machine cannot be restored from the table while another one has its name", async () => {
+    await page.goto(DELETED_MACHINE_FILTER_PARAMS.url);
+    await workflowRejectRestoreOfTaken({
+      ...DELETED_MACHINE_FILTER_PARAMS,
+      page,
+      id: activeMachines[0].id,
+      uniqueViolation: uniqueNameViolation(
+        MACHINE_NAME_CONSTRAINT,
+        dbTableMachine,
+        `${activeMachines[0].name} actualizado`,
+      ),
+      errorMessage: NAME_TAKEN_MESSAGE,
+    });
+  });
+});
+
+test("delete every machine and restore it, and close the session of the ones deleted while in use", async ({
+  page,
+  db,
+  openPage,
+}) => {
+  await test.step("delete every machine, emptying its queue but keeping what it produced, and restore it", async () => {
+    expect(
+      activeMachines.some(
+        (machine) =>
+          machine.activeProductionOrderId !== null &&
+          mockMachineProductionOrderQueues.filter((queue) => queue.machineId === machine.id).length > 1,
+      ),
+      "Wrong test set up: Some Máquina should work on an Orden de producción and have others queued",
+    ).toBe(true);
+
+    const deletedMachineIds = new Set(mockMachines.filter((machine) => machine.deletedAt !== null).map(({ id }) => id));
+    const getActiveMachines = () => mockMachines.filter((machine) => !deletedMachineIds.has(machine.id));
+    const tableProductionOrder = page.getByTestId("table-production-order");
+    const inProductionState = { filters: [{ id: "statuses", value: [ProductionOrderStatus.InProduction] }] };
+    const productionOrderInProductionUrl = `/production-order?${new URLSearchParams({ "table-production-order": JSON.stringify(inProductionState) })}`;
+
+    for (const machine of activeMachines) {
+      await workflowDeleteMachine(page, machine.id, machine.name);
+      deletedMachineIds.add(machine.id);
+
+      for (const otherMachine of getActiveMachines()) {
+        await expect(tableMaintenanceMachine.getByText(otherMachine.name, { exact: true })).toBeVisible();
+      }
+
+      // Its queue is emptied and it stops working on its Orden de producción...
+      expect(
+        await db.query.dbTableMachine.findMany({
+          columns: { activeProductionOrderId: true, id: true },
+          orderBy: { id: "asc" },
+        }),
+      ).toEqual(
+        mockMachines.map(({ activeProductionOrderId, id }) => ({
+          activeProductionOrderId: deletedMachineIds.has(id) ? null : activeProductionOrderId,
+          id,
+        })),
+      );
+      expect(
+        (
+          await db.query.dbTableMachineProductionOrderQueue.findMany({
+            columns: { machineId: true, productionOrderId: true },
+          })
+        ).sort(compareQueues),
+      ).toEqual(
+        mockMachineProductionOrderQueues
+          .filter((queue) => !deletedMachineIds.has(queue.machineId))
+          .map(({ machineId, productionOrderId }) => ({ machineId, productionOrderId }))
+          .sort(compareQueues),
+      );
+
+      // ...but what it produced is kept
+      expect(
+        await db.query.dbTablePartProduction.findMany({
+          columns: { id: true, machineId: true },
+          orderBy: { id: "asc" },
+        }),
+      ).toEqual(mockPartProduction.map(({ id, machineId }) => ({ id, machineId })));
+
+      await page.goto("/production-order");
+      for (const queue of mockMachineProductionOrderQueues.filter((mockQueue) => mockQueue.machineId === machine.id)) {
+        await expect(
+          getTableRowByTestId(tableProductionOrder, queue.productionOrderId).getByTestId(
+            `div-assigned-machine-${machine.id}`,
+          ),
+        ).toHaveCount(0);
+      }
+      if (machine.activeProductionOrderId !== null) {
+        await expect(
+          getTableRowByTestId(tableProductionOrder, machine.activeProductionOrderId).getByTestId("status"),
+        ).toHaveText(STATUS_PENDING_LABEL);
+      }
+
+      // Only the Órdenes de producción of the remaining Máquinas are still in production
+      const inProductionOrderIds = new Set(
+        getActiveMachines().flatMap(({ activeProductionOrderId }) =>
+          activeProductionOrderId === null ? [] : [activeProductionOrderId],
+        ),
+      );
+      await page.goto(productionOrderInProductionUrl);
+      await assertTableRowCount(tableProductionOrder, inProductionOrderIds.size);
+
+      await page.goto(`/machine/${machine.id}`);
+      await assertFormLoaded(formMachine);
+
+      // A deleted machine is read only until it is restored
+      await expect(formMachine.getByText(MACHINE_DELETED_MESSAGE, { exact: true })).toBeVisible();
+      await expect(formMachine.getByTestId("button-submit")).toHaveCount(0);
+
+      // The restore dialog lists the machine, and cancelling it keeps the machine deleted
+      await formMachine.getByTestId("button-restore").click();
+      const dialogRestoreMachine = page.getByTestId("dialog-restore-model-content");
+      await expect(dialogRestoreMachine).toContainText(machine.name);
+      await closeDialog(dialogRestoreMachine);
+      await expect(formMachine.getByText(MACHINE_DELETED_MESSAGE, { exact: true })).toBeVisible();
+      expect((await getMachineById(machine.id))?.deletedAt).toBeInstanceOf(Date);
+
+      await openAndConfirmAlertDialog(page, formMachine.getByTestId("button-restore"), "dialog-restore-model-content");
+      await expectSingleSuccessToast(page, MACHINE_RESTORED_MESSAGE);
+
+      await expect(formMachine.getByText(MACHINE_DELETED_MESSAGE, { exact: true })).not.toBeVisible();
+      await expect(formMachine.getByTestId("button-submit")).toBeVisible();
+
+      // Restoring it does not bring its queue nor its Orden de producción back
+      const restoredMachine = await getMachineById(machine.id);
+      expect(restoredMachine?.deletedAt).toBeNull();
+      expect(restoredMachine?.activeProductionOrderId).toBeNull();
+      expect(
+        await db.query.dbTableMachineProductionOrderQueue.findMany({ where: { machineId: machine.id } }),
+      ).toHaveLength(0);
+    }
+  });
+
+  await test.step("close the session of every Machine that is deleted while in use", async () => {
+    for (const [index, machine] of activeMachines.entries()) {
+      const remainingMachines = activeMachines.slice(index + 1);
+      const machinePage = await openPage({ machineId: machine.id, userMode: UserMode.Machine });
+      await machinePage.goto("/production");
+
+      await expect(machinePage.getByTestId("span-current-user-mode")).toHaveText(machine.name);
+      await expect(machinePage.getByTestId("form-login")).not.toBeVisible();
+
+      await workflowDeleteMachine(page, machine.id, machine.name);
+
+      // The session is closed and the user mode has to be picked again
+      await expect(machinePage.getByTestId("form-login")).toBeVisible();
+      await expect(machinePage.getByTestId("span-current-user-mode")).toBeEmpty();
+      await expect(machinePage).toHaveURL("/");
+
+      // The deleted Machine is no longer selectable, only the remaining ones are
+      await machinePage.getByRole("button", { name: UserMode.Machine }).click();
+      const dialogMachineSelection = machinePage.getByTestId("form-machine-selection");
+      await expect(dialogMachineSelection).toBeVisible();
+      const machineButtons = dialogMachineSelection.getByRole("button");
+      await expect(machineButtons).toHaveCount(remainingMachines.length);
+      for (const remainingMachine of remainingMachines) {
+        await expect(filterByExactText(machineButtons, remainingMachine.name)).toHaveCount(1);
+      }
+      await expect(filterByExactText(machineButtons, machine.name)).toHaveCount(0);
+      if (remainingMachines.length === 0) {
+        await expect(dialogMachineSelection.getByText(NO_MACHINES_MESSAGE)).toBeVisible();
+      }
+    }
+  });
 });
 
 test("show the machine as it is in the database when its page is opened again", async ({ page, db }) => {
@@ -500,18 +504,5 @@ test("list the deleted machines only when asked for and restore them from the ta
     editButton: EditButtonVisibility.Always,
     deletedToastTitle: MACHINE_DELETED_MESSAGE,
     restoredToastTitle: MACHINE_RESTORED_MESSAGE,
-  });
-});
-
-test("a deleted machine cannot be restored from the table while another one has its name", async ({ page, db }) => {
-  const machine = activeMachines[0];
-  await workflowRestoreTaken({
-    ...DELETED_MACHINE_FILTER_PARAMS,
-    page,
-    id: machine.id,
-    insertDuplicate: async () => db.insert(dbTableMachine).values({ name: machine.name }),
-    uniqueViolation: uniqueNameViolation(MACHINE_NAME_CONSTRAINT, dbTableMachine, machine.name),
-    errorMessage: NAME_TAKEN_MESSAGE,
-    deletedToastTitle: MACHINE_DELETED_MESSAGE,
   });
 });

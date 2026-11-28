@@ -73,8 +73,13 @@ import {
   getTableRows,
   getTableSubrowById,
 } from "@/tests/utils/components/table";
-import { expectSingleToast, expectSingleSuccessToast } from "@/tests/utils/components/toast";
-import { expectRejectedMutation, type TErrorCode } from "@/tests/utils/errors-log";
+import { expectSingleSuccessToast } from "@/tests/utils/components/toast";
+import {
+  expectRejectedMutation,
+  type TErrorCode,
+  expectRejectedToast,
+  holdRequestAndExpectRejection,
+} from "@/tests/utils/errors-log";
 import { inAnotherTab, setUserMode, test } from "@/tests/utils/fixtures";
 import {
   getMockStartedProductionOrdersWithoutQuantity,
@@ -121,8 +126,7 @@ test("assign, unassign and filter the machines of the production orders", async 
     await expect(getTableRows(tableProductionOrders).first()).toBeVisible();
 
     const comboboxMachineFilter = tableProductionOrders.getByTestId("combobox-filter-machine");
-    await openCombobox(comboboxMachineFilter);
-    await clickInComboboxOption(page, machineWithActiveProductionOrder.name);
+    await selectComboboxOption(page, comboboxMachineFilter, machineWithActiveProductionOrder.name);
 
     await assertTableRowCount(tableProductionOrders, machineProductionOrders.length);
     for (const productionOrder of machineProductionOrders) {
@@ -132,8 +136,7 @@ test("assign, unassign and filter the machines of the production orders", async 
       getTableRowByTestId(tableProductionOrders, machineWithActiveProductionOrder.activeProductionOrderId!),
     ).toBeVisible();
 
-    await openCombobox(comboboxMachineFilter);
-    await clickInComboboxOption(page, machineWithoutProductionOrders.name);
+    await selectComboboxOption(page, comboboxMachineFilter, machineWithoutProductionOrders.name);
     await expect(getTableNoDataRow(tableProductionOrders)).toBeVisible();
 
     await getClearComboboxButton(comboboxMachineFilter).click();
@@ -220,7 +223,6 @@ test("assign, unassign and filter the machines of the production orders", async 
     await expect(divAssignedMachine).toBeVisible();
 
     const buttonUnassignMachine = divAssignedMachine.getByTestId("button-unassign-machine");
-    await expect(buttonUnassignMachine).toBeVisible();
     await buttonUnassignMachine.click();
 
     await expectSingleSuccessToast(page, MACHINE_UNASSIGNED_MESSAGE);
@@ -249,37 +251,6 @@ test("assign, unassign and filter the machines of the production orders", async 
   });
 });
 
-test("sort production orders by the numeric dimension of their part", async ({ page, db }) => {
-  const statuses = [ProductionOrderStatus.Pending, ProductionOrderStatus.InProduction];
-  const filters: TTableProductionOrderState["filters"] = [{ id: "statuses", value: statuses }];
-  const productionOrders = await getProductionOrdersByStatuses(statuses);
-  const partIds = [...new Set(productionOrders.map((productionOrder) => productionOrder.partId))];
-  expect(partIds.length, "The listed Órdenes de producción should belong to several Artículos").toBeGreaterThan(1);
-
-  // As text they sort "10" < "100" < "9", so the narrowest Artículo would be listed last
-  for (const [index, partId] of partIds.entries()) {
-    const width = index === 0 ? "9" : String(10 ** index);
-    await db.update(dbTablePart).set({ width }).where(eq(dbTablePart.id, partId));
-  }
-  const parts = await Promise.all(partIds.map(async (partId) => (await getPartById(partId))!));
-  const getDimension = (productionOrder: BaseProductionOrder) =>
-    formatPartDimension(parts.find((part) => part.id === productionOrder.partId));
-  const ascendingDimensions = productionOrders
-    .map(getDimension)
-    .sort((a, b) => Number.parseFloat(a) - Number.parseFloat(b));
-
-  for (const desc of [false, true]) {
-    const expectedDimensions = desc ? [...ascendingDimensions].reverse() : ascendingDimensions;
-    const sorts = [{ desc, id: "dimension" }];
-
-    expect((await getProductionOrdersByStatuses(statuses, { sorts })).map(getDimension)).toEqual(expectedDimensions);
-
-    const state: TTableProductionOrderState = { filters, pagination: { pageSize: productionOrders.length }, sorts };
-    await page.goto(`/production-order?${new URLSearchParams({ "table-production-order": JSON.stringify(state) })}`);
-    await expect(getTableRows(tableProductionOrders).getByTestId("dimension")).toHaveText(expectedDimensions);
-  }
-});
-
 test("clear the default status filter of the production orders", async ({ page }) => {
   const defaultProductionOrders = await getProductionOrdersByStatuses([
     ProductionOrderStatus.Pending,
@@ -303,8 +274,7 @@ test("clear the default status filter of the production orders", async ({ page }
   // Setting and clearing another filter must not bring the default status filter back
   const machine = mockMachines.find((mockMachine) => mockMachine.activeProductionOrderId !== null)!;
   const comboboxMachineFilter = tableProductionOrders.getByTestId("combobox-filter-machine");
-  await openCombobox(comboboxMachineFilter);
-  await clickInComboboxOption(page, machine.name);
+  await selectComboboxOption(page, comboboxMachineFilter, machine.name);
   await assertTableRowCount(
     tableProductionOrders,
     (await getProductionOrders({ filters: [{ id: "assignedMachineId", value: machine.id }] })).length,
@@ -474,8 +444,7 @@ test("restoring a production order that another tab restores meanwhile is reject
   });
 
   const notRestorableMessage = `Orden de producción con ID ${productionOrder.id} no encontrada o no eliminada`;
-  await expectSingleToast(page, notRestorableMessage);
-  expectRejectedMutation({
+  await expectRejectedToast(page, {
     code: "NOT_FOUND",
     message: notRestorableMessage,
     procedurePath: "productionOrder.restore",
@@ -483,26 +452,73 @@ test("restoring a production order that another tab restores meanwhile is reject
   expect((await getProductionOrderById(productionOrder.id))?.deletedAt).toBeNull();
 });
 
-test("the heading only counts the production orders once they are loaded", async ({ page }) => {
-  // The count of a loading table is only shown for a moment, so every heading is recorded as the page renders it
-  await page.addInitScript((productionOrdersLabel) => {
-    const headings = new Set<string>();
-    (window as Window & { productionOrderHeadings?: Set<string> }).productionOrderHeadings = headings;
-    new MutationObserver(() => {
-      for (const heading of document.querySelectorAll("h2")) {
-        if (heading.textContent.endsWith(productionOrdersLabel)) headings.add(heading.textContent);
-      }
-    }).observe(document, { characterData: true, childList: true, subtree: true });
-  }, PRODUCTION_ORDERS_LABEL);
-  await gotoProductionOrdersWithStatuses(page, Object.values(ProductionOrderStatus));
+test("count, sort and copy the production orders", async ({ page, db }) => {
+  await test.step("the heading only counts the production orders once they are loaded", async () => {
+    // The count of a loading table is only shown for a moment, so every heading is recorded as the page renders it
+    await page.addInitScript((productionOrdersLabel) => {
+      const headings = new Set<string>();
+      (window as Window & { productionOrderHeadings?: Set<string> }).productionOrderHeadings = headings;
+      new MutationObserver(() => {
+        for (const heading of document.querySelectorAll("h2")) {
+          if (heading.textContent.endsWith(productionOrdersLabel)) headings.add(heading.textContent);
+        }
+      }).observe(document, { characterData: true, childList: true, subtree: true });
+    }, PRODUCTION_ORDERS_LABEL);
+    await gotoProductionOrdersWithStatuses(page, Object.values(ProductionOrderStatus));
 
-  await expect(page.getByRole("heading", { level: 2, name: /Órdenes de producción$/ })).toHaveText(
-    `${mockProductionOrders.length} Órdenes de producción`,
-  );
-  const headings = await page.evaluate(() => [
-    ...(window as Window & { productionOrderHeadings?: Set<string> }).productionOrderHeadings!,
-  ]);
-  expect(headings).not.toContain("0 Órdenes de producción");
+    await expect(page.getByRole("heading", { level: 2, name: new RegExp(`${PRODUCTION_ORDERS_LABEL}$`) })).toHaveText(
+      `${mockProductionOrders.length} ${PRODUCTION_ORDERS_LABEL}`,
+    );
+    const headings = await page.evaluate(() => [
+      ...(window as Window & { productionOrderHeadings?: Set<string> }).productionOrderHeadings!,
+    ]);
+    expect(headings).not.toContain(`0 ${PRODUCTION_ORDERS_LABEL}`);
+  });
+
+  await test.step("sort production orders by the numeric dimension of their part", async () => {
+    const statuses = [ProductionOrderStatus.Pending, ProductionOrderStatus.InProduction];
+    const filters: TTableProductionOrderState["filters"] = [{ id: "statuses", value: statuses }];
+    const productionOrders = await getProductionOrdersByStatuses(statuses);
+    const partIds = [...new Set(productionOrders.map((productionOrder) => productionOrder.partId))];
+    expect(partIds.length, "The listed Órdenes de producción should belong to several Artículos").toBeGreaterThan(1);
+
+    // As text they sort "10" < "100" < "9", so the narrowest Artículo would be listed last
+    for (const [index, partId] of partIds.entries()) {
+      const width = index === 0 ? "9" : String(10 ** index);
+      await db.update(dbTablePart).set({ width }).where(eq(dbTablePart.id, partId));
+    }
+    const parts = await Promise.all(partIds.map(async (partId) => (await getPartById(partId))!));
+    const getDimension = (productionOrder: BaseProductionOrder) =>
+      formatPartDimension(parts.find((part) => part.id === productionOrder.partId));
+    const ascendingDimensions = productionOrders
+      .map(getDimension)
+      .sort((a, b) => Number.parseFloat(a) - Number.parseFloat(b));
+
+    for (const desc of [false, true]) {
+      const expectedDimensions = desc ? [...ascendingDimensions].reverse() : ascendingDimensions;
+      const sorts = [{ desc, id: "dimension" }];
+
+      expect((await getProductionOrdersByStatuses(statuses, { sorts })).map(getDimension)).toEqual(expectedDimensions);
+
+      const state: TTableProductionOrderState = { filters, pagination: { pageSize: productionOrders.length }, sorts };
+      await page.goto(`/production-order?${new URLSearchParams({ "table-production-order": JSON.stringify(state) })}`);
+      await expect(getTableRows(tableProductionOrders).getByTestId("dimension")).toHaveText(expectedDimensions);
+    }
+  });
+
+  // Last, as it leaves the page in another user mode
+  await test.step("only admins can copy the reference of a production order", async () => {
+    const statuses = [ProductionOrderStatus.Pending, ProductionOrderStatus.InProduction];
+    const buttonsCopy = tableProductionOrders.getByTestId("button-copy");
+
+    await gotoProductionOrdersWithStatuses(page, statuses);
+    await expect(buttonsCopy.first()).toBeVisible();
+
+    await setUserMode(page, UserMode.User);
+    await gotoProductionOrdersWithStatuses(page, statuses);
+    await expect(getTableRows(tableProductionOrders).first()).toBeVisible();
+    await expect(buttonsCopy).toHaveCount(0);
+  });
 });
 
 test("showing every production order renders the rows scrolled into view and expands them", async ({ page, db }) => {
@@ -763,15 +779,13 @@ test("filter production orders by the dimension and the raw material of their pa
     expect(materialShape.id, "The Material should have another shape than its Artículo").not.toBe(partShape.id);
 
     await popoverMaterialFilters.getByTestId("popover-trigger").click();
-    await openCombobox(comboboxShape);
-    await clickInComboboxOption(page, partShape.name);
+    await selectComboboxOption(page, comboboxShape, partShape.name);
     await expectVisibleProductionOrders(
       [{ id: "partShapeId", value: partShape.id }],
       getProductionOrderIds((part) => part.shapeId === partShape.id),
     );
 
-    await openCombobox(comboboxShape);
-    await clickInComboboxOption(page, materialShape.name);
+    await selectComboboxOption(page, comboboxShape, materialShape.name);
     await expectVisibleProductionOrders(
       [{ id: "partShapeId", value: materialShape.id }],
       getProductionOrderIds((part) => part.shapeId === materialShape.id),
@@ -801,24 +815,21 @@ test("filter production orders by the dimension and the raw material of their pa
     );
 
     await popoverMaterialFilters.getByTestId("popover-trigger").click();
-    await openCombobox(comboboxRawMaterial);
-    await clickInComboboxOption(page, rawMaterial.name);
+    await selectComboboxOption(page, comboboxRawMaterial, rawMaterial.name);
     await expectVisibleProductionOrders([rawMaterialFilter], rawMaterialProductionOrderIds);
 
     const otherShape = getShape(getPart(2).shapeId);
     expect(
       getProductionOrderIds((part) => hasRawMaterial(part, rawMaterial.id) && part.shapeId === otherShape.id),
     ).toHaveLength(0);
-    await openCombobox(comboboxShape);
-    await clickInComboboxOption(page, otherShape.name);
+    await selectComboboxOption(page, comboboxShape, otherShape.name);
     await expectVisibleProductionOrders([rawMaterialFilter, { id: "partShapeId", value: otherShape.id }], []);
 
     const shape = getShape(getPart(1).shapeId);
     const combinedProductionOrderIds = getProductionOrderIds(
       (part) => hasRawMaterial(part, rawMaterial.id) && part.shapeId === shape.id,
     );
-    await openCombobox(comboboxShape);
-    await clickInComboboxOption(page, shape.name);
+    await selectComboboxOption(page, comboboxShape, shape.name);
     await expectVisibleProductionOrders(
       [rawMaterialFilter, { id: "partShapeId", value: shape.id }],
       combinedProductionOrderIds,
@@ -981,13 +992,14 @@ test("only pending and in production orders can be assigned to a machine", async
       productionOrder.id,
       translatedEnums.ProductionOrderStatus[status],
     );
-    await holdRequestWhile({
+    await holdRequestAndExpectRejection({
       page,
       procedurePath: "machineProductionOrderQueue.create",
       send: async () => workflowAssignMachineToProductionOrder(page, productionOrder.id, machine, message),
       meanwhile: async () => setDeletedAt(new Date()),
+      code: "BAD_REQUEST",
+      message,
     });
-    expectRejectedMutation({ code: "BAD_REQUEST", message, procedurePath: "machineProductionOrderQueue.create" });
     await setDeletedAt(null);
   }
 });
@@ -1143,13 +1155,14 @@ test("create production orders by hand and from a sell order line", async ({ pag
       meanwhile: () => Promise<void>,
       code: TErrorCode = "BAD_REQUEST",
     ) => {
-      await holdRequestWhile({
+      await holdRequestAndExpectRejection({
         page,
         procedurePath: "productionOrder.create",
         send: async () => workflowCreateProductionOrder(page, { part, sellOrderLineId }, expectedErrorMessage),
         meanwhile,
+        code,
+        message: expectedErrorMessage,
       });
-      expectRejectedMutation({ code, message: expectedErrorMessage, procedurePath: "productionOrder.create" });
     };
     const setPartDeletedAt = async (deletedAt: Date | null) => {
       await db.update(dbTablePart).set({ deletedAt }).where(eq(dbTablePart.id, otherPart.id));
@@ -1303,19 +1316,6 @@ test("hovering a production order shows the blueprints of its part beside the ta
     await rowWithBlueprints.hover();
     await expect(cardBlueprint).toBeVisible();
   });
-});
-
-test("only admins can copy the reference of a production order", async ({ page }) => {
-  const statuses = [ProductionOrderStatus.Pending, ProductionOrderStatus.InProduction];
-  const buttonsCopy = tableProductionOrders.getByTestId("button-copy");
-
-  await gotoProductionOrdersWithStatuses(page, statuses);
-  await expect(buttonsCopy.first()).toBeVisible();
-
-  await setUserMode(page, UserMode.User);
-  await gotoProductionOrdersWithStatuses(page, statuses);
-  await expect(getTableRows(tableProductionOrders).first()).toBeVisible();
-  await expect(buttonsCopy).toHaveCount(0);
 });
 
 for (const [index, { userMode, machineId }] of [

@@ -54,10 +54,9 @@ import {
   getTableRowByTestId,
   getTableRows,
 } from "@/tests/utils/components/table";
-import { expectRejectedMutation } from "@/tests/utils/errors-log";
+import { expectRejectedMutation, holdRequestAndExpectRejection } from "@/tests/utils/errors-log";
 import { inAnotherTab, setUserMode, test } from "@/tests/utils/fixtures";
 import { getMockSellOrderLineById, getMockTreatmentQuantities } from "@/tests/utils/mock-data-utils";
-import { holdRequestWhile } from "@/tests/utils/trpc";
 import { gotoProductionOrdersWithStatuses } from "@/tests/workflows/production";
 import {
   assertFillPendingButton,
@@ -501,7 +500,7 @@ test("the server rejects what changed since the page was loaded and receiving mo
   await test.step("sending parts that changed meanwhile", async () => {
     const pendingPart = mockParts.find((part) => part.id === pending.partId)!;
     await gotoTreatment(page);
-    await holdRequestWhile({
+    await holdRequestAndExpectRejection({
       page,
       procedurePath: "treatment.send",
       send: async () =>
@@ -511,16 +510,13 @@ test("the server rejects what changed since the page was loaded and receiving mo
           PRODUCTION_ORDER_PART_WITHOUT_COATING_MESSAGE(pending.id),
         ),
       meanwhile: async () => setPartCoating(pendingPart.id, null),
-    });
-    expectRejectedMutation({
       code: "BAD_REQUEST",
       message: PRODUCTION_ORDER_PART_WITHOUT_COATING_MESSAGE(pending.id),
-      procedurePath: "treatment.send",
     });
     await setPartCoating(pendingPart.id, pendingPart.coatingId);
 
     await gotoTreatment(page);
-    await holdRequestWhile({
+    await holdRequestAndExpectRejection({
       page,
       procedurePath: "treatment.sendPart",
       send: async () =>
@@ -530,11 +526,8 @@ test("the server rejects what changed since the page was loaded and receiving mo
           PART_WITHOUT_COATING_MESSAGE(coatedPart.description),
         ),
       meanwhile: async () => setPartCoating(coatedPart.id, null),
-    });
-    expectRejectedMutation({
       code: "BAD_REQUEST",
       message: PART_WITHOUT_COATING_MESSAGE(coatedPart.description),
-      procedurePath: "treatment.sendPart",
     });
     await setPartCoating(coatedPart.id, coatedPart.coatingId);
 
@@ -544,7 +537,7 @@ test("the server rejects what changed since the page was loaded and receiving mo
       translatedEnums.ProductionOrderStatus[ProductionOrderStatus.Deleted],
     );
     await gotoTreatment(page);
-    await holdRequestWhile({
+    await holdRequestAndExpectRejection({
       page,
       procedurePath: "treatment.send",
       send: async () =>
@@ -562,15 +555,16 @@ test("the server rejects what changed since the page was loaded and receiving mo
           .set({ deletedAt: new Date() })
           .where(eq(dbTableProductionOrder.id, otherPending.id));
       },
+      code: "BAD_REQUEST",
+      message: deletedMessage,
     });
-    expectRejectedMutation({ code: "BAD_REQUEST", message: deletedMessage, procedurePath: "treatment.send" });
 
     await gotoTreatment(page);
     const sellOrderDeletedMessage = PRODUCTION_ORDER_NOT_SENDABLE_MESSAGE(
       sellOrderLinePending!.id,
       translatedEnums.ProductionOrderStatus[ProductionOrderStatus.SellOrderDeleted],
     );
-    await holdRequestWhile({
+    await holdRequestAndExpectRejection({
       page,
       procedurePath: "treatment.send",
       send: async () =>
@@ -583,11 +577,8 @@ test("the server rejects what changed since the page was loaded and receiving mo
         const { sellOrderId } = getMockSellOrderLineById(sellOrderLinePending!.sellOrderLineId!)!;
         await db.update(dbTableSellOrder).set({ deletedAt: new Date() }).where(eq(dbTableSellOrder.id, sellOrderId));
       },
-    });
-    expectRejectedMutation({
       code: "BAD_REQUEST",
       message: sellOrderDeletedMessage,
-      procedurePath: "treatment.send",
     });
 
     expect(await getNewTreatmentShipments()).toHaveLength(0);
@@ -614,7 +605,7 @@ test("the server rejects what changed since the page was loaded and receiving mo
 
   await test.step("deleting shipments and receptions that changed meanwhile", async () => {
     await gotoTreatment(page);
-    await holdRequestWhile({
+    await holdRequestAndExpectRejection({
       page,
       procedurePath: "treatment.deleteShipment",
       send: async () =>
@@ -629,11 +620,8 @@ test("the server rejects what changed since the page was loaded and receiving mo
           .insert(dbTableTreatmentReception)
           .values({ quantity: 1, receivedAt: new Date(), treatmentShipmentId: shipmentWithoutReceptions.id });
       },
-    });
-    expectRejectedMutation({
       code: "BAD_REQUEST",
       message: SHIPMENT_WITH_RECEPTIONS_MESSAGE,
-      procedurePath: "treatment.deleteShipment",
     });
     const [reception] = await getNewTreatmentReceptions();
 
@@ -643,7 +631,7 @@ test("the server rejects what changed since the page was loaded and receiving mo
         .sectionOut.getByTestId(`table-treatment-batch-${batchOut.sentAt.getTime()}`)
         .getByTestId(`div-treatment-reception-${reception.id}`),
     ).toBeVisible();
-    await holdRequestWhile({
+    await holdRequestAndExpectRejection({
       page,
       procedurePath: "treatment.deleteReception",
       send: async () =>
@@ -656,15 +644,12 @@ test("the server rejects what changed since the page was loaded and receiving mo
       meanwhile: async () => {
         await db.delete(dbTableTreatmentReception).where(eq(dbTableTreatmentReception.id, reception.id));
       },
-    });
-    expectRejectedMutation({
       code: "NOT_FOUND",
       message: `Recepción del tratamiento con ID ${reception.id} no encontrada`,
-      procedurePath: "treatment.deleteReception",
     });
 
     await gotoTreatment(page);
-    await holdRequestWhile({
+    await holdRequestAndExpectRejection({
       page,
       procedurePath: "treatment.deleteShipment",
       send: async () =>
@@ -677,18 +662,15 @@ test("the server rejects what changed since the page was loaded and receiving mo
       meanwhile: async () => {
         await db.delete(dbTableTreatmentShipment).where(eq(dbTableTreatmentShipment.id, shipmentWithoutReceptions.id));
       },
-    });
-    expectRejectedMutation({
       code: "NOT_FOUND",
       message: `Envío al tratamiento con ID ${shipmentWithoutReceptions.id} no encontrado`,
-      procedurePath: "treatment.deleteShipment",
     });
   });
 
   await test.step("receiving a shipment deleted meanwhile", async () => {
     await workflowSendPartToTreatment(page, { partId: coatedPart.id, quantity: 1 });
     const [shipment] = await getNewTreatmentShipments();
-    await holdRequestWhile({
+    await holdRequestAndExpectRejection({
       page,
       procedurePath: "treatment.receive",
       send: async () =>
@@ -701,11 +683,8 @@ test("the server rejects what changed since the page was loaded and receiving mo
       meanwhile: async () => {
         await db.delete(dbTableTreatmentShipment).where(eq(dbTableTreatmentShipment.id, shipment.id));
       },
-    });
-    expectRejectedMutation({
       code: "NOT_FOUND",
       message: `Envío al tratamiento con ID ${shipment.id} no encontrado`,
-      procedurePath: "treatment.receive",
     });
     expect(await getNewTreatmentReceptions()).toHaveLength(0);
   });
@@ -715,7 +694,7 @@ test("receiving the parts another tab receives meanwhile is rejected", async ({ 
   const shipment = batchOut.treatmentShipments.find((treatmentShipment) => treatmentShipment.pendingQuantity > 1)!;
   await gotoTreatment(page);
 
-  await holdRequestWhile({
+  await holdRequestAndExpectRejection({
     page,
     procedurePath: "treatment.receive",
     send: async () =>
@@ -732,11 +711,8 @@ test("receiving the parts another tab receives meanwhile is rejected", async ({ 
           { quantity: 1, treatmentShipmentId: shipment.id },
         ]);
       }),
-  });
-  expectRejectedMutation({
     code: "BAD_REQUEST",
     message: SHIPMENT_PENDING_QUANTITY_EXCEEDED_MESSAGE(shipment.id, shipment.pendingQuantity - 1),
-    procedurePath: "treatment.receive",
   });
 
   expect(

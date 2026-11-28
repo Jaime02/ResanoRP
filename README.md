@@ -84,6 +84,8 @@ bun run generate-routes     # regenerate the TanStack route tree
 
 A git hook (`.githooks`) is installed by `bun install` through `prepare`.
 
+How forms validate, reset and are tested: [docs/forms.md](docs/forms.md).
+
 ## Database
 
 The schema is in `src/db/schema.ts` and managed with Drizzle (`drizzle.config.ts`).

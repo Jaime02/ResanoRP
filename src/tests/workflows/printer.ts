@@ -18,7 +18,7 @@ import {
   PRINTER_USERNAME_LABEL,
 } from "@/messages/printer";
 import { openAndConfirmAlertDialog } from "@/tests/utils/components/alert-dialog";
-import { clickInComboboxOption, openCombobox, selectComboboxOption } from "@/tests/utils/components/combobox";
+import { selectComboboxOption } from "@/tests/utils/components/combobox";
 import { assertFormLoaded, getFormInputByLabel, InputElementType } from "@/tests/utils/components/form";
 import { findTableRowByText } from "@/tests/utils/components/table";
 import { expectSingleSuccessToast, getToasts } from "@/tests/utils/components/toast";
@@ -149,7 +149,6 @@ export async function expectPrintedByBrowser(page: Page, buttonPrint: Locator) {
 }
 
 export async function workflowSelectPrinter(page: Page, dialog: Locator, name: string) {
-  await openCombobox(getComboboxPrinter(dialog));
-  await clickInComboboxOption(page, name);
+  await selectComboboxOption(page, getComboboxPrinter(dialog), name);
   await assertSelectedPrinter(dialog, name);
 }

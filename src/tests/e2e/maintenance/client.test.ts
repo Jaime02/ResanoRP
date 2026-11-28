@@ -51,7 +51,7 @@ import {
   mockPaymentMethods,
   mockSellOrders,
 } from "@/tests/mock-data";
-import { openAndConfirmAlertDialog } from "@/tests/utils/components/alert-dialog";
+import { closeDialog, openAndConfirmAlertDialog } from "@/tests/utils/components/alert-dialog";
 import {
   assertComboboxOptionsCount,
   assertComboboxValue,
@@ -66,17 +66,19 @@ import {
   assertTableRowCount,
   filterByExactText,
   findTableRowByText,
+  getTableHeaderCells,
   getTableNoDataRow,
+  getTableResizeHandles,
   getTableRowByTestId,
   getTableRows,
 } from "@/tests/utils/components/table";
 import { expectSingleToast, expectSingleSuccessToast } from "@/tests/utils/components/toast";
 import { expectUniqueViolation } from "@/tests/utils/db";
 import {
-  expectRejectedMutation,
   expectUniqueViolationRejected,
   uniqueColumnsViolation,
   uniqueNameViolation,
+  expectRejectedToast,
 } from "@/tests/utils/errors-log";
 import { TestAnnotations, inAnotherTab, test } from "@/tests/utils/fixtures";
 import { getMockPartReferenceById, getMockSellOrderLines } from "@/tests/utils/mock-data-utils";
@@ -85,7 +87,7 @@ import { workflowAssertClientFormData, workflowDeleteClient } from "@/tests/work
 import {
   EditButtonVisibility,
   workflowDeletedFilterAndRestore,
-  workflowRestoreTaken,
+  workflowRejectRestoreOfTaken,
 } from "@/tests/workflows/deleted-filter";
 import { workflowRejectCreateWithTakenName, workflowRejectRenameToTakenName } from "@/tests/workflows/unique-name";
 import type { BaseClient } from "@/types/client";
@@ -222,8 +224,21 @@ test("manage the clients", { annotation: TestAnnotations.ResetSellOrders }, asyn
       }
     }
 
+    const resizeHandles = getTableResizeHandles(tableMaintenanceClient);
+    const sizedHeaderCells = getTableHeaderCells(tableMaintenanceClient).and(page.locator("[style*='width']"));
+    await expect(resizeHandles).not.toHaveCount(0);
+    await expect(sizedHeaderCells).not.toHaveCount(0);
+
+    // An empty table drops the column sizes and the resize handles, so its columns fit the header text
     await inputFilterName.fill(`${activeClients[0].name}x`);
     await expect(getTableNoDataRow(tableMaintenanceClient)).toBeVisible();
+    await expect(resizeHandles).toHaveCount(0);
+    await expect(sizedHeaderCells).toHaveCount(0);
+
+    await inputFilterName.clear();
+    await expect(getClientRows(activeClients[0].name)).toHaveCount(1);
+    await expect(resizeHandles).not.toHaveCount(0);
+    await expect(sizedHeaderCells).not.toHaveCount(0);
   });
 
   await test.step("go back to the clients table from the client route", async () => {
@@ -483,56 +498,137 @@ test("remove every client invoice email", async ({ page, db }) => {
   }
 });
 
-test("delete every client when confirmed and restore it", async ({ page, db }) => {
-  expect(
-    activeClients.some((client) => mockClientInvoiceEmails.some((email) => email.clientId === client.id)),
-    "Wrong test set up: Some Cliente should have invoice emails",
-  ).toBe(true);
-  const deletedClientIds = new Set<number>();
+test(
+  "delete every client when confirmed and restore it, and keep its name unique while it is not deleted",
+  { annotation: TestAnnotations.ResetSellOrders },
+  async ({ page, db }) => {
+    await test.step("delete every client when confirmed and restore it", async () => {
+      expect(
+        activeClients.some((client) => mockClientInvoiceEmails.some((email) => email.clientId === client.id)),
+        "Wrong test set up: Some Cliente should have invoice emails",
+      ).toBe(true);
+      const deletedClientIds = new Set<number>();
 
-  for (const client of activeClients) {
-    await page.goto("/maintenance");
-    expect((await getClientById(client.id))?.deletedAt).toBeNull();
+      for (const client of activeClients) {
+        await page.goto("/maintenance");
+        expect((await getClientById(client.id))?.deletedAt).toBeNull();
 
-    await openAndConfirmAlertDialog(
-      page,
-      (await findTableRowByText(tableMaintenanceClient, client.name)).getByTestId("button-delete"),
-      "dialog-delete-model-content",
-    );
-    await expectSingleSuccessToast(page, CLIENT_DELETED_MESSAGE);
-    deletedClientIds.add(client.id);
+        await openAndConfirmAlertDialog(
+          page,
+          (await findTableRowByText(tableMaintenanceClient, client.name)).getByTestId("button-delete"),
+          "dialog-delete-model-content",
+        );
+        await expectSingleSuccessToast(page, CLIENT_DELETED_MESSAGE);
+        deletedClientIds.add(client.id);
 
-    await expect(getClientRows(client.name)).toHaveCount(0);
-    for (const otherClient of activeClients.filter(({ id }) => !deletedClientIds.has(id))) {
-      await expect(getClientRows(otherClient.name)).toHaveCount(1);
-    }
-    expect((await getClientById(client.id))?.deletedAt).toBeInstanceOf(Date);
+        await expect(getClientRows(client.name)).toHaveCount(0);
+        for (const otherClient of activeClients.filter(({ id }) => !deletedClientIds.has(id))) {
+          await expect(getClientRows(otherClient.name)).toHaveCount(1);
+        }
+        expect((await getClientById(client.id))?.deletedAt).toBeInstanceOf(Date);
 
-    // Its invoice emails are deleted, the ones of the other Clientes are kept
-    expect(await db.query.dbTableClientInvoiceEmail.findMany({ orderBy: { id: "asc" } })).toEqual(
-      mockClientInvoiceEmails.filter((email) => !deletedClientIds.has(email.clientId)),
-    );
+        // Its invoice emails are deleted, the ones of the other Clientes are kept
+        expect(await db.query.dbTableClientInvoiceEmail.findMany({ orderBy: { id: "asc" } })).toEqual(
+          mockClientInvoiceEmails.filter((email) => !deletedClientIds.has(email.clientId)),
+        );
 
-    await page.goto(`/client/${client.id}`);
-    await assertFormLoaded(formClient);
+        await page.goto(`/client/${client.id}`);
+        await assertFormLoaded(formClient);
 
-    // A deleted client is read only until it is restored
-    await expect(formClient.getByTestId("badge-client-deleted")).toBeVisible();
-    await expect(formClient.getByTestId("button-submit")).toHaveCount(0);
-    await assertInvoiceEmailsCard({ isReadOnly: true, emails: [] });
+        // A deleted client is read only until it is restored
+        await expect(formClient.getByTestId("badge-client-deleted")).toBeVisible();
+        await expect(formClient.getByTestId("button-submit")).toHaveCount(0);
+        await assertInvoiceEmailsCard({ isReadOnly: true, emails: [] });
 
-    await openAndConfirmAlertDialog(page, formClient.getByTestId("button-restore"), "dialog-restore-model-content");
-    await expectSingleSuccessToast(page, CLIENT_RESTORED_MESSAGE);
+        await openAndConfirmAlertDialog(page, formClient.getByTestId("button-restore"), "dialog-restore-model-content");
+        await expectSingleSuccessToast(page, CLIENT_RESTORED_MESSAGE);
 
-    await expect(formClient.getByTestId("badge-client-deleted")).not.toBeVisible();
-    await expect(formClient.getByTestId("button-submit")).toBeVisible();
-    expect((await getClientById(client.id))?.deletedAt).toBeNull();
+        await expect(formClient.getByTestId("badge-client-deleted")).not.toBeVisible();
+        await expect(formClient.getByTestId("button-submit")).toBeVisible();
+        expect((await getClientById(client.id))?.deletedAt).toBeNull();
 
-    // Restoring the Cliente does not bring its invoice emails back, but new ones can be added again
-    expect(await db.query.dbTableClientInvoiceEmail.findMany({ where: { clientId: client.id } })).toHaveLength(0);
-    await assertInvoiceEmailsCard({ isReadOnly: false, emails: [] });
-  }
-});
+        // Restoring the Cliente does not bring its invoice emails back, but new ones can be added again
+        expect(await db.query.dbTableClientInvoiceEmail.findMany({ where: { clientId: client.id } })).toHaveLength(0);
+        await assertInvoiceEmailsCard({ isReadOnly: false, emails: [] });
+      }
+    });
+
+    await test.step("keep the name of a Cliente unique while it is not deleted", async () => {
+      const openCreateClient = async () => {
+        await page.getByRole("button", { name: CLIENT_CREATE_TITLE }).click();
+        await expect(dialogCreateClient).toBeVisible();
+      };
+
+      await page.goto("/maintenance");
+      await workflowRejectCreateWithTakenName({
+        page,
+        items: activeClients,
+        form: dialogCreateClient,
+        openCreate: openCreateClient,
+        closeCreate: async () => {
+          await closeDialog(dialogCreateClient);
+        },
+        fill: async (client, name) => fillRequiredClientFields(dialogCreateClient, { ...client, name }),
+        insertDuplicate: async (name) =>
+          db.insert(dbTableClient).values({ ...getRequiredClientFields(activeClients[0]), name }),
+        constraintName: CLIENT_NAME_CONSTRAINT,
+        table: dbTableClient,
+        errorMessage: NAME_TAKEN_MESSAGE,
+      });
+
+      await workflowRejectRenameToTakenName({
+        page,
+        items: activeClients,
+        form: formClient,
+        openEdit: async (client) => {
+          await page.goto(`/client/${client.id}`);
+        },
+        getName: async (id) => (await getClientById(id))?.name,
+        table: dbTableClient,
+        constraintName: CLIENT_NAME_CONSTRAINT,
+        errorMessage: NAME_TAKEN_MESSAGE,
+      });
+
+      for (const client of activeClients) {
+        // Deleting a Cliente frees its name, also typed with spaces around it...
+        await workflowDeleteClient(page, client);
+        await expect(getClientRows(client.name)).toHaveCount(0);
+
+        await openCreateClient();
+        await fillRequiredClientFields(dialogCreateClient, { ...client, name: `  ${client.name}  ` });
+        await dialogCreateClient.getByTestId("button-submit").click();
+
+        await expect(dialogCreateClient).not.toBeVisible();
+        await expectSingleSuccessToast(page, CLIENT_CREATED_MESSAGE);
+        await assertFormLoaded(formClient);
+        await expect(getFormInputByLabel(formClient, NAME_LABEL)).toHaveValue(client.name);
+
+        // ...so the deleted Cliente can no longer be restored
+        await page.goto(`/client/${client.id}`);
+        await assertFormLoaded(formClient);
+        await openAndConfirmAlertDialog(page, formClient.getByTestId("button-restore"), "dialog-restore-model-content");
+        await expectSingleToast(page, NAME_TAKEN_MESSAGE);
+        expectUniqueViolationRejected(
+          uniqueNameViolation(CLIENT_NAME_CONSTRAINT, dbTableClient, client.name),
+          NAME_TAKEN_MESSAGE,
+        );
+
+        expect((await getClientById(client.id))?.deletedAt).toBeInstanceOf(Date);
+      }
+    });
+
+    await test.step("a deleted client cannot be restored from the table while another one has its name", async () => {
+      await page.goto(DELETED_CLIENT_FILTER_PARAMS.url);
+      await workflowRejectRestoreOfTaken({
+        ...DELETED_CLIENT_FILTER_PARAMS,
+        page,
+        id: activeClients[0].id,
+        uniqueViolation: uniqueNameViolation(CLIENT_NAME_CONSTRAINT, dbTableClient, activeClients[0].name),
+        errorMessage: NAME_TAKEN_MESSAGE,
+      });
+    });
+  },
+);
 
 test("no invoice email can be added to a client deleted in another tab meanwhile", async ({ page, db }) => {
   for (const client of activeClients) {
@@ -547,8 +643,7 @@ test("no invoice email can be added to a client deleted in another tab meanwhile
       meanwhile: async () => inAnotherTab(page, async (anotherPage) => workflowDeleteClient(anotherPage, client)),
     });
 
-    await expectSingleToast(page, CLIENT_INVOICE_EMAIL_DELETED_CLIENT_MESSAGE);
-    expectRejectedMutation({
+    await expectRejectedToast(page, {
       code: "BAD_REQUEST",
       message: CLIENT_INVOICE_EMAIL_DELETED_CLIENT_MESSAGE,
       procedurePath: "clientInvoiceEmail.create",
@@ -596,19 +691,6 @@ test("list the deleted clients only when asked for and restore them from the tab
     editButton: EditButtonVisibility.Always,
     deletedToastTitle: CLIENT_DELETED_MESSAGE,
     restoredToastTitle: CLIENT_RESTORED_MESSAGE,
-  });
-});
-
-test("a deleted client cannot be restored from the table while another one has its name", async ({ page, db }) => {
-  const client = activeClients[0];
-  await workflowRestoreTaken({
-    ...DELETED_CLIENT_FILTER_PARAMS,
-    page,
-    id: client.id,
-    insertDuplicate: async () => db.insert(dbTableClient).values(getRequiredClientFields(client)),
-    uniqueViolation: uniqueNameViolation(CLIENT_NAME_CONSTRAINT, dbTableClient, client.name),
-    errorMessage: NAME_TAKEN_MESSAGE,
-    deletedToastTitle: CLIENT_DELETED_MESSAGE,
   });
 });
 
@@ -739,75 +821,6 @@ test("a deleted client keeps its history, but its references and prices are hidd
     }
   }
 });
-
-test(
-  "keep the name of a Cliente unique while it is not deleted",
-  { annotation: TestAnnotations.ResetSellOrders },
-  async ({ page, db }) => {
-    const openCreateClient = async () => {
-      await page.getByRole("button", { name: CLIENT_CREATE_TITLE }).click();
-      await expect(dialogCreateClient).toBeVisible();
-    };
-
-    await page.goto("/maintenance");
-    await workflowRejectCreateWithTakenName({
-      page,
-      items: activeClients,
-      form: dialogCreateClient,
-      openCreate: openCreateClient,
-      closeCreate: async () => {
-        await dialogCreateClient.getByTestId("button-close").click();
-        await expect(dialogCreateClient).not.toBeVisible();
-      },
-      fill: async (client, name) => fillRequiredClientFields(dialogCreateClient, { ...client, name }),
-      insertDuplicate: async (name) =>
-        db.insert(dbTableClient).values({ ...getRequiredClientFields(activeClients[0]), name }),
-      constraintName: CLIENT_NAME_CONSTRAINT,
-      table: dbTableClient,
-      errorMessage: NAME_TAKEN_MESSAGE,
-    });
-
-    await workflowRejectRenameToTakenName({
-      page,
-      items: activeClients,
-      form: formClient,
-      openEdit: async (client) => {
-        await page.goto(`/client/${client.id}`);
-      },
-      getName: async (id) => (await getClientById(id))?.name,
-      table: dbTableClient,
-      constraintName: CLIENT_NAME_CONSTRAINT,
-      errorMessage: NAME_TAKEN_MESSAGE,
-    });
-
-    for (const client of activeClients) {
-      // Deleting a Cliente frees its name, also typed with spaces around it...
-      await workflowDeleteClient(page, client);
-      await expect(getClientRows(client.name)).toHaveCount(0);
-
-      await openCreateClient();
-      await fillRequiredClientFields(dialogCreateClient, { ...client, name: `  ${client.name}  ` });
-      await dialogCreateClient.getByTestId("button-submit").click();
-
-      await expect(dialogCreateClient).not.toBeVisible();
-      await expectSingleSuccessToast(page, CLIENT_CREATED_MESSAGE);
-      await assertFormLoaded(formClient);
-      await expect(getFormInputByLabel(formClient, NAME_LABEL)).toHaveValue(client.name);
-
-      // ...so the deleted Cliente can no longer be restored
-      await page.goto(`/client/${client.id}`);
-      await assertFormLoaded(formClient);
-      await openAndConfirmAlertDialog(page, formClient.getByTestId("button-restore"), "dialog-restore-model-content");
-      await expectSingleToast(page, NAME_TAKEN_MESSAGE);
-      expectUniqueViolationRejected(
-        uniqueNameViolation(CLIENT_NAME_CONSTRAINT, dbTableClient, client.name),
-        NAME_TAKEN_MESSAGE,
-      );
-
-      expect((await getClientById(client.id))?.deletedAt).toBeInstanceOf(Date);
-    }
-  },
-);
 
 test.describe("at a fractional zoom level", () => {
   test.use({ deviceScaleFactor: 1.25 });

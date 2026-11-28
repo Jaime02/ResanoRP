@@ -13,7 +13,7 @@ import {
 } from "@/messages/coating";
 import { COATING_LABEL, NAME_LABEL } from "@/messages/common";
 import { mockCoatings, mockParts } from "@/tests/mock-data";
-import { openAndConfirmAlertDialog } from "@/tests/utils/components/alert-dialog";
+import { closeDialog, openAndConfirmAlertDialog } from "@/tests/utils/components/alert-dialog";
 import { assertComboboxValue } from "@/tests/utils/components/combobox";
 import { InputElementType, assertFormLoaded, getFormInputByLabel } from "@/tests/utils/components/form";
 import {
@@ -28,7 +28,7 @@ import { test } from "@/tests/utils/fixtures";
 import {
   EditButtonVisibility,
   workflowDeletedFilterAndRestore,
-  workflowRestoreTaken,
+  workflowRejectRestoreOfTaken,
 } from "@/tests/workflows/deleted-filter";
 import {
   workflowRejectCreateWithTakenName,
@@ -48,10 +48,6 @@ test("manage the Tratamientos", async ({ page, db }) => {
   const openCreateCoating = async () => {
     await page.getByRole("button", { name: COATING_CREATE_TITLE }).click();
     await expect(dialogCreateEditCoating).toBeVisible();
-  };
-  const closeDialog = async () => {
-    await dialogCreateEditCoating.getByTestId("button-close").click();
-    await expect(dialogCreateEditCoating).not.toBeVisible();
   };
 
   await test.step("rename a Tratamiento and give it back its name", async () => {
@@ -81,7 +77,7 @@ test("manage the Tratamientos", async ({ page, db }) => {
       items: activeCoatings,
       form: dialogCreateEditCoating,
       openCreate: openCreateCoating,
-      closeCreate: closeDialog,
+      closeCreate: async () => closeDialog(dialogCreateEditCoating),
       insertDuplicate: async (name) => db.insert(dbTableCoating).values({ name }),
       constraintName: COATING_NAME_CONSTRAINT,
       table: dbTableCoating,
@@ -91,7 +87,7 @@ test("manage the Tratamientos", async ({ page, db }) => {
     // A cancelled draft is kept
     await openCreateCoating();
     await expect(getFormInputByLabel(dialogCreateEditCoating, NAME_LABEL)).toHaveValue(activeCoatings.at(-1)!.name);
-    await closeDialog();
+    await closeDialog(dialogCreateEditCoating);
 
     await workflowRejectRenameToTakenName({
       page,
@@ -99,7 +95,7 @@ test("manage the Tratamientos", async ({ page, db }) => {
       form: dialogCreateEditCoating,
       openEdit: async (coating) =>
         (await findTableRowByText(tableCoating, coating.name)).getByTestId("button-edit").click(),
-      closeEdit: closeDialog,
+      closeEdit: async () => closeDialog(dialogCreateEditCoating),
       getName: async (id) => (await getCoatingById(id))?.name,
       table: dbTableCoating,
       constraintName: COATING_NAME_CONSTRAINT,
@@ -153,11 +149,18 @@ test("manage the Tratamientos", async ({ page, db }) => {
         constraintName: COATING_NAME_CONSTRAINT,
       });
       await expect(filterByExactText(getTableRows(tableCoating), coating.name)).toHaveCount(1);
+      await workflowRejectRestoreOfTaken({
+        ...DELETED_COATING_FILTER_PARAMS,
+        page,
+        id: coating.id,
+        uniqueViolation: uniqueNameViolation(COATING_NAME_CONSTRAINT, dbTableCoating, coating.name),
+        errorMessage: NAME_TAKEN_MESSAGE,
+      });
 
       // The create dialog starts empty after a Tratamiento is created
       await openCreateCoating();
       await expect(getFormInputByLabel(dialogCreateEditCoating, NAME_LABEL)).toHaveValue("");
-      await closeDialog();
+      await closeDialog(dialogCreateEditCoating);
 
       await page.goto("/part");
       for (const part of mockParts.filter((mockPart) => mockPart.deletedAt === null)) {
@@ -196,18 +199,5 @@ test("list the deleted Tratamientos only when asked for and restore them from th
     editButton: EditButtonVisibility.OnlyActive,
     deletedToastTitle: COATING_DELETED_MESSAGE,
     restoredToastTitle: COATING_RESTORED_MESSAGE,
-  });
-});
-
-test("a deleted Tratamiento cannot be restored from the table while another one has its name", async ({ page, db }) => {
-  const coating = mockCoatings.find((mockCoating) => mockCoating.deletedAt === null)!;
-  await workflowRestoreTaken({
-    ...DELETED_COATING_FILTER_PARAMS,
-    page,
-    id: coating.id,
-    insertDuplicate: async () => db.insert(dbTableCoating).values({ name: coating.name }),
-    uniqueViolation: uniqueNameViolation(COATING_NAME_CONSTRAINT, dbTableCoating, coating.name),
-    errorMessage: NAME_TAKEN_MESSAGE,
-    deletedToastTitle: COATING_DELETED_MESSAGE,
   });
 });

@@ -372,6 +372,8 @@ export default function BaseTable<TRow extends TBaseModel, TState extends TTable
   }, [isLoading, rows, pageRowsCount, navigateToPage, state?.pagination?.pageIndex]);
 
   const isPaginationUnknown = Boolean(state?.pagination) && (isLoading || rowCount === null);
+  const showsSkeletonRows = isLoading || disabledMessage !== undefined;
+  const showsNoDataRow = !showsSkeletonRows && (rows === undefined || rows.length === 0);
 
   return (
     <RadioGroup
@@ -462,12 +464,14 @@ export default function BaseTable<TRow extends TBaseModel, TState extends TTable
           <BaseTableHead
             table={table}
             hasRows={rows ? rows.length > 0 : false}
-            thStyle={(header) => getColumnSizeStyle(header.column.getCanResize(), `var(--col-${header.index}-size)`)}
+            thStyle={(header) =>
+              showsNoDataRow ? {} : getColumnSizeStyle(header.column.getCanResize(), `var(--col-${header.index}-size)`)
+            }
             onStateChange={navigateOnStateChange}
           />
         </CustomFiltersContext>
         <TableBody ref={tbodyRef}>
-          {isLoading || disabledMessage !== undefined ? (
+          {showsSkeletonRows ? (
             Array.from({ length: loadingRowsCount }).map((_, index) => (
               <SkeletonRow
                 key={index}
@@ -476,7 +480,7 @@ export default function BaseTable<TRow extends TBaseModel, TState extends TTable
                 hasRadioColumn={tableMode === TableMode.Radio}
               />
             ))
-          ) : rows === undefined || rows.length === 0 ? (
+          ) : showsNoDataRow ? (
             <NoDataRow columns={table.getAllLeafColumns().length} message={noDataMessage} />
           ) : virtualized ? (
             <VirtualizedRows rows={tableRows} tbodyRef={tbodyRef} renderRow={renderRow} />

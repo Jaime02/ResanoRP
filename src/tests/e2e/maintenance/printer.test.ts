@@ -16,6 +16,7 @@ import {
   PRINTER_REACHABLE_MESSAGE,
 } from "@/messages/printer";
 import { readAuditLog } from "@/tests/utils/audit-log";
+import { closeDialog } from "@/tests/utils/components/alert-dialog";
 import { assertFormLoaded, getFormInputByLabel, getInvalidFields } from "@/tests/utils/components/form";
 import { filterByExactText, getTableRows } from "@/tests/utils/components/table";
 import { expectSingleSuccessToast, expectSingleToast } from "@/tests/utils/components/toast";
@@ -168,8 +169,7 @@ test("manage the Impresoras", async ({ page, db }) => {
     await (await findPrinterRow(page, labelPrinter.name)).getByTestId("button-edit").click();
     await assertFormLoaded(dialogCreateEditPrinter);
     await expect(getFormInputByLabel(dialogCreateEditPrinter, PRINTER_PASSWORD_LABEL)).toHaveValue("");
-    await dialogCreateEditPrinter.getByTestId("button-close").click();
-    await expect(dialogCreateEditPrinter).not.toBeVisible();
+    await closeDialog(dialogCreateEditPrinter);
     await workflowEditPrinter(page, labelPrinter.name, { ...labelPrinter, labelWidthMm: 50, password: undefined });
     expect(await getLabelPrinter()).toMatchObject({ ...labelPrinter, labelWidthMm: 50 });
 

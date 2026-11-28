@@ -12,6 +12,7 @@ import {
   SELL_ORDER_EDITED_MESSAGE,
   SELL_ORDER_FILE_DELETED_MESSAGE,
   SELL_ORDER_LINE_DELETED_MESSAGE,
+  SELL_ORDER_LINE_EDITED_MESSAGE,
 } from "@/messages/sell-order";
 import { openAndConfirmAlertDialog } from "@/tests/utils/components/alert-dialog";
 import { setInputFiles } from "@/tests/utils/components/file-input";
@@ -133,4 +134,11 @@ export async function workflowOpenSellOrderLinePartPicker(page: Page, sellOrderI
   const dialogCreateSellOrderLine = await workflowOpenCreateSellOrderLine(page, sellOrderId);
   const { tablePickerPart } = await openPartPicker(page, dialogCreateSellOrderLine.getByTestId("picker-part"));
   return tablePickerPart;
+}
+
+export async function workflowEditSellOrderLineCell(page: Page, input: Locator, value: string) {
+  await input.clear();
+  await input.pressSequentially(value);
+  await input.press("Enter");
+  await expectSingleSuccessToast(page, SELL_ORDER_LINE_EDITED_MESSAGE);
 }

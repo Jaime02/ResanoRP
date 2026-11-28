@@ -23,7 +23,9 @@ const fn = (name: string, ...args: Array<TExpression>) => new IR.Func(name, args
 
 const table = getTableName(dbTableSellOrderLine);
 
-test("the rows a query loads from Postgres before PowerSync brings its table", async () => {
+test("the rows a query loads from Postgres before PowerSync brings its table, without what PowerSync keeps from a client", async ({
+  page,
+}) => {
   const rows = await db.select().from(dbTableSellOrderLine);
   // The function returns the rows of whichever table it is asked for
   const load = async (where: TExpression | undefined, request: Partial<TSubsetRequest> = {}) =>
@@ -126,9 +128,7 @@ test("the rows a query loads from Postgres before PowerSync brings its table", a
     });
     expect(sorted(byDate!)).toEqual(sorted(kept(where)));
   });
-});
 
-test("Postgres keeps from a client what PowerSync keeps from it", async ({ page }) => {
   // Only a shared printer keeps a password
   const printer = {
     ...getMockPrinterShareCredentials(),

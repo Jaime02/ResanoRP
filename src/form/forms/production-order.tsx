@@ -105,158 +105,164 @@ export default function FormProductionOrder({
   return (
     <FormContextProvider form={form} formMode={formMode} validationSchema={validationSchema} className="w-full grow">
       <ResizablePanelGroup orientation="horizontal" className="h-auto grow">
-        <ResizablePanel className="flex min-w-0 flex-col items-center gap-3">
-          <div className="flex flex-col items-center gap-3">
-            {productionOrder?.deletedAt && (
-              <Badge variant="destructive" size="lg" testId="badge-production-order-deleted">
-                <TriangleAlertIcon className="size-icon" />
-                {PRODUCTION_ORDER_DELETED_MESSAGE}
-              </Badge>
-            )}
-            {formMode !== FormMode.Create && (
-              <div className="flex flex-row flex-wrap items-start justify-center gap-3">
-                <Card>
-                  <CardHeader>
-                    <CardTitle>
-                      <ButtonLink
-                        testId="button-link-part"
-                        to="/part/$id"
-                        params={{ id: productionOrderDetail?.part?.id }}
-                        target="_blank"
-                        disabled={productionOrderDetail?.part === undefined}
-                      >
-                        {PART_LABEL}
+        <ResizablePanel className="flex min-w-0 flex-col items-center">
+          <div className="flex w-fit max-w-full flex-col items-center gap-3">
+            <div className="flex flex-col items-center gap-3">
+              {productionOrder?.deletedAt && (
+                <Badge variant="destructive" size="lg" testId="badge-production-order-deleted">
+                  <TriangleAlertIcon className="size-icon" />
+                  {PRODUCTION_ORDER_DELETED_MESSAGE}
+                </Badge>
+              )}
+              {formMode !== FormMode.Create && (
+                <div className="flex flex-row flex-wrap items-start justify-center gap-3">
+                  <Card>
+                    <CardHeader>
+                      <CardTitle>
+                        <ButtonLink
+                          testId="button-link-part"
+                          to="/part/$id"
+                          params={{ id: productionOrderDetail?.part?.id }}
+                          target="_blank"
+                          disabled={productionOrderDetail?.part === undefined}
+                        >
+                          {PART_LABEL}
+                        </ButtonLink>
+                      </CardTitle>
+                    </CardHeader>
+                    <PartFields
+                      part={productionOrderDetail?.part}
+                      productionOrderId={productionOrderDetail?.id}
+                      canTakeMaterial={formMode !== FormMode.ReadOnly}
+                    />
+                  </Card>
+                  <Card>
+                    <CardHeader>
+                      <CardTitle>Orden de producción {productionOrder?.id}</CardTitle>
+                    </CardHeader>
+                    <ProductionOrderFields
+                      productionOrder={productionOrderDetail}
+                      producedQuantity={productionOrder?.producedQuantity?.producedQuantity}
+                    />
+                    {notesField}
+                    {checkboxFields}
+                  </Card>
+                  {productionOrderDetail?.qualityControl === true && (
+                    <TableQualityControl
+                      key={productionOrderDetail.id}
+                      productionOrder={productionOrderDetail}
+                      readOnly
+                    />
+                  )}
+                </div>
+              )}
+              {/* Created by hand there is no Pedido to show yet */}
+              {formMode === FormMode.Create && sellOrderLine != null && (
+                <div className="flex flex-row flex-wrap justify-center gap-2">
+                  {partReferenceToProduce != null && (
+                    <FieldLayoutContainer>
+                      <FieldLabel>{REFERENCE_LABEL}</FieldLabel>
+                      <ButtonLink to="/part/$id" params={{ id: partReferenceToProduce.partId }} target="_blank">
+                        {partReferenceToProduce.reference}
                       </ButtonLink>
-                    </CardTitle>
-                  </CardHeader>
-                  <PartFields
-                    part={productionOrderDetail?.part}
-                    productionOrderId={productionOrderDetail?.id}
-                    canTakeMaterial={formMode !== FormMode.ReadOnly}
-                  />
-                </Card>
-                <Card>
-                  <CardHeader>
-                    <CardTitle>Orden de producción {productionOrder?.id}</CardTitle>
-                  </CardHeader>
-                  <ProductionOrderFields
-                    productionOrder={productionOrderDetail}
-                    producedQuantity={productionOrder?.producedQuantity?.producedQuantity}
+                    </FieldLayoutContainer>
+                  )}
+                  <FieldLayoutContainer>
+                    <FieldLabel>{SELL_ORDER_LABEL}</FieldLabel>
+                    <ButtonLink to="/sell-order/$id" params={{ id: sellOrderLine.sellOrder?.id }} target="_blank">
+                      {sellOrderLine.sellOrder?.clientReference ??
+                        (sellOrderLine.sellOrder?.id !== undefined
+                          ? String(sellOrderLine.sellOrder.id)
+                          : VIEW_SELL_ORDER_LABEL)}
+                    </ButtonLink>
+                  </FieldLayoutContainer>
+                  <FieldLayoutContainer>
+                    <FieldLabel>{DELIVERY_DATE_LABEL}</FieldLabel>
+                    <DateInput
+                      date={sellOrderLine.requestedDeliveryDate}
+                      disabled
+                      emptyMessage={NOT_SPECIFIED_MESSAGE}
+                    />
+                  </FieldLayoutContainer>
+                </div>
+              )}
+              {formMode === FormMode.Create && (
+                <>
+                  {partReferenceToProduce == null && (
+                    <form.AppField
+                      name="partId"
+                      children={(field) => (
+                        <field.PickerPart
+                          id="form-production-order-part"
+                          label={PART_LABEL}
+                          pickerMode={TablePartPickerMode.PickParts}
+                          onRowSelect={(row) => field.handleChange(row?.partId ?? null)}
+                        />
+                      )}
+                    />
+                  )}
+                  <form.AppField
+                    name="quantity"
+                    listeners={{
+                      onChange: ({ value }) => form.setFieldValue("qualityControl", hasDefaultQualityControl(value)),
+                    }}
+                    children={(field) => (
+                      <field.NumberInput id="form-production-order-quantity" label={QUANTITY_TO_PRODUCE_LABEL} />
+                    )}
                   />
                   {notesField}
                   {checkboxFields}
-                </Card>
-                {productionOrderDetail?.qualityControl === true && (
-                  <TableQualityControl
-                    key={productionOrderDetail.id}
-                    productionOrder={productionOrderDetail}
-                    readOnly
-                  />
-                )}
-              </div>
-            )}
-            {/* Created by hand there is no Pedido to show yet */}
-            {formMode === FormMode.Create && sellOrderLine != null && (
-              <div className="flex flex-row flex-wrap justify-center gap-2">
-                {partReferenceToProduce != null && (
-                  <FieldLayoutContainer>
-                    <FieldLabel>{REFERENCE_LABEL}</FieldLabel>
-                    <ButtonLink to="/part/$id" params={{ id: partReferenceToProduce.partId }} target="_blank">
-                      {partReferenceToProduce.reference}
-                    </ButtonLink>
-                  </FieldLayoutContainer>
-                )}
-                <FieldLayoutContainer>
-                  <FieldLabel>{SELL_ORDER_LABEL}</FieldLabel>
-                  <ButtonLink to="/sell-order/$id" params={{ id: sellOrderLine.sellOrder?.id }} target="_blank">
-                    {sellOrderLine.sellOrder?.clientReference ??
-                      (sellOrderLine.sellOrder?.id !== undefined
-                        ? String(sellOrderLine.sellOrder.id)
-                        : VIEW_SELL_ORDER_LABEL)}
-                  </ButtonLink>
-                </FieldLayoutContainer>
-                <FieldLayoutContainer>
-                  <FieldLabel>{DELIVERY_DATE_LABEL}</FieldLabel>
-                  <DateInput date={sellOrderLine.requestedDeliveryDate} disabled emptyMessage={NOT_SPECIFIED_MESSAGE} />
-                </FieldLayoutContainer>
-              </div>
-            )}
-            {formMode === FormMode.Create && (
-              <>
-                {partReferenceToProduce == null && (
-                  <form.AppField
-                    name="partId"
-                    children={(field) => (
-                      <field.PickerPart
-                        id="form-production-order-part"
-                        label={PART_LABEL}
-                        pickerMode={TablePartPickerMode.PickParts}
-                        onRowSelect={(row) => field.handleChange(row?.partId ?? null)}
-                      />
-                    )}
-                  />
-                )}
-                <form.AppField
-                  name="quantity"
-                  listeners={{
-                    onChange: ({ value }) => form.setFieldValue("qualityControl", hasDefaultQualityControl(value)),
-                  }}
-                  children={(field) => (
-                    <field.NumberInput id="form-production-order-quantity" label={QUANTITY_TO_PRODUCE_LABEL} />
+                </>
+              )}
+              {formMode !== FormMode.ReadOnly && (
+                <div className="flex w-full flex-row justify-end gap-2">
+                  {formMode !== FormMode.Create && (
+                    <ButtonDeleteModel
+                      dialogTitle={PRODUCTION_ORDER_DELETE_TITLE}
+                      dialogDescription={PRODUCTION_ORDER_DELETE_MESSAGE}
+                      serializedModel={productionOrder && serializeProductionOrder(productionOrder)}
+                      onConfirm={async () => {
+                        if (productionOrder?.id === undefined) return;
+                        void showToastOnTransaction({
+                          transaction: () =>
+                            dbClient.collection(productionOrderCollection).delete(productionOrder.id, {
+                              optimistic: import.meta.env.VITE_ENV_NAME !== "test",
+                            }),
+                          onSuccess: { title: PRODUCTION_ORDER_DELETED_MESSAGE },
+                        });
+                      }}
+                      triggerExtraComponents={DELETE_LABEL}
+                      size="default"
+                    />
                   )}
-                />
-                {notesField}
-                {checkboxFields}
-              </>
-            )}
-            {formMode !== FormMode.ReadOnly && (
-              <div className="flex w-full flex-row justify-end gap-2">
-                {formMode !== FormMode.Create && (
-                  <ButtonDeleteModel
-                    dialogTitle={PRODUCTION_ORDER_DELETE_TITLE}
-                    dialogDescription={PRODUCTION_ORDER_DELETE_MESSAGE}
-                    serializedModel={productionOrder && serializeProductionOrder(productionOrder)}
-                    onConfirm={async () => {
-                      if (productionOrder?.id === undefined) return;
-                      void showToastOnTransaction({
-                        transaction: () =>
-                          dbClient.collection(productionOrderCollection).delete(productionOrder.id, {
-                            optimistic: import.meta.env.VITE_ENV_NAME !== "test",
-                          }),
-                        onSuccess: { title: PRODUCTION_ORDER_DELETED_MESSAGE },
-                      });
-                    }}
-                    triggerExtraComponents={DELETE_LABEL}
+                  <form.ButtonSubmit disableIfPristine={formMode !== FormMode.Create} />
+                </div>
+              )}
+              {productionOrder?.deletedAt && (
+                <div className="flex w-full flex-row justify-end gap-2">
+                  <ButtonRestoreModel
+                    dialogTitle={PRODUCTION_ORDER_RESTORE_TITLE}
+                    dialogDescription={PRODUCTION_ORDER_RESTORE_MESSAGE}
+                    serializedModel={serializeProductionOrder(productionOrder)}
+                    triggerExtraComponents={RESTORE_LABEL}
                     size="default"
+                    onConfirm={() =>
+                      void showToastOnTRPCMutation({
+                        mutation: trpc.productionOrder.restore.mutate({ id: productionOrder.id }),
+                        onSuccess: { title: PRODUCTION_ORDER_RESTORED_MESSAGE },
+                      })
+                    }
                   />
-                )}
-                <form.ButtonSubmit disableIfPristine={formMode !== FormMode.Create} />
-              </div>
-            )}
-            {productionOrder?.deletedAt && (
-              <div className="flex w-full flex-row justify-end gap-2">
-                <ButtonRestoreModel
-                  dialogTitle={PRODUCTION_ORDER_RESTORE_TITLE}
-                  dialogDescription={PRODUCTION_ORDER_RESTORE_MESSAGE}
-                  serializedModel={serializeProductionOrder(productionOrder)}
-                  triggerExtraComponents={RESTORE_LABEL}
-                  size="default"
-                  onConfirm={() =>
-                    void showToastOnTRPCMutation({
-                      mutation: trpc.productionOrder.restore.mutate({ id: productionOrder.id }),
-                      onSuccess: { title: PRODUCTION_ORDER_RESTORED_MESSAGE },
-                    })
-                  }
-                />
-              </div>
-            )}
+                </div>
+              )}
+            </div>
+            <Separator orientation="horizontal" />
+            <TablePartProductionHistory
+              title={PRODUCTION_HISTORY_TITLE}
+              partId={productionOrder?.part?.id ?? pickedPartId ?? undefined}
+              skipQueries={isLoading}
+            />
           </div>
-          <Separator orientation="horizontal" />
-          <TablePartProductionHistory
-            title={PRODUCTION_HISTORY_TITLE}
-            partId={productionOrder?.part?.id ?? pickedPartId ?? undefined}
-            skipQueries={isLoading}
-          />
         </ResizablePanel>
         {showBlueprints && (
           <>

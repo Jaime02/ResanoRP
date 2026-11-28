@@ -48,7 +48,12 @@ import { getPopoverContent } from "@/tests/utils/components/popover";
 import { getTableRowByTestId } from "@/tests/utils/components/table";
 import { clearToasts, expectSingleSuccessToast, expectSingleToast, getToasts } from "@/tests/utils/components/toast";
 import { expectCheckViolation } from "@/tests/utils/db";
-import { expectRejectedMutation, httpRequestFailedEvent, invalidParamsEvent } from "@/tests/utils/errors-log";
+import {
+  expectRejectedMutation,
+  httpRequestFailedEvent,
+  invalidParamsEvent,
+  expectRejectedToast,
+} from "@/tests/utils/errors-log";
 import { TestAnnotations, expectErrorsLog, setUserMode, test } from "@/tests/utils/fixtures";
 import { getProductionOrdersByStatuses } from "@/tests/utils/mock-data-utils";
 import { holdRequestWhile } from "@/tests/utils/trpc";
@@ -313,8 +318,7 @@ test(
         send: async () =>
           workflowSubmitMaterialLotForm(page, { unit: getOtherMaterialLotUnit(materialLot.unit) }, materialLot.id),
       });
-      await expectSingleToast(page, MATERIAL_LOT_UNIT_WITH_MOVEMENTS_MESSAGE);
-      expectRejectedMutation({
+      await expectRejectedToast(page, {
         code: "BAD_REQUEST",
         message: MATERIAL_LOT_UNIT_WITH_MOVEMENTS_MESSAGE,
         procedurePath: "materialLot.update",
@@ -426,8 +430,7 @@ test(
         procedurePath: "materialLot.delete",
         send: async () => workflowDeleteMaterialLot(page, deletableMaterialLot.id),
       });
-      await expectSingleToast(page, MATERIAL_LOT_WITH_MOVEMENTS_MESSAGE);
-      expectRejectedMutation({
+      await expectRejectedToast(page, {
         code: "BAD_REQUEST",
         message: MATERIAL_LOT_WITH_MOVEMENTS_MESSAGE,
         procedurePath: "materialLot.delete",
@@ -579,8 +582,7 @@ test("take and return the stock of a Lote without an Orden de producción", asyn
         await workflowMoveMaterial(page, otherRow, { mode: MaterialLotMovementMode.Take, quantity: 1 });
       },
     });
-    await expectSingleToast(page, MATERIAL_LOT_WITHOUT_STOCK_MESSAGE);
-    expectRejectedMutation({
+    await expectRejectedToast(page, {
       code: "BAD_REQUEST",
       message: MATERIAL_LOT_WITHOUT_STOCK_MESSAGE,
       procedurePath: "materialLot.move",
@@ -709,8 +711,7 @@ test(
           await workflowMoveMaterial(page, usedMaterial, { mode: MaterialLotMovementMode.Take, quantity: 0 });
         },
       });
-      await expectSingleToast(page, MATERIAL_LOT_WITHOUT_STOCK_MESSAGE);
-      expectRejectedMutation({
+      await expectRejectedToast(page, {
         code: "BAD_REQUEST",
         message: MATERIAL_LOT_WITHOUT_STOCK_MESSAGE,
         procedurePath: "materialLot.move",

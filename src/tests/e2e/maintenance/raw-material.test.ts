@@ -1,6 +1,7 @@
 import { expect } from "@playwright/test";
 import { eq } from "drizzle-orm";
 
+import db from "@/db";
 import { RAW_MATERIAL_NAME_CONSTRAINT, dbTableRawMaterial } from "@/db/schema";
 import { formatPrice } from "@/lib/formatters";
 import { NAME_LABEL } from "@/messages/common";
@@ -15,7 +16,7 @@ import {
   RAW_MATERIAL_EDITED_MESSAGE,
 } from "@/messages/material";
 import { mockMaterials, mockRawMaterials } from "@/tests/mock-data";
-import { openAndConfirmAlertDialog } from "@/tests/utils/components/alert-dialog";
+import { closeDialog, openAndConfirmAlertDialog } from "@/tests/utils/components/alert-dialog";
 import { InputElementType, assertFormLoaded, getFormInputByLabel } from "@/tests/utils/components/form";
 import {
   assertTableRowCount,
@@ -31,7 +32,7 @@ import { test } from "@/tests/utils/fixtures";
 import {
   EditButtonVisibility,
   workflowDeletedFilterAndRestore,
-  workflowRestoreTaken,
+  workflowRejectRestoreOfTaken,
 } from "@/tests/workflows/deleted-filter";
 import {
   assertInactiveMaterialWarning,
@@ -75,10 +76,6 @@ test("manage the Materias primas", async ({ page, db }) => {
     await page.getByRole("button", { name: RAW_MATERIAL_CREATE_TITLE }).click();
     await expect(dialogCreateEditRawMaterial).toBeVisible();
   };
-  const closeDialog = async () => {
-    await dialogCreateEditRawMaterial.getByTestId("button-close").click();
-    await expect(dialogCreateEditRawMaterial).not.toBeVisible();
-  };
   const fillRawMaterial = async (rawMaterial: BaseRawMaterial, name: string) => {
     await getFormInputByLabel(dialogCreateEditRawMaterial, NAME_LABEL).fill(name);
     const inputPrice = getFormInputByLabel(
@@ -98,7 +95,7 @@ test("manage the Materias primas", async ({ page, db }) => {
       items: activeRawMaterials,
       form: dialogCreateEditRawMaterial,
       openCreate: openCreateRawMaterial,
-      closeCreate: closeDialog,
+      closeCreate: async () => closeDialog(dialogCreateEditRawMaterial),
       fill: fillRawMaterial,
       insertDuplicate: async (name) => db.insert(dbTableRawMaterial).values({ name }),
       constraintName: RAW_MATERIAL_NAME_CONSTRAINT,
@@ -112,7 +109,7 @@ test("manage the Materias primas", async ({ page, db }) => {
       form: dialogCreateEditRawMaterial,
       openEdit: async (rawMaterial) =>
         (await findTableRowByText(tableRawMaterial, rawMaterial.name)).getByTestId("button-edit").click(),
-      closeEdit: closeDialog,
+      closeEdit: async () => closeDialog(dialogCreateEditRawMaterial),
       getName: async (id) => (await db.query.dbTableRawMaterial.findFirst({ where: { id } }))?.name,
       table: dbTableRawMaterial,
       constraintName: RAW_MATERIAL_NAME_CONSTRAINT,
@@ -242,6 +239,13 @@ test("manage the Materias primas", async ({ page, db }) => {
         constraintName: RAW_MATERIAL_NAME_CONSTRAINT,
       });
       await expect(filterByExactText(getTableRows(tableRawMaterial), rawMaterial.name)).toHaveCount(1);
+      await workflowRejectRestoreOfTaken({
+        ...DELETED_RAW_MATERIAL_FILTER_PARAMS,
+        page,
+        id: rawMaterial.id,
+        uniqueViolation: uniqueNameViolation(RAW_MATERIAL_NAME_CONSTRAINT, dbTableRawMaterial, rawMaterial.name),
+        errorMessage: NAME_TAKEN_MESSAGE,
+      });
     }
   });
 });
@@ -250,33 +254,16 @@ const DELETED_RAW_MATERIAL_FILTER_PARAMS = {
   url: MAINTENANCE_RAW_MATERIAL_URL,
   tableTestId: "table-raw-material",
   filterLabel: SHOW_DELETED_RAW_MATERIALS_LABEL,
+  getDeletedAt: async (id: number) => (await db.query.dbTableRawMaterial.findFirst({ where: { id } }))?.deletedAt,
 };
 
-test("list the deleted Materias primas only when asked for and restore them from the table", async ({ page, db }) => {
+test("list the deleted Materias primas only when asked for and restore them from the table", async ({ page }) => {
   await workflowDeletedFilterAndRestore({
     ...DELETED_RAW_MATERIAL_FILTER_PARAMS,
     page,
-    getDeletedAt: async (id) => (await db.query.dbTableRawMaterial.findFirst({ where: { id } }))?.deletedAt,
     ids: mockRawMaterials.filter((rawMaterial) => rawMaterial.deletedAt === null).map(({ id }) => id),
     editButton: EditButtonVisibility.OnlyActive,
     deletedToastTitle: RAW_MATERIAL_DELETED_MESSAGE,
     restoredToastTitle: RAW_MATERIAL_RESTORED_MESSAGE,
-  });
-});
-
-test("a deleted Materia prima cannot be restored from the table while another one has its name", async ({
-  page,
-  db,
-}) => {
-  const rawMaterial = mockRawMaterials.find((mockRawMaterial) => mockRawMaterial.deletedAt === null)!;
-  await workflowRestoreTaken({
-    ...DELETED_RAW_MATERIAL_FILTER_PARAMS,
-    page,
-    getDeletedAt: async (id) => (await db.query.dbTableRawMaterial.findFirst({ where: { id } }))?.deletedAt,
-    id: rawMaterial.id,
-    insertDuplicate: async () => db.insert(dbTableRawMaterial).values({ name: rawMaterial.name }),
-    uniqueViolation: uniqueNameViolation(RAW_MATERIAL_NAME_CONSTRAINT, dbTableRawMaterial, rawMaterial.name),
-    errorMessage: NAME_TAKEN_MESSAGE,
-    deletedToastTitle: RAW_MATERIAL_DELETED_MESSAGE,
   });
 });

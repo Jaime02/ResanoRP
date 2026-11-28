@@ -5,7 +5,7 @@ import MaintenanceDialog from "@/components/dialog/maintenance-dialog";
 import useCreatePartFeatureForm from "@/form/hooks/use-create-part-feature";
 import {
   PART_FEATURE_CREATE_TITLE,
-  PART_FEATURE_LABEL,
+  PART_FEATURE_FORM_LABEL,
   PART_FEATURE_MAX_VALUE_LABEL,
   PART_FEATURE_MIN_VALUE_LABEL,
 } from "@/messages/part";
@@ -42,7 +42,7 @@ export default function DialogCreatePartFeature({ open, partId }: DialogCreatePa
           <field.TextInput
             id="input-feature-create-part-feature-dialog"
             testId="input-feature"
-            label={PART_FEATURE_LABEL}
+            label={PART_FEATURE_FORM_LABEL}
           />
         )}
       />

@@ -73,3 +73,9 @@ export async function assertFormSchemaErrors(container: Locator, schema: z.ZodTy
   }
   await expect(container.getByTestId("button-submit")).toBeDisabled();
 }
+
+export async function retypeInput(input: Locator, value: string) {
+  await input.clear();
+  await input.pressSequentially(value);
+  await expect(input).toHaveValue(value);
+}

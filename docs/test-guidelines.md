@@ -52,3 +52,37 @@ for i in $(seq 1 10); do
   node --env-file=./envs/.env.test ./node_modules/@playwright/test/cli.js test src/tests/e2e/<file>.test.ts -g "<title>" --workers=1 --reporter=line | grep -E "passed|failed"
 done
 ```
+
+## A route in a test context turns off the HTTP cache
+
+### What happened
+
+`trackAuditedMutations` routed every tRPC request so the audit checks could read the request bodies. Playwright turns off the browser's HTTP cache for a whole context once it has a route, so every page load downloaded about 2.3 MB of JavaScript again. Page loads took about 157 ms on average; without the route they took about 87 ms.
+
+### Rules for test code
+
+- **Route only the requests a test needs to change or inspect.** A route on one URL pattern still disables the cache for the whole context.
+- **Put the route in the helper that needs it, once per context.** Keep a `WeakSet` of contexts that are already routed, so a helper called again does not add a second route.
+- **Measure before you optimize a test.** Record each step's category (hook, fixture, action, assertion) with a reporter, and compare before and after runs interleaved, not back to back. Most of the time in this suite was in assertion waits and clicks, not in setup or resets.
+
+## Wait for the server before saving state it reads from a cookie
+
+### What happened
+
+The server takes the admin role only from its httpOnly session cookie. The app saved the new user mode first and then called the logout. A navigation that followed aborted the logout request, so the browser showed another mode while the server still had the admin session.
+
+### Rules for app code
+
+- **Save the cookie-backed state only after the server has answered the request that changes it.** If the request fails, keep the old state and show an error.
+- **Ignore new picks while that request is pending.** Otherwise a second pick sends a second logout.
+
+## Fail one request of a batch in a test
+
+### What happened
+
+Aborting every server-function POST made the client's own log request fail too, so the logged error the test expects was never recorded.
+
+### Rules for test code
+
+- **Abort only the request the test is about.** Use a flag so that the route aborts the first matching request and lets the rest through.
+- **Unroute the request once the test has checked the result,** so later steps in the same test are not affected.

@@ -33,7 +33,7 @@ import { CONFIGURATION_EDITED_MESSAGE, VAT_PERCENTAGE_LABEL } from "@/messages/c
 import type { TTableAuditLogState } from "@/schemas/audit-log";
 import { mockSellOrders } from "@/tests/mock-data";
 import { readAuditLog } from "@/tests/utils/audit-log";
-import { openAndConfirmAlertDialog } from "@/tests/utils/components/alert-dialog";
+import { closeDialog, openAndConfirmAlertDialog } from "@/tests/utils/components/alert-dialog";
 import { InputElementType, assertFormLoaded, getFormInputByLabel } from "@/tests/utils/components/form";
 import {
   assertTableRowCount,
@@ -308,8 +308,7 @@ test("the Usuarios of the Backoffice name an IP in the header and in the audit l
       uniqueColumnsViolation(USER_IP_CONSTRAINT, dbTableUser, [[dbTableUser.ip, browserIp]]),
       USER_IP_TAKEN_MESSAGE,
     );
-    await dialogCreateEditUser.getByTestId("button-close").click();
-    await expect(dialogCreateEditUser).not.toBeVisible();
+    await closeDialog(dialogCreateEditUser);
   });
 
   await test.step("deleting the Usuario takes its name out of the header", async () => {

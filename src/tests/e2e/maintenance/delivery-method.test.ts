@@ -1,6 +1,7 @@
 import { expect } from "@playwright/test";
 import { eq } from "drizzle-orm";
 
+import db from "@/db";
 import { DELIVERY_METHOD_NAME_CONSTRAINT, dbTableDeliveryMethod } from "@/db/schema";
 import { DEFAULT_DELIVERY_METHOD_LABEL } from "@/messages/client";
 import { STATUS_DELETED_LABEL, DELIVERY_METHOD_LABEL, NAME_LABEL } from "@/messages/common";
@@ -13,18 +14,24 @@ import {
   DELIVERY_METHOD_EDITED_MESSAGE,
 } from "@/messages/delivery-method";
 import { mockClients, mockDeliveryMethods, mockDeliveryNotes } from "@/tests/mock-data";
-import { openAndConfirmAlertDialog } from "@/tests/utils/components/alert-dialog";
-import { assertComboboxValue, fillComboboxFilter, openCombobox } from "@/tests/utils/components/combobox";
+import { closeDialog, openAndConfirmAlertDialog } from "@/tests/utils/components/alert-dialog";
+import {
+  assertComboboxOptionsCount,
+  assertComboboxValue,
+  fillComboboxFilter,
+  openCombobox,
+} from "@/tests/utils/components/combobox";
 import { InputElementType, assertFormLoaded, getFormInputByLabel } from "@/tests/utils/components/form";
 import { getPopoverContent } from "@/tests/utils/components/popover";
 import { filterByExactText, findTableRowByText, getTableRows } from "@/tests/utils/components/table";
 import { expectSingleSuccessToast } from "@/tests/utils/components/toast";
 import { uniqueNameViolation } from "@/tests/utils/errors-log";
 import { test } from "@/tests/utils/fixtures";
+import { assertDeletedDefaultsCleared } from "@/tests/workflows/client";
 import {
   EditButtonVisibility,
   workflowDeletedFilterAndRestore,
-  workflowRestoreTaken,
+  workflowRejectRestoreOfTaken,
 } from "@/tests/workflows/deleted-filter";
 import { workflowOpenEditDeliveryNote } from "@/tests/workflows/delivery-note";
 import {
@@ -32,7 +39,6 @@ import {
   workflowRejectRenameToTakenName,
   workflowReuseDeletedName,
 } from "@/tests/workflows/unique-name";
-import type { BaseClient } from "@/types/client";
 
 const MAINTENANCE_DELIVERY_METHOD_URL = "/maintenance?tab=deliveryMethod";
 const NAME_TAKEN_MESSAGE = "Existe un Transporte con el mismo nombre";
@@ -45,10 +51,6 @@ test("manage the Transportes", async ({ page, db }) => {
   const openCreateDeliveryMethod = async () => {
     await page.getByRole("button", { name: DELIVERY_METHOD_CREATE_TITLE }).click();
     await expect(dialogCreateEditDeliveryMethod).toBeVisible();
-  };
-  const closeDialog = async () => {
-    await dialogCreateEditDeliveryMethod.getByTestId("button-close").click();
-    await expect(dialogCreateEditDeliveryMethod).not.toBeVisible();
   };
 
   await test.step("rename a Transporte and give it back its name", async () => {
@@ -78,7 +80,7 @@ test("manage the Transportes", async ({ page, db }) => {
       items: activeDeliveryMethods,
       form: dialogCreateEditDeliveryMethod,
       openCreate: openCreateDeliveryMethod,
-      closeCreate: closeDialog,
+      closeCreate: async () => closeDialog(dialogCreateEditDeliveryMethod),
       insertDuplicate: async (name) => db.insert(dbTableDeliveryMethod).values({ name }),
       constraintName: DELIVERY_METHOD_NAME_CONSTRAINT,
       table: dbTableDeliveryMethod,
@@ -91,7 +93,7 @@ test("manage the Transportes", async ({ page, db }) => {
       form: dialogCreateEditDeliveryMethod,
       openEdit: async (deliveryMethod) =>
         (await findTableRowByText(tableDeliveryMethod, deliveryMethod.name)).getByTestId("button-edit").click(),
-      closeEdit: closeDialog,
+      closeEdit: async () => closeDialog(dialogCreateEditDeliveryMethod),
       getName: async (id) => (await db.query.dbTableDeliveryMethod.findFirst({ where: { id } }))?.name,
       table: dbTableDeliveryMethod,
       constraintName: DELIVERY_METHOD_NAME_CONSTRAINT,
@@ -110,12 +112,7 @@ test("manage the Transportes", async ({ page, db }) => {
     ).toBe(true);
 
     const deletedDeliveryMethodIds = new Set<number>();
-    const getExpectedDefaultDeliveryMethodId = (client: BaseClient) =>
-      client.defaultDeliveryMethodId !== null && deletedDeliveryMethodIds.has(client.defaultDeliveryMethodId)
-        ? null
-        : client.defaultDeliveryMethodId;
     const dialogCreateEditDeliveryNote = page.getByTestId("dialog-create-edit-delivery-note");
-    const formClient = page.getByTestId("form-client");
 
     for (const deliveryMethod of activeDeliveryMethods) {
       await page.goto(MAINTENANCE_DELIVERY_METHOD_URL);
@@ -137,16 +134,12 @@ test("manage the Transportes", async ({ page, db }) => {
       expect(
         (await db.query.dbTableDeliveryMethod.findFirst({ where: { id: deliveryMethod.id } }))?.deletedAt,
       ).toBeInstanceOf(Date);
-      expect(
-        await db.query.dbTableClient.findMany({
-          columns: { defaultDeliveryMethodId: true, id: true },
-          orderBy: { id: "asc" },
-        }),
-      ).toEqual(
-        mockClients.map((client) => ({
-          defaultDeliveryMethodId: getExpectedDefaultDeliveryMethodId(client),
-          id: client.id,
-        })),
+      await assertDeletedDefaultsCleared(
+        page,
+        "defaultDeliveryMethodId",
+        DEFAULT_DELIVERY_METHOD_LABEL,
+        deletedDeliveryMethodIds,
+        deliveryMethod.id,
       );
       expect(
         await db.query.dbTableDeliveryNote.findMany({
@@ -159,17 +152,6 @@ test("manage the Transportes", async ({ page, db }) => {
           id: deliveryNote.id,
         })),
       );
-
-      for (const client of mockClients.filter(
-        (mockClient) => mockClient.deletedAt === null && mockClient.defaultDeliveryMethodId === deliveryMethod.id,
-      )) {
-        await page.goto(`/client/${client.id}`);
-        await assertFormLoaded(formClient);
-        await assertComboboxValue(
-          getFormInputByLabel(formClient, DEFAULT_DELIVERY_METHOD_LABEL, InputElementType.Combobox),
-          null,
-        );
-      }
 
       // The deleted Transporte is still shown in its pending Albaranes, although it can no longer be picked
       for (const deliveryNote of mockDeliveryNotes.filter(
@@ -195,7 +177,7 @@ test("manage the Transportes", async ({ page, db }) => {
 
         await openCombobox(comboboxDeliveryMethod);
         await fillComboboxFilter(page, deliveryMethod.name);
-        await expect(page.getByTestId("combobox-list").locator("[role='option']")).toHaveCount(0);
+        await assertComboboxOptionsCount(page, 0);
       }
 
       // Its name can be used again, so the deleted Transporte can no longer be restored
@@ -214,6 +196,17 @@ test("manage the Transportes", async ({ page, db }) => {
         constraintName: DELIVERY_METHOD_NAME_CONSTRAINT,
       });
       await expect(filterByExactText(getTableRows(tableDeliveryMethod), deliveryMethod.name)).toHaveCount(1);
+      await workflowRejectRestoreOfTaken({
+        ...DELETED_DELIVERY_METHOD_FILTER_PARAMS,
+        page,
+        id: deliveryMethod.id,
+        uniqueViolation: uniqueNameViolation(
+          DELIVERY_METHOD_NAME_CONSTRAINT,
+          dbTableDeliveryMethod,
+          deliveryMethod.name,
+        ),
+        errorMessage: NAME_TAKEN_MESSAGE,
+      });
     }
   });
 });
@@ -222,30 +215,16 @@ const DELETED_DELIVERY_METHOD_FILTER_PARAMS = {
   url: MAINTENANCE_DELIVERY_METHOD_URL,
   tableTestId: "table-delivery-method",
   filterLabel: SHOW_DELETED_DELIVERY_METHODS_LABEL,
+  getDeletedAt: async (id: number) => (await db.query.dbTableDeliveryMethod.findFirst({ where: { id } }))?.deletedAt,
 };
 
-test("list the deleted Transportes only when asked for and restore them from the table", async ({ page, db }) => {
+test("list the deleted Transportes only when asked for and restore them from the table", async ({ page }) => {
   await workflowDeletedFilterAndRestore({
     ...DELETED_DELIVERY_METHOD_FILTER_PARAMS,
     page,
-    getDeletedAt: async (id) => (await db.query.dbTableDeliveryMethod.findFirst({ where: { id } }))?.deletedAt,
     ids: mockDeliveryMethods.filter((deliveryMethod) => deliveryMethod.deletedAt === null).map(({ id }) => id),
     editButton: EditButtonVisibility.OnlyActive,
     deletedToastTitle: DELIVERY_METHOD_DELETED_MESSAGE,
     restoredToastTitle: DELIVERY_METHOD_RESTORED_MESSAGE,
-  });
-});
-
-test("a deleted Transporte cannot be restored from the table while another one has its name", async ({ page, db }) => {
-  const deliveryMethod = mockDeliveryMethods.find((mockDeliveryMethod) => mockDeliveryMethod.deletedAt === null)!;
-  await workflowRestoreTaken({
-    ...DELETED_DELIVERY_METHOD_FILTER_PARAMS,
-    page,
-    getDeletedAt: async (id) => (await db.query.dbTableDeliveryMethod.findFirst({ where: { id } }))?.deletedAt,
-    id: deliveryMethod.id,
-    insertDuplicate: async () => db.insert(dbTableDeliveryMethod).values({ name: deliveryMethod.name }),
-    uniqueViolation: uniqueNameViolation(DELIVERY_METHOD_NAME_CONSTRAINT, dbTableDeliveryMethod, deliveryMethod.name),
-    errorMessage: NAME_TAKEN_MESSAGE,
-    deletedToastTitle: DELIVERY_METHOD_DELETED_MESSAGE,
   });
 });

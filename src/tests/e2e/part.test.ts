@@ -72,7 +72,7 @@ import {
   PART_COMPONENT_DUPLICATED_ERROR_MESSAGE,
   PART_COMPONENT_EDIT_VALIDATION_ERROR_MESSAGE,
   PART_COMPONENT_SELF_ERROR_MESSAGE,
-  PART_FEATURE_LABEL,
+  PART_FEATURE_FORM_LABEL,
   PART_REFERENCE_DELETED_TOOLTIP_MESSAGE,
   PART_STOCK_UPDATE_QUANTITY_LABEL,
   PART_FEATURE_CREATED_MESSAGE,
@@ -119,14 +119,8 @@ import {
   mockShapes,
 } from "@/tests/mock-data";
 import { countTestIdInsertions } from "@/tests/utils/components";
-import { openAndConfirmAlertDialog } from "@/tests/utils/components/alert-dialog";
-import {
-  assertComboboxValue,
-  clickInComboboxOption,
-  getClearComboboxButton,
-  openCombobox,
-  selectComboboxOption,
-} from "@/tests/utils/components/combobox";
+import { closeDialog, openAndConfirmAlertDialog } from "@/tests/utils/components/alert-dialog";
+import { assertComboboxValue, getClearComboboxButton, selectComboboxOption } from "@/tests/utils/components/combobox";
 import { setInputFiles } from "@/tests/utils/components/file-input";
 import {
   InputElementType,
@@ -152,6 +146,7 @@ import {
   expectRejectedMutation,
   expectUniqueViolationRejected,
   uniqueColumnsViolation,
+  expectRejectedToast,
 } from "@/tests/utils/errors-log";
 import { TestAnnotations, inAnotherTab, setUserMode, test } from "@/tests/utils/fixtures";
 import {
@@ -280,8 +275,7 @@ test("manage the parts", { annotation: TestAnnotations.ResetBlueprints }, async 
 
     const dialogGetPartByIdQueryError = page.getByTestId("dialog-error-get-part-by-id-query");
     await expect(dialogGetPartByIdQueryError).toBeVisible();
-    await dialogGetPartByIdQueryError.getByTestId("button-close").click();
-    await expect(dialogGetPartByIdQueryError).not.toBeVisible();
+    await closeDialog(dialogGetPartByIdQueryError);
     await expect(page).toHaveURL("/part");
   });
 
@@ -328,8 +322,7 @@ test("manage the parts", { annotation: TestAnnotations.ResetBlueprints }, async 
 
       await popoverMaterialFilters.getByTestId("popover-trigger").click();
 
-      await openCombobox(page.getByTestId("combobox-filter-material-raw-material"));
-      await clickInComboboxOption(page, rawMaterialName);
+      await selectComboboxOption(page, page.getByTestId("combobox-filter-material-raw-material"), rawMaterialName);
       await expectVisibleParts(
         getPartIdsWithMaterial((partMaterial) => partMaterial.rawMaterialId === material.rawMaterialId),
       );
@@ -343,8 +336,7 @@ test("manage the parts", { annotation: TestAnnotations.ResetBlueprints }, async 
         ),
       );
 
-      await openCombobox(page.getByTestId("combobox-filter-material-shape"));
-      await clickInComboboxOption(page, shapeName);
+      await selectComboboxOption(page, page.getByTestId("combobox-filter-material-shape"), shapeName);
       const materialPartIds = getPartIdsWithMaterial((partMaterial) => partMaterial.id === material.id);
       await expectVisibleParts(materialPartIds);
 
@@ -352,8 +344,7 @@ test("manage the parts", { annotation: TestAnnotations.ResetBlueprints }, async 
 
       // Both filters must match
       for (const coating of mockCoatings.filter((mockCoating) => mockCoating.deletedAt === null)) {
-        await openCombobox(comboboxCoatingFilter);
-        await clickInComboboxOption(page, coating.name);
+        await selectComboboxOption(page, comboboxCoatingFilter, coating.name);
         await expectVisibleParts(
           activeParts
             .filter((part) => part.coatingId === coating.id && materialPartIds.includes(part.id))
@@ -368,8 +359,7 @@ test("manage the parts", { annotation: TestAnnotations.ResetBlueprints }, async 
     }
 
     for (const coating of mockCoatings.filter((mockCoating) => mockCoating.deletedAt === null)) {
-      await openCombobox(comboboxCoatingFilter);
-      await clickInComboboxOption(page, coating.name);
+      await selectComboboxOption(page, comboboxCoatingFilter, coating.name);
       await expectVisibleParts(activeParts.filter((part) => part.coatingId === coating.id).map((part) => part.id));
       await getClearComboboxButton(comboboxCoatingFilter).click();
     }
@@ -454,7 +444,7 @@ test("manage the parts", { annotation: TestAnnotations.ResetBlueprints }, async 
       await page.getByRole("tab", { name: BLUEPRINTS_TITLE }).click();
       await formPart.getByTestId("button-create-part-feature").click();
       const dialogCreatePartFeature = page.getByTestId("dialog-create-part-feature");
-      await getFormInputByLabel(dialogCreatePartFeature, PART_FEATURE_LABEL).fill("Característica sin guardar");
+      await getFormInputByLabel(dialogCreatePartFeature, PART_FEATURE_FORM_LABEL).fill("Característica sin guardar");
       await dialogCreatePartFeature.getByTestId("button-submit").click();
       await expect(dialogCreatePartFeature).toBeHidden();
       await expectSingleSuccessToast(page, PART_FEATURE_CREATED_MESSAGE);
@@ -488,8 +478,7 @@ test("manage the parts", { annotation: TestAnnotations.ResetBlueprints }, async 
 
       const comboboxShape = formPart.getByTestId("combobox-shape");
       await assertComboboxValue(comboboxShape, part.shapeId === null ? null : String(part.shapeId));
-      await openCombobox(comboboxShape);
-      await clickInComboboxOption(page, newShape.name);
+      await selectComboboxOption(page, comboboxShape, newShape.name);
 
       await clearToasts(page);
       await formPart.getByTestId("button-submit").click();
@@ -539,8 +528,7 @@ test("manage the parts", { annotation: TestAnnotations.ResetBlueprints }, async 
       await expect(getFormInputByLabel(formPart, DESCRIPTION_LABEL)).toHaveValue(newClientDescription);
 
       const clientReferenceCombobox = formPart.getByTestId("combobox-client");
-      await openCombobox(clientReferenceCombobox);
-      await clickInComboboxOption(page, client.name);
+      await selectComboboxOption(page, clientReferenceCombobox, client.name);
 
       await getFormInputByLabel(formPart, DESCRIPTION_LABEL).fill(newDescription);
       await getFormInputByLabel(formPart, NOTES_LABEL, InputElementType.Textarea).fill(newNotes);
@@ -590,8 +578,7 @@ test("manage the parts", { annotation: TestAnnotations.ResetBlueprints }, async 
       );
       await expect(getFormInputByLabel(formPart, DESCRIPTION_LABEL)).toHaveValue(newDescription);
 
-      await openCombobox(formPart.getByTestId("combobox-client"));
-      await clickInComboboxOption(page, client.name);
+      await selectComboboxOption(page, formPart.getByTestId("combobox-client"), client.name);
 
       await formPart.getByTestId("button-submit").click();
 
@@ -633,8 +620,7 @@ test("edit, delete and create the prices of every part", async ({ page }) => {
 
       await inputPrice.clear();
       await inputPrice.pressSequentially(newPrice);
-      await openCombobox(comboboxClient);
-      await clickInComboboxOption(page, newClient.name);
+      await selectComboboxOption(page, comboboxClient, newClient.name);
       await expect(inputPrice).toHaveValue(formatPrice(newPrice, { replaceNBSP: true }));
       await assertComboboxValue(comboboxClient, String(newClient.id));
 
@@ -672,8 +658,7 @@ test("edit, delete and create the prices of every part", async ({ page }) => {
       const inputPrice = getFormInputByLabel(cardCreatePartPrice, PRICE_LABEL, InputElementType.Number);
       await inputPrice.clear();
       await inputPrice.pressSequentially(newPrice);
-      await openCombobox(cardCreatePartPrice.getByTestId("combobox-client"));
-      await clickInComboboxOption(page, client.name);
+      await selectComboboxOption(page, cardCreatePartPrice.getByTestId("combobox-client"), client.name);
 
       const buttonSubmit = cardCreatePartPrice.getByTestId("button-submit");
       await expect(buttonSubmit).toBeEnabled();
@@ -780,51 +765,59 @@ test("remove every material of every part and add the compatible ones back", asy
   }
 });
 
-test("list every material of a part at once, without paging", async ({ page, db }) => {
-  const part = activeParts[0];
-  const [shape] = await db.insert(dbTableShape).values({ name: "Many materials shape" }).returning();
-  const [rawMaterial] = await db.insert(dbTableRawMaterial).values({ name: "Many materials raw material" }).returning();
-  // More than the default page of 10 rows of a table
-  const materials = await db
-    .insert(dbTableMaterial)
-    .values(
-      Array.from({ length: 11 }, (_, index) => ({
-        rawMaterialId: rawMaterial.id,
-        shapeId: shape.id,
-        width: String(index + 1),
-      })),
-    )
-    .returning();
-  await db
-    .insert(dbTablePartMaterial)
-    .values(materials.map((material) => ({ materialId: material.id, partId: part.id })));
-  const partMaterialsCount = getMockPartMaterials(part).length + materials.length;
+test("keep a material when its delete dialog is dismissed, and list every material of a part at once", async ({
+  page,
+  db,
+}) => {
+  await test.step("dismissing the delete dialog of a material keeps it in the part", async () => {
+    const part = activeParts.find((activePart) => getMockPartMaterials(activePart).length > 0)!;
+    const partMaterials = getMockPartMaterials(part);
+    const material = partMaterials[0];
 
-  await page.goto(`/part/${part.id}?tab=materials`);
-  await assertFormLoaded(formPart);
-  await assertTableRowCount(tablePartMaterials, partMaterialsCount);
-  await expect(getTableRows(tablePartMaterials)).toHaveCount(partMaterialsCount);
-  await expect(getTablePagerButton(tablePartMaterials, NEXT_PAGE_LABEL)).not.toBeVisible();
-});
+    await page.goto(`/part/${part.id}?tab=materials`);
+    await assertFormLoaded(formPart);
+    await getTableRowByTestId(tablePartMaterials, material.id).getByTestId("button-delete").click();
+    const dialog = page.getByTestId("dialog-delete-model-content");
+    await expect(dialog).toBeVisible();
+    await page.keyboard.press("Escape");
+    await expect(dialog).not.toBeVisible();
 
-test("dismissing the delete dialog of a material keeps it in the part", async ({ page, db }) => {
-  const part = activeParts.find((activePart) => getMockPartMaterials(activePart).length > 0)!;
-  const partMaterials = getMockPartMaterials(part);
-  const material = partMaterials[0];
+    await assertTableRowCount(tablePartMaterials, partMaterials.length);
+    await expect(getTableRowByTestId(tablePartMaterials, material.id)).toBeVisible();
+    expect(
+      await db.query.dbTablePartMaterial.findFirst({ where: { materialId: material.id, partId: part.id } }),
+    ).toBeDefined();
+  });
 
-  await page.goto(`/part/${part.id}?tab=materials`);
-  await assertFormLoaded(formPart);
-  await getTableRowByTestId(tablePartMaterials, material.id).getByTestId("button-delete").click();
-  const dialog = page.getByTestId("dialog-delete-model-content");
-  await expect(dialog).toBeVisible();
-  await page.keyboard.press("Escape");
-  await expect(dialog).not.toBeVisible();
+  await test.step("list every material of a part at once, without paging", async () => {
+    const part = activeParts[0];
+    const [shape] = await db.insert(dbTableShape).values({ name: "Many materials shape" }).returning();
+    const [rawMaterial] = await db
+      .insert(dbTableRawMaterial)
+      .values({ name: "Many materials raw material" })
+      .returning();
+    // More than the default page of 10 rows of a table
+    const materials = await db
+      .insert(dbTableMaterial)
+      .values(
+        Array.from({ length: 11 }, (_, index) => ({
+          rawMaterialId: rawMaterial.id,
+          shapeId: shape.id,
+          width: String(index + 1),
+        })),
+      )
+      .returning();
+    await db
+      .insert(dbTablePartMaterial)
+      .values(materials.map((material) => ({ materialId: material.id, partId: part.id })));
+    const partMaterialsCount = getMockPartMaterials(part).length + materials.length;
 
-  await assertTableRowCount(tablePartMaterials, partMaterials.length);
-  await expect(getTableRowByTestId(tablePartMaterials, material.id)).toBeVisible();
-  expect(
-    await db.query.dbTablePartMaterial.findFirst({ where: { materialId: material.id, partId: part.id } }),
-  ).toBeDefined();
+    await page.goto(`/part/${part.id}?tab=materials`);
+    await assertFormLoaded(formPart);
+    await assertTableRowCount(tablePartMaterials, partMaterialsCount);
+    await expect(getTableRows(tablePartMaterials)).toHaveCount(partMaterialsCount);
+    await expect(getTablePagerButton(tablePartMaterials, NEXT_PAGE_LABEL)).not.toBeVisible();
+  });
 });
 
 test("add stock to every part without an existing part stock", async ({ page, db }) => {
@@ -901,8 +894,10 @@ test("list, create, edit and delete the features of every part", async ({ page, 
     await formPart.getByTestId("button-create-part-feature").click();
     await expect(dialogCreatePartFeature).toBeVisible();
     // The form is validated as it opens, so the missing Característica is marked before anything is typed
-    await expect(getFormInputByLabel(getInvalidFields(dialogCreatePartFeature), PART_FEATURE_LABEL)).toHaveCount(1);
-    await getFormInputByLabel(dialogCreatePartFeature, PART_FEATURE_LABEL).fill(newFeature);
+    await expect(getFormInputByLabel(getInvalidFields(dialogCreatePartFeature), PART_FEATURE_FORM_LABEL)).toHaveCount(
+      1,
+    );
+    await getFormInputByLabel(dialogCreatePartFeature, PART_FEATURE_FORM_LABEL).fill(newFeature);
     await dialogCreatePartFeature.getByTestId("button-submit").click();
     await expect(dialogCreatePartFeature).toBeHidden();
     await expectSingleSuccessToast(page, PART_FEATURE_CREATED_MESSAGE);
@@ -935,8 +930,7 @@ test("list, create, edit and delete the features of every part", async ({ page, 
       );
 
       if (isChecked) {
-        await expectSingleToast(page, PART_FEATURE_CHECKED_DELETE_ERROR_MESSAGE);
-        expectRejectedMutation({
+        await expectRejectedToast(page, {
           code: "BAD_REQUEST",
           message: PART_FEATURE_CHECKED_DELETE_ERROR_MESSAGE,
           procedurePath: "partFeature.delete",
@@ -977,7 +971,7 @@ test("a part cannot have two features with the same name, but different parts ca
     );
   const createPartFeature = async (feature: string) => {
     await formPart.getByTestId("button-create-part-feature").click();
-    await getFormInputByLabel(dialogCreatePartFeature, PART_FEATURE_LABEL).fill(feature);
+    await getFormInputByLabel(dialogCreatePartFeature, PART_FEATURE_FORM_LABEL).fill(feature);
     await dialogCreatePartFeature.getByTestId("button-submit").click();
   };
 
@@ -989,8 +983,7 @@ test("a part cannot have two features with the same name, but different parts ca
   await expectSingleToast(page, duplicatedErrorMessage);
   expectDuplicatedRejected();
   await expect(dialogCreatePartFeature).toBeVisible();
-  await dialogCreatePartFeature.getByTestId("button-close").click();
-  await expect(dialogCreatePartFeature).toBeHidden();
+  await closeDialog(dialogCreatePartFeature);
   await assertTableRowCount(tablePartFeatures, getPartFeatures(part.id).length);
 
   const inputSecondFeature = getEditableCellById(getTableRowByTestId(tablePartFeatures, secondFeature.id), "feature");
@@ -1028,7 +1021,7 @@ test("a feature can have a range of up to 2 decimals whose minimum cannot exceed
   await page.goto(`/part/${part.id}?tab=blueprints`);
   await assertFormLoaded(formPart);
   await formPart.getByTestId("button-create-part-feature").click();
-  await getFormInputByLabel(dialogCreatePartFeature, PART_FEATURE_LABEL).fill(feature);
+  await getFormInputByLabel(dialogCreatePartFeature, PART_FEATURE_FORM_LABEL).fill(feature);
   await inputMinValue.fill("5,5");
   await inputMaxValue.fill("5");
   await expect(buttonSubmit).toBeDisabled();
@@ -1070,8 +1063,7 @@ test("the range of a feature that has quality checks cannot change but its name 
   ] as const) {
     await input.fill(value);
     await input.blur();
-    await expectSingleToast(page, PART_FEATURE_CHECKED_RANGE_ERROR_MESSAGE);
-    expectRejectedMutation({
+    await expectRejectedToast(page, {
       code: "BAD_REQUEST",
       message: PART_FEATURE_CHECKED_RANGE_ERROR_MESSAGE,
       procedurePath: "partFeature.update",
@@ -1254,8 +1246,7 @@ test(
         message: BLUEPRINT_FILE_NAME_TAKEN_MESSAGE(takenBlueprintName),
         procedurePath: "blueprint.create",
       });
-      await dialogCreateBlueprint.getByTestId("button-close").click();
-      await expect(dialogCreateBlueprint).not.toBeVisible();
+      await closeDialog(dialogCreateBlueprint);
       expect(await getBlueprintsByPartId(part.id)).toHaveLength(dbBlueprints.length);
 
       for (const blueprint of dbBlueprints) {
@@ -1589,8 +1580,7 @@ test("update every part reference", async ({ page, db }) => {
     await getFormInputByLabel(dialogCreateEditPartReference, REFERENCE_LABEL).fill(newReference);
     await getFormInputByLabel(dialogCreateEditPartReference, CLIENT_REFERENCE_DESCRIPTION_LABEL).fill(newDescription);
     const clientCombobox = dialogCreateEditPartReference.getByTestId("combobox-client");
-    await openCombobox(clientCombobox);
-    await clickInComboboxOption(page, newClient.name);
+    await selectComboboxOption(page, clientCombobox, newClient.name);
     await assertComboboxValue(clientCombobox, String(newClient.id));
 
     await dialogCreateEditPartReference.getByTestId("button-submit").click();
@@ -1621,8 +1611,7 @@ test("create a part reference for every part, unique for each client", async ({ 
     await expect(dialogCreateEditPartReference).toBeVisible();
     await getFormInputByLabel(dialogCreateEditPartReference, REFERENCE_LABEL).fill(reference);
     await getFormInputByLabel(dialogCreateEditPartReference, CLIENT_REFERENCE_DESCRIPTION_LABEL).fill(description);
-    await openCombobox(clientCombobox);
-    await clickInComboboxOption(page, clientName);
+    await selectComboboxOption(page, clientCombobox, clientName);
     await dialogCreateEditPartReference.getByTestId("button-submit").click();
   };
 
@@ -1664,8 +1653,7 @@ test("create a part reference for every part, unique for each client", async ({ 
       }),
       PART_REFERENCE_CONSTRAINT,
     );
-    await dialogCreateEditPartReference.getByTestId("button-close").click();
-    await expect(dialogCreateEditPartReference).not.toBeVisible();
+    await closeDialog(dialogCreateEditPartReference);
 
     for (const [index, otherClient] of otherClients.entries()) {
       // ...but another Cliente can
@@ -1715,47 +1703,14 @@ test("create a part reference for every part, unique for each client", async ({ 
   }
 });
 
-test("list the compatible materials of a part by their numeric width", async ({ page, db }) => {
-  for (const part of activeParts) {
-    // A Forma of its own, so no other Material is compatible with the Artículo
-    const [shape] = await db
-      .insert(dbTableShape)
-      .values({ name: `Numeric width shape ${part.id}` })
-      .returning();
-    const [rawMaterial] = await db
-      .insert(dbTableRawMaterial)
-      .values({ name: `Numeric width raw material ${part.id}` })
-      .returning();
-    const partWidth = "10";
-    await db.update(dbTablePart).set({ shapeId: shape.id, width: partWidth }).where(eq(dbTablePart.id, part.id));
-
-    // As text, "9" would be wider than "10" and "100" narrower than "25.5"
-    const materials = await db
-      .insert(dbTableMaterial)
-      .values(["9", "10", "100", "25.5"].map((width) => ({ rawMaterialId: rawMaterial.id, shapeId: shape.id, width })))
-      .returning();
-    const expectedMaterials = materials
-      .filter((material) => Number(material.width) >= Number(partWidth))
-      .sort((a, b) => Number(a.width) - Number(b.width));
-
-    await page.goto(`/part/${part.id}?tab=materials`);
-    await assertFormLoaded(formPart);
-
-    await assertTableRowCount(tableCompatiblePartMaterials, expectedMaterials.length);
-    for (const [position, material] of expectedMaterials.entries()) {
-      await expect(getTableRowByPosition(tableCompatiblePartMaterials, position)).toHaveAttribute(
-        "data-testid",
-        String(material.id),
-      );
-    }
-  }
-});
-
 // PowerSync replicates the changes made straight in the database with some lag
 const REPLICATION_LAG = { timeout: 30_000 };
 
-async function expectCompatibleMaterialIds(materialIds: Array<number>) {
-  await assertTableRowCount(tableCompatiblePartMaterials, materialIds.length, REPLICATION_LAG);
+// A paged table counts the rows of the current page, not all of them
+async function expectCompatibleMaterialIds(materialIds: Array<number>, { paged = false } = {}) {
+  await (paged
+    ? expect(getTableRows(tableCompatiblePartMaterials)).toHaveCount(materialIds.length)
+    : assertTableRowCount(tableCompatiblePartMaterials, materialIds.length, REPLICATION_LAG));
   for (const [position, materialId] of materialIds.entries()) {
     await expect(getTableRowByPosition(tableCompatiblePartMaterials, position)).toHaveAttribute(
       "data-testid",
@@ -1765,273 +1720,195 @@ async function expectCompatibleMaterialIds(materialIds: Array<number>) {
   }
 }
 
-test("list the compatible materials of a part with the same width by their id", async ({ page, db }) => {
+async function expectCompatibleMaterialsPage(current: number, total: number) {
+  await expect(
+    tableCompatiblePartMaterials
+      .locator("xpath=preceding-sibling::div[1]")
+      .getByText(PAGE_OF_MESSAGE(current, total), { exact: true }),
+  ).toBeVisible();
+}
+
+const byWidth = (a: { width: string | null }, b: { width: string | null }) => Number(a.width) - Number(b.width);
+const getIds = (materials: Array<{ id: number }>) => materials.map(({ id }) => id);
+// One short of two full pages, so the last page is partial
+const TWO_PAGES_OF_WIDTHS = Array.from({ length: COMPATIBLE_MATERIALS_PAGE_SIZE * 2 - 1 }, (_, index) =>
+  String((index + 1) * 10),
+);
+
+test("list, page, filter and keep up to date the compatible materials of a part", async ({ page, db }) => {
   const part = activeParts[0];
-  // A Forma of its own, so no other Material is compatible with the Artículo
-  const [shape] = await db.insert(dbTableShape).values({ name: "Same width materials shape" }).returning();
-  // Materiales of the same Forma and Medida need different Materias primas
-  const [firstRawMaterial, secondRawMaterial] = await db
-    .insert(dbTableRawMaterial)
-    .values([{ name: "Same width raw material 1" }, { name: "Same width raw material 2" }])
-    .returning();
-  await db.update(dbTablePart).set({ shapeId: shape.id, width: "10" }).where(eq(dbTablePart.id, part.id));
-  const [firstMaterial, secondMaterial, narrowMaterial] = await db
-    .insert(dbTableMaterial)
-    .values([
-      { rawMaterialId: firstRawMaterial.id, shapeId: shape.id, width: "25" },
-      { rawMaterialId: secondRawMaterial.id, shapeId: shape.id, width: "20" },
-      { rawMaterialId: firstRawMaterial.id, shapeId: shape.id, width: "15" },
-    ])
-    .returning();
 
-  await page.goto(`/part/${part.id}?tab=materials`);
-  await assertFormLoaded(formPart);
-  await expectCompatibleMaterialIds([narrowMaterial.id, secondMaterial.id, firstMaterial.id]);
-
-  // The changed Material arrives last, but it still goes before the one of the same Medida with a greater id
-  await db.update(dbTableMaterial).set({ width: "20" }).where(eq(dbTableMaterial.id, firstMaterial.id));
-  await expectCompatibleMaterialIds([narrowMaterial.id, firstMaterial.id, secondMaterial.id]);
-});
-
-test("keep the compatible materials of a part up to date while they are listed", async ({ page, db }) => {
-  const part = activeParts[0];
-  // A Forma of its own, so no other Material is compatible with the Artículo
-  const [shape] = await db.insert(dbTableShape).values({ name: "Live materials shape" }).returning();
-  const [firstRawMaterial, secondRawMaterial] = await db
-    .insert(dbTableRawMaterial)
-    .values([{ name: "Live materials raw material 1" }, { name: "Live materials raw material 2" }])
-    .returning();
-  await db.update(dbTablePart).set({ shapeId: shape.id, width: "10" }).where(eq(dbTablePart.id, part.id));
-  const [firstMaterial, secondMaterial] = await db
-    .insert(dbTableMaterial)
-    .values([
-      { rawMaterialId: firstRawMaterial.id, shapeId: shape.id, width: "10" },
-      { rawMaterialId: secondRawMaterial.id, shapeId: shape.id, width: "20" },
-    ])
-    .returning();
-
-  await page.goto(`/part/${part.id}?tab=materials`);
-  await assertFormLoaded(formPart);
-  await expectCompatibleMaterialIds([firstMaterial.id, secondMaterial.id]);
-
-  const [newMaterial] = await db
-    .insert(dbTableMaterial)
-    .values({ rawMaterialId: firstRawMaterial.id, shapeId: shape.id, width: "30" })
-    .returning();
-  await expectCompatibleMaterialIds([firstMaterial.id, secondMaterial.id, newMaterial.id]);
-
-  await db.update(dbTableMaterial).set({ deletedAt: new Date() }).where(eq(dbTableMaterial.id, firstMaterial.id));
-  await expectCompatibleMaterialIds([secondMaterial.id, newMaterial.id]);
-
-  // Deleting a Materia prima hides its Materiales, even though they are not deleted themselves
-  await db
-    .update(dbTableRawMaterial)
-    .set({ deletedAt: new Date() })
-    .where(eq(dbTableRawMaterial.id, secondRawMaterial.id));
-  await expectCompatibleMaterialIds([newMaterial.id]);
-});
-
-test("page through the compatible materials of a part", async ({ page, db }) => {
-  const part = activeParts[0];
-  // A Forma of its own, so no other Material is compatible with the Artículo
-  const [shape] = await db.insert(dbTableShape).values({ name: "Paged materials shape" }).returning();
-  const [rawMaterial] = await db
-    .insert(dbTableRawMaterial)
-    .values({ name: "Paged materials raw material" })
-    .returning();
-  await db.update(dbTablePart).set({ shapeId: shape.id, width: "10" }).where(eq(dbTablePart.id, part.id));
-
-  // One short of two full pages, so the last page is partial
-  const materials = (
-    await db
-      .insert(dbTableMaterial)
-      .values(
-        Array.from({ length: COMPATIBLE_MATERIALS_PAGE_SIZE * 2 - 1 }, (_, index) => ({
-          rawMaterialId: rawMaterial.id,
-          shapeId: shape.id,
-          width: String((index + 1) * 10),
-        })),
-      )
-      .returning()
-  ).sort((a, b) => Number(a.width) - Number(b.width));
-  const firstPageMaterials = materials.slice(0, COMPATIBLE_MATERIALS_PAGE_SIZE);
-  const lastPageMaterials = materials.slice(COMPATIBLE_MATERIALS_PAGE_SIZE);
-
-  async function expectCompatibleMaterials(expectedMaterials: typeof materials) {
-    await expect(getTableRows(tableCompatiblePartMaterials)).toHaveCount(expectedMaterials.length);
-    for (const [position, material] of expectedMaterials.entries()) {
-      await expect(getTableRowByPosition(tableCompatiblePartMaterials, position)).toHaveAttribute(
-        "data-testid",
-        String(material.id),
-      );
-    }
-  }
-
-  await page.goto(`/part/${part.id}?tab=materials`);
-  await assertFormLoaded(formPart);
-
-  const tablePager = tableCompatiblePartMaterials.locator("xpath=preceding-sibling::div[1]");
-  const buttonNextPage = getTablePagerButton(tableCompatiblePartMaterials, NEXT_PAGE_LABEL);
-
-  await expect(tablePager.getByText(PAGE_OF_MESSAGE(1, 2), { exact: true })).toBeVisible();
-  await expectCompatibleMaterials(firstPageMaterials);
-
-  await buttonNextPage.click();
-  await expect(tablePager.getByText(PAGE_OF_MESSAGE(2, 2), { exact: true })).toBeVisible();
-  await expect(buttonNextPage).toBeDisabled();
-  await expectCompatibleMaterials(lastPageMaterials);
-  expect(page.url()).not.toContain("table-compatible-part-materials");
-
-  for (const material of lastPageMaterials) {
-    await getTableRowByTestId(tableCompatiblePartMaterials, material.id).getByTestId("button-success").click();
-    await expectSingleSuccessToast(page, PART_MATERIAL_ASSIGNED_MESSAGE);
-    await expect(getTableRowByTestId(tablePartMaterials, material.id)).toBeVisible();
-  }
-
-  // Emptying the last page goes back to the remaining one
-  await expect(buttonNextPage).not.toBeVisible();
-  await expectCompatibleMaterials(firstPageMaterials);
-});
-
-test("filter the compatible materials of a part by their raw material, starting over from the first page", async ({
-  page,
-  db,
-}) => {
-  const part = activeParts[0];
-  // A Forma of its own, so no other Material is compatible with the Artículo
-  const [shape] = await db.insert(dbTableShape).values({ name: "Filtered materials shape" }).returning();
-  const [pagedRawMaterial, singleRawMaterial, emptyRawMaterial] = await db
-    .insert(dbTableRawMaterial)
-    .values([
-      { name: "Filtered materials paged raw material" },
-      { name: "Filtered materials single raw material" },
-      { name: "Filtered materials empty raw material" },
-    ])
-    .returning();
-  await db.update(dbTablePart).set({ shapeId: shape.id, width: "10" }).where(eq(dbTablePart.id, part.id));
-
-  // Still two pages once filtered, so staying on the second one would show rows
-  const pagedMaterials = await db
-    .insert(dbTableMaterial)
-    .values(
-      Array.from({ length: COMPATIBLE_MATERIALS_PAGE_SIZE * 2 - 1 }, (_, index) => ({
-        rawMaterialId: pagedRawMaterial.id,
-        shapeId: shape.id,
-        width: String((index + 1) * 10),
-      })),
-    )
-    .returning();
-  const [singleMaterial] = await db
-    .insert(dbTableMaterial)
-    .values({ rawMaterialId: singleRawMaterial.id, shapeId: shape.id, width: "15" })
-    .returning();
-  const byWidth = (a: { width: string | null }, b: { width: string | null }) => Number(a.width) - Number(b.width);
-  const allMaterials = [...pagedMaterials, singleMaterial].sort(byWidth);
-  pagedMaterials.sort(byWidth);
-
-  const tablePager = tableCompatiblePartMaterials.locator("xpath=preceding-sibling::div[1]");
-  const comboboxRawMaterial = tableCompatiblePartMaterials.getByTestId("combobox-raw-material");
-  const buttonClearRawMaterial = comboboxRawMaterial.getByTestId("button-clear");
-
-  async function expectCompatibleMaterials(expectedMaterials: typeof allMaterials) {
-    await expect(getTableRows(tableCompatiblePartMaterials)).toHaveCount(expectedMaterials.length);
-    for (const [position, material] of expectedMaterials.entries()) {
-      await expect(getTableRowByPosition(tableCompatiblePartMaterials, position)).toHaveAttribute(
-        "data-testid",
-        String(material.id),
-      );
-    }
-  }
-
-  await page.goto(`/part/${part.id}?tab=materials`);
-  await assertFormLoaded(formPart);
-  await expect(buttonClearRawMaterial).not.toBeVisible();
-
-  await getTablePagerButton(tableCompatiblePartMaterials, NEXT_PAGE_LABEL).click();
-  await expect(tablePager.getByText(PAGE_OF_MESSAGE(2, 2), { exact: true })).toBeVisible();
-
-  await selectComboboxOption(page, comboboxRawMaterial, pagedRawMaterial.name, String(pagedRawMaterial.id));
-  await expect(tablePager.getByText(PAGE_OF_MESSAGE(1, 2), { exact: true })).toBeVisible();
-  await expectCompatibleMaterials(pagedMaterials.slice(0, COMPATIBLE_MATERIALS_PAGE_SIZE));
-
-  await getTablePagerButton(tableCompatiblePartMaterials, NEXT_PAGE_LABEL).click();
-  await expect(tablePager.getByText(PAGE_OF_MESSAGE(2, 2), { exact: true })).toBeVisible();
-
-  await buttonClearRawMaterial.click();
-  await expect(buttonClearRawMaterial).not.toBeVisible();
-  await assertComboboxValue(comboboxRawMaterial, null);
-  await expect(tablePager.getByText(PAGE_OF_MESSAGE(1, 2), { exact: true })).toBeVisible();
-  await expectCompatibleMaterials(allMaterials.slice(0, COMPATIBLE_MATERIALS_PAGE_SIZE));
-
-  await selectComboboxOption(page, comboboxRawMaterial, singleRawMaterial.name, String(singleRawMaterial.id));
-  await expect(getTablePagerButton(tableCompatiblePartMaterials, NEXT_PAGE_LABEL)).not.toBeVisible();
-  await expectCompatibleMaterials([singleMaterial]);
-
-  await selectComboboxOption(page, comboboxRawMaterial, emptyRawMaterial.name, String(emptyRawMaterial.id));
-  await expect(getTableNoDataRow(tableCompatiblePartMaterials)).toHaveText(NO_COMPATIBLE_MATERIALS_MESSAGE);
-});
-
-for (const missingField of ["width", "shape"] as const) {
-  test(`ask for the ${missingField} of a part before listing its compatible materials`, async ({ page, db }) => {
-    const part = activeParts[0];
-    const partWidth = "10";
-    // A Forma of its own, so no other Material is compatible with the Artículo
+  // A Forma of its own, so no other Material is compatible with the Artículo. Materiales of the same Forma and Medida
+  // need different Materias primas
+  const seedShape = async (name: string, rawMaterialCount: number, partToShape = part) => {
     const [shape] = await db
       .insert(dbTableShape)
-      .values({ name: `Missing ${missingField} materials shape` })
+      .values({ name: `${name} shape` })
       .returning();
-    const [rawMaterial] = await db
+    const rawMaterials = await db
       .insert(dbTableRawMaterial)
-      .values({ name: `Missing ${missingField} materials raw material` })
+      .values(Array.from({ length: rawMaterialCount }, (_, index) => ({ name: `${name} raw material ${index + 1}` })))
       .returning();
-    await db.update(dbTablePart).set({ shapeId: shape.id, width: partWidth }).where(eq(dbTablePart.id, part.id));
-    const materials = await db
-      .insert(dbTableMaterial)
-      .values(
-        Array.from({ length: COMPATIBLE_MATERIALS_PAGE_SIZE * 2 - 1 }, (_, index) => ({
-          rawMaterialId: rawMaterial.id,
-          shapeId: shape.id,
-          width: String((index + 1) * 10),
-        })),
-      )
-      .returning();
-    materials.sort((a, b) => Number(a.width) - Number(b.width));
-
-    const tablePager = tableCompatiblePartMaterials.locator("xpath=preceding-sibling::div[1]");
-    const inputWidth = formPart.getByTestId("input-width");
-    const comboboxShape = formPart.getByTestId("combobox-shape");
-
-    // The Forma and Medida are edited in the General tab, and the unsaved values carry over to the Materiales tab
-    await page.goto(`/part/${part.id}`);
+    await db.update(dbTablePart).set({ shapeId: shape.id, width: "10" }).where(eq(dbTablePart.id, partToShape.id));
+    const insertMaterials = async (rawMaterialId: number, widths: Array<string>) =>
+      db
+        .insert(dbTableMaterial)
+        .values(widths.map((width) => ({ rawMaterialId, shapeId: shape.id, width })))
+        .returning();
+    return { insertMaterials, rawMaterials, shape };
+  };
+  const gotoPartMaterials = async (partId = part.id) => {
+    await page.goto(`/part/${partId}?tab=materials`);
     await assertFormLoaded(formPart);
+  };
 
-    if (missingField === "width") {
-      await inputWidth.clear();
-    } else {
-      await getClearComboboxButton(comboboxShape).click();
-      await assertComboboxValue(comboboxShape, null);
-    }
-    await page.getByRole("tab", { name: MATERIALS_LABEL }).click();
-    await expect(getTableNoDataRow(tableCompatiblePartMaterials)).toHaveText(PART_SELECT_SHAPE_AND_SIZE_MESSAGE);
-    await expect(getTablePagerButton(tableCompatiblePartMaterials, NEXT_PAGE_LABEL)).not.toBeVisible();
+  await test.step("list the compatible materials of every part by their numeric width", async () => {
+    for (const activePart of activeParts) {
+      const { insertMaterials, rawMaterials } = await seedShape(`Numeric width ${activePart.id}`, 1, activePart);
+      // As text, "9" would be wider than "10" and "100" narrower than "25.5"
+      const materials = await insertMaterials(rawMaterials[0].id, ["9", "10", "100", "25.5"]);
 
-    await page.getByRole("tab", { name: GENERAL_LABEL }).click();
-    if (missingField === "width") {
-      await inputWidth.pressSequentially(partWidth);
-    } else {
-      await selectComboboxOption(page, comboboxShape, shape.name, String(shape.id));
-    }
-    await page.getByRole("tab", { name: MATERIALS_LABEL }).click();
-    await expect(tablePager.getByText(PAGE_OF_MESSAGE(1, 2), { exact: true })).toBeVisible();
-    await expect(getTableRows(tableCompatiblePartMaterials)).toHaveCount(COMPATIBLE_MATERIALS_PAGE_SIZE);
-    for (const [position, material] of materials.slice(0, COMPATIBLE_MATERIALS_PAGE_SIZE).entries()) {
-      await expect(getTableRowByPosition(tableCompatiblePartMaterials, position)).toHaveAttribute(
-        "data-testid",
-        String(material.id),
+      await gotoPartMaterials(activePart.id);
+      await expectCompatibleMaterialIds(
+        getIds(materials.filter((material) => Number(material.width) >= 10).sort(byWidth)),
       );
     }
   });
-}
+
+  await test.step("list the compatible materials with the same width by their id", async () => {
+    const { insertMaterials, rawMaterials } = await seedShape("Same width materials", 2);
+    const [firstMaterial, narrowMaterial] = await insertMaterials(rawMaterials[0].id, ["25", "15"]);
+    const [secondMaterial] = await insertMaterials(rawMaterials[1].id, ["20"]);
+
+    await gotoPartMaterials();
+    await expectCompatibleMaterialIds([narrowMaterial.id, secondMaterial.id, firstMaterial.id]);
+
+    // The changed Material arrives last, but it still goes before the one of the same Medida with a greater id
+    await db.update(dbTableMaterial).set({ width: "20" }).where(eq(dbTableMaterial.id, firstMaterial.id));
+    await expectCompatibleMaterialIds([narrowMaterial.id, firstMaterial.id, secondMaterial.id]);
+  });
+
+  await test.step("keep the compatible materials up to date while they are listed", async () => {
+    const { insertMaterials, rawMaterials } = await seedShape("Live materials", 2);
+    const [firstMaterial] = await insertMaterials(rawMaterials[0].id, ["10"]);
+    const [secondMaterial] = await insertMaterials(rawMaterials[1].id, ["20"]);
+
+    await gotoPartMaterials();
+    await expectCompatibleMaterialIds([firstMaterial.id, secondMaterial.id]);
+
+    const [newMaterial] = await insertMaterials(rawMaterials[0].id, ["30"]);
+    await expectCompatibleMaterialIds([firstMaterial.id, secondMaterial.id, newMaterial.id]);
+
+    await db.update(dbTableMaterial).set({ deletedAt: new Date() }).where(eq(dbTableMaterial.id, firstMaterial.id));
+    await expectCompatibleMaterialIds([secondMaterial.id, newMaterial.id]);
+
+    // Deleting a Materia prima hides its Materiales, even though they are not deleted themselves
+    await db
+      .update(dbTableRawMaterial)
+      .set({ deletedAt: new Date() })
+      .where(eq(dbTableRawMaterial.id, rawMaterials[1].id));
+    await expectCompatibleMaterialIds([newMaterial.id]);
+  });
+
+  await test.step("page through the compatible materials", async () => {
+    const { insertMaterials, rawMaterials } = await seedShape("Paged materials", 1);
+    const materials = (await insertMaterials(rawMaterials[0].id, TWO_PAGES_OF_WIDTHS)).sort(byWidth);
+    const firstPageMaterials = materials.slice(0, COMPATIBLE_MATERIALS_PAGE_SIZE);
+    const lastPageMaterials = materials.slice(COMPATIBLE_MATERIALS_PAGE_SIZE);
+    const buttonNextPage = getTablePagerButton(tableCompatiblePartMaterials, NEXT_PAGE_LABEL);
+
+    await gotoPartMaterials();
+    await expectCompatibleMaterialsPage(1, 2);
+    await expectCompatibleMaterialIds(getIds(firstPageMaterials), { paged: true });
+
+    await buttonNextPage.click();
+    await expectCompatibleMaterialsPage(2, 2);
+    await expect(buttonNextPage).toBeDisabled();
+    await expectCompatibleMaterialIds(getIds(lastPageMaterials), { paged: true });
+    expect(page.url()).not.toContain("table-compatible-part-materials");
+
+    for (const material of lastPageMaterials) {
+      await getTableRowByTestId(tableCompatiblePartMaterials, material.id).getByTestId("button-success").click();
+      await expectSingleSuccessToast(page, PART_MATERIAL_ASSIGNED_MESSAGE);
+      await expect(getTableRowByTestId(tablePartMaterials, material.id)).toBeVisible();
+    }
+
+    // Emptying the last page goes back to the remaining one
+    await expect(buttonNextPage).not.toBeVisible();
+    await expectCompatibleMaterialIds(getIds(firstPageMaterials), { paged: true });
+  });
+
+  await test.step("filter the compatible materials by their raw material, starting over from the first page", async () => {
+    const { insertMaterials, rawMaterials } = await seedShape("Filtered materials", 3);
+    const [pagedRawMaterial, singleRawMaterial, emptyRawMaterial] = rawMaterials;
+    // Still two pages once filtered, so staying on the second one would show rows
+    const pagedMaterials = (await insertMaterials(pagedRawMaterial.id, TWO_PAGES_OF_WIDTHS)).sort(byWidth);
+    const [singleMaterial] = await insertMaterials(singleRawMaterial.id, ["15"]);
+    const allMaterials = [...pagedMaterials, singleMaterial].sort(byWidth);
+    const comboboxRawMaterial = tableCompatiblePartMaterials.getByTestId("combobox-raw-material");
+    const buttonClearRawMaterial = comboboxRawMaterial.getByTestId("button-clear");
+    const buttonNextPage = getTablePagerButton(tableCompatiblePartMaterials, NEXT_PAGE_LABEL);
+
+    await gotoPartMaterials();
+    await expect(buttonClearRawMaterial).not.toBeVisible();
+
+    await buttonNextPage.click();
+    await expectCompatibleMaterialsPage(2, 2);
+
+    await selectComboboxOption(page, comboboxRawMaterial, pagedRawMaterial.name, String(pagedRawMaterial.id));
+    await expectCompatibleMaterialsPage(1, 2);
+    await expectCompatibleMaterialIds(getIds(pagedMaterials.slice(0, COMPATIBLE_MATERIALS_PAGE_SIZE)), { paged: true });
+
+    await buttonNextPage.click();
+    await expectCompatibleMaterialsPage(2, 2);
+
+    await buttonClearRawMaterial.click();
+    await expect(buttonClearRawMaterial).not.toBeVisible();
+    await assertComboboxValue(comboboxRawMaterial, null);
+    await expectCompatibleMaterialsPage(1, 2);
+    await expectCompatibleMaterialIds(getIds(allMaterials.slice(0, COMPATIBLE_MATERIALS_PAGE_SIZE)), { paged: true });
+
+    await selectComboboxOption(page, comboboxRawMaterial, singleRawMaterial.name, String(singleRawMaterial.id));
+    await expect(buttonNextPage).not.toBeVisible();
+    await expectCompatibleMaterialIds([singleMaterial.id], { paged: true });
+
+    await selectComboboxOption(page, comboboxRawMaterial, emptyRawMaterial.name, String(emptyRawMaterial.id));
+    await expect(getTableNoDataRow(tableCompatiblePartMaterials)).toHaveText(NO_COMPATIBLE_MATERIALS_MESSAGE);
+  });
+
+  for (const missingField of ["width", "shape"] as const) {
+    await test.step(`ask for the ${missingField} of a part before listing its compatible materials`, async () => {
+      const { insertMaterials, rawMaterials, shape } = await seedShape(`Missing ${missingField} materials`, 1);
+      const materials = (await insertMaterials(rawMaterials[0].id, TWO_PAGES_OF_WIDTHS)).sort(byWidth);
+      const inputWidth = formPart.getByTestId("input-width");
+      const comboboxShape = formPart.getByTestId("combobox-shape");
+
+      // The Forma and Medida are edited in the General tab, and the unsaved values carry over to the Materiales tab
+      await page.goto(`/part/${part.id}`);
+      await assertFormLoaded(formPart);
+
+      if (missingField === "width") {
+        await inputWidth.clear();
+      } else {
+        await getClearComboboxButton(comboboxShape).click();
+        await assertComboboxValue(comboboxShape, null);
+      }
+      await page.getByRole("tab", { name: MATERIALS_LABEL }).click();
+      await expect(getTableNoDataRow(tableCompatiblePartMaterials)).toHaveText(PART_SELECT_SHAPE_AND_SIZE_MESSAGE);
+      await expect(getTablePagerButton(tableCompatiblePartMaterials, NEXT_PAGE_LABEL)).not.toBeVisible();
+
+      await page.getByRole("tab", { name: GENERAL_LABEL }).click();
+      if (missingField === "width") {
+        await inputWidth.pressSequentially("10");
+      } else {
+        await selectComboboxOption(page, comboboxShape, shape.name, String(shape.id));
+      }
+      await page.getByRole("tab", { name: MATERIALS_LABEL }).click();
+      await expectCompatibleMaterialsPage(1, 2);
+      await expectCompatibleMaterialIds(getIds(materials.slice(0, COMPATIBLE_MATERIALS_PAGE_SIZE)), { paged: true });
+    });
+  }
+});
 
 test("page through the production history of a part, without storing its page in the URL", async ({ page, db }) => {
   const productionOrder = mockProductionOrders.find(
@@ -2190,8 +2067,7 @@ test(
       await getFormInputByLabel(formPart, REFERENCE_LABEL).fill("628000450");
       await getFormInputByLabel(formPart, DESCRIPTION_LABEL).fill(description);
       await getFormInputByLabel(formPart, CLIENT_REFERENCE_DESCRIPTION_LABEL).fill(description);
-      await openCombobox(formPart.getByTestId("combobox-client"));
-      await clickInComboboxOption(page, activeClients[0].name);
+      await selectComboboxOption(page, formPart.getByTestId("combobox-client"), activeClients[0].name);
       await formPart.getByTestId("button-submit").click();
       await expect(page).toHaveURL(`/part/${partId}`);
 
@@ -2259,8 +2135,7 @@ test("create a part with its blueprint", { annotation: TestAnnotations.ResetBlue
   await getFormInputByLabel(formPart, REFERENCE_LABEL).fill("REF-BLUEPRINT");
   await getFormInputByLabel(formPart, DESCRIPTION_LABEL).fill("Part with blueprint");
   await getFormInputByLabel(formPart, CLIENT_REFERENCE_DESCRIPTION_LABEL).fill("Part with blueprint");
-  await openCombobox(formPart.getByTestId("combobox-client"));
-  await clickInComboboxOption(page, activeClients[0].name);
+  await selectComboboxOption(page, formPart.getByTestId("combobox-client"), activeClients[0].name);
 
   const inputFileName = getFormInputByLabel(formPart, NAME_LABEL);
   const inputBlueprintFile = getFormInputByLabel(formPart, BLUEPRINT_LABEL, InputElementType.File);
@@ -2447,8 +2322,7 @@ test("manage multi-level part sets", { annotation: TestAnnotations.ResetBlueprin
 
     await nodeRow.getByTestId("button-part-set-node-blueprints").click();
     await expect(dialogBlueprints).toBeVisible();
-    await dialogBlueprints.getByTestId("button-close").click();
-    await expect(dialogBlueprints).toBeHidden();
+    await closeDialog(dialogBlueprints);
     await expect(popoverPartSet).toBeVisible();
 
     await page.keyboard.press("Escape");
@@ -2627,8 +2501,11 @@ test(
           });
         },
       });
-      await expectSingleToast(page, errorMessage);
-      expectRejectedMutation({ code: "BAD_REQUEST", message: errorMessage, procedurePath: "partComponent.create" });
+      await expectRejectedToast(page, {
+        code: "BAD_REQUEST",
+        message: errorMessage,
+        procedurePath: "partComponent.create",
+      });
     }
   },
 );

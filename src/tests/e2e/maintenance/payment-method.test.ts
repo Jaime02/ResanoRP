@@ -1,6 +1,7 @@
 import { expect } from "@playwright/test";
 import { eq } from "drizzle-orm";
 
+import db from "@/db";
 import { PAYMENT_METHOD_NAME_CONSTRAINT, dbTablePaymentMethod } from "@/db/schema";
 import { DEFAULT_PAYMENT_METHOD_LABEL } from "@/messages/client";
 import { NAME_LABEL, PAYMENT_METHOD_LABEL } from "@/messages/common";
@@ -14,24 +15,29 @@ import {
   PAYMENT_METHOD_EDITED_MESSAGE,
 } from "@/messages/payment-method";
 import { mockClients, mockInvoices, mockPaymentMethods, mockSellOrders } from "@/tests/mock-data";
-import { openAndConfirmAlertDialog } from "@/tests/utils/components/alert-dialog";
-import { assertComboboxValue, fillComboboxFilter, openCombobox } from "@/tests/utils/components/combobox";
+import { closeDialog, openAndConfirmAlertDialog } from "@/tests/utils/components/alert-dialog";
+import {
+  assertComboboxOptionsCount,
+  assertComboboxValue,
+  fillComboboxFilter,
+  openCombobox,
+} from "@/tests/utils/components/combobox";
 import { InputElementType, assertFormLoaded, getFormInputByLabel } from "@/tests/utils/components/form";
 import { filterByExactText, findTableRowByText, getTableRows } from "@/tests/utils/components/table";
 import { expectSingleSuccessToast } from "@/tests/utils/components/toast";
 import { uniqueNameViolation } from "@/tests/utils/errors-log";
 import { test } from "@/tests/utils/fixtures";
+import { assertDeletedDefaultsCleared } from "@/tests/workflows/client";
 import {
   EditButtonVisibility,
   workflowDeletedFilterAndRestore,
-  workflowRestoreTaken,
+  workflowRejectRestoreOfTaken,
 } from "@/tests/workflows/deleted-filter";
 import {
   workflowRejectCreateWithTakenName,
   workflowRejectRenameToTakenName,
   workflowReuseDeletedName,
 } from "@/tests/workflows/unique-name";
-import type { BaseClient } from "@/types/client";
 
 const MAINTENANCE_PAYMENT_METHOD_URL = "/maintenance?tab=paymentMethod";
 const NAME_TAKEN_MESSAGE = "Existe una Forma de pago con el mismo nombre";
@@ -43,10 +49,6 @@ test("manage the Formas de pago", async ({ page, db }) => {
   const openCreatePaymentMethod = async () => {
     await page.getByRole("button", { name: PAYMENT_METHOD_CREATE_TITLE }).click();
     await expect(dialogCreateEditPaymentMethod).toBeVisible();
-  };
-  const closeDialog = async () => {
-    await dialogCreateEditPaymentMethod.getByTestId("button-close").click();
-    await expect(dialogCreateEditPaymentMethod).not.toBeVisible();
   };
   const checkboxGeneratesReceipt = dialogCreateEditPaymentMethod.getByTestId(
     "dialog-create-edit-payment-method-generates-receipt",
@@ -134,7 +136,7 @@ test("manage the Formas de pago", async ({ page, db }) => {
       items: activePaymentMethods,
       form: dialogCreateEditPaymentMethod,
       openCreate: openCreatePaymentMethod,
-      closeCreate: closeDialog,
+      closeCreate: async () => closeDialog(dialogCreateEditPaymentMethod),
       insertDuplicate: async (name) => db.insert(dbTablePaymentMethod).values({ name }),
       constraintName: PAYMENT_METHOD_NAME_CONSTRAINT,
       table: dbTablePaymentMethod,
@@ -147,7 +149,7 @@ test("manage the Formas de pago", async ({ page, db }) => {
       form: dialogCreateEditPaymentMethod,
       openEdit: async (paymentMethod) =>
         (await findTableRowByText(tablePaymentMethod, paymentMethod.name)).getByTestId("button-edit").click(),
-      closeEdit: closeDialog,
+      closeEdit: async () => closeDialog(dialogCreateEditPaymentMethod),
       getName: async (id) => (await db.query.dbTablePaymentMethod.findFirst({ where: { id } }))?.name,
       table: dbTablePaymentMethod,
       constraintName: PAYMENT_METHOD_NAME_CONSTRAINT,
@@ -172,11 +174,6 @@ test("manage the Formas de pago", async ({ page, db }) => {
     ).toBe(true);
 
     const deletedPaymentMethodIds = new Set<number>();
-    const getExpectedDefaultPaymentMethodId = (client: BaseClient) =>
-      client.defaultPaymentMethodId !== null && deletedPaymentMethodIds.has(client.defaultPaymentMethodId)
-        ? null
-        : client.defaultPaymentMethodId;
-    const formClient = page.getByTestId("form-client");
     const formSellOrder = page.getByTestId("form-sell-order");
 
     for (const paymentMethod of activePaymentMethods) {
@@ -199,16 +196,12 @@ test("manage the Formas de pago", async ({ page, db }) => {
       expect(
         (await db.query.dbTablePaymentMethod.findFirst({ where: { id: paymentMethod.id } }))?.deletedAt,
       ).toBeInstanceOf(Date);
-      expect(
-        await db.query.dbTableClient.findMany({
-          columns: { defaultPaymentMethodId: true, id: true },
-          orderBy: { id: "asc" },
-        }),
-      ).toEqual(
-        mockClients.map((client) => ({
-          defaultPaymentMethodId: getExpectedDefaultPaymentMethodId(client),
-          id: client.id,
-        })),
+      await assertDeletedDefaultsCleared(
+        page,
+        "defaultPaymentMethodId",
+        DEFAULT_PAYMENT_METHOD_LABEL,
+        deletedPaymentMethodIds,
+        paymentMethod.id,
       );
       expect(
         await db.query.dbTableSellOrder.findMany({
@@ -222,17 +215,6 @@ test("manage the Formas de pago", async ({ page, db }) => {
           orderBy: { id: "asc" },
         }),
       ).toEqual(mockInvoices.map(({ id, paymentMethodId }) => ({ id, paymentMethodId })));
-
-      for (const client of mockClients.filter(
-        (mockClient) => mockClient.deletedAt === null && mockClient.defaultPaymentMethodId === paymentMethod.id,
-      )) {
-        await page.goto(`/client/${client.id}`);
-        await assertFormLoaded(formClient);
-        await assertComboboxValue(
-          getFormInputByLabel(formClient, DEFAULT_PAYMENT_METHOD_LABEL, InputElementType.Combobox),
-          null,
-        );
-      }
 
       // The deleted Forma de pago is still shown in its Pedidos de venta, although it can no longer be picked
       for (const sellOrder of mockSellOrders.filter(
@@ -250,7 +232,7 @@ test("manage the Formas de pago", async ({ page, db }) => {
 
         await openCombobox(comboboxPaymentMethod);
         await fillComboboxFilter(page, paymentMethod.name);
-        await expect(page.getByTestId("combobox-list").locator("[role='option']")).toHaveCount(0);
+        await assertComboboxOptionsCount(page, 0);
       }
 
       // Its name can be used again, so the deleted Forma de pago can no longer be restored
@@ -266,6 +248,13 @@ test("manage the Formas de pago", async ({ page, db }) => {
         constraintName: PAYMENT_METHOD_NAME_CONSTRAINT,
       });
       await expect(filterByExactText(getTableRows(tablePaymentMethod), paymentMethod.name)).toHaveCount(1);
+      await workflowRejectRestoreOfTaken({
+        ...DELETED_PAYMENT_METHOD_FILTER_PARAMS,
+        page,
+        id: paymentMethod.id,
+        uniqueViolation: uniqueNameViolation(PAYMENT_METHOD_NAME_CONSTRAINT, dbTablePaymentMethod, paymentMethod.name),
+        errorMessage: NAME_TAKEN_MESSAGE,
+      });
     }
   });
 });
@@ -274,33 +263,16 @@ const DELETED_PAYMENT_METHOD_FILTER_PARAMS = {
   url: MAINTENANCE_PAYMENT_METHOD_URL,
   tableTestId: "table-payment-method",
   filterLabel: SHOW_DELETED_PAYMENT_METHODS_LABEL,
+  getDeletedAt: async (id: number) => (await db.query.dbTablePaymentMethod.findFirst({ where: { id } }))?.deletedAt,
 };
 
-test("list the deleted Formas de pago only when asked for and restore them from the table", async ({ page, db }) => {
+test("list the deleted Formas de pago only when asked for and restore them from the table", async ({ page }) => {
   await workflowDeletedFilterAndRestore({
     ...DELETED_PAYMENT_METHOD_FILTER_PARAMS,
     page,
-    getDeletedAt: async (id) => (await db.query.dbTablePaymentMethod.findFirst({ where: { id } }))?.deletedAt,
     ids: mockPaymentMethods.filter((paymentMethod) => paymentMethod.deletedAt === null).map(({ id }) => id),
     editButton: EditButtonVisibility.OnlyActive,
     deletedToastTitle: PAYMENT_METHOD_DELETED_MESSAGE,
     restoredToastTitle: PAYMENT_METHOD_RESTORED_MESSAGE,
-  });
-});
-
-test("a deleted Forma de pago cannot be restored from the table while another one has its name", async ({
-  page,
-  db,
-}) => {
-  const paymentMethod = mockPaymentMethods.find((mockPaymentMethod) => mockPaymentMethod.deletedAt === null)!;
-  await workflowRestoreTaken({
-    ...DELETED_PAYMENT_METHOD_FILTER_PARAMS,
-    page,
-    getDeletedAt: async (id) => (await db.query.dbTablePaymentMethod.findFirst({ where: { id } }))?.deletedAt,
-    id: paymentMethod.id,
-    insertDuplicate: async () => db.insert(dbTablePaymentMethod).values({ name: paymentMethod.name }),
-    uniqueViolation: uniqueNameViolation(PAYMENT_METHOD_NAME_CONSTRAINT, dbTablePaymentMethod, paymentMethod.name),
-    errorMessage: NAME_TAKEN_MESSAGE,
-    deletedToastTitle: PAYMENT_METHOD_DELETED_MESSAGE,
   });
 });

@@ -27,7 +27,7 @@ import { assertComboboxOptionsCount, openCombobox } from "@/tests/utils/componen
 import { getTableRowByTestId } from "@/tests/utils/components/table";
 import { expectSingleSuccessToast, expectSingleToast } from "@/tests/utils/components/toast";
 import { httpRequestFailedEvent, rejectedMutationEvents } from "@/tests/utils/errors-log";
-import { expectErrorsLog, inAnotherTab, test, TestAnnotations } from "@/tests/utils/fixtures";
+import { expectErrorsLog, inAnotherTab, test } from "@/tests/utils/fixtures";
 import { getMockDeliveryNoteLines, getMockPendingSellOrderLines } from "@/tests/utils/mock-data-utils";
 import {
   clearPrintJobs,
@@ -441,24 +441,6 @@ test("print the documents on the Impresoras of the server or with the browser", 
   });
 });
 
-test(
-  "a user prints an Albarán on an Impresora created by an admin",
-  { annotation: TestAnnotations.UserModeUser },
-  async ({ page, openPage }) => {
-    clearPrintJobs();
-    await createPrinters(await openPage({ userMode: UserMode.Admin }));
-
-    const dialog = await workflowOpenPrintDeliveryNote(page, null);
-    await assertSelectedPrinter(dialog, PRINTERS.accepting.name);
-    const previousJobsCount = await printOnPrinter(
-      page,
-      dialog.getByTestId("button-print-delivery-note-once"),
-      PRINTERS.accepting.name,
-    );
-    await expectPrintJob(previousJobsCount, { host: PRINTERS.accepting.address, orientation: Orientation.Portrait });
-  },
-);
-
 // The download is the file the preview shows
 async function downloadPrintedDeliveryNote(page: Page, dialog: Locator) {
   const downloadPromise = page.waitForEvent("download");
@@ -467,7 +449,10 @@ async function downloadPrintedDeliveryNote(page: Page, dialog: Locator) {
   return { texts: await readPdfPagesTexts(await fs.promises.readFile(await download.path())), url: download.url() };
 }
 
-test("an Albarán with prices is a file apart, which only the Administrador opens", async ({ page, openPage }) => {
+test("an Albarán with prices is a file apart, which only the Administrador opens, and a user prints on the Impresoras of an admin", async ({
+  page,
+  openPage,
+}) => {
   const userPage = await openPage({ userMode: UserMode.User });
   const dialog = await workflowOpenPrintDeliveryNote(page, "with-prices");
 
@@ -487,5 +472,19 @@ test("an Albarán with prices is a file apart, which only the Administrador open
     const response = await userPage.goto(url);
     expect(response?.status()).toBe(403);
     expectErrorsLog(httpRequestFailedEvent("GET", 403, `${pathname}${search}`));
+  });
+
+  await test.step("a user prints an Albarán on an Impresora created by an admin", async () => {
+    clearPrintJobs();
+    await createPrinters(page);
+
+    const userDialog = await workflowOpenPrintDeliveryNote(userPage, null);
+    await assertSelectedPrinter(userDialog, PRINTERS.accepting.name);
+    const previousJobsCount = await printOnPrinter(
+      userPage,
+      userDialog.getByTestId("button-print-delivery-note-once"),
+      PRINTERS.accepting.name,
+    );
+    await expectPrintJob(previousJobsCount, { host: PRINTERS.accepting.address, orientation: Orientation.Portrait });
   });
 });

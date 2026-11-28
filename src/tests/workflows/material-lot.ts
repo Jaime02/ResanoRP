@@ -26,7 +26,7 @@ import {
   mockPartMaterials,
   mockRawMaterials,
 } from "@/tests/mock-data";
-import { openAndConfirmAlertDialog } from "@/tests/utils/components/alert-dialog";
+import { closeDialog, openAndConfirmAlertDialog } from "@/tests/utils/components/alert-dialog";
 import { assertComboboxOptionsCount, openCombobox, selectComboboxOption } from "@/tests/utils/components/combobox";
 import { selectDateInputDate } from "@/tests/utils/components/date-input";
 import { setInputFiles } from "@/tests/utils/components/file-input";
@@ -297,8 +297,7 @@ export async function workflowOpenMaterialLotMovements(page: Page, materialLot: 
 }
 
 export async function workflowCloseDialog(dialog: Locator) {
-  await dialog.getByTestId("button-close").click();
-  await expect(dialog).not.toBeVisible();
+  await closeDialog(dialog);
 }
 
 export function getMaterialMovementButton(container: Locator, mode: MaterialLotMovementMode) {

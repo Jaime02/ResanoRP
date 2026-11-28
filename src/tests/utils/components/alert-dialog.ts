@@ -1,6 +1,11 @@
 import { expect } from "@playwright/test";
 import type { Locator, Page } from "@playwright/test";
 
+export async function closeDialog(dialog: Locator) {
+  await dialog.getByTestId("button-close").click();
+  await expect(dialog).not.toBeVisible();
+}
+
 export async function openAndConfirmAlertDialog(page: Page, trigger: Locator, dialogContentId: string) {
   await expect(trigger).toBeVisible();
   await expect(trigger).toBeEnabled();

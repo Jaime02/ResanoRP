@@ -1,4 +1,5 @@
 import { expect } from "@playwright/test";
+import type { Page } from "@playwright/test";
 import { TRPCError } from "@trpc/server";
 import { getHTTPStatusCodeFromError } from "@trpc/server/http";
 import { getTableName } from "drizzle-orm";
@@ -10,8 +11,10 @@ import { PG_UNIQUE_VIOLATION } from "@/lib/handlers";
 import { LoggerLevels, LogMessages, UNLOGGED_HTTP_STATUS_CODE } from "@/logging/types";
 import type { AppRouter } from "@/routes/api/trpc/$";
 import { formatZodError } from "@/schemas/utils";
+import { expectSingleToast } from "@/tests/utils/components/toast";
 import { expectErrorsLog, type TUserConfig } from "@/tests/utils/fixtures";
-import type { TProcedurePath } from "@/tests/utils/trpc";
+import { holdRequestWhile } from "@/tests/utils/trpc";
+import type { HoldRequestWhileParams, TProcedurePath } from "@/tests/utils/trpc";
 
 export type TErrorCode = TRPCError["code"];
 type TEvent = Record<string, unknown>;
@@ -208,4 +211,22 @@ export function rejectedMutationEvents({
 
 export function expectRejectedMutation(rejectedMutation: TRejectedMutation) {
   expectErrorsLog(...rejectedMutationEvents(rejectedMutation));
+}
+
+// The mutation held is rejected, as what it changes changed meanwhile
+export async function holdRequestAndExpectRejection({
+  page,
+  procedurePath,
+  send,
+  meanwhile,
+  ...rejection
+}: HoldRequestWhileParams & Omit<TRejectedMutation, "procedurePath">) {
+  await holdRequestWhile({ page, procedurePath, send, meanwhile });
+  expectRejectedMutation({ procedurePath, ...rejection });
+}
+
+// The toast shows the message the client gets
+export async function expectRejectedToast(page: Page, rejectedMutation: TRejectedMutation) {
+  await expectSingleToast(page, rejectedMutation.message);
+  expectRejectedMutation(rejectedMutation);
 }

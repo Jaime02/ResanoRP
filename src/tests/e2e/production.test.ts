@@ -123,7 +123,6 @@ test(
         const buttonDialogTriggerMachineProductionOrderQueue = page.getByTestId(
           "button-dialog-trigger-machine-production-order-queue",
         );
-        await expect(buttonDialogTriggerMachineProductionOrderQueue).toBeVisible();
         await buttonDialogTriggerMachineProductionOrderQueue.click();
 
         await expect(dialogContentMachineProductionOrderQueue).toBeVisible();
@@ -140,7 +139,6 @@ test(
         await expect(rowToMove).toBeVisible();
 
         const buttonMoveToQueueStart = rowToMove.getByTestId("button-move-production-order-to-queue-start");
-        await expect(buttonMoveToQueueStart).toBeVisible();
         await buttonMoveToQueueStart.click();
 
         await expectSingleSuccessToast(page, PRODUCTION_ORDER_PRIORITIZED_MESSAGE);
@@ -253,7 +251,6 @@ test(
         );
 
         const confirmStopButton = dialogContentStopProductionOrder.getByTestId("button-confirm-stop-production-order");
-        await expect(confirmStopButton).toBeVisible();
         await confirmStopButton.click();
 
         // The tag has already been printed, so the production order is stopped without asking for confirmation
@@ -342,25 +339,27 @@ test(
   },
 );
 
-test("start every queued production order of the machines with no active production order", async ({ page }) => {
-  const idleMachinesWithQueue = idleMachines.filter((machine) => getMockQueue(machine).length > 0);
-  expect(idleMachinesWithQueue.length, "Wrong test set up: Some idle Máquina should have a queue").toBeGreaterThan(0);
+test("start the queued production orders of the idle machines and work on the ones without a quantity", async ({
+  page,
+}) => {
+  await test.step("start every queued production order of the machines with no active production order", async () => {
+    const idleMachinesWithQueue = idleMachines.filter((machine) => getMockQueue(machine).length > 0);
+    expect(idleMachinesWithQueue.length, "Wrong test set up: Some idle Máquina should have a queue").toBeGreaterThan(0);
 
-  for (const machine of idleMachinesWithQueue) {
-    for (const queue of getMockQueue(machine)) {
-      await workflowStartProductionOrderFromQueue(page, machine, queue.productionOrderId);
+    for (const machine of idleMachinesWithQueue) {
+      for (const queue of getMockQueue(machine)) {
+        await workflowStartProductionOrderFromQueue(page, machine, queue.productionOrderId);
 
-      // Stopping it without producing keeps it queued for the next one
-      await workflowStopActiveProductionOrder(page, {
-        expectedStatus: ProductionOrderStatus.Pending,
-        machine,
-        producedQuantity: 0,
-      });
+        // Stopping it without producing keeps it queued for the next one
+        await workflowStopActiveProductionOrder(page, {
+          expectedStatus: ProductionOrderStatus.Pending,
+          machine,
+          producedQuantity: 0,
+        });
+      }
     }
-  }
-});
+  });
 
-test("work on every production order without a quantity", async ({ page }) => {
   const machinesWithoutQueue = idleMachines.filter((machine) => getMockQueue(machine).length === 0);
   expect(machinesWithoutQueue.length, "Wrong test set up: Some Máquina should be idle").toBeGreaterThan(0);
 

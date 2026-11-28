@@ -55,13 +55,15 @@ import {
   mockSellOrderLines,
 } from "@/tests/mock-data";
 import { getTestId } from "@/tests/utils/components";
+import { closeDialog } from "@/tests/utils/components/alert-dialog";
 import {
   assertComboboxValue,
   clickInComboboxOption,
   getClearComboboxButton,
   openCombobox,
+  selectComboboxOption,
 } from "@/tests/utils/components/combobox";
-import { assertFormLoaded } from "@/tests/utils/components/form";
+import { assertFormLoaded, retypeInput } from "@/tests/utils/components/form";
 import { closePopover, openPopover } from "@/tests/utils/components/popover";
 import {
   assertTableRowCount,
@@ -79,6 +81,7 @@ import {
   httpRequestFailedEvent,
   invalidParamsEvent,
   type TErrorCode,
+  expectRejectedToast,
 } from "@/tests/utils/errors-log";
 import { TestAnnotations, expectErrorsLog, inAnotherTab, setUserMode, test } from "@/tests/utils/fixtures";
 import {
@@ -100,7 +103,7 @@ import {
 } from "@/tests/workflows/delivery-note";
 import { workflowPickInvoiceClient } from "@/tests/workflows/invoice";
 import { assertPartStockConsumption } from "@/tests/workflows/part-stock";
-import { workflowOpenSellOrder } from "@/tests/workflows/sell-order";
+import { workflowOpenSellOrder, workflowEditSellOrderLineCell } from "@/tests/workflows/sell-order";
 import { expectTagField, getTagNamePrefix, getTagSellOrderText, workflowPrintTag } from "@/tests/workflows/tag";
 import { CLIENT_SPLIT_SELL_ORDERS_CHECKBOX_ID, CLIENT_SPLIT_SELL_ORDERS_TOOLTIP_TEST_ID } from "@/types/client";
 import type { BaseDeliveryNote } from "@/types/delivery-note";
@@ -187,9 +190,7 @@ for (const selectedClient of clientsWithPendingLines) {
         const inputStagedQuantity = getEditableCellById(stagedSellOrderLineRow, "quantity");
 
         // The quantity is validated as it is typed, without leaving the cell
-        await inputStagedQuantity.clear();
-        await inputStagedQuantity.pressSequentially("0");
-        await expect(inputStagedQuantity).toHaveValue("0");
+        await retypeInput(inputStagedQuantity, "0");
 
         await expect(buttonSubmitFormDeliveryNote).toBeVisible();
         await expect(buttonSubmitFormDeliveryNote).toBeDisabled();
@@ -584,9 +585,7 @@ for (const client of clientsWithPendingLines) {
           getTableRowByTestId(tableStagedSellOrderLines, sellOrderLine.id),
           "quantity",
         );
-        await inputStagedQuantity.clear();
-        await inputStagedQuantity.pressSequentially(String(quantity));
-        await expect(inputStagedQuantity).toHaveValue(String(quantity));
+        await retypeInput(inputStagedQuantity, String(quantity));
       }
       await expect(buttonSubmitFormDeliveryNote).toBeEnabled();
       await buttonSubmitFormDeliveryNote.click();
@@ -605,8 +604,7 @@ for (const client of clientsWithPendingLines) {
       const previousDeliveryNotesCount = (await getDeliveryNotes()).length;
       await submitStagedQuantities(stagedQuantities);
       const message = PENDING_QUANTITY_EXCEEDED_MESSAGE(stagedQuantities[0][0].id);
-      await expectSingleToast(page, message);
-      expectRejectedMutation({ code: "BAD_REQUEST", message, procedurePath: "deliveryNote.createWithLines" });
+      await expectRejectedToast(page, { code: "BAD_REQUEST", message, procedurePath: "deliveryNote.createWithLines" });
       expect(await getDeliveryNotes()).toHaveLength(previousDeliveryNotesCount);
     };
 
@@ -691,8 +689,7 @@ for (const client of clientsWithPendingLines) {
       await workflowOpenEditDeliveryNote(page, firstReturnLine.deliveryNoteId);
       const inputQuantity = await workflowEditDeliveryNoteLineQuantity(page, firstReturnLine.id, -100);
       const exceededMessage = PENDING_QUANTITY_EXCEEDED_MESSAGE(orderedSellOrderLine.id);
-      await expectSingleToast(page, exceededMessage);
-      expectRejectedMutation({
+      await expectRejectedToast(page, {
         code: "BAD_REQUEST",
         message: exceededMessage,
         procedurePath: "deliveryNoteLine.update",
@@ -867,9 +864,7 @@ for (const client of clientsWithPendingLines) {
       await test.step("the total of a part fills its earliest lines first, also when a line joins it", async () => {
         await getButtonStage(earliestLine).click();
         await getButtonStage(mockFirstLine).click();
-        await inputPartQuantity.clear();
-        await inputPartQuantity.pressSequentially(String(lowerTotal));
-        await expect(inputPartQuantity).toHaveValue(String(lowerTotal));
+        await retypeInput(inputPartQuantity, String(lowerTotal));
 
         // The units of the joining line go to the earlier line that was not filled, so the joining one is left at 0
         await getButtonStage(mockLastLine).click();
@@ -880,18 +875,14 @@ for (const client of clientsWithPendingLines) {
         // empty total and a lone minus sign leave nothing to serve either
         await getButtonStage(returnLine).click();
         for (const typedTotal of ["", "-", "0"]) {
-          await inputPartQuantity.clear();
-          await inputPartQuantity.pressSequentially(typedTotal);
-          await expect(inputPartQuantity).toHaveValue(typedTotal);
+          await retypeInput(inputPartQuantity, typedTotal);
           await expect(buttonSubmitFormDeliveryNote).toBeDisabled();
           await expect(page.getByTestId("button-add-lines-to-existing-delivery-note")).toBeDisabled();
           await expect(partRow.getByTestId("button-print-tag")).toBeDisabled();
         }
         await getTableRowByTestId(tableStagedSellOrderLines, returnLine.id).getByTestId("button-unstage").click();
         await expect(buttonSubmitFormDeliveryNote).toBeDisabled();
-        await inputPartQuantity.clear();
-        await inputPartQuantity.pressSequentially(String(total));
-        await expect(inputPartQuantity).toHaveValue(String(total));
+        await retypeInput(inputPartQuantity, String(total));
 
         // The lines left at 0 are left out of the tag, which holds the whole total by default
         const [tag, ...otherTags] = await workflowPrintTag(page, partRow, tagNamePrefix);
@@ -945,9 +936,7 @@ for (const client of clientsWithPendingLines) {
         );
         const total = pendingOfMockFirstLine + mockLastLine.pendingQuantity + extraUnits;
         await expect(inputQuantity).toHaveValue(String(total - extraUnits));
-        await inputQuantity.clear();
-        await inputQuantity.pressSequentially(String(total));
-        await expect(inputQuantity).toHaveValue(String(total));
+        await retypeInput(inputQuantity, String(total));
 
         await inAnotherTab(page, async (anotherPage) => {
           await workflowOpenCreateDeliveryNoteForClient(anotherPage, client);
@@ -1086,9 +1075,7 @@ for (const client of clientsWithPendingLines) {
               await workflowStageSingleSellOrderLine(anotherPage, sellOrderLine.id),
               "quantity",
             );
-            await inputStagedQuantity.clear();
-            await inputStagedQuantity.pressSequentially(String(deliveredQuantity));
-            await expect(inputStagedQuantity).toHaveValue(String(deliveredQuantity));
+            await retypeInput(inputStagedQuantity, String(deliveredQuantity));
             await getButtonSubmitFormDeliveryNote(anotherPage).click();
             await expectSingleSuccessToast(anotherPage, DELIVERY_NOTE_CREATED_MESSAGE);
           }),
@@ -1156,10 +1143,7 @@ for (const client of clientsWithPendingLines) {
         [deliveredAfterEdits, 0],
         [deliveredAfterEdits + 2, 2],
       ]) {
-        await inputQuantity.clear();
-        await inputQuantity.pressSequentially(String(quantity));
-        await inputQuantity.press("Enter");
-        await expectSingleSuccessToast(page, SELL_ORDER_LINE_EDITED_MESSAGE);
+        await workflowEditSellOrderLineCell(page, inputQuantity, String(quantity));
         expect(await getSellOrderLineById(sellOrderLine.id)).toMatchObject({ pendingQuantity, quantity });
       }
     });
@@ -1167,94 +1151,89 @@ for (const client of clientsWithPendingLines) {
 }
 
 for (const client of clientsWithPendingLines) {
-  test(`pending sell order lines of ${client.name} are sorted by delivery date keeping the lines of the same part together`, async ({
-    db,
-    page,
-  }) => {
-    const mockPendingSellOrderLines = await getMockPendingSellOrderLines(client.id);
-    expect(
-      mockPendingSellOrderLines.every((line) => line.requestedDeliveryDate === null),
-      "The mock pending lines of the Cliente are expected without delivery date",
-    ).toBe(true);
+  test(`sort the pending sell order lines of ${client.name} and hide the staged ones`, async ({ db, page }) => {
+    await test.step("pending sell order lines are sorted by delivery date keeping the lines of the same part together", async () => {
+      const mockPendingSellOrderLines = await getMockPendingSellOrderLines(client.id);
+      expect(
+        mockPendingSellOrderLines.every((line) => line.requestedDeliveryDate === null),
+        "The mock pending lines of the Cliente are expected without delivery date",
+      ).toBe(true);
 
-    const samePartReferenceId = 2;
-    const samePartPendingLine = mockPendingSellOrderLines.find(
-      (line) =>
-        line.partReferenceId !== samePartReferenceId &&
-        getMockPartByPartReferenceId(line.partReferenceId)?.id ===
-          getMockPartByPartReferenceId(samePartReferenceId)?.id,
-    )!;
-    expect(samePartPendingLine, "A pending line of the same part with another reference is needed").toBeDefined();
-    const otherPartReferenceId = 10;
-    const line = { pendingQuantity: 1, quantity: 1, sellOrderId: samePartPendingLine.sellOrderId };
+      const samePartReferenceId = 2;
+      const samePartPendingLine = mockPendingSellOrderLines.find(
+        (line) =>
+          line.partReferenceId !== samePartReferenceId &&
+          getMockPartByPartReferenceId(line.partReferenceId)?.id ===
+            getMockPartByPartReferenceId(samePartReferenceId)?.id,
+      )!;
+      expect(samePartPendingLine, "A pending line of the same part with another reference is needed").toBeDefined();
+      const otherPartReferenceId = 10;
+      const line = { pendingQuantity: 1, quantity: 1, sellOrderId: samePartPendingLine.sellOrderId };
 
-    const [earliestLine, laterLine, noDateLine, customLine, samePartLine] = await db
-      .insert(dbTableSellOrderLine)
-      .values([
-        { ...line, partReferenceId: otherPartReferenceId, requestedDeliveryDate: addDays(MOCK_INITIAL_DATE, 1) },
-        { ...line, partReferenceId: otherPartReferenceId, requestedDeliveryDate: addDays(MOCK_INITIAL_DATE, 5) },
-        { ...line, partReferenceId: otherPartReferenceId, requestedDeliveryDate: null },
-        { ...line, description: "Portes", partPrice: "12.5", requestedDeliveryDate: addDays(MOCK_INITIAL_DATE, 2) },
-        { ...line, partReferenceId: samePartReferenceId, requestedDeliveryDate: addDays(MOCK_INITIAL_DATE, 3) },
-      ])
-      .returning();
+      const [earliestLine, laterLine, noDateLine, customLine, samePartLine] = await db
+        .insert(dbTableSellOrderLine)
+        .values([
+          { ...line, partReferenceId: otherPartReferenceId, requestedDeliveryDate: addDays(MOCK_INITIAL_DATE, 1) },
+          { ...line, partReferenceId: otherPartReferenceId, requestedDeliveryDate: addDays(MOCK_INITIAL_DATE, 5) },
+          { ...line, partReferenceId: otherPartReferenceId, requestedDeliveryDate: null },
+          { ...line, description: "Portes", partPrice: "12.5", requestedDeliveryDate: addDays(MOCK_INITIAL_DATE, 2) },
+          { ...line, partReferenceId: samePartReferenceId, requestedDeliveryDate: addDays(MOCK_INITIAL_DATE, 3) },
+        ])
+        .returning();
 
-    await workflowOpenCreateDeliveryNoteForClient(page, client);
-    const rows = getTableRows(tablePendingSellOrderLines);
-    await expect(rows).toHaveCount(mockPendingSellOrderLines.length + 5);
-    const rowIds = await Promise.all((await rows.all()).map(getTestId));
+      await workflowOpenCreateDeliveryNoteForClient(page, client);
+      const rows = getTableRows(tablePendingSellOrderLines);
+      await expect(rows).toHaveCount(mockPendingSellOrderLines.length + 5);
+      const rowIds = await Promise.all((await rows.all()).map(getTestId));
 
-    // A line without delivery date stays with the lines of its part, and a part goes where its earliest line goes
-    expect(rowIds.slice(0, 6)).toEqual([
-      earliestLine.id,
-      laterLine.id,
-      noDateLine.id,
-      customLine.id,
-      samePartLine.id,
-      samePartPendingLine.id,
-    ]);
-    expect(rowIds.slice(6)).toEqual(
-      expect.arrayContaining(
-        mockPendingSellOrderLines
-          .filter((pendingLine) => pendingLine.id !== samePartPendingLine.id)
-          .map((pendingLine) => pendingLine.id),
-      ),
-    );
-  });
-}
+      // A line without delivery date stays with the lines of its part, and a part goes where its earliest line goes
+      expect(rowIds.slice(0, 6)).toEqual([
+        earliestLine.id,
+        laterLine.id,
+        noDateLine.id,
+        customLine.id,
+        samePartLine.id,
+        samePartPendingLine.id,
+      ]);
+      expect(rowIds.slice(6)).toEqual(
+        expect.arrayContaining(
+          mockPendingSellOrderLines
+            .filter((pendingLine) => pendingLine.id !== samePartPendingLine.id)
+            .map((pendingLine) => pendingLine.id),
+        ),
+      );
+    });
 
-for (const client of clientsWithPendingLines) {
-  test(`staged sell order lines of ${client.name} can be hidden from the pending sell order lines`, async ({
-    page,
-  }) => {
-    const [stagedLine, otherLine] = await getMockPendingSellOrderLines(client.id);
-    expect(otherLine, "At least two pending lines of the Cliente are needed").toBeDefined();
-    const checkboxShowStagedLines = page.getByTestId("checkbox-show-staged-lines");
-    const stagedLineRow = getTableRowByTestId(tablePendingSellOrderLines, stagedLine.id);
-    const otherLineRow = getTableRowByTestId(tablePendingSellOrderLines, otherLine.id);
+    await test.step("staged sell order lines can be hidden from the pending sell order lines", async () => {
+      const [stagedLine, otherLine] = await getMockPendingSellOrderLines(client.id);
+      expect(otherLine, "At least two pending lines of the Cliente are needed").toBeDefined();
+      const checkboxShowStagedLines = page.getByTestId("checkbox-show-staged-lines");
+      const stagedLineRow = getTableRowByTestId(tablePendingSellOrderLines, stagedLine.id);
+      const otherLineRow = getTableRowByTestId(tablePendingSellOrderLines, otherLine.id);
 
-    await workflowOpenCreateDeliveryNoteForClient(page, client);
-    await openPopover(buttonPendingSettings);
-    await expect(checkboxShowStagedLines).not.toBeChecked();
-    await closePopover(page, buttonPendingSettings);
-    await workflowStageSingleSellOrderLine(page, stagedLine.id);
+      await workflowOpenCreateDeliveryNoteForClient(page, client);
+      await openPopover(buttonPendingSettings);
+      await expect(checkboxShowStagedLines).not.toBeChecked();
+      await closePopover(page, buttonPendingSettings);
+      await workflowStageSingleSellOrderLine(page, stagedLine.id);
 
-    await expect(stagedLineRow).toHaveCount(0);
-    await expect(otherLineRow).toBeVisible();
+      await expect(stagedLineRow).toHaveCount(0);
+      await expect(otherLineRow).toBeVisible();
 
-    await openPopover(buttonPendingSettings);
-    await checkboxShowStagedLines.click();
-    await expect(checkboxShowStagedLines).toBeChecked();
-    await expect(stagedLineRow).toBeVisible();
-    await expect(otherLineRow).toBeVisible();
+      await openPopover(buttonPendingSettings);
+      await checkboxShowStagedLines.click();
+      await expect(checkboxShowStagedLines).toBeChecked();
+      await expect(stagedLineRow).toBeVisible();
+      await expect(otherLineRow).toBeVisible();
 
-    await page.getByText(SHOW_PREPARED_LINES_LABEL).click();
-    await expect(checkboxShowStagedLines).not.toBeChecked();
-    await expect(stagedLineRow).toHaveCount(0);
-    await closePopover(page, buttonPendingSettings);
-    await getTableRowByTestId(tableStagedSellOrderLines, stagedLine.id).getByTestId("button-unstage").click();
-    await expect(stagedLineRow).toBeVisible();
-    await expect(otherLineRow).toBeVisible();
+      await page.getByText(SHOW_PREPARED_LINES_LABEL).click();
+      await expect(checkboxShowStagedLines).not.toBeChecked();
+      await expect(stagedLineRow).toHaveCount(0);
+      await closePopover(page, buttonPendingSettings);
+      await getTableRowByTestId(tableStagedSellOrderLines, stagedLine.id).getByTestId("button-unstage").click();
+      await expect(stagedLineRow).toBeVisible();
+      await expect(otherLineRow).toBeVisible();
+    });
   });
 }
 
@@ -1550,16 +1529,13 @@ for (const client of clientsWithPendingLines) {
       await stageSellOrderLines([notInvoicedLine]);
 
       await buttonAddLinesToExistingDeliveryNote.click();
-      await openCombobox(comboboxDeliveryNote);
-      await clickInComboboxOption(page, `Albarán ${notInvoicedDeliveryNote.id} `);
+      await selectComboboxOption(page, comboboxDeliveryNote, `Albarán ${notInvoicedDeliveryNote.id} `);
       await expect(buttonSubmit).toBeEnabled();
       // Clearing the selection invalidates the form while adding to an existing Albarán, not while creating one
       await getClearComboboxButton(comboboxDeliveryNote).click();
       await expect(buttonSubmit).toBeDisabled();
-      await openCombobox(comboboxDeliveryNote);
-      await clickInComboboxOption(page, `Albarán ${notInvoicedDeliveryNote.id} `);
-      await dialog.getByTestId("button-close").click();
-      await expect(dialog).not.toBeVisible();
+      await selectComboboxOption(page, comboboxDeliveryNote, `Albarán ${notInvoicedDeliveryNote.id} `);
+      await closeDialog(dialog);
       await expect(buttonSubmitFormDeliveryNote).toBeEnabled();
 
       // The previous selection is not kept, so it cannot be submitted without being seen

@@ -91,6 +91,7 @@ import {
   assertFormLoaded,
   getFormInputByLabel,
   getInvalidFields,
+  retypeInput,
 } from "@/tests/utils/components/form";
 import {
   assertPickerPartKeepsNullClientParts,
@@ -146,6 +147,7 @@ import {
   workflowOpenSellOrderFile,
   workflowSubmitSellOrder,
   workflowUploadSellOrderFile,
+  workflowEditSellOrderLineCell,
 } from "@/tests/workflows/sell-order";
 import type { BaseSellOrder } from "@/types/sell-order";
 import { ToastType } from "@/types/toast";
@@ -190,12 +192,10 @@ test("manage the sell orders", { annotation: TestAnnotations.ResetSellOrders }, 
 
     if (newSellOrder.clientReference !== null) {
       const inputClientReference = getFormInputByLabel(page, CLIENT_REFERENCE_LABEL);
-      await expect(inputClientReference).toBeVisible();
       await inputClientReference.fill(newSellOrder.clientReference);
     }
 
     const inputNotes = getFormInputByLabel(page, NOTES_LABEL, InputElementType.Textarea);
-    await expect(inputNotes).toBeVisible();
     await inputNotes.fill(newSellOrder.notes!);
 
     const buttonSubmit = page.getByTestId("button-submit-form-sell-order");
@@ -267,8 +267,6 @@ test("manage the sell orders", { annotation: TestAnnotations.ResetSellOrders }, 
     const sellOrder = mockSellOrders[0];
     const existingSellOrderLines = getMockSellOrderLines(sellOrder.id);
 
-    const sellOrderClient = getMockClientById(sellOrder.clientId);
-    expect(sellOrderClient).toBeDefined();
     const clientParts = getMockClientParts({ clientId: sellOrder.clientId, includePartReferenceNullClientId: true });
     const clientPartReferences = getMockPartReferences({
       clientId: sellOrder.clientId,
@@ -594,11 +592,7 @@ test("manage the sell orders", { annotation: TestAnnotations.ResetSellOrders }, 
 
     const inputQuantity = getEditableCellById(rowSellOrderLine, "quantity");
     await expect(inputQuantity).toBeVisible();
-    await inputQuantity.clear();
-    await inputQuantity.pressSequentially(String(updatedSellOrderLineData.quantity));
-    await inputQuantity.press("Enter");
-
-    await expectSingleSuccessToast(page, SELL_ORDER_LINE_EDITED_MESSAGE);
+    await workflowEditSellOrderLineCell(page, inputQuantity, String(updatedSellOrderLineData.quantity));
 
     // The pending quantity can not be typed: it moves with the quantity, within what was not delivered
     let updatedSellOrderLine = await getSellOrderLineById(sellOrderLineToBeUpdated.id);
@@ -627,10 +621,7 @@ test("manage the sell orders", { annotation: TestAnnotations.ResetSellOrders }, 
     expect((await getSellOrderLineById(sellOrderLineWithNotes.id))?.notes).toBe(newNotes);
 
     // Clearing the notes stores them as empty
-    await inputNotes.clear();
-    await inputNotes.press("Enter");
-
-    await expectSingleSuccessToast(page, SELL_ORDER_LINE_EDITED_MESSAGE);
+    await workflowEditSellOrderLineCell(page, inputNotes, "");
     expect((await getSellOrderLineById(sellOrderLineWithNotes.id))?.notes).toBeNull();
 
     const cellInputPartPicker = rowSellOrderLine.getByTestId("partPrice");
@@ -686,11 +677,7 @@ test("manage the sell orders", { annotation: TestAnnotations.ResetSellOrders }, 
     expect(newPartPrice, "Wrong test dummy value, it is equal to the existing part price").not.toStrictEqual(
       updatedSellOrderLine!.partPrice,
     );
-    await inputPartPrice.clear();
-    await inputPartPrice.pressSequentially(newPartPrice);
-    await inputPartPrice.press("Enter");
-
-    await expectSingleSuccessToast(page, SELL_ORDER_LINE_EDITED_MESSAGE);
+    await workflowEditSellOrderLineCell(page, inputPartPrice, newPartPrice);
 
     expect((await getSellOrderLineById(sellOrderLineToBeUpdated.id))?.partPrice).toBe(newPartPrice);
 
@@ -706,10 +693,7 @@ test("manage the sell orders", { annotation: TestAnnotations.ResetSellOrders }, 
     await expect(buttonClearPartPrice).not.toBeAttached();
 
     // The clear button follows prices typed in the price input
-    await inputPartPriceWithoutPrice.pressSequentially(newPartPrice);
-    await inputPartPriceWithoutPrice.press("Enter");
-
-    await expectSingleSuccessToast(page, SELL_ORDER_LINE_EDITED_MESSAGE);
+    await workflowEditSellOrderLineCell(page, inputPartPriceWithoutPrice, newPartPrice);
     expect((await getSellOrderLineById(sellOrderLineWithoutPrice.id))?.partPrice).toBe(newPartPrice);
     await expect(buttonClearPartPrice).toBeVisible();
 
@@ -861,7 +845,6 @@ test("manage the sell orders", { annotation: TestAnnotations.ResetSellOrders }, 
     await assertComboboxValue(comboboxClient, String(existingSellOrderClient!.id));
     await expect(buttonClearComboboxClient).toBeVisible();
 
-    await expect(inputClientReference).toBeVisible();
     await inputClientReference.fill(existingSellOrder.clientReference);
 
     await expect(buttonSubmit).toBeDisabled();
@@ -1131,14 +1114,10 @@ test("manage the sell order lines without part", async ({ page, db }) => {
 
     const inputRowPartPrice = cellPartPrice.getByTestId("input-part-price");
     await expect(inputRowPartPrice).toHaveValue("");
-    await inputRowPartPrice.pressSequentially(customLinePartPrice);
-    await inputRowPartPrice.press("Enter");
-    await expectSingleSuccessToast(page, SELL_ORDER_LINE_EDITED_MESSAGE);
+    await workflowEditSellOrderLineCell(page, inputRowPartPrice, customLinePartPrice);
     expect((await getSellOrderLineById(customSellOrderLineId))?.partPrice).toBe(customLinePartPrice);
 
-    await inputRowPartPrice.clear();
-    await inputRowPartPrice.press("Enter");
-    await expectSingleSuccessToast(page, SELL_ORDER_LINE_EDITED_MESSAGE);
+    await workflowEditSellOrderLineCell(page, inputRowPartPrice, "");
     expect((await getSellOrderLineById(customSellOrderLineId))?.partPrice).toBeNull();
   });
 });
@@ -1168,9 +1147,7 @@ test("manage the returns of a sell order", async ({ page }) => {
 
   await test.step("create a return, which is pending for its whole negative quantity", async () => {
     const existingDbSellOrderLines = await getSellOrderLinesBySellOrderId(sellOrder.id);
-    await inputQuantity.clear();
-    await inputQuantity.pressSequentially(String(returnLine.quantity));
-    await expect(inputQuantity).toHaveValue(String(returnLine.quantity));
+    await retypeInput(inputQuantity, String(returnLine.quantity));
     await inputPartPrice.pressSequentially("0.82");
     await inputPartPrice.blur();
     // The read-only total keeps the sign of a negative amount
@@ -1200,10 +1177,7 @@ test("manage the returns of a sell order", async ({ page }) => {
     const inputRowQuantity = getEditableCellById(rowSellOrderLine, "quantity");
     await expect(getEditableCellById(rowSellOrderLine, "pendingQuantity")).toHaveCount(0);
     const editQuantity = async (quantity: number) => {
-      await inputRowQuantity.clear();
-      await inputRowQuantity.pressSequentially(String(quantity));
-      await inputRowQuantity.press("Enter");
-      await expectSingleSuccessToast(page, SELL_ORDER_LINE_EDITED_MESSAGE);
+      await workflowEditSellOrderLineCell(page, inputRowQuantity, String(quantity));
     };
 
     // Nothing of it was delivered, so all of the new quantity is pending, also once it is an ordered line
@@ -1450,56 +1424,57 @@ async function getDeletedSellOrderFilePaths(sellOrderId: number) {
 
 const getButtonFile = (container: Locator) => container.getByTestId("button-sell-order-file");
 
-test("view the files of the sell orders", async ({ page }) => {
-  // The UI only reads fileUploadedAt, so the mock data has to match the mock SELL_ORDERS folder
-  for (const sellOrder of mockSellOrders) {
-    expect((await getSellOrderFilePath(sellOrder.id)) !== null, `Wrong test set up: sell order ${sellOrder.id}`).toBe(
-      sellOrder.fileUploadedAt !== null,
-    );
-  }
-
-  await test.step("in the table", async () => {
-    await page.goto("/sell-order");
-    const tableSellOrder = page.getByTestId("table-sell-order");
-    for (const sellOrder of mockSellOrders.filter((mockSellOrder) => mockSellOrder.deletedAt === null)) {
-      await expect(
-        getButtonFile(getTableRowByTestId(tableSellOrder, sellOrder.id)),
-        `Sell order ${sellOrder.id}`,
-      ).toBeEnabled({ enabled: sellOrder.fileUploadedAt !== null });
-    }
-    const dialogFile = await workflowOpenSellOrderFile(
-      page,
-      getButtonFile(getTableRowByTestId(tableSellOrder, sellOrderWithFile.id)),
-    );
-    await expect(dialogFile).toContainText(`Pedido de venta ${sellOrderWithFile.id}`);
-    await workflowDownloadSellOrderFile(page, dialogFile, sellOrderWithFile.id);
-  });
-
-  await test.step("in the form, where the same file keeps its URL so the browser can cache it", async () => {
-    const buttonFile = getButtonFile(await workflowOpenSellOrder(page, sellOrderWithFile.id));
-    const dialogFile = await workflowOpenSellOrderFile(page, buttonFile);
-    await expect(dialogFile.getByTestId("button-delete-sell-order-file")).toBeVisible();
-    const url = await workflowDownloadSellOrderFile(page, dialogFile, sellOrderWithFile.id);
-    await page.keyboard.press("Escape");
-    await expect(dialogFile).not.toBeVisible();
-    expect(
-      await workflowDownloadSellOrderFile(
-        page,
-        await workflowOpenSellOrderFile(page, buttonFile),
-        sellOrderWithFile.id,
-      ),
-    ).toBe(url);
-
-    for (const sellOrder of [sellOrderWithoutFile, deletedSellOrder]) {
-      await expect(getButtonFile(await workflowOpenSellOrder(page, sellOrder.id))).toBeDisabled();
-    }
-  });
-});
-
 test(
-  "delete, upload and replace the files of the sell orders",
+  "view, delete, upload and replace the files of the sell orders",
   { annotation: TestAnnotations.ResetSellOrders },
   async ({ page, toasts, openPage }) => {
+    await test.step("view the files of the sell orders", async () => {
+      // The UI only reads fileUploadedAt, so the mock data has to match the mock SELL_ORDERS folder
+      for (const sellOrder of mockSellOrders) {
+        expect(
+          (await getSellOrderFilePath(sellOrder.id)) !== null,
+          `Wrong test set up: sell order ${sellOrder.id}`,
+        ).toBe(sellOrder.fileUploadedAt !== null);
+      }
+
+      await test.step("in the table", async () => {
+        await page.goto("/sell-order");
+        const tableSellOrder = page.getByTestId("table-sell-order");
+        for (const sellOrder of mockSellOrders.filter((mockSellOrder) => mockSellOrder.deletedAt === null)) {
+          await expect(
+            getButtonFile(getTableRowByTestId(tableSellOrder, sellOrder.id)),
+            `Sell order ${sellOrder.id}`,
+          ).toBeEnabled({ enabled: sellOrder.fileUploadedAt !== null });
+        }
+        const dialogFile = await workflowOpenSellOrderFile(
+          page,
+          getButtonFile(getTableRowByTestId(tableSellOrder, sellOrderWithFile.id)),
+        );
+        await expect(dialogFile).toContainText(`Pedido de venta ${sellOrderWithFile.id}`);
+        await workflowDownloadSellOrderFile(page, dialogFile, sellOrderWithFile.id);
+      });
+
+      await test.step("in the form, where the same file keeps its URL so the browser can cache it", async () => {
+        const buttonFile = getButtonFile(await workflowOpenSellOrder(page, sellOrderWithFile.id));
+        const dialogFile = await workflowOpenSellOrderFile(page, buttonFile);
+        await expect(dialogFile.getByTestId("button-delete-sell-order-file")).toBeVisible();
+        const url = await workflowDownloadSellOrderFile(page, dialogFile, sellOrderWithFile.id);
+        await page.keyboard.press("Escape");
+        await expect(dialogFile).not.toBeVisible();
+        expect(
+          await workflowDownloadSellOrderFile(
+            page,
+            await workflowOpenSellOrderFile(page, buttonFile),
+            sellOrderWithFile.id,
+          ),
+        ).toBe(url);
+
+        for (const sellOrder of [sellOrderWithoutFile, deletedSellOrder]) {
+          await expect(getButtonFile(await workflowOpenSellOrder(page, sellOrder.id))).toBeDisabled();
+        }
+      });
+    });
+
     const fileContent = fs.readFileSync((await getSellOrderFilePath(sellOrderWithFile.id))!);
     expect(fileContent.equals(fs.readFileSync(SAMPLE_PDF_PATH)), "Wrong test set up: the files should differ").toBe(
       false,

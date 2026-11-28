@@ -8,13 +8,14 @@ import {
   MACHINE_CREATE_TITLE,
   MACHINE_DELETED_MESSAGE,
   MACHINE_EDITED_MESSAGE,
+  MACHINE_MIN_DIAMETER_LABEL,
 } from "@/messages/machine";
 import { openAndConfirmAlertDialog } from "@/tests/utils/components/alert-dialog";
 import { assertFormLoaded, getFormInputByLabel } from "@/tests/utils/components/form";
 import { findTableRowByText } from "@/tests/utils/components/table";
 import { expectSingleSuccessToast } from "@/tests/utils/components/toast";
 
-export async function workflowCreateMachine(page: Page, machineId: number, machineName: string) {
+export async function workflowCreateMachine(page: Page, machineId: number, machineName: string, minDiameter?: number) {
   const tableMaintenanceMachine = page.getByTestId("table-machine");
   const dialogCreateMachine = page.getByTestId("dialog-create-machine");
 
@@ -28,15 +29,20 @@ export async function workflowCreateMachine(page: Page, machineId: number, machi
   await expect(dialogCreateMachine).toBeVisible();
 
   await getFormInputByLabel(dialogCreateMachine, NAME_LABEL).fill(machineName);
+  if (minDiameter !== undefined) {
+    await getFormInputByLabel(dialogCreateMachine, MACHINE_MIN_DIAMETER_LABEL).fill(String(minDiameter));
+  }
   await dialogCreateMachine.getByTestId("button-submit").click();
 
   await expect(dialogCreateMachine).not.toBeVisible();
   await expectSingleSuccessToast(page, MACHINE_CREATED_MESSAGE);
   await expect(tableMaintenanceMachine.getByText(machineName, { exact: true })).toBeVisible();
 
-  const dbMachine = await getMachineById(machineId);
-  expect(dbMachine).toBeDefined();
-  expect(dbMachine!.name).toBe(machineName);
+  expect(await getMachineById(machineId)).toMatchObject({
+    maxDiameter: null,
+    minDiameter: minDiameter ?? null,
+    name: machineName,
+  });
 }
 
 export async function workflowEditMachine(page: Page, machineId: number, currentName: string, updatedName: string) {

@@ -22,7 +22,7 @@ import {
   mockRawMaterials,
   mockShapes,
 } from "@/tests/mock-data";
-import { clickInComboboxOption, openCombobox } from "@/tests/utils/components/combobox";
+import { selectComboboxOption } from "@/tests/utils/components/combobox";
 import { assertFormLoaded } from "@/tests/utils/components/form";
 import {
   assertTableRowCount,
@@ -288,8 +288,7 @@ for (const part of activeParts.filter((activePart) =>
         await expect(formEstimator.getByTestId("button-submit")).toHaveText(SAVE_NEW_PRICE_LABEL);
 
         const comboboxClient = formEstimator.getByTestId("combobox-client");
-        await openCombobox(comboboxClient);
-        await clickInComboboxOption(page, client.name);
+        await selectComboboxOption(page, comboboxClient, client.name);
         partPricesBefore = await getPartPricesByPartId(part.id);
         if (basePrice === null) {
           await assertPriceCannotBeSaved();

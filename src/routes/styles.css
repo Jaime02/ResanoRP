@@ -183,6 +183,15 @@
     pointer-events: none;
   }
 
+  /* The overlay above only gets its height from script, so until then it covers the whole server-rendered table */
+  &:not([style*="--viewport-height"])::before {
+    position: absolute;
+    inset: 0;
+    width: auto;
+    height: auto;
+    margin: 0;
+  }
+
   & th::after {
     content: "";
     position: absolute;

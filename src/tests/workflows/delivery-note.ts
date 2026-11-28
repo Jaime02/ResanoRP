@@ -16,12 +16,7 @@ import {
 } from "@/messages/delivery-note";
 import { getTestId } from "@/tests/utils/components";
 import { openAndConfirmAlertDialog } from "@/tests/utils/components/alert-dialog";
-import {
-  assertComboboxValue,
-  clickInComboboxOption,
-  openCombobox,
-  selectComboboxOption,
-} from "@/tests/utils/components/combobox";
+import { assertComboboxValue, selectComboboxOption } from "@/tests/utils/components/combobox";
 import { InputElementType, assertFormLoaded, getFormInputByLabel } from "@/tests/utils/components/form";
 import { getEditableCellById, getTableRowByTestId, getTableRows } from "@/tests/utils/components/table";
 import { expectSingleSuccessOrErrorToast, expectSingleSuccessToast } from "@/tests/utils/components/toast";
@@ -149,8 +144,7 @@ export async function workflowPrepareAppendStagedLinesToDeliveryNote(page: Page,
   const comboboxDeliveryNote = dialog.getByTestId("combobox-delivery-note");
   await page.getByTestId("button-add-lines-to-existing-delivery-note").click();
   await expect(dialog).toBeVisible();
-  await openCombobox(comboboxDeliveryNote);
-  await clickInComboboxOption(page, `Albarán ${deliveryNoteId} `);
+  await selectComboboxOption(page, comboboxDeliveryNote, `Albarán ${deliveryNoteId} `);
   await assertComboboxValue(comboboxDeliveryNote, String(deliveryNoteId));
   return dialog.getByTestId("button-submit-add-lines-to-existing-delivery-note");
 }

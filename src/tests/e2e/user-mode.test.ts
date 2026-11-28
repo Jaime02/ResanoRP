@@ -57,8 +57,8 @@ import { expectSingleToast } from "@/tests/utils/components/toast";
 import {
   clientErrorEvent,
   clientLogEvent,
-  expectRejectedMutation,
   httpRequestFailedEvent,
+  holdRequestAndExpectRejection,
 } from "@/tests/utils/errors-log";
 import { TestAnnotations, expectErrorsLog, inAnotherTab, setUserMode, test } from "@/tests/utils/fixtures";
 import {
@@ -67,7 +67,6 @@ import {
   getMockSellOrderById,
   getMockSellOrderLineById,
 } from "@/tests/utils/mock-data-utils";
-import { holdRequestWhile } from "@/tests/utils/trpc";
 import { workflowUnaccountInvoice } from "@/tests/workflows/invoice";
 import { TRPC_URL } from "@/trpc/trpc-client";
 import { ToastType } from "@/types/toast";
@@ -88,8 +87,29 @@ async function openLoginDialog(page: Page) {
   return dialogLogin;
 }
 
-test("login with every user mode", { annotation: TestAnnotations.UserModeNull }, async ({ page }) => {
+test("login with every user mode", { annotation: TestAnnotations.UserModeNull }, async ({ page, baseURL }) => {
   const spanCurrentUserMode = page.getByTestId("span-current-user-mode");
+
+  await test.step("a user mode cookie from an older version asks for the user mode again", async () => {
+    const dialogLogin = page.getByTestId("form-login");
+
+    await page.context().addCookies([
+      {
+        name: AppContextStorage.COOKIE_NAME,
+        value: encodeURIComponent(JSON.stringify({ userMode: "Admininistrador", userModeMachineId: "1" })),
+        url: baseURL!,
+      },
+    ]);
+    await page.goto("/");
+
+    await expect(dialogLogin).toBeVisible();
+    await expect(spanCurrentUserMode).toHaveText("");
+
+    await dialogLogin.getByRole("button", { name: UserMode.User }).click();
+    await expect(dialogLogin).not.toBeVisible();
+    await expect(spanCurrentUserMode).toHaveText(UserMode.User);
+    await expect(page.getByRole("link", { name: SERVE_PARTS_LABEL })).toBeVisible();
+  });
 
   await test.step("login as admin", async () => {
     const dialogLogin = await openLoginDialog(page);
@@ -170,32 +190,6 @@ test("login with every user mode", { annotation: TestAnnotations.UserModeNull },
     });
   }
 });
-
-test(
-  "a user mode cookie from an older version asks for the user mode again",
-  { annotation: TestAnnotations.UserModeNull },
-  async ({ page, baseURL }) => {
-    const spanCurrentUserMode = page.getByTestId("span-current-user-mode");
-    const dialogLogin = page.getByTestId("form-login");
-
-    await page.context().addCookies([
-      {
-        name: AppContextStorage.COOKIE_NAME,
-        value: encodeURIComponent(JSON.stringify({ userMode: "Admininistrador", userModeMachineId: "1" })),
-        url: baseURL!,
-      },
-    ]);
-    await page.goto("/");
-
-    await expect(dialogLogin).toBeVisible();
-    await expect(spanCurrentUserMode).toHaveText("");
-
-    await dialogLogin.getByRole("button", { name: UserMode.User }).click();
-    await expect(dialogLogin).not.toBeVisible();
-    await expect(spanCurrentUserMode).toHaveText(UserMode.User);
-    await expect(page.getByRole("link", { name: SERVE_PARTS_LABEL })).toBeVisible();
-  },
-);
 
 const adminPaths = [
   "/sell-order",
@@ -420,16 +414,13 @@ test(
       userConfig: Parameters<typeof clientLogEvent>[2],
     ) => {
       await page.goto("/invoicing");
-      await holdRequestWhile({
+      await holdRequestAndExpectRejection({
         page,
         procedurePath: "invoice.unaccount",
         send: async () => workflowUnaccountInvoice(page, accountedInvoice.id, ADMIN_ONLY_MESSAGE),
         meanwhile: changeSession,
-      });
-      expectRejectedMutation({
         code: "FORBIDDEN",
         message: ADMIN_ONLY_MESSAGE,
-        procedurePath: "invoice.unaccount",
         serverError: null,
         userConfig,
       });

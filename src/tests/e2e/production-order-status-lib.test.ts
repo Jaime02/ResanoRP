@@ -27,85 +27,61 @@ const pendingLine: { deletedAt: Date | null; pendingQuantity: number } = { delet
 const activeSellOrder = { deletedAt: null };
 
 test("the production order status library", async () => {
+  const status = (overrides: Partial<TProductionOrderStatusInput>) =>
+    computeProductionOrderStatus({ ...produced, ...overrides });
+
   await test.step("a deleted production order, sell order line or sell order wins over everything else", () => {
-    expect(computeProductionOrderStatus({ ...produced, deletedAt: DATE })).toBe(ProductionOrderStatus.Deleted);
-    expect(
-      computeProductionOrderStatus({ ...produced, sellOrderLine: { deletedAt: DATE, sellOrder: { deletedAt: DATE } } }),
-    ).toBe(ProductionOrderStatus.SellOrderLineDeleted);
-    expect(
-      computeProductionOrderStatus({ ...produced, sellOrderLine: { deletedAt: null, sellOrder: { deletedAt: DATE } } }),
-    ).toBe(ProductionOrderStatus.SellOrderDeleted);
+    expect(status({ deletedAt: DATE })).toBe(ProductionOrderStatus.Deleted);
+    expect(status({ sellOrderLine: { deletedAt: DATE, sellOrder: { deletedAt: DATE } } })).toBe(
+      ProductionOrderStatus.SellOrderLineDeleted,
+    );
+    expect(status({ sellOrderLine: { deletedAt: null, sellOrder: { deletedAt: DATE } } })).toBe(
+      ProductionOrderStatus.SellOrderDeleted,
+    );
     // Without a sell order line there is nothing else that can be deleted
-    expect(
-      computeProductionOrderStatus({ ...produced, sellOrderLine: null, sentQuantity: 10, receivedQuantity: 10 }),
-    ).toBe(ProductionOrderStatus.Completed);
+    expect(status({ sellOrderLine: null, sentQuantity: 10, receivedQuantity: 10 })).toBe(
+      ProductionOrderStatus.Completed,
+    );
   });
 
   await test.step("with a quantity, it is pending or in production until it reaches it", () => {
-    expect(computeProductionOrderStatus({ ...produced, producedQuantity: 9 })).toBe(ProductionOrderStatus.Pending);
-    expect(computeProductionOrderStatus({ ...produced, producedQuantity: 9, isActiveOnMachine: true })).toBe(
-      ProductionOrderStatus.InProduction,
-    );
+    expect(status({ producedQuantity: 9 })).toBe(ProductionOrderStatus.Pending);
+    expect(status({ producedQuantity: 9, isActiveOnMachine: true })).toBe(ProductionOrderStatus.InProduction);
     // Reaching the quantity finishes the production even while a machine still runs it
-    expect(computeProductionOrderStatus({ ...produced, isActiveOnMachine: true })).toBe(
-      ProductionOrderStatus.PendingTreatment,
-    );
-    expect(computeProductionOrderStatus({ ...produced, producedQuantity: 15 })).toBe(
-      ProductionOrderStatus.PendingTreatment,
-    );
+    expect(status({ isActiveOnMachine: true })).toBe(ProductionOrderStatus.PendingTreatment);
+    expect(status({ producedQuantity: 15 })).toBe(ProductionOrderStatus.PendingTreatment);
   });
 
   await test.step("without a quantity, it is produced once no machine runs it and something was produced", () => {
-    const withoutQuantity = { ...produced, quantity: null };
-    expect(computeProductionOrderStatus({ ...withoutQuantity, producedQuantity: 0 })).toBe(
-      ProductionOrderStatus.Pending,
-    );
-    expect(computeProductionOrderStatus({ ...withoutQuantity, producedQuantity: 0, isActiveOnMachine: true })).toBe(
+    expect(status({ quantity: null, producedQuantity: 0 })).toBe(ProductionOrderStatus.Pending);
+    expect(status({ quantity: null, producedQuantity: 0, isActiveOnMachine: true })).toBe(
       ProductionOrderStatus.InProduction,
     );
-    expect(computeProductionOrderStatus({ ...withoutQuantity, isActiveOnMachine: true })).toBe(
-      ProductionOrderStatus.InProduction,
-    );
-    expect(computeProductionOrderStatus(withoutQuantity)).toBe(ProductionOrderStatus.PendingTreatment);
+    expect(status({ quantity: null, isActiveOnMachine: true })).toBe(ProductionOrderStatus.InProduction);
+    expect(status({ quantity: null })).toBe(ProductionOrderStatus.PendingTreatment);
   });
 
   await test.step("a part without a coating is completed as soon as it is produced", () => {
-    expect(computeProductionOrderStatus({ ...produced, needsTreatment: false })).toBe(ProductionOrderStatus.Completed);
-    expect(computeProductionOrderStatus({ ...produced, needsTreatment: false, quantity: null })).toBe(
-      ProductionOrderStatus.Completed,
-    );
+    expect(status({ needsTreatment: false })).toBe(ProductionOrderStatus.Completed);
+    expect(status({ needsTreatment: false, quantity: null })).toBe(ProductionOrderStatus.Completed);
   });
 
   await test.step("a part with a coating goes through the treatment before it is completed", () => {
-    expect(computeProductionOrderStatus({ ...produced, sentQuantity: 4 })).toBe(ProductionOrderStatus.InTreatment);
+    expect(status({ sentQuantity: 4 })).toBe(ProductionOrderStatus.InTreatment);
     // Some parts out and some still to send is shown as in the treatment
-    expect(computeProductionOrderStatus({ ...produced, sentQuantity: 4, receivedQuantity: 2 })).toBe(
-      ProductionOrderStatus.InTreatment,
-    );
+    expect(status({ sentQuantity: 4, receivedQuantity: 2 })).toBe(ProductionOrderStatus.InTreatment);
     // Nothing out, but some still to send
-    expect(computeProductionOrderStatus({ ...produced, sentQuantity: 4, receivedQuantity: 4 })).toBe(
-      ProductionOrderStatus.PendingTreatment,
-    );
-    expect(computeProductionOrderStatus({ ...produced, sentQuantity: 10, receivedQuantity: 9 })).toBe(
-      ProductionOrderStatus.InTreatment,
-    );
-    expect(computeProductionOrderStatus({ ...produced, sentQuantity: 10, receivedQuantity: 10 })).toBe(
-      ProductionOrderStatus.Completed,
-    );
+    expect(status({ sentQuantity: 4, receivedQuantity: 4 })).toBe(ProductionOrderStatus.PendingTreatment);
+    expect(status({ sentQuantity: 10, receivedQuantity: 9 })).toBe(ProductionOrderStatus.InTreatment);
+    expect(status({ sentQuantity: 10, receivedQuantity: 10 })).toBe(ProductionOrderStatus.Completed);
     // More parts can be sent than were produced
-    expect(computeProductionOrderStatus({ ...produced, sentQuantity: 12, receivedQuantity: 10 })).toBe(
-      ProductionOrderStatus.InTreatment,
-    );
-    expect(computeProductionOrderStatus({ ...produced, sentQuantity: 12, receivedQuantity: 12 })).toBe(
-      ProductionOrderStatus.Completed,
-    );
+    expect(status({ sentQuantity: 12, receivedQuantity: 10 })).toBe(ProductionOrderStatus.InTreatment);
+    expect(status({ sentQuantity: 12, receivedQuantity: 12 })).toBe(ProductionOrderStatus.Completed);
     // The parts sent while it was still being produced do not finish it
-    expect(
-      computeProductionOrderStatus({ ...produced, producedQuantity: 5, sentQuantity: 5, receivedQuantity: 5 }),
-    ).toBe(ProductionOrderStatus.Pending);
-    expect(
-      computeProductionOrderStatus({ ...produced, producedQuantity: 5, sentQuantity: 5, isActiveOnMachine: true }),
-    ).toBe(ProductionOrderStatus.InProduction);
+    expect(status({ producedQuantity: 5, sentQuantity: 5, receivedQuantity: 5 })).toBe(ProductionOrderStatus.Pending);
+    expect(status({ producedQuantity: 5, sentQuantity: 5, isActiveOnMachine: true })).toBe(
+      ProductionOrderStatus.InProduction,
+    );
   });
 
   await test.step("isProductionFinished is true once the machines are done with it", () => {

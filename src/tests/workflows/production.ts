@@ -99,7 +99,6 @@ export async function workflowOpenProduction(page: Page, machine: BaseMachine) {
 export async function workflowOpenStopDialog(page: Page) {
   const { dialogContentStopProductionOrder, inputProducedQuantity } = getProductionLocators(page);
   const stopButton = page.getByTestId("button-dialog-trigger-stop-production-order");
-  await expect(stopButton).toBeVisible();
   await stopButton.click();
   await expect(dialogContentStopProductionOrder).toBeVisible();
   await expect(inputProducedQuantity).toBeVisible();
@@ -229,7 +228,6 @@ export async function workflowStartProductionOrderFromQueue(
   await expect(rowToStart).toBeVisible();
 
   const buttonStartProductionOrder = rowToStart.getByTestId("button-start-production-order");
-  await expect(buttonStartProductionOrder).toBeVisible();
   await buttonStartProductionOrder.click();
   await expectSingleSuccessToast(page, PRODUCTION_ORDER_ASSIGNED_MESSAGE);
 
