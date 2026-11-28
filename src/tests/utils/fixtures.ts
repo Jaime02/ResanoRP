@@ -6,6 +6,7 @@ import type { BrowserContext, Page, PlaywrightTestArgs, TestAnnotation, TestInfo
 import { AppContextStorage, UserMode } from "@/contexts/app-context";
 import { cleanDatabase, type TDatabase } from "@/db";
 import { ADMIN_SESSION_COOKIE_NAME, getAdminSessionToken } from "@/lib/admin-session";
+import { POWERSYNC_PATH } from "@/lib/powersync";
 import { errorsLogFilePath } from "@/logging/logger";
 import { resetBlueprints, resetMaterialCertificates, resetSellOrders, resetTags } from "@/scripts/reset-env";
 import { MOCK_INITIAL_DATE } from "@/tests/mock-data";
@@ -67,6 +68,11 @@ export interface TUserConfig {
 }
 
 const FAILED_REQUEST_CONSOLE_MESSAGE = "Failed to load resource";
+// The PowerSync client restarts its sync stream whenever a page changes the tables it needs. Caddy aborts the response it
+// was reading from the cancelled one, and Chrome now and then reports that reset before its own cancel. The client
+// retries a dropped stream, so a stream that stays broken fails the tests that wait for data instead
+const SYNC_STREAM_URL_SUFFIX = `${POWERSYNC_PATH}/sync/stream`;
+const SYNC_STREAM_RESET_CONSOLE_MESSAGE = `${FAILED_REQUEST_CONSOLE_MESSAGE}: net::ERR_HTTP2_PROTOCOL_ERROR`;
 // Only a performance hint, emitted when a render crosses a time threshold, so it depends on the machine speed
 const LIVE_QUERY_WARNING_CONSOLE_MESSAGE = "[useLiveQuery] Deriving live query identity";
 
@@ -213,6 +219,9 @@ async function preparePage(page: Page) {
       msg.type() === "warning" &&
       msg.text().startsWith(LIVE_QUERY_WARNING_CONSOLE_MESSAGE)
     ) {
+      return;
+    }
+    if (msg.text() === SYNC_STREAM_RESET_CONSOLE_MESSAGE && msg.location().url.endsWith(SYNC_STREAM_URL_SUFFIX)) {
       return;
     }
     if (msg.type() === "warning" || msg.type() === "error") {
